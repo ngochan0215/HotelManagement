@@ -6,6 +6,8 @@ import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 
 import authRoute from "./routes/authRoutes.js";
+import userRoute from "./routes/userRoutes.js";
+import adminRoute from "./routes/adminRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -19,6 +21,8 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 app.use("/auth", authRoute);
+app.use("/user", userRoute);
+app.use("/admin", adminRoute);
 
 app.set("io", io);
 

@@ -1,6 +1,5 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import crypto from "crypto"
 import { User } from "../models/index.js";
 import { sendResetPasswordEmail } from "../utils/sendEmails.js";
 
@@ -58,3 +57,4 @@ export const resetPassword = async (req, res) => {
 
     res.json({ message: "Đặt lại mật khẩu thành công." });
 };
+

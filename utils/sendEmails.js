@@ -19,3 +19,12 @@ export const sendResetPasswordEmail = async (email, otp) => {
         text: `Mã OTP của bạn là: ${otp}. Mã sẽ hết hạn sau 5 phút.`,    
     });
 };
+
+export const sendVerificationEmail = async (email, otp) => {
+    await transporter.sendMail({
+        from: `"ThuHan Hotel Management" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Xác thực email",
+        text: `Mã OTP của bạn là: ${otp}. Mã sẽ hết hạn sau 5 phút.`,    
+    });
+};

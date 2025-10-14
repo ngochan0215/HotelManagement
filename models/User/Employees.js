@@ -7,17 +7,16 @@ const employeeSchema = new mongoose.Schema(
         full_name: { type: String, required: true, trim: true },
         date_birth: { type: Date },
         phone_number: { type: String, required: true, unique: true, trim: true },
-        nationality: { type: String },
         CCCD: { type: String, unique: true, required: true },
-        avatar: { type: String },
-        
-        type: { type: String, enum: ["manager", "receptionist", "technicican", "customer-service"], default: "receptionist" },
+        nationality: { type: String , default: "vietnam" },
+
+        position: { type: String, enum: ["manager", "receptionist", "technicican", "customer-service"], default: "receptionist" },
         status: { type: String, enum: ["working", "resign"], default: "working" },
-        fixed_salary: { type: Number, required: true },
+        fixed_salary: { type: Number },
         working_year: { type: Number },
     }, 
     { 
-        timestamps: { updatedAt: "updated_at" }, 
+        timestamps: { updatedAt: "updated_at", createdAt: "created_at"}, 
     }
 );
 
