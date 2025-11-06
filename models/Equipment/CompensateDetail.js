@@ -7,6 +7,7 @@ const compensateDetailSchema = new mongoose.Schema(
         facility_id: { type: mongoose.Schema.Types.ObjectId, ref: "Facility", required: true },
         count: { type: Number, default: 1, required: true },
         broken_state: { type: String, required: true },
+        penalty_fee: { type: Number, default: 0, required: true }
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

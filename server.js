@@ -8,6 +8,10 @@ import connectDB from "./config/db.js";
 import authRoute from "./routes/authRoutes.js";
 import userRoute from "./routes/userRoutes.js";
 import adminRoute from "./routes/adminRoutes.js";
+import serviceRoute from  "./routes/serviceRoutes.js";
+import discountRoute from "./routes/discountRoutes.js";
+import roomRoute from "./routes/roomRoutes.js";
+import equipmentRoute from "./routes/equipmentRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -23,6 +27,10 @@ app.use(express.json());
 app.use("/auth", authRoute);
 app.use("/user", userRoute);
 app.use("/admin", adminRoute);
+app.use("/service-category", serviceRoute);
+app.use("/discount", discountRoute);
+app.use("/room", roomRoute);
+app.use("/equipment", equipmentRoute);
 
 app.set("io", io);
 

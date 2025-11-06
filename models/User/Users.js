@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema(
     {
         email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
         password: { type: String, required: true },
-        system_role: { type: String, enum: ["customer", "employee", "admin"], default: "customer" },
+        system_role: { type: String, enum: ["customer", "employee", "manager"], default: "customer", required: true },
         avatar: { type: String },
 
         resetPasswordOtp: { type: String },
@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
         emailChangeExpires: { type: Date },
     },
     {
-        timestamps: { createdAt: "create_at", updatedAt: "update_at" },
+        timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
     }
 );
 

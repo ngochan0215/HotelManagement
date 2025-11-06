@@ -7,7 +7,7 @@ const DiscountSchema = new mongoose.Schema(
         description: { type: String, required: true },
         begin_date: { type: Date, required: true },
         end_date: { type: Date, required: true },
-        percentage: { type: Number, default: 0 },
+        percentage: { type: Number, min: 1, max: 100, required: true },
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

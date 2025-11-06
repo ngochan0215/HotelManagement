@@ -31,7 +31,7 @@ export const forgotPassword = async (req, res, ) => {
 
     const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
     user.resetPasswordOtp = otp;
-    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordExpires = Date.now() + 5 * 60 * 1000;
     await user.save();
 
     await sendResetPasswordEmail(email, otp);
@@ -47,11 +47,12 @@ export const resetPassword = async (req, res) => {
         resetPasswordOtp: otp,
         resetPasswordExpires: { $gt: Date.now() }
     });
-    if (!user) return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn." });
+    if (!user) 
+        return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn." });
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
-    user.resetPasswordToken = undefined;
+    user.resetPasswordOtp = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
 

@@ -25,9 +25,16 @@ export const verifyToken = (req, res, next) => {
     }
 };
 
-export const isAdmin = (req, res, next) => {
-    if (req.user.role !== "admin") {
-        return res.status(403).json({ message: "Bạn không có quyền truy cập." });
+export const isCustomer = (req, res, next) => {
+    if (req.user.role !== "customer") {
+        return res.status(403).json({ message: "Bạn không phải Khách hàng, không có quyền truy cập." });
+    }
+    next();
+};
+
+export const isManager = (req, res, next) => {
+    if (req.user.role !== "manager") {
+        return res.status(403).json({ message: "Bạn không phải Quản lý, không có quyền truy cập." });
     }
     next();
 };
@@ -36,7 +43,7 @@ export const isEmployee = (req, res, next) => {
     if (req.user.role === "employee") {
         return next();
     }
-    return res.status(403).json({ message: "Bạn không có quyền truy cập." });
+    return res.status(403).json({ message: "Bạn không phải Nhân viên, không có quyền truy cập." });
 };
 
 export const verifyTokenForProfile = async (req, res, next) => {

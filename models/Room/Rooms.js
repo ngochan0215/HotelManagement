@@ -4,16 +4,15 @@ import mongoose from "mongoose";
 const roomSchema = new mongoose.Schema(
     {
         category_id: { type: mongoose.Schema.Types.ObjectId, ref: "RoomCategory", required: true },
-        room_number: { type: Number },
-        room_status: { type: String, enum: ["free", "occupied", "out_of_order"], default: "free" },
-        cleaning_status: { type: String, enum: ["cleaned", "unclean"], default: "cleaned" },
-        begin_date: { type: Date },
-        end_date: { type: Date }
+        room_number: { type: String, required: true, unique: true },
+        room_status: { type: String, enum: ["available", "booked", "occupied", "cleaning", "maintenance"], default: "available", required: true }
     },
     { 
         timestamps: { createdAt: "created_at", updatedAt: "updated_at"},
     }
 );
 
+roomSchema.index({ category_id: 1 });
+
 const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
-export default Roomategory;
+export default Room;
