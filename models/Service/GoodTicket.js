@@ -4,7 +4,8 @@ import mongoose from "mongoose";
 const goodTicketSchema = new mongoose.Schema(
     {
         employee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-        import_day: { type: Date, required: true },
+        import_date: { type: Date, required: true },
+        status: { type: String, enum: ["pending", "completed"], default: "pending" }
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

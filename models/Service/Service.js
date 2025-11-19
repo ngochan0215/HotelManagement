@@ -8,6 +8,7 @@ const serviceSchema = new mongoose.Schema(
         description: { type: String },
         unit: { type: String, enum: ['hour', 'day', 'item', 'can', 'bottle', 'portion'], default: "hour" },
         price: { type: Number, required: true },
+        images: [ { type: String } ]
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

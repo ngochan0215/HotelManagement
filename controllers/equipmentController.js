@@ -1,4 +1,4 @@
-import { Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, Room } from "../models/index.js";
+import { Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, Room, EquipmentInstall, InstallDetail } from "../models/index.js";
 import mongoose from "mongoose";
 
 //------EQUIPMENT CATEGORY------//
@@ -98,7 +98,6 @@ export const deleteEquipmentCategory = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
-
 
 //------ EQUIPMENT ------//
 export const addEquipment = async (req, res) => {
@@ -256,9 +255,6 @@ export const createEquipmentTicket = async (req, res) => {
         if (!employee_id || !import_date)
             return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
 
-        if (!mongoose.Types.ObjectId.isValid(employee_id))
-            return res.status(400).json({ success: false, message: "ID nhân viên không hợp lệ!" });
-
         const existing = await EquipmentTicket.findOne({ import_date });
         if (existing)
             return res.status(400).json({ success: false, message: "Có một phiếu nhập trùng ngày nhập, bạn có thể tìm kiếm và thêm thiết bị nhập ở phiếu đó." });
@@ -294,14 +290,11 @@ export const getAllEquipmentTickets = async (req, res) => {
 export const getEquipmentTicketById = async (req, res) => {
     try {
         const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
 
         const ticket = await EquipmentTicket.findById(id).select("-__v -updated_at");
         if (!ticket)
             return res.status(404).json({ success: false, message: "Không tìm thấy phiếu nhập thiết bị." });
 
-        // include imports
         const imports = await EquipmentImport.find({ ticket_id: id })
             .populate("category_id", "name unit price -_id")
             .select("-__v -created_at -updated_at -ticket_id");
@@ -316,9 +309,6 @@ export const updateEquipmentTicket = async (req, res) => {
     try {
         const { id } = req.params;
         const { import_date } = req.body;
-
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
 
         const ticket = await EquipmentTicket.findById(id);
         if (!ticket)
@@ -401,9 +391,6 @@ export const createEquipmentImport = async (req, res) => {
         if (!ticket_id || !category_id)
             return res.status(400).json({ success: false, message: "Yêu cầu ticket_id và category_id" });
 
-        if (!mongoose.Types.ObjectId.isValid(ticket_id) || !mongoose.Types.ObjectId.isValid(category_id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
-
         const ticket = await EquipmentTicket.findById(ticket_id);
         if (!ticket) return res.status(404).json({ success: false, message: "Không tìm thấy phiếu nhập thiết bị." });
         
@@ -429,12 +416,12 @@ export const createEquipmentImport = async (req, res) => {
 
         const now = new Date();
         if (ticket.import_date && now == new Date(ticket.import_date)) {
-            // Create N physical equipments in stock with condition new
-            const equipmentsToCreate = Array.from({ length: qty }, () => ({ category_id, status: "in-stock", condition: "new" }));
+            const equipmentsToCreate = Array.from({ length: qty }, () => ({ category_id, status: "in-stock", condition: "new", import_ticket_id: ticket_id, import_date: ticket.import_date }));
             const createdEquipments = await Equipment.insertMany(equipmentsToCreate);
-            // Increase storage count by quantity
+
             await EquipmentCategory.updateOne({ _id: category_id }, { $inc: { storage_quantity: qty } });
             return res.status(201).json({ success: true, import: equipmentImport, created_count: createdEquipments.length });
+
         }
         
         return res.status(201).json({ success: true, message: "Thêm chi tiết phiếu nhập thành công!", equipmentImport });
@@ -475,8 +462,6 @@ export const getAllEquipmentImports = async (req, res) => {
 export const getEquipmentImportById = async (req, res) => {
     try {
         const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
 
         const imp = await EquipmentImport.findById(id)
             .populate("ticket_id", "employee_id import_date")
@@ -496,11 +481,9 @@ export const updateEquipmentImport = async (req, res) => {
         const { id } = req.params;
         const { import_price, import_quantity } = req.body;
 
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
-
         const imp = await EquipmentImport.findById(id);
-        if (!imp) return res.status(404).json({ success: false, message: "Không tìm thấy chi tiết nhập thiết bị." });
+        if (!imp) 
+            return res.status(404).json({ success: false, message: "Không tìm thấy chi tiết nhập thiết bị." });
 
         // Lấy ngày nhập từ phiếu tương ứng
         const ticket = await EquipmentTicket.findById(imp.ticket_id);
@@ -532,8 +515,6 @@ export const deleteEquipmentImport = async (req, res) => {
 
     try {
         const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
 
         const imp = await EquipmentImport.findById(id);
         if (!imp){
@@ -566,7 +547,6 @@ export const deleteEquipmentImport = async (req, res) => {
         return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
     }
 };
-
 
 export const confirmEquipmentTicket = async (req, res) => {
     try {
@@ -619,6 +599,198 @@ export const confirmEquipmentTicket = async (req, res) => {
         ticket.status = "completed";
         await ticket.save();
         return res.status(200).json({ success: true, message: "Xác nhận nhập kho thành công!", ticket });
+
+    } catch (err) {
+        return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+    }
+};
+
+//------ EQUIPMENT INSTALL TICKET ------//
+export const createInstallTicket = async (req, res) => {
+  try {
+    const { employee_id, room_id, install_date, equipment_list } = req.body;
+
+    if (!employee_id || !install_date || !room_id)
+        return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
+
+    const existing = await EquipmentInstall.findOne({ install_date, room_id });
+    if (existing)
+        return res.status(400).json({ success: false, message: "Có một phiếu trùng ngày lắp đặt và phòng, bạn có thể tìm kiếm và thêm thiết bị ở phiếu đó." });
+
+    const installDate = new Date(install_date);
+    const now = new Date();
+    if (installDate < new Date(now.toDateString())) {
+        return res.status(400).json({ success: false, message: "Ngày lắp đặt không hợp lệ! Không thể nhỏ hơn ngày hiện tại." });
+    }
+
+    if (!equipment_list || equipment_list.length == 0) {
+        return res.status(400).json({ success: false, message: "Không có thiết bị nào được chọn để lắp đặt. Vui lòng xem lại!" });
+    }
+
+    const install = await EquipmentInstall.create({ employee_id, room_id, install_date, status: "pending" });
+
+    // nếu có danh sách thiết bị đi kèm
+    if (equipment_list && equipment_list.length > 0) {
+      const details = equipment_list.map((eid) => ({
+        install_id: install._id,
+        equipment_id: eid,
+      }));
+      await InstallDetail.insertMany(details);
+    }
+
+    res.status(201).json({ success: true, message: "Thêm phiếu lắp đặt thành công. Phiếu đang trong trạng thái chờ lắp đặt.", data: install });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: "SERVER ERROR" + error.message });
+  }
+};
+
+export const getAllEquipmentInstalls = async (req, res) => {
+  try {
+    const installs = await EquipmentInstall.find()
+        .sort({ install_date: -1 }).select("-created_at -updated_at -__v");
+
+    res.status(200).json({ success: true, counts: installs.length, installs });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getEquipmentInstallById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const install = await EquipmentInstall.findById(id).select("-created_at -updated_at -__v");
+
+    if (!install)
+      return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt." });
+
+    const details = await InstallDetail.find({ install_id: install._id,}).select("-created_at -updated_at -__v");
+
+    res.status(200).json({ success: true, data: { install, details } });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateEquipmentInstall = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { room_id, install_date, equipment_list } = req.body;
+
+    const install_ticket = await EquipmentInstall.findById(id);
+    if (!install_ticket)
+        return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
+
+    const now = new Date();
+    if (install_ticket.install_date && now >= new Date(install_ticket.install_date)) {
+        return res.status(400).json({
+            success: false,
+            message: "Không thể chỉnh sửa vì đã đến hoặc qua ngày lắp đặt thiết bị."
+        });
+    }
+
+    if (install_date) {
+        const installDate = new Date(install_date);
+        const now = new Date();
+        if (installDate < new Date(now.toDateString())) {
+            return res.status(400).json({ success: false, message: "Ngày lắp đặt không hợp lệ! Không thể nhỏ hơn ngày hiện tại." });
+        }
+    }
+
+    const install = await EquipmentInstall.findByIdAndUpdate(
+      req.params.id,
+      { room_id, install_date, equipment_list },
+      { new: true }
+    );
+
+    // Cập nhật danh sách thiết bị (nếu có)
+    if (equipment_list) {
+      await InstallDetail.deleteMany({ install_id: install._id });
+      const newDetails = equipment_list.map((eid) => ({
+        install_id: install._id,
+        equipment_id: eid,
+      }));
+      await InstallDetail.insertMany(newDetails);
+    }
+
+    res.status(200).json({ success: true, message: "Updated successfully.", data: install });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteEquipmentInstall = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const force = req.query?.force === 'true';
+
+    const install_ticket = await EquipmentInstall.findById(id);
+    if (!install_ticket)
+        return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
+
+    const now = new Date();
+    if (install_ticket.install_date && now >= new Date(install_ticket.install_date)) {
+        return res.status(400).json({
+            success: false,
+            message: "Không thể xóa vì đã đến hoặc qua ngày lắp đặt thiết bị."
+        });
+    }
+
+    const relatedDetails = await InstallDetail.find({ install_id: id }).lean();
+    if (relatedDetails.length > 0 && !force) {
+        return res.status(400).json({ success: false, message: `Phiếu có ${relatedDetails.length} thiết bị lắp đặt. Dùng ?force=true để xóa phiếu.` });
+    }
+
+    await InstallDetail.deleteMany({ install_id: install._id });
+    await EquipmentInstall.deleteOne({ _id: id });
+
+    res.status(200).json({ success: true, message: "Đã xóa phiếu lắp đặt thiết bị." });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const confirmEquipmentInstall = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const ticket = await EquipmentInstall.findById(id);
+        if (!ticket)
+            return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
+
+        if (ticket.status === "completed") {
+            return res.status(400).json({ success: false, message: "Phiếu lắp đặt này đã hoàn thành trước đó." });
+        }
+
+        const now = new Date();
+        if (ticket.install_date && now < new Date(ticket.install_date)) {
+            return res.status(400).json({ success: false, message: "Chưa đến ngày lắp đặt, không thể xác nhận lắp đặt." });
+        }
+
+        const details = await InstallDetail.find({ install_id: id });
+        if (details.length === 0) {
+            return res.status(400).json({ success: false, message: "Phiếu lắp đặt không có thiết bị nào." });
+        }
+
+        for (const d of details) {
+            await Equipment.findByIdAndUpdate(
+                d.equipment_id,
+                {
+                    status: "in-use",
+                    condition: "good",
+                    room_id: ticket.room_id,
+                },
+                { new: true }
+            );
+            }
+
+        ticket.status = "completed";
+        await ticket.save();
+        return res.status(200).json({ success: true, message: "Xác nhận lắp đặt thành công!", ticket });
 
     } catch (err) {
         return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });

@@ -148,3 +148,31 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
+
+export const updateAvatar = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Không có file nào được chọn." });
+    }
+
+    const avatarUrl = req.file.path; // URL Cloudinary
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { avatar: avatarUrl },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật avatar thành công",
+      avatar: updatedUser.avatar,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+

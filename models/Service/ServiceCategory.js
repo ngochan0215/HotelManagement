@@ -5,6 +5,7 @@ const ServiceCategorySchema = new mongoose.Schema(
     {
         name: { type: String, required: true },
         description: { type: String },
+        images: [ { type: String } ]
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

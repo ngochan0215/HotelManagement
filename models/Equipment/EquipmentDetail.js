@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // chi tiết phiếu lắp đặt thiết bị (một phiếu có thể lắp đặt nhiều thiết bị)
-const facilityInstallDetailSchema = new mongoose.Schema(
+const equipmentInstallDetailSchema = new mongoose.Schema(
     {
         install_id: { type: mongoose.Schema.Types.ObjectId, ref: "EquipmentInstall", required: true },
         equipment_id: { type: mongoose.Schema.Types.ObjectId, ref: "Equipment", required: true },
@@ -11,5 +11,6 @@ const facilityInstallDetailSchema = new mongoose.Schema(
     }
 );
 
-const InstallDetail = mongoose.models.InstallDetail || mongoose.model("InstallDeatil", facilityInstallDetailSchema);
+const InstallDetail = mongoose.models.InstallDetail || mongoose.model("InstallDetail", equipmentInstallDetailSchema);
 export default InstallDetail;
+ 

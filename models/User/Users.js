@@ -7,8 +7,13 @@ const userSchema = new mongoose.Schema(
         system_role: { type: String, enum: ["customer", "employee", "manager"], default: "customer", required: true },
         avatar: { type: String },
 
+        emailVerified: { type: Boolean, default: false },
+        verifyEmailOtp: { type: String },
+        verifyEmailOtpExpires: { type: Date },
+
         resetPasswordOtp: { type: String },
         resetPasswordExpires: { type: Date },
+
         emailChangeOtp: {type: String },
         emailChangeNew: { type: String },
         emailChangeExpires: { type: Date },

@@ -8,12 +8,11 @@ const employeeSchema = new mongoose.Schema(
         date_birth: { type: Date },
         phone_number: { type: String, required: true, unique: true, trim: true },
         CCCD: { type: String, unique: true, required: true },
-        nationality: { type: String , default: "vietnam" },
-
-        position: { type: String, enum: ["manager", "receptionist", "technicican", "customer-service"], default: "receptionist" },
+        
+        position: { type: String, enum: ["manager", "receptionist", "technicican", "customer-service", "housekeeper"], default: "receptionist" },
         status: { type: String, enum: ["working", "resign"], default: "working" },
         fixed_salary: { type: Number },
-        working_year: { type: Number },
+        working_year: { type: Number, default: 0 },
     }, 
     { 
         timestamps: { updatedAt: "updated_at", createdAt: "created_at"}, 

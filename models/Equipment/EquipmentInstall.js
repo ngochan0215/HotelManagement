@@ -1,15 +1,17 @@
 import mongoose from "mongoose";
 
 // phiếu lắp đặt thiết bị trong phòng
-const facilityInstallSchema = new mongoose.Schema(
+const EquipmentInstallSchema = new mongoose.Schema(
     {
         employee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-        install_day: { type: Date, required: true },
+        room_id: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true },
+        install_date: { type: Date, required: true },
+        status: { type: String, enum: ["pending", "completed"], default: "pending" }
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
     }
 );
 
-const FacilityInstall = mongoose.models.FacilityInstall || mongoose.model("FacilityInstall", facilityInstallSchema);
-export default FacilityInstall;
+const EquipmentInstall = mongoose.models.EquipmentInstall || mongoose.model("EquipmentInstall", EquipmentInstallSchema);
+export default EquipmentInstall;

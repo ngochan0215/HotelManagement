@@ -6,19 +6,8 @@ const roomCategorySchema = new mongoose.Schema(
     description: { type: String, required: true, trim: true },
     max_adults: { type: Number, required: true, min: 1 },
     max_children: { type: Number, required: true, min: 0 },
-    default_equipment: {
-      type: [
-        {
-          equipment: { type: mongoose.Schema.Types.ObjectId, ref: "EquipmentCategory", required: true },
-          quantity: { type: Number, required: true, min: 1 },
-        },
-      ],
-      validate: {
-        validator: (arr) => arr.length > 0,
-        message: "Phải có ít nhất một tiện nghi mặc định.",
-      },
-    },
     price: { type: Number, required: true, min: 0 },
+    images: [ { type: String }]
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

@@ -4,7 +4,9 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         addEquipment, getAllEquipments, getEquipmentById, updateEquipment, deleteEquipment,
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket,
         createEquipmentImport, getAllEquipmentImports, getEquipmentImportById, updateEquipmentImport, deleteEquipmentImport,
-        confirmEquipmentTicket
+        confirmEquipmentTicket,
+        createInstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
+        confirmEquipmentInstall
 } from "../controllers/equipmentController.js";
 import { isManager, verifyToken } from "../middleware/authMiddleware.js";
 
@@ -37,7 +39,14 @@ router.get("/import/all", verifyToken, getAllEquipmentImports);
 router.get("/import/:id", verifyToken, getEquipmentImportById);
 router.put("/import/:id", verifyToken, isManager, updateEquipmentImport);
 router.delete("/import/:id", verifyToken, isManager, deleteEquipmentImport);
-
 router.post("/ticket/confirm/:id", verifyToken, isManager, confirmEquipmentTicket);
+
+//----PHIẾU LẮP ĐẶT THIẾT BỊ----//
+router.post("/install/add", verifyToken, isManager, createInstallTicket);
+router.get("/install/all", verifyToken, getAllEquipmentInstalls);
+router.get("/install/:id", verifyToken, getEquipmentInstallById);
+router.put("/install/:id", verifyToken, isManager, updateEquipmentInstall);
+router.delete("/install/:id", verifyToken, isManager, deleteEquipmentInstall);
+router.post("/install/confirm/:id", verifyToken, isManager, confirmEquipmentInstall);
 
 export default router;

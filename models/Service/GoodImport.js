@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 const goodImportSchema = new mongoose.Schema(
     {
         ticket_id: { type: mongoose.Schema.Types.ObjectId, ref: "GoodTicket", required: true },
-        service_id: { type: mongoose.Schema.Types.ObjectId, ref: "Service", required: true },
+        category_id: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceCategory", required: true },
         import_price: { type: Number, default: 0 },
         import_quantity: { type: Number, default: 0 }, 
     }, 
