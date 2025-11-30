@@ -1,0 +1,1 @@
+//Khai báo route toàn hệ thống
