@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from '../features/auth/pages/loginPage.jsx';
 import Dashboard from '../features/dashboard/pages/dashboard.jsx';
 import { useAuth } from '../features/auth/hooks/useAuth.js';
-
+import MainLayout from "../core/layout/mainLayout.jsx";
 export default function AppRoutes() {
   const { user } = useAuth();
 
