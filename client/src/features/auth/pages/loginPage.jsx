@@ -1,29 +1,50 @@
 import { useState } from 'react';
 import { AuthProvider } from '../hooks/authContext.jsx';
 import { useNavigate } from 'react-router-dom';
-import {useAuth} from '../hooks/useAuth.js';
+import { useAuth } from "../hooks/authContext.jsx";
+//import {useAuth} from '../hooks/useAuth.js';
 import Input from "../../../components/ui/Input.jsx";
 import Button from "../../../components/ui/Button.jsx";
 
 // Mock API call
+// const login = async (email, password) => {
+//   if (email === 'admin@example.com' && password === '123456') {
+//     return { token: 'fake-jwt-token' };
+//   } else {
+//     throw new Error('Email hoặc mật khẩu không đúng');
+//   }
+// };
+
 const login = async (email, password) => {
-  if (email === 'admin@example.com' && password === '123456') {
-    return { token: 'fake-jwt-token' };
-  } else {
-    throw new Error('Email hoặc mật khẩu không đúng');
+  const res = await fetch("http://localhost:3000/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email, password })
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Đăng nhập thất bại");
   }
+
+  return await res.json(); // API trả token + user id + system_role
 };
+
 
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
   const { loginUser } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
     try {
       const data = await login(email, password);
       loginUser(data.token);

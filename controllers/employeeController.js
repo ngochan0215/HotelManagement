@@ -29,7 +29,7 @@ export const registerEmployee = async (req, res) => {
     const randomAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
     
     const newUser = await User.create({
-      email, password: hashedPassword, system_role: "employee", avatar: randomAvatar
+      email, password: hashedPassword, system_role: "employee", avatar: randomAvatar, emailVerified: true,
     });
 
     const newEmployee =  await Employee.create({

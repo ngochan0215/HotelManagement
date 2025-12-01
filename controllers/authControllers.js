@@ -7,12 +7,12 @@ export const Login = async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email: email });
+        
+        if (!user) 
+            return res.status(400).json({ message: "Tài khoản không tồn tại" });
 
         if(!user.emailVerified)
             return res.status(401).json({ message: "Email chưa được xác thực." });
-
-        if (!user) 
-            return res.status(400).json({ message: "Tài khoản không tồn tại" });
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) 

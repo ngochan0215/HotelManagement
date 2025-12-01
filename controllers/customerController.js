@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { User, Customer } from "../models/index.js";
+import { sendVerificationEmail } from "../utils/sendEmails.js";
 
 export const createAccount = async (req, res) => {
     try {
