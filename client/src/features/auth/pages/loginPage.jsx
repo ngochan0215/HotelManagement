@@ -1,56 +1,27 @@
 import { useState } from 'react';
-import { AuthProvider } from '../hooks/authContext.jsx';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from "../hooks/authContext.jsx";
-//import {useAuth} from '../hooks/useAuth.js';
+import { AuthProvider,useAuth } from '../hooks/authContext.jsx';
 import Input from "../../../components/ui/Input.jsx";
 import Button from "../../../components/ui/Button.jsx";
 
-// Mock API call
-// const login = async (email, password) => {
-//   if (email === 'admin@example.com' && password === '123456') {
-//     return { token: 'fake-jwt-token' };
-//   } else {
-//     throw new Error('Email hoặc mật khẩu không đúng');
-//   }
-// };
-
-const login = async (email, password) => {
-  const res = await fetch("http://localhost:3000/auth/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ email, password })
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.message || "Đăng nhập thất bại");
-  }
-
-  return await res.json(); // API trả token + user id + system_role
-};
-
-
-function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-
-  const { loginUser } = useAuth();
+const LoginPage = () => {
+  const { login } = useAuth();
   const navigate = useNavigate();
+
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+
+  const handleChange = (e) => {
+    setCredentials({ ...credentials, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-
     try {
-      const data = await login(email, password);
-      loginUser(data.token);
-      navigate('/dashboard');
+      await login(credentials);
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Login failed");
     }
   };
 
@@ -63,17 +34,19 @@ function LoginPage() {
             <Input
               type="email"
               placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              name="email"
+              value={credentials.email}
+              onChange={handleChange}
             />
             <Input
               type="password"
               placeholder="Mật khẩu"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              name="password"
+              value={credentials.password}
+              onChange={handleChange}
               required
             />
+
             <Button type="submit">Đăng nhập</Button>
           </form>
         </div>
