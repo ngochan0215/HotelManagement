@@ -5,8 +5,8 @@ export const createShift = async (req, res) => {
     const { work_day, shift_type, begin_time, end_time } = req.body;
 
     if (!work_day || !shift_type || !begin_time || !end_time) {
-            return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin bắt buộc!" });
-        }
+      return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin bắt buộc!" });
+    }
 
     // Prevent duplicate shift (same day + type)
     const existing = await Shift.findOne({ work_day, shift_type });

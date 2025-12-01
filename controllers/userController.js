@@ -14,7 +14,7 @@ export const viewProfile = async (req, res) => {
             profile = await Customer.findOne({ user_id: id }).populate("user_id", "-password -__v -booking_count");
         } else if (role === "employee") {
             profile = await Employee.findOne({ user_id: id }).populate("user_id", "-password -__v");
-        } else if (role === "admin") {
+        } else if (role === "manager") {
             profile = await User.findById(id).select("email system_role");
         }
 

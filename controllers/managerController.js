@@ -59,7 +59,7 @@ export const getAllCustomers = async (req, res) => {
 };
 
 //---- QUY ĐỊNHH ----//
-export const createRule = async (req, res) => {
+export const setRule = async (req, res) => {
     
 }
 

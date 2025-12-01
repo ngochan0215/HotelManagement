@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
 import { User, Employee, Shift, Schedule } from "../models/index.js";
+import { defaultAvatars } from "../config/avatars.js";
 
 //------ EMPLOYEE ------//
 export const registerEmployee = async (req, res) => {
@@ -40,6 +41,7 @@ export const registerEmployee = async (req, res) => {
       data: { user_account: newUser, employee_account: newEmployee }
     });
   } catch (err) {
+    
     res.status(500).json({ message: "SERVER ERROR: ", err: err.message });
   }
 };

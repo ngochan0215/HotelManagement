@@ -20,11 +20,12 @@ import Discount from "./Discount.js";
 
 import RoomCategory from "./Room/RoomCategory.js";
 import Room from "./Room/Rooms.js";
+import DefaultEquipment from "./Room/DefaultEquipment.js";
 
 export {
     User, Customer, Employee, Shift, Schedule,
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
     Service, ServiceCategory, GoodImport, GoodTicket,
     Discount,
-    Room, RoomCategory,
+    Room, RoomCategory, DefaultEquipment,
 };

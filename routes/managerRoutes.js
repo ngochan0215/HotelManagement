@@ -1,7 +1,7 @@
 import express from "express";
 import { verifyToken, isManager  } from "../middleware/authMiddleware.js";
 import { createShift, updateShift, deleteShift, getShiftById, getAllShifts } from "../controllers/shiftController.js";
-import { getAllCustomers } from "../controllers/managerController.js";
+import { getAllCustomers, setRule } from "../controllers/managerController.js";
 
 const router = express.Router();
 
@@ -15,5 +15,7 @@ router.delete("/:id", verifyToken, isManager, deleteShift);
 // CUSTOMER
 router.get("/customers", verifyToken, isManager, getAllCustomers);
 
+// RULE
+router.post("/rule", verifyToken, isManager, setRule);
 export default router;
     
