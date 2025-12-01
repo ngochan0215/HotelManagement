@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build:css": "npx tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
-    "watch:css": "npx tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+    "build:css": "npx tailwindcss -i ./src/styles/index.css -o ./dist/output.css --minify",
+    "watch:css": "npx tailwindcss -i ./src/styles/index.css -o ./dist/output.css --watch"
   },
   "dependencies": {
     "react": "^19.2.0",
