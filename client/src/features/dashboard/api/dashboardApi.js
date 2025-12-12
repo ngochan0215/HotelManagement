@@ -1,4 +1,3 @@
-//mock data
 export const dashboardApi = {
   getOverview: () =>
     Promise.resolve({
@@ -7,10 +6,20 @@ export const dashboardApi = {
         revenueChangePercent: 2.1,
         updatedAt: "2025-11-03 02:17",
 
+        revenueChart: [
+          { day: "01", current: 120, lastWeek: 90 },
+          { day: "02", current: 150, lastWeek: 110 },
+          { day: "03", current: 130, lastWeek: 100 },
+          { day: "04", current: 170, lastWeek: 140 },
+          { day: "05", current: 160, lastWeek: 120 },
+          { day: "06", current: 190, lastWeek: 150 },
+          { day: "07", current: 210, lastWeek: 160 },
+        ],
+
         roomStatus: {
-          empty: 85,
-          busy: 85,
-          repair: 92,
+          empty: 15,
+          busy: 76,
+          repair: 9,
         },
 
         cancelReasons: [

@@ -37,20 +37,13 @@ const sidebarConfig = [
     type: "group",
     title: "Báo cáo thống kê",
     children: [
-      // Kinh doanh
       { name: "Doanh thu", path: "/reports/revenue", icon: FiFileText },
       { name: "Phòng trống", path: "/reports/available-rooms", icon: FiFileText },
       { name: "Lợi nhuận", path: "/reports/profit", icon: FiFileText },
-
-      // Vận hành
       { name: "Chi phí vận hành", path: "/reports/operational-costs", icon: FiFileText },
       { name: "Tỉ lệ lấp phòng", path: "/reports/occupancy-rate", icon: FiFileText },
-
-      // Khách hàng & dịch vụ
       { name: "Khách hàng", path: "/reports/customers", icon: FiFileText },
       { name: "Sử dụng dịch vụ", path: "/reports/service-usage", icon: FiFileText },
-
-      // Nhân sự & sự cố
       { name: "Hiệu suất nhân viên", path: "/reports/staff-performance", icon: FiFileText },
       { name: "Sự cố", path: "/reports/incidents", icon: FiFileText },
     ],
@@ -73,11 +66,9 @@ const SidebarItem = ({ item, isMain }) => {
     >
       <Icon
         size={16}
-        className={`
-          mr-3 transition-all duration-150
-          ${isActive ? ACTIVE_TEXT : ICON_COLOR}
-          group-hover:text-[#4b55c6]
-        `}
+        className={`mr-3 transition-all duration-150
+        ${isActive ? ACTIVE_TEXT : ICON_COLOR}
+        group-hover:text-[#4b55c6]`}
       />
       {item.name || item.title}
     </Link>
@@ -87,8 +78,9 @@ const SidebarItem = ({ item, isMain }) => {
 export default function Sidebar() {
   return (
     <div className="sidebar w-[270px] min-h-screen bg-[#f7f7f9] border-r border-gray-200">
+
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-6 border-b border-gray-300">
+      <div className="flex items-center gap-3 px-6 py-6">
         <div className="w-10 h-10 rounded-full bg-[#4b55c6] text-white flex items-center justify-center text-lg font-semibold">
           S
         </div>
@@ -97,26 +89,30 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="px-3 mt-4">
-        {sidebarConfig.map((section, i) => {
-          if (section.type === "main") {
-            return (
-              <div key={i}>
-                <SidebarItem item={section} isMain={true} />
-              </div>
-            );
-          }
 
-          return (
+        {/* Menu chính */}
+        <div className="pb-3 border-b border-gray-200">
+          {sidebarConfig
+            .filter(section => section.type === "main")
+            .map((item, i) => (
+              <SidebarItem key={i} item={item} isMain={true} />
+            ))}
+        </div>
+
+        {/* Nhóm Quản lý + Báo cáo */}
+        {sidebarConfig
+          .filter(section => section.type === "group")
+          .map((section, i) => (
             <div key={i} className="mt-6 mb-2">
               <h3 className="text-sm font-semibold text-slate-400 mb-2 px-4">
                 {section.title}
               </h3>
+
               {section.children.map((child, j) => (
                 <SidebarItem key={j} item={child} isMain={false} />
               ))}
             </div>
-          );
-        })}
+          ))}
       </nav>
     </div>
   );
