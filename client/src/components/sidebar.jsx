@@ -14,7 +14,6 @@ const HOVER_BG = "hover:bg-gray-800 hover:text-white";
 const sidebarConfig = [
   { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard" },
   { type: "main", title: "Lịch phòng", icon: FiCalendar, path: "/room-calendar" },
-
   {
     type: "group",
     title: "QUẢN LÝ",
