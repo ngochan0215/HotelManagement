@@ -2,17 +2,8 @@ import React, { useEffect, useState } from "react";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/Topbar.jsx";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell, Legend
 } from "recharts";
 import "../components/dashboard.css";
 
@@ -64,182 +55,184 @@ export default function Dashboard() {
     setBookingStats(mockBookingStats);
   }, []);
 
-  if (!overview || !bookingStats)
-    return <div className="p-6">Đang tải...</div>;
+  if (!overview || !bookingStats) return <div className="p-6">Đang tải...</div>;
 
-  const cancelColor = ["#6366F1", "#A5B4FC", "#E0E7FF"];
+  const cancelColors = ["#3B82F6", "#F59E0B", "#94A3B8"];
   const roomStatusData = [
-    { label: "Có khách", value: 79, color: "#6366F1" },
-    { label: "Trống", value: 15, color: "#A5B4FC" },
-    { label: "Sửa chữa", value: 6, color: "#E0E7FF" },
+    { label: "Có khách", value: 79, color: "#4F46E5" },
+    { label: "Trống", value: 15, color: "#10B981" },
+    { label: "Sửa chữa", value: 6, color: "#EF4444" },
   ];
 
   return (
-    <div className="dashboard-layout flex bg-gray-100 min-h-screen">
+    <div className="dashboard-layout flex bg-gray-50 min-h-screen font-sans">
       <Sidebar />
 
-      <div className="dashboard-content flex-1 bg-[#fefefe]">
+      <div className="dashboard-content flex-1">
         <Topbar />
 
         <div className="p-6 space-y-6">
-          <h1 className="text-2xl font-semibold mb-4">Bảng điều khiển</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-6 border-l-4 border-indigo-600 pl-3">
+            Bảng điều khiển
+          </h1>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-white p-6 rounded-xl shadow-md lg:col-span-2">
-              <div className="flex justify-between items-center mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
+              <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="font-semibold text-gray-700">Doanh thu</h2>
-                  <p className="text-4xl font-bold text-gray-900">
+                  <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Tổng Doanh thu</h2>
+                  <p className="text-3xl font-extrabold text-gray-900 mt-2">
                     {overview.revenue.toLocaleString()} VND
                   </p>
-                  <p className="text-green-600 mt-1">
-                    ↑ {overview.revenueChangePercent}% so với tuần trước
-                  </p>
+                  <div className="flex items-center mt-2">
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full flex items-center">
+                      ↑ {overview.revenueChangePercent}%
+                    </span>
+                    <span className="text-gray-500 text-sm ml-2">so với tuần trước</span>
+                  </div>
                 </div>
-                <button className="text-sm text-blue-600 hover:underline">
-                  Xem báo cáo
+                <button className="px-4 py-2 bg-indigo-50 text-indigo-600 text-sm font-medium rounded-lg hover:bg-indigo-100 transition">
+                  Xem chi tiết
                 </button>
               </div>
 
-              <div className="h-48 mt-4">
-                {overview.revenueChart && overview.revenueChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overview.revenueChart}>
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="current" fill="#6366F1" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="lastWeek" fill="#CBD5E1" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-sm text-gray-400">
-                    Không có dữ liệu biểu đồ doanh thu
-                  </div>
-                )}
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={overview.revenueChart} barGap={8}>
+                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#6B7280'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280'}} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                      cursor={{fill: '#F3F4F6'}}
+                    />
+                    <Bar dataKey="current" name="Tuần này" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="lastWeek" name="Tuần trước" fill="#E5E7EB" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Legend iconType="circle" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-md">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="font-semibold text-gray-700">Lý do hủy phòng</h2>
-                <button className="text-sm text-blue-600 hover:underline">
-                  Xem báo cáo
-                </button>
+                <h2 className="font-bold text-gray-700">Lý do hủy phòng</h2>
               </div>
 
-              <div className="flex items-center justify-between">
-                <PieChart width={200} height={200}>
-                  <Pie
-                    data={overview.cancelReasons}
-                    dataKey="value"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={2}
-                  >
-                    {overview.cancelReasons.map((_, i) => (
-                      <Cell key={i} fill={cancelColor[i]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-
-                <div className="space-y-2 text-sm">
+              <div className="flex-1 flex flex-col items-center justify-center relative">
+                <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                    <Pie
+                        data={overview.cancelReasons}
+                        dataKey="value"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={4}
+                    >
+                        {overview.cancelReasons.map((_, i) => (
+                        <Cell key={i} fill={cancelColors[i]} strokeWidth={0} />
+                        ))}
+                    </Pie>
+                    <Tooltip />
+                    </PieChart>
+                </ResponsiveContainer>
+                <div className="w-full space-y-3 mt-2">
                   {overview.cancelReasons.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span
-                        className="w-3 h-3 rounded-full"
-                        style={{ background: cancelColor[i] }}
-                      ></span>
-                      <span>
-                        {item.label}: {item.value}%
-                      </span>
+                    <div key={i} className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full" style={{ background: cancelColors[i] }}></span>
+                        <span className="text-gray-600">{item.label}</span>
+                      </div>
+                      <span className="font-semibold text-gray-800">{item.value}%</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-                     <div className="bg-white p-6 rounded-xl shadow-md flex flex-col items-center">
-                       <h3 className="font-medium text-gray-700 mb-4 text-lg">Trạng thái phòng</h3>
-                       <PieChart width={200} height={200}>
-                         <Pie
-                           data={roomStatusData}
-                           dataKey="value"
-                           nameKey="label"
-                           innerRadius={60}
-                           outerRadius={80}
-                           paddingAngle={2}
-                           isAnimationActive={false}
-                         >
-                           {roomStatusData.map((entry, index) => (
-                             <Cell key={`cell-${index}`} fill={entry.color} />
-                           ))}
-                         </Pie>
-                       </PieChart>
-                       <div className="flex justify-center gap-6 mt-6 text-sm flex-wrap w-full">
-                         {roomStatusData.map((item, i) => (
-                           <span key={i} className="flex items-center gap-1">
-                             <span
-                               className="w-3 h-3 rounded-full"
-                               style={{ background: item.color }}
-                             ></span>
-                             {item.label} {item.value}%
-                           </span>
-                         ))}
-                       </div>
-                     </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-6 text-lg border-b pb-2">Trạng thái phòng hiện tại</h3>
 
-            <div className="bg-white p-5 rounded-xl shadow-md">
-              <h3 className="font-medium text-gray-700 mb-4">
-                Loại phòng được đặt nhiều nhất
+                <div className="flex items-center justify-between">
+                    <div className="relative w-32 h-32">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                data={roomStatusData}
+                                dataKey="value"
+                                innerRadius={40}
+                                outerRadius={60}
+                                paddingAngle={2}
+                                >
+                                {roomStatusData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0}/>
+                                ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col">
+                            <span className="text-xs text-gray-400">Tổng</span>
+                            <span className="text-xl font-bold text-gray-800">100</span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 ml-6 space-y-3">
+                         {roomStatusData.map((item, i) => (
+                           <div key={i} className="flex justify-between items-center">
+                             <div className="flex items-center gap-2">
+                               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: item.color }}></span>
+                               <span className="text-sm text-gray-600">{item.label}</span>
+                             </div>
+                             <span className="text-sm font-bold" style={{ color: item.color }}>
+                               {item.value}%
+                             </span>
+                           </div>
+                         ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="font-bold text-gray-700 mb-4">
+                Loại phòng "Hot" nhất
               </h3>
-              <ul className="space-y-3 text-gray-700">
+              <ul className="space-y-4">
                 {overview.topRoomTypes.map((room, i) => (
-                  <li key={i} className="flex justify-between border-b pb-2">
-                    <span>{room.name}</span>
-                    <span>{room.price.toLocaleString()} VND</span>
+                  <li key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div className="flex items-center gap-3">
+                        <span className="text-gray-400 font-bold text-lg">#{i + 1}</span>
+                        <span className="text-gray-700 font-medium text-sm">{room.name}</span>
+                    </div>
+                    <span className="text-indigo-600 font-bold text-sm">{room.price.toLocaleString()} đ</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-semibold text-gray-700">Đặt phòng</h2>
-                <button className="text-sm text-blue-600 hover:underline">
-                  Xem báo cáo
-                </button>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="font-bold text-gray-700">Lượt đặt phòng</h2>
+                <span className="text-xs font-medium px-2 py-1 bg-red-100 text-red-600 rounded">
+                   ↓ {bookingStats.percentChange}%
+                </span>
               </div>
 
-              <p className="text-4xl font-bold">
-                {bookingStats.total.toLocaleString()}
-              </p>
-              <p className="text-red-500 mb-4">
-                ↓ {bookingStats.percentChange}% so với tuần trước
+              <p className="text-2xl font-extrabold text-gray-900 mb-6">
+                {bookingStats.total.toLocaleString()} <span className="text-sm font-normal text-gray-400">lượt</span>
               </p>
 
-              <div className="h-64">
+              <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={bookingStats.chart}>
-                    <XAxis dataKey="day" />
-                    <YAxis />
+                    <XAxis dataKey="day" hide />
                     <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="current"
-                      stroke="#6366F1"
-                      strokeWidth={3}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="lastWeek"
-                      stroke="#CBD5E1"
-                      strokeWidth={3}
-                    />
+                    <Line type="monotone" dataKey="current" stroke="#4F46E5" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                    <Line type="monotone" dataKey="lastWeek" stroke="#CBD5E1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
+
           </div>
         </div>
       </div>
