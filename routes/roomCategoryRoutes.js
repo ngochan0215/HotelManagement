@@ -12,10 +12,10 @@ import uploadRoomImages from "../middleware/uploadImage.js";
 const router = express.Router();
 
 // ROOM CATEGORY
-router.post("/category/add", verifyToken, isManager, uploadRoomImages.array("images", 10), createRoomCategory );
-router.get("/category/all", getAllRoomCategories);
-router.get("/category/:id", getRoomCategoryById);
-router.put("/category/:id", verifyToken, isManager, uploadRoomImages.array("images", 10), updateRoomCategory);
-router.delete("/category/:id", verifyToken, isManager, deleteRoomCategory);
+router.post("/add", verifyToken, isManager, uploadRoomImages.array("images", 10), createRoomCategory );
+router.get("/all", getAllRoomCategories);
+router.get("/:id", getRoomCategoryById);
+router.put("/:id", verifyToken, isManager, uploadRoomImages.array("images", 10), updateRoomCategory);
+router.delete("/:id", verifyToken, isManager, deleteRoomCategory);
 
 export default router;

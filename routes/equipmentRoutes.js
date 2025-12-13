@@ -14,8 +14,8 @@ const router = express.Router();
 
 //----DANH MỤC THIẾT BỊ - EQUIPMENT CATEGORY----//
 router.post("/category/add", verifyToken, isManager, createEquipmentCategory);
-router.put("/category/update/:id", verifyToken, isManager, updateEquipmentCategory);
-router.delete("/category/delete/:id", verifyToken, isManager, deleteEquipmentCategory);
+router.put("/category/:id", verifyToken, isManager, updateEquipmentCategory);
+router.delete("/category/:id", verifyToken, isManager, deleteEquipmentCategory);
 router.get("/category/all", verifyToken, getAllEquipmentCategories);
 router.get("/category/:id", verifyToken, getEquipmentCategoryById);
 

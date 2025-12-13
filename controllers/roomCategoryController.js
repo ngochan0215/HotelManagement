@@ -8,6 +8,11 @@ export const createRoomCategory = async (req, res) => {
         if (!category_name || !description || !max_adults || !price)
             return res.status(400).json({ success: false, message: "Vui lòng nhập đầy đủ thông tin bắt buộc!" });
 
+        // Check duplicate
+        const existing = await RoomCategory.findOne({ category_name });
+        if (existing)
+            return res.status(400).json({ success: false, message: "Tên loại phòng đã tồn tại!" });
+
         let equipmentList = [];
         if (typeof default_equipments === "string") {
             try {
@@ -23,10 +28,12 @@ export const createRoomCategory = async (req, res) => {
             return res.status(400).json({ message: "Danh sách thiết bị mặc định không hợp lệ" });
         }
 
-        // Check duplicate
-        const existing = await RoomCategory.findOne({ category_name });
-        if (existing)
-            return res.status(400).json({ success: false, message: "Tên loại phòng đã tồn tại!" });
+        if (!equipmentList || equipmentList.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Vui lòng chọn ít nhất một thiết bị mặc định"
+            });
+        }
 
         let images = [];
         if (req.files && req.files.length > 0) {
@@ -64,11 +71,15 @@ export const createRoomCategory = async (req, res) => {
 export const updateRoomCategory = async (req, res) => {
     try {
         const { id } = req.params;
-        console.log("UPDATE REQUEST BODY:", req.body);
         const { category_name, description, max_adults, max_children, default_equipments, price } = req.body;
 
         const category = await RoomCategory.findById(id);
-        if (!category) return res.status(404).json({ message: "Không tìm thấy loại phòng" });
+        if (!category) 
+            return res.status(404).json({ message: "Không tìm thấy loại phòng" });
+
+        const existing = await RoomCategory.findOne({ category_name: category_name, _id: { $ne: id } });
+        if (existing)
+            return res.status(400).json({ success: false, message: "Tên loại phòng đã tồn tại!" });
 
         // update các thông tin cơ bản
         category.category_name = category_name ?? category.category_name;
@@ -156,7 +167,11 @@ export const deleteRoomCategory = async (req, res) => {
 
         const relatedRoomCount = await Room.countDocuments({ category_id: id });
         if (relatedRoomCount > 0 && !force) {
-            return res.status(400).json({ success: false, message: `Loại phòng này có ${relatedServiceCount} phòng. Dùng ?force=true để xóa tất cả các phòng thuộc loại phòng này.` });
+            return res.status(409).json({ 
+                success: false, 
+                code: "CATEGORY_HAS_ROOMS",
+                roomCount: relatedRoomCount,
+                message: `Loại phòng này có ${relatedRoomCount} phòng. Bạn có muốn xóa tất cả các phòng thuộc loại phòng này không?` });
         }
         if (force) {
             await Room.deleteMany({ category_id: id });
@@ -192,7 +207,9 @@ export const getAllRoomCategories = async (req, res) => {
             categories.map(async cat => {
                 const equipments = await DefaultEquipment.find({
                     category_id: cat._id
-                }).populate("equipment_category_id", "category_name");
+                })
+                    .select("-_id")
+                    .populate("equipment_category_id", "name");
 
                 return {
                     ...cat.toObject(),

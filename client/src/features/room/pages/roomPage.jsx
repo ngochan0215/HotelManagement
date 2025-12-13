@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import Sidebar from "../../../components/sidebar";
 import Topbar from "../../../components/Topbar";
-import RoomListTab from "./RoomListTab";
-import RoomCategoryTab from "./RoomCategoryTab";
+import RoomListTab from "./roomListTab";
+import RoomCategoryTab from "./roomCategoryTab";
 import { FaBed, FaLayerGroup } from "react-icons/fa";
 
 export default function RoomPage() {

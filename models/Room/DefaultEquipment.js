@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+// danh sách thiết bị mặc định của phòng
 const defaultEquipmentSchema = new mongoose.Schema(
   {
     category_id: {

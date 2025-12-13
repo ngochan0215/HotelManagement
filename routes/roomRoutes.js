@@ -8,7 +8,6 @@ import {
     getRoomsByCategory
 } from "../controllers/roomController.js";
 import { isManager, verifyToken } from "../middleware/authMiddleware.js";
-import uploadRoomImages from "../middleware/uploadImage.js";
 
 const router = express.Router();
 

@@ -114,7 +114,7 @@ export default function RoomListTab() {
               setIsModalOpen(true);
               // Tự chọn loại phòng đầu tiên nếu có
               const firstCatId = categories.length > 0 ? categories[0]._id : "";
-              setFormData({ room_number: "", category_id: firstCatId, room_status: "available" });
+              setFormData({ room_number: "", category_id: "", room_status: "available" });
             }}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition"
         >
@@ -139,7 +139,7 @@ export default function RoomListTab() {
               // Tìm tên loại phòng an toàn
               let catName = "---";
               if (room.category_id && room.category_id.category_name) {
-                catName = room.category_id.category_name; // Nếu backend đã populate
+                catName = room.category_id.category_name;
               } else if (categories.length > 0) {
                 const foundCat = categories.find(c => c._id === room.category_id);
                 if (foundCat) catName = foundCat.category_name;

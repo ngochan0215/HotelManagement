@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const BASE_URL = "http://localhost:3000/room";
+const BASE_URL_ = "http://localhost:3000/room-category";
 
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
@@ -8,18 +9,19 @@ const getAuthHeader = () => {
 };
 
 export const roomApi = {
+  // room-category
   getAllCategories: async () => {
-    const response = await axios.get(`${BASE_URL}/category/all`);
+    const response = await axios.get(`${BASE_URL_}/all`);
     return response.data;
   },
 
   getCategoryById: async (id) => {
-    const response = await axios.get(`${BASE_URL}/category/${id}`);
+    const response = await axios.get(`${BASE_URL_}/${id}`);
     return response.data;
   },
 
   createCategory: async (formData) => {
-    const response = await axios.post(`${BASE_URL}/category/add`, formData, {
+    const response = await axios.post(`${BASE_URL_}/add`, formData, {
       headers: {
         ...getAuthHeader().headers,
         "Content-Type": "multipart/form-data"
@@ -29,7 +31,7 @@ export const roomApi = {
   },
 
   updateCategory: async (id, formData) => {
-    const response = await axios.put(`${BASE_URL}/category/${id}`, formData, {
+    const response = await axios.put(`${BASE_URL_}/${id}`, formData, {
       headers: {
         ...getAuthHeader().headers,
         "Content-Type": "multipart/form-data"
@@ -39,9 +41,16 @@ export const roomApi = {
   },
 
   deleteCategory: async (id) => {
-    const response = await axios.delete(`${BASE_URL}/category/${id}`, getAuthHeader());
+    const response = await axios.delete(`${BASE_URL_}/${id}`, getAuthHeader());
     return response.data;
   },
+
+  forceDeleteCategory: async (id) => {
+    const response = await axios.delete(`${BASE_URL_}/${id}?force=true`, getAuthHeader());
+    return response.data;
+  },
+
+  // room
   getAllRooms: async () => {
     const response = await axios.get(`${BASE_URL}/all`);
     return response.data;
