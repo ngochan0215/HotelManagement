@@ -71,3 +71,65 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.topbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-search {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.search-input {
+  width: 380px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #f5f6fa;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  color: #444;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #bcd0ff;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.username {
+  font-weight: 500;
+  color: #444;
+}
+
+.avatar-circle {
+  width: 40px;
+  height: 40px;
+  background: #fde68a;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 700;
+  color: #333;
+}
+
