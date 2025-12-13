@@ -11,6 +11,7 @@ import managerRoute from "./routes/managerRoutes.js";
 import serviceRoute from  "./routes/serviceRoutes.js";
 import discountRoute from "./routes/discountRoutes.js";
 import roomRoute from "./routes/roomRoutes.js";
+import roomCategoryRoute from "./routes/roomCategoryRoutes.js";
 import equipmentRoute from "./routes/equipmentRoutes.js";
 import employeeRoute from "./routes/employeeRoutes.js";
 
@@ -34,6 +35,7 @@ app.use("/employee", employeeRoute);
 app.use("/service", serviceRoute);
 app.use("/discount", discountRoute);
 app.use("/room", roomRoute);
+app.use("/room-category", roomCategoryRoute);
 app.use("/equipment", equipmentRoute);
 
 app.use("/avatars", express.static("avatars"));

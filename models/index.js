@@ -22,10 +22,13 @@ import RoomCategory from "./Room/RoomCategory.js";
 import Room from "./Room/Rooms.js";
 import DefaultEquipment from "./Room/DefaultEquipment.js";
 
+import Booking from "./Booking/Booking.js";
+
 export {
     User, Customer, Employee, Shift, Schedule,
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
     Service, ServiceCategory, GoodImport, GoodTicket,
     Discount,
     Room, RoomCategory, DefaultEquipment,
+    Booking,
 };

@@ -1,10 +1,5 @@
 import express from "express";
 import { 
-    createRoomCategory, 
-    updateRoomCategory, 
-    deleteRoomCategory, 
-    getAllRoomCategories, 
-    getRoomCategoryById,
     createRoom,
     getAllRooms,
     getRoomById,
@@ -17,14 +12,6 @@ import uploadRoomImages from "../middleware/uploadImage.js";
 
 const router = express.Router();
 
-// ROOM CATEGORY
-router.post("/category/add", verifyToken, isManager, uploadRoomImages.array("images", 10), createRoomCategory );
-router.get("/category/all", getAllRoomCategories);
-router.get("/category/:id", getRoomCategoryById);
-router.put("/category/:id", verifyToken, isManager, uploadRoomImages.array("images", 10), updateRoomCategory);
-router.delete("/category/:id", verifyToken, isManager, deleteRoomCategory);
-
-// ROOM
 router.post("/add", verifyToken, isManager, createRoom);
 router.get("/all", getAllRooms);
 router.get("/by-category", getRoomsByCategory);
