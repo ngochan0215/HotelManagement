@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 
 const checkinOutSchema = new mongoose.Schema(
   {
-    booking_id: {
+    booking_detail_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
+      ref: "BookingDetail",
       required: true,
     },
     employee_id: {
@@ -13,8 +13,18 @@ const checkinOutSchema = new mongoose.Schema(
       required: true,
     },
 
-    actual_checkin: { type: Date, required: true },
-    actual_checkout: { type: Date, required: true },
+    action: {
+      type: String,
+      enum: ["checkin", "checkout"],
+      required: true,
+    },
+
+    action_time: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+    
     note: { type: String, default: "" },
   },
   {

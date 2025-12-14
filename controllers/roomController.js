@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment } from "../models/index.js";
+import { Room, RoomCategory, DefaultEquipment, BookingDetail, Booking, CheckInOut } from "../models/index.js";
 
+// ROOM
 export const createRoom = async (req, res) => {
     try {
         const { category_id, room_number, room_status } = req.body;
@@ -177,6 +178,7 @@ export const deleteRoom = async (req, res) => {
     }
 };
 
+
 // Group all rooms by category (including categories with zero rooms)
 export const getRoomsByCategory = async (req, res) => {
     try {
@@ -292,3 +294,102 @@ export const getRoomsByCategory = async (req, res) => {
     }
 };
 
+// trả về số lượng phòng group by tình trạng
+export const getRoomStatusSummary = async (req, res) => {
+  try {
+    const result = await Room.aggregate([
+      {
+        $group: {
+          _id: "$room_status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const summary = {
+      available: 0,
+      booked: 0,
+      occupied: 0,
+      cleaning: 0,
+      maintenance: 0,
+      total: 0,
+    };
+
+    result.forEach(item => {
+      summary[item._id] = item.count;
+      summary.total += item.count;
+    });
+
+    return res.json(summary);
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Không thống kê được tình trạng các phòng ở hiện tại.",
+      error: error.message,
+    });
+  }
+};
+
+// trả về những phòng được đặt nhiều nhất
+export const getTopBookedRoomCategories = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 5;
+
+    const result = await BookingDetail.aggregate([
+      // join sang Room
+      {
+        $lookup: {
+          from: "rooms",
+          localField: "room_id",
+          foreignField: "_id",
+          as: "room",
+        },
+      },
+      { $unwind: "$room" },
+
+      // group theo category
+      {
+        $group: {
+          _id: "$room.category_id",
+          totalBooked: { $sum: 1 },
+        },
+      },
+
+      // sort giảm dần
+      { $sort: { totalBooked: -1 } },
+
+      // limit
+      { $limit: limit },
+
+      // join sang RoomCategory
+      {
+        $lookup: {
+          from: "roomcategories",
+          localField: "_id",
+          foreignField: "_id",
+          as: "category",
+        },
+      },
+      { $unwind: "$category" },
+
+      // kết quả trả về cúi cùm
+      {
+        $project: {
+          _id: 0,
+          category_id: "$_id",
+          name: "$category.category_name",
+          price: "$category.price",
+          totalBooked: 1,
+        },
+      },
+    ]);
+
+    return res.json(result);
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Không lấy được danh sách các loại phòng được đặt nhiều nhất.",
+      error: error.message,
+    });
+  }
+};

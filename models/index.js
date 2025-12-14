@@ -23,6 +23,9 @@ import Room from "./Room/Rooms.js";
 import DefaultEquipment from "./Room/DefaultEquipment.js";
 
 import Booking from "./Booking/Booking.js";
+import BookingDetail from "./Booking/BookingDetail.js";
+import CheckInOut from "./Booking/CheckInOut.js";
+import RoomCancellation from "./Booking/RoomCancellation.js";
 
 export {
     User, Customer, Employee, Shift, Schedule,
@@ -30,5 +33,5 @@ export {
     Service, ServiceCategory, GoodImport, GoodTicket,
     Discount,
     Room, RoomCategory, DefaultEquipment,
-    Booking,
+    Booking, BookingDetail, CheckInOut, RoomCancellation,
 };

@@ -22,7 +22,14 @@ export const Login = async (req, res) => {
             expiresIn: "1d",
         });
 
-        res.json({ message: "Đăng nhập thành công", token });
+        const safeUser = {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.system_role
+        };
+
+        res.json({ message: "Đăng nhập thành công", token, safeUser });
     } catch (err) {
         res.status(500).json({ message: "Lỗi server", error: err.message });
     }

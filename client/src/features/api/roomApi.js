@@ -70,4 +70,21 @@ export const roomApi = {
     const response = await axios.delete(`${BASE_URL}/${id}`, getAuthHeader());
     return response.data;
   },
+
+  getRoomStatusSummary: async () => {
+    const response = await axios.get(`${BASE_URL}/statistic/status`, getAuthHeader());
+    return response.data;
+  },
+
+  getTopRoomTypes: async (limit = 5) => {
+    const response = await axios.get(
+      `${BASE_URL}/statistic/top-booked`,
+      {
+        ...getAuthHeader(),
+        params: { limit },
+      }
+    );
+    return response.data;
+  },
+
 };

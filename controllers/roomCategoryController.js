@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment, Booking } from "../models/index.js";
+import { Room, RoomCategory, DefaultEquipment, Booking, BookingDetail, CheckInOut } from "../models/index.js";
 
 export const createRoomCategory = async (req, res) => {
     try {
@@ -246,47 +246,98 @@ export const getRoomCategoryById = async (req, res) => {
     }
 };
 
-// thống kê các loại phòng được đặt nhiều nhất
-export const getTopRoomCategories = async (req, res) => {
+// trả về thông tin các loại phòng còn trống trong khoảng thời gian nhất định
+export const getAvailableRoomCategories = async (req, res) => {
   try {
-    const result = await Booking.aggregate([
+    const { checkin, checkout, adults, children, minPrice, maxPrice } = req.query;
+
+    if (!checkin || !checkout) {
+      return res.status(400).json({
+        message: "Phải điền thời gian nhận và trả phòng.",
+      });
+    }
+
+    const start = new Date(checkin);
+    const end = new Date(checkout);
+
+    if (start >= end) {
+      return res.status(400).json({ message: "Ngày trả phòng phải sau ngày nhận phòng." });
+    }
+
+    // query các đơn đặt phòng
+    const bookings = await Booking.find({
+      status: { $in: ["confirmed", "checked_in"] },
+    }).select("_id");
+
+    const bookingIds = bookings.map(b => b._id);
+
+    // query các phòng bị chiếm trong khoảng thời gian ở trên
+    const busyRooms = await BookingDetail.find({
+      booking_id: { $in: bookingIds },
+      checkin_expected: { $lt: end },
+      checkout_expected: { $gt: start },
+    }).select("room_id");
+
+    const busyRoomIds = busyRooms.map(b => b.room_id);
+
+    // tập hợp các điều kiện lọc loại phòng
+    const categoryFilter = {};
+
+    if (adults) {
+      categoryFilter["category.max_adults"] = { $gte: Number(adults) };
+    }
+    if (children) {
+        categoryFilter["category.max_children"] = { $gte: Number(children) };
+    }
+
+    if (minPrice || maxPrice) {
+      categoryFilter["category.price"] = {};
+      if (minPrice) categoryFilter["category.price"].$gte = Number(minPrice);
+      if (maxPrice) categoryFilter["category.price"].$lte = Number(maxPrice);
+    }
+
+    const data = await Room.aggregate([
       {
-        $lookup: {
-          from: "rooms",
-          localField: "roomId",
-          foreignField: "_id",
-          as: "room"
-        }
+        $match: {
+          _id: { $nin: busyRoomIds },
+          room_status: { $in: ["available", "cleaning"] },
+        },
       },
-      { $unwind: "$room" },
       {
         $group: {
-          _id: "$room.category",
-          totalBookings: { $sum: 1 }
-        }
+          _id: "$category_id",
+          availableRooms: { $sum: 1 },
+        },
       },
-      { $sort: { totalBookings: -1 } },
-      { $limit: 5 }         // top x loại phòng được đặt nhiều nhất
+      {
+        $lookup: {
+          from: "roomcategories",
+          localField: "_id",
+          foreignField: "_id",
+          as: "category",
+        },
+      },
+      { $unwind: "$category" },
+      { $match: categoryFilter },
+      {
+        $project: {
+          _id: 0,
+          category_id: "$category._id",
+          name: "$category.category_name",
+          price: "$category.price",
+          adults: "$category.max_adults",
+          children: "$category.max_children",
+          description: "$category.description",
+          availableRooms: 1,
+        },
+      },
+      { $sort: { price: 1 } },
     ]);
 
-    return res.json(result);
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
-
-// export const getRoomCategoryById = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const category = await RoomCategory.findById(id).populate("default_equipment.equipment", "name type").select("-created_at -updated_at -__v");
-//     if (!category)
-//       return res.status(404).json({ success: false, message: "Không tìm thấy loại phòng!" });
-
-//     return res.status(200).json({ success: true, category });
-    
-//   } catch (err) {
-//     console.error(err);
-//     return res.status(500).json({ success: false, message: "SERVER ERROR", err: err.message });
-//   }
-// };

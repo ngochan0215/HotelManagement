@@ -8,7 +8,7 @@ const bookingSchema = new mongoose.Schema(
       required: true,
     },
 
-    employee_id: {
+    handled_by: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
       default: null
@@ -27,13 +27,26 @@ const bookingSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    checkin_expected: { type: Date, required: true },
-    checkout_expected: { type: Date, required: true },
+    expected_checkin: {
+      type: Date,
+      required: true,
+    },
+
+    expected_checkout: {
+      type: Date,
+      required: true,
+      validate: {
+        validator: function (value) {
+          return value > this.expected_checkin;
+        },
+        message: "Ngày check-out phải sau ngày check-in.",
+      },
+    },
 
     adults: { type: Number, required: true, min: 1 },
     children: { type: Number, required: true, min: 0 },
 
-    deposit: { type: Number, default: 0 },
+    deposit: { type: Number, default: 0, min: 0 },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

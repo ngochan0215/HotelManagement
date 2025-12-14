@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../../../components/sidebar.jsx";
-import Topbar from "../../../components/Topbar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import { roomApi } from "../../api/roomApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
+
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend
@@ -10,8 +13,52 @@ import "../components/dashboard.css";
 export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [bookingStats, setBookingStats] = useState(null);
+  const [roomStatus, setRoomStatus] = useState(null);
+  const [topRoomTypes, setTopRoomTypes] = useState([]);
+  const [cancelReasons, setCancelReasons] = useState([]);
 
   useEffect(() => {
+      const fetchRoomStatus = async () => {
+      try {
+        const data = await roomApi.getRoomStatusSummary();
+        setRoomStatus(data);
+      } catch (error) {
+        alert("Lỗi: " + (error.response?.data?.message || error.message));
+      }
+    };
+
+    const fetchTopRoomTypes = async () => {
+      try {
+        const data = await roomApi.getTopRoomTypes(5);
+        setTopRoomTypes(data);
+      } catch (error) {
+        alert("Lỗi: " + (error.response?.data?.message || error.message));
+      }
+    };
+
+    const fetchCancelReasons = async () => {
+      try {
+        const data = await bookingApi.getCancellationReasonStats();
+
+        // tổng số lần hủy
+        const total = data.reduce((sum, item) => sum + item.total, 0);
+
+        // map về đúng format PieChart đang dùng
+        const chartData = data.map(item => ({
+          label: item.reason_label,
+          value: Math.round((item.total / total) * 100),
+        }));
+
+        setCancelReasons(chartData);
+      } catch (error) {
+        alert("LỖI: " + (error.response?.data?.message || error.message));
+      }
+    }
+
+    fetchRoomStatus();
+    fetchTopRoomTypes();
+    fetchCancelReasons();
+
     const mockOverview = {
       revenue: 7852000,
       revenueChangePercent: 2.1,
@@ -24,18 +71,17 @@ export default function Dashboard() {
         { day: "06", current: 145, lastWeek: 170 },
         { day: "07", current: 165, lastWeek: 140 },
       ],
-      cancelReasons: [
-        { label: "Đổi lịch trình", value: 40 },
-        { label: "Bận nhầm", value: 32 },
-        { label: "Lý do khác", value: 28 },
-      ],
-      roomStatus: { empty: 15, busy: 79, repair: 6 },
-      topRoomTypes: [
-        { name: "Phòng VIP Hướng Biển", price: 1200000 },
-        { name: "Phòng Deluxe Đôi", price: 950000 },
-        { name: "Phòng Standard", price: 650000 },
-        { name: "Phòng Suite Cao Cấp", price: 1800000 },
-      ],
+      // cancelReasons: [
+      //   { label: "Đổi lịch trình", value: 40 },
+      //   { label: "Bận nhầm", value: 32 },
+      //   { label: "Lý do khác", value: 28 },
+      // ],
+      // topRoomTypes: [
+      //   { name: "Phòng VIP Hướng Biển", price: 1200000 },
+      //   { name: "Phòng Deluxe Đôi", price: 950000 },
+      //   { name: "Phòng Standard", price: 650000 },
+      //   { name: "Phòng Suite Cao Cấp", price: 1800000 },
+      // ],
     };
 
     const mockBookingStats = {
@@ -55,14 +101,18 @@ export default function Dashboard() {
     setBookingStats(mockBookingStats);
   }, []);
 
-  if (!overview || !bookingStats) return <div className="p-6">Đang tải...</div>;
+  if (!overview || !bookingStats || !roomStatus || !cancelReasons) 
+    return <div className="p-6">Đang tải...</div>;
 
   const cancelColors = ["#3B82F6", "#F59E0B", "#94A3B8"];
   const roomStatusData = [
-    { label: "Có khách", value: 79, color: "#4F46E5" },
-    { label: "Trống", value: 15, color: "#10B981" },
-    { label: "Sửa chữa", value: 6, color: "#EF4444" },
+    { label: "Có khách", value: roomStatus.occupied, color: "#4F46E5" },
+    { label: "Trống", value: roomStatus.available, color: "#10B981" },
+    { label: "Sửa chữa", value: roomStatus.maintenance, color: "#EF4444" },
+    { label: "Đang dọn dẹp", value: roomStatus.cleaning, color: "#3593c2ff" },
+    { label: "Đã đặt trước", value: roomStatus.booked, color: "#f9d478ff" },
   ];
+  const overviewCancelReasons = cancelReasons;
 
   return (
     <div className="dashboard-layout flex bg-gray-50 min-h-screen font-sans">
@@ -122,27 +172,30 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                     <Pie
-                        data={overview.cancelReasons}
+                        data={overviewCancelReasons}
                         dataKey="value"
                         innerRadius={55}
                         outerRadius={75}
                         paddingAngle={4}
                     >
-                        {overview.cancelReasons.map((_, i) => (
-                        <Cell key={i} fill={cancelColors[i]} strokeWidth={0} />
+                        {overviewCancelReasons.map((_, i) => (
+                        <Cell key={i} fill={cancelColors[i % cancelColors.length]} strokeWidth={0} />
                         ))}
                     </Pie>
                     <Tooltip />
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="w-full space-y-3 mt-2">
-                  {overview.cancelReasons.map((item, i) => (
+                  {overviewCancelReasons.map((item, i) => (
                     <div key={i} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ background: cancelColors[i] }}></span>
+                        <span className="w-3 h-3 rounded-full" style={{ background: cancelColors[i % cancelColors.length] }}></span>
                         <span className="text-gray-600">{item.label}</span>
                       </div>
-                      <span className="font-semibold text-gray-800">{item.value}%</span>
+                      <span className="text-sm font-bold" style={{ color: item.color }}>
+                        {item.value}%
+                      </span>
+
                     </div>
                   ))}
                 </div>
@@ -172,7 +225,7 @@ export default function Dashboard() {
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex items-center justify-center flex-col">
                             <span className="text-xs text-gray-400">Tổng</span>
-                            <span className="text-xl font-bold text-gray-800">100</span>
+                            <span className="text-xl font-bold text-gray-800">{roomStatus?.total}</span>
                         </div>
                     </div>
 
@@ -184,8 +237,8 @@ export default function Dashboard() {
                                <span className="text-sm text-gray-600">{item.label}</span>
                              </div>
                              <span className="text-sm font-bold" style={{ color: item.color }}>
-                               {item.value}%
-                             </span>
+                              {Math.round((item.value / roomStatus.total) * 100)}%
+                            </span>
                            </div>
                          ))}
                     </div>
@@ -197,7 +250,7 @@ export default function Dashboard() {
                 Loại phòng "Hot" nhất
               </h3>
               <ul className="space-y-4">
-                {overview.topRoomTypes.map((room, i) => (
+                {/* {overview.topRoomTypes.map((room, i) => (
                   <li key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                     <div className="flex items-center gap-3">
                         <span className="text-gray-400 font-bold text-lg">#{i + 1}</span>
@@ -205,9 +258,32 @@ export default function Dashboard() {
                     </div>
                     <span className="text-indigo-600 font-bold text-sm">{room.price.toLocaleString()} đ</span>
                   </li>
+                ))} */}
+
+                {topRoomTypes.map((room, i) => (
+                  <li
+                    key={i}
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-400 font-bold text-lg">#{i + 1}</span>
+                      <span className="text-gray-700 font-medium text-sm">
+                        {room.name}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="block text-indigo-600 font-bold text-sm">
+                        {room.price.toLocaleString()} đ
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {room.totalBooked} lượt đặt
+                      </span>
+                    </div>
+                  </li>
                 ))}
-              </ul>
-            </div>
+
+                              </ul>
+                            </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
               <div className="flex justify-between items-center mb-2">

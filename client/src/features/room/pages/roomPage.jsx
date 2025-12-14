@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/Topbar";
+import Topbar from "../../../components/topbar";
 import RoomListTab from "./roomListTab";
 import RoomCategoryTab from "./roomCategoryTab";
 import { FaBed, FaLayerGroup } from "react-icons/fa";

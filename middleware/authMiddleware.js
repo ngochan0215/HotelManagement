@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import { User } from "../models/index.js";
+import { User, Booking, Customer } from "../models/index.js";
 
 dotenv.config();
 
@@ -45,6 +45,33 @@ export const isEmployee = (req, res, next) => {
     }
     return res.status(403).json({ message: "Bạn không phải Nhân viên, không có quyền truy cập." });
 };
+
+export const canAccessBooking = async (req, res, next) => {
+    const bookingId = req.body.booking_id || req.params.bookingId;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+        return res.status(404).json({ message: "Booking không tồn tại." });
+    }
+
+    const customer = await Customer.findById(booking.customer_id);
+    if (!customer) {
+        return res.status(404).json({ message: "Customer không tồn tại." });
+    }
+
+    // customer chỉ được thao tác booking của mình
+    if ( req.user.role === "customer" && customer.user_id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: "Bạn không phải là người đứng ra đặt phòng." });
+    }
+
+    if (req.user.role === "employee" || req.user.role === "admin") {
+        return res.status(403).json({ message: "Bạn là Manager hoặc Nhân viên, không được xóa."});
+    }
+
+    req.booking = booking;
+    next();
+};
+
 
 export const verifyTokenForProfile = async (req, res, next) => {
     const authHeader = req.headers.authorization;

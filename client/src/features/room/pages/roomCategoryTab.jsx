@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX } from "react-icons/fi";
-import { roomApi } from "../api/roomApi";
+import { roomApi } from "../../api/roomApi";
 import { equipmentApi } from "../../api/equipmentApi";
 import ConfirmModal from "../../../components/confirmModal";
 

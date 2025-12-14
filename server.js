@@ -8,12 +8,15 @@ import connectDB from "./config/db.js";
 import authRoute from "./routes/authRoutes.js";
 import userRoute from "./routes/userRoutes.js";
 import managerRoute from "./routes/managerRoutes.js";
+import employeeRoute from "./routes/employeeRoutes.js";
+import customerRoute from "./routes/customerRoutes.js";
+
 import serviceRoute from  "./routes/serviceRoutes.js";
 import discountRoute from "./routes/discountRoutes.js";
 import roomRoute from "./routes/roomRoutes.js";
 import roomCategoryRoute from "./routes/roomCategoryRoutes.js";
 import equipmentRoute from "./routes/equipmentRoutes.js";
-import employeeRoute from "./routes/employeeRoutes.js";
+import bookingRoute from "./routes/bookingRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -31,12 +34,14 @@ app.use("/auth", authRoute);
 app.use("/user", userRoute);
 app.use("/manager", managerRoute);
 app.use("/employee", employeeRoute);
+app.use("/customer", customerRoute);
 
 app.use("/service", serviceRoute);
 app.use("/discount", discountRoute);
 app.use("/room", roomRoute);
 app.use("/room-category", roomCategoryRoute);
 app.use("/equipment", equipmentRoute);
+app.use("/booking", bookingRoute);
 
 app.use("/avatars", express.static("avatars"));
 

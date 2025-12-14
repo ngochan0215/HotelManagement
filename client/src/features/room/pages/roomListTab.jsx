@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX } from "react-icons/fi";
-import { roomApi } from "../api/roomApi";
+import { roomApi } from "../../api/roomApi";
 
 const STATUS_MAP = {
   available: { label: "Trống", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
