@@ -20,6 +20,7 @@ import Discount from "./Discount.js";
 
 import RoomCategory from "./Room/RoomCategory.js";
 import Room from "./Room/Rooms.js";
+import RoomStatusLog from "./Booking/RoomStatusLog.js";
 import DefaultEquipment from "./Room/DefaultEquipment.js";
 
 import Booking from "./Booking/Booking.js";
@@ -32,6 +33,6 @@ export {
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
     Service, ServiceCategory, GoodImport, GoodTicket,
     Discount,
-    Room, RoomCategory, DefaultEquipment,
-    Booking, BookingDetail, CheckInOut, RoomCancellation,
+    Room, RoomCategory, DefaultEquipment, RoomStatusLog,
+    Booking, BookingDetail, CheckInOut, RoomCancellation, 
 };

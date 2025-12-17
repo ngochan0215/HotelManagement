@@ -72,9 +72,6 @@ export default function RoomCalendar() {
 
             const normalizedEvents = data.events.map(e => ({
                 ...e,
-                roomId: e.room_id,
-                booking_id: e.booking_id,
-                _id: e.id,
                 status: normalizeStatus(e.status),            
             }));
 
@@ -103,7 +100,7 @@ export default function RoomCalendar() {
 
             // lọc theo trạng thái phòng
             let matchStatus = true;
-            const roomEvents = events.filter(e => e.roomId === room._id);
+            const roomEvents = events.filter(e => e.room_id === room._id);
 
             if (filterStatus === "available") {
             // Phòng trống = KHÔNG có event nào giao với ngày hiện tại
@@ -320,7 +317,7 @@ export default function RoomCalendar() {
                                         ))}
 
                                         {events
-                                            .filter(e => e.roomId.toString() === room._id.toString())
+                                            .filter(e => e.room_id.toString() === room._id.toString())
                                             .map(event => {
                                                 const position = getEventStyle(event);
                                                 if (!position) return null;

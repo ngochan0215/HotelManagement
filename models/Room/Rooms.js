@@ -14,5 +14,15 @@ const roomSchema = new mongoose.Schema(
 
 roomSchema.index({ category_id: 1 });
 
+roomSchema.virtual("roomStatusLog", {
+  ref: "RoomStatusLog",
+  localField: "_id",
+  foreignField: "room_id",
+  justOne: true,
+});
+
+roomSchema.set("toObject", { virtuals: true });
+roomSchema.set("toJSON", { virtuals: true });
+
 const Room = mongoose.models.Room || mongoose.model("Room", roomSchema);
 export default Room;

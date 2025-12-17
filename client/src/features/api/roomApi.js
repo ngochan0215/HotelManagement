@@ -56,6 +56,11 @@ export const roomApi = {
     return response.data;
   },
 
+  getRoomById: async (id) => {
+    const response = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
+    return response.data;
+  },
+
   createRoom: async (data) => {
     const response = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
     return response.data;
