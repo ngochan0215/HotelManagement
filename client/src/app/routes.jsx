@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from '../features/auth/pages/loginPage.jsx';
 import Dashboard from '../features/dashboard/pages/dashboard.jsx';
 import RoomPage from '../features/room/pages/RoomPage.jsx';
-import { useAuth } from '../features/auth/hooks/useAuth.js';
+import { useAuth } from '../features/auth/hooks/authContext.jsx';
 import MainLayout from "../core/layout/mainLayout.jsx";
 
 export default function AppRoutes() {

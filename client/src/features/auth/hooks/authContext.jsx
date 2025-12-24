@@ -1,17 +1,29 @@
-import { createContext, useContext, useState } from "react";
-import { loginUser } from "../API/authApi";
+import { createContext, useContext, useState, useEffect } from "react";
+import { loginUser as loginAPI } from "../api/authApi";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const tokenFromStorage = localStorage.getItem("token");
-  const [user, setUser] = useState(tokenFromStorage ? { token: tokenFromStorage } : null);
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      setUser({ token });
+    }
+    setIsLoading(false);
+  }, []);
 
   const login = async (credentials) => {
-    const data = await loginUser(credentials);
-    setUser({ token: data.token });
-    localStorage.setItem("token", data.token);
-    return data;
+    try {
+      const data = await loginAPI(credentials);
+      setUser({ token: data.token, ...data.user });
+      localStorage.setItem("token", data.token);
+      return data;
+    } catch (error) {
+      throw error;
+    }
   };
 
   const logout = () => {
@@ -20,10 +32,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
