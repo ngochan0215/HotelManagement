@@ -67,17 +67,21 @@ export default function RoomCalendar() {
             const data = await bookingApi.getRoomsCalendar(
                 format(currentDate, "yyyy-MM-dd")
             );
-
-            console.log("CALENDAR ROOMS: ", data);
-
-            const normalizedEvents = data.events.map(e => ({
-                ...e,
-                status: normalizeStatus(e.status),            
-            }));
-
-            console.log("NORMALIZED EVENT: ", normalizedEvents);
+            console.log("getCalendarRooms result returns: ", data);
             setRooms(data.rooms);
-            setEvents(normalizedEvents);
+
+            const mappedEvents = data.events.map(e => ({
+                _id: e.id,
+                room_id: e.room_id,
+                room_number: e.room_number,
+                start: e.start,
+                end: e.end,
+                status: e.status,
+                title: e.title,
+                note: e.note,
+                handled_by: e.handled_by,
+            }));
+            setEvents(mappedEvents);
 
             } catch (err) {
                 alert(err.response?.data?.message || "Không tải được lịch phòng");
@@ -87,7 +91,7 @@ export default function RoomCalendar() {
     }, [currentDate]);
 
 
-    // logic lọc phòng
+    // logic lọc phòng để tìm kiếm
     const filteredRooms = useMemo(() => {
         const keyword = searchTerm.trim().toLowerCase();
 
@@ -103,8 +107,7 @@ export default function RoomCalendar() {
             const roomEvents = events.filter(e => e.room_id === room._id);
 
             if (filterStatus === "available") {
-            // Phòng trống = KHÔNG có event nào giao với ngày hiện tại
-                matchStatus = roomEvents.length === 0;
+                matchStatus = roomEvents.every(e => e.status !== "occupied" && e.status !== "booked" && e.status!== "maintenance");
             } else if (filterStatus !== "all") {
                 matchStatus = roomEvents.some(e => e.status === filterStatus);
             }
@@ -133,6 +136,23 @@ export default function RoomCalendar() {
     };
 
     const handleSlotClick = (room, time) => setSelectedSlot({ room, time });
+
+    const getEventStyle = (event) => {
+        const eventStart = parseISO(event.start);
+        const eventEnd = parseISO(event.end);
+        const dayStart = startOfDay(currentDate);
+        const dayEnd = endOfDay(currentDate);
+
+        // Cắt event nếu nó tràn ra ngoài ngày hiện tại
+        const drawStart = eventStart < dayStart ? dayStart : eventStart;
+        const drawEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
+
+        if (drawStart >= drawEnd) return null; // Không thuộc ngày này
+
+        const diffMinutesStart = differenceInMinutes(drawStart, dayStart);
+        const durationMinutes = differenceInMinutes(drawEnd, drawStart);
+        return { left: (diffMinutesStart / 60) * HOUR_WIDTH, width: (durationMinutes / 60) * HOUR_WIDTH };
+    };
 
     // TODO: thêm logic tạo phòng
     const handleCreateBooking = (type) => {
@@ -185,38 +205,6 @@ export default function RoomCalendar() {
         } catch (err) {
             alert(err.response?.data?.message || "Không thể hủy booking");
         }
-    };
-
-//   const handleCheckOut = () => {
-//     setEvents(events.map(e => e._id === selectedEvent._id ? { ...e, status: 'cleaning', title: "Đang dọn dẹp" } : e));
-//     setSelectedEvent(null);
-//   };
-
-//   const handleCancel = () => {
-//     setEvents(events.filter(e => e._id !== selectedEvent._id));
-//     setSelectedEvent(null);
-//   };
-
-//   const handleCheckIn = () => {
-//     setEvents(events.map(e => e._id === selectedEvent._id ? { ...e, status: 'occupied' } : e));
-//     setSelectedEvent(null);
-//   };
-
-    const getEventStyle = (event) => {
-        const eventStart = parseISO(event.start);
-        const eventEnd = parseISO(event.end);
-        const dayStart = startOfDay(currentDate);
-        const dayEnd = endOfDay(currentDate);
-
-        // Cắt event nếu nó tràn ra ngoài ngày hiện tại
-        const drawStart = eventStart < dayStart ? dayStart : eventStart;
-        const drawEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
-
-        if (drawStart >= drawEnd) return null; // Không thuộc ngày này
-
-        const diffMinutesStart = differenceInMinutes(drawStart, dayStart);
-        const durationMinutes = differenceInMinutes(drawEnd, drawStart);
-        return { left: (diffMinutesStart / 60) * HOUR_WIDTH, width: (durationMinutes / 60) * HOUR_WIDTH };
     };
 
     return (
@@ -321,8 +309,8 @@ export default function RoomCalendar() {
                                             .map(event => {
                                                 const position = getEventStyle(event);
                                                 if (!position) return null;
-                                                console.log(event.status, STATUS_CONFIG[event.status]);
-                                                const config = STATUS_CONFIG[event.status] || STATUS_CONFIG.booked;
+                                                console.log("LOG IN MAP:", event.status, STATUS_CONFIG[event.status]);
+                                                const config = STATUS_CONFIG[event.status] || STATUS_CONFIG.available;
                                                 return (
                                                     <div
                                                         key={event._id}
@@ -390,17 +378,17 @@ export default function RoomCalendar() {
 
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
-                                    <span className="text-xs text-gray-400 block mb-1">Check-in</span>
+                                    <span className="text-xs text-gray-400 block mb-1">Bắt đầu:</span>
                                     <span className="font-semibold text-gray-800">{format(parseISO(selectedEvent.start), "HH:mm dd/MM")}</span>
                                 </div>
                                 <div>
-                                    <span className="text-xs text-gray-400 block mb-1">Check-out</span>
+                                    <span className="text-xs text-gray-400 block mb-1">Kết thúc:</span>
                                     <span className="font-semibold text-gray-800">{format(parseISO(selectedEvent.end), "HH:mm dd/MM")}</span>
                                 </div>
                             </div>
 
                             <div className="pt-4 grid gap-3">
-                                {selectedEvent.status === 'confirmed' && (
+                                {selectedEvent.status === 'booked' && (
                                     <>
                                         <button
                                         onClick={() => handleCheckIn(selectedEvent._id)}
@@ -410,7 +398,7 @@ export default function RoomCalendar() {
                                         </button>
 
                                         <button
-                                        onClick={handleCancel}
+                                        onClick={handleCancelBooking}
                                         className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl font-bold transition"
                                         >
                                         <FiXCircle /> Hủy Đặt Phòng
@@ -419,26 +407,26 @@ export default function RoomCalendar() {
                                 )}
 
 
-                                {selectedEvent.status === 'checked_in' && (
-    <>
-        <button
-        onClick={() => alert("Mở form thêm dịch vụ...")}
-        className="w-full flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2.5 rounded-xl font-bold transition"
-        >
-        <FiShoppingCart /> Thêm Dịch Vụ
-        </button>
+                                {selectedEvent.status === 'occupied' && (
+                                    <>
+                                        <button
+                                        onClick={() => alert("Mở form thêm dịch vụ...")}
+                                        className="w-full flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2.5 rounded-xl font-bold transition"
+                                        >
+                                        <FiShoppingCart /> Thêm Dịch Vụ
+                                        </button>
 
-        <button
-        onClick={handleCheckOut}
-        className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl font-bold transition shadow-lg shadow-orange-200"
-        >
-        <FiLogOut /> Trả Phòng (Check-out)
-        </button>
-    </>
-    )}
+                                        <button
+                                        onClick={handleCheckOut}
+                                        className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl font-bold transition shadow-lg shadow-orange-200"
+                                        >
+                                        <FiLogOut /> Trả Phòng (Check-out)
+                                        </button>
+                                    </>
+                                )}
 
-
-                                {["checked_out", "cancelled", "expired"].includes(selectedEvent.status) && (
+                                {/* TODO: THÊM LOGIC UPDATE STATUS PHÒNG SANG AVAILABLE */}
+                                {["cleaning", "maintenance"].includes(selectedEvent.status) && (
                                     <button onClick={() => setSelectedEvent(null)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold transition">
                                         Xác nhận hoàn thành
                                     </button>

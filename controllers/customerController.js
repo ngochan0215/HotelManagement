@@ -35,6 +35,10 @@ export const createAccount = async (req, res) => {
             return res.status(400).json({ message: "CCCD đã tồn tại" });
         }
 
+        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        if(!regex.test(password)) {
+            return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm một chữ hoa, chữ thường, số và ký tự đặc biệt." });
+        }
 
         const hashed = await bcrypt.hash(password, 10);
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -69,10 +73,12 @@ export const createAccount = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const { otp } = req.body;
-    const user = await User.findById(req.user._id).select("+password");
+
+    const user = await User.findById(req.user.userId).select("+password");
     if(!user){
         return res.status(404).json({ message: "Không tìm thấy người dùng." });
     }
+
     if (!user.verifyEmailOtp || user.verifyEmailOtp !== otp || user.verifyEmailOtpExpires < Date.now()) {
       return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn." });
     }
@@ -90,10 +96,33 @@ export const verifyEmail = async (req, res) => {
 
 export const getAllCustomers = async (req, res) => {
     try {
-        const customers = await Customer.find()
+        const { loyalty, min_points, max_points, min_booking_count, max_booking_count, status } = req.query;
+        let filter = {};
+
+        if (loyalty) filter.loyalty = loyalty;
+        if (status) filter.status = status;
+
+        if (min_points || max_points) {
+            filter.points = {};
+            if (min_points) filter.points.$gte = Number(min_points);
+            if (max_points) filter.points.$lte = Number(max_points);
+        }
+
+        if (min_booking_count || max_booking_count) {
+            filter.booking_count = {};
+            if (min_booking_count) filter.booking_count.$gte = Number(min_booking_count);
+            if (max_booking_count) filter.booking_count.$lte = Number(max_booking_count);
+        }
+
+        const customers = await Customer.find(filter)
             .select("-_id, -updated_at -created_at -__v")
-            .populate("user_id", "email role");
-        res.status(200).json(customers);
+            .populate("user_id", "email system_role avatar");
+
+        res.status(200).json({
+            success: true,
+            total: customers.length,
+            customers
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

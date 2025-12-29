@@ -2,9 +2,9 @@ import { Shift } from "../models/index.js";
 
 export const createShift = async (req, res) => {
   try {
-    const { work_day, shift_type, begin_time, end_time } = req.body;
+    const { work_day, shift_type, begin_time, end_time, required_staff } = req.body;
 
-    if (!work_day || !shift_type || !begin_time || !end_time) {
+    if (!work_day || !shift_type || !begin_time || !end_time || !required_staff) {
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin bắt buộc!" });
     }
 
@@ -13,7 +13,7 @@ export const createShift = async (req, res) => {
     if (existing)
       return res.status(400).json({ success: false, message: "Đã tồn tại loại ca làm này trong cùng ngày." });
 
-    const shift = await Shift.create({ work_day, shift_type, begin_time, end_time });
+    const shift = await Shift.create({ work_day, shift_type, begin_time, end_time, required_staff });
 
     res.status(201).json({ success: true, message: "Thêm ca làm thành công", data: shift });
 
@@ -24,10 +24,20 @@ export const createShift = async (req, res) => {
 
 export const getAllShifts = async (req, res) => {
   try {
+    const { work_day, type } = req.query;
+    const filter = {};
+
+    if (work_day) {
+      filter.work_day = work_day; 
+    }
+    if (type) {
+      filter.type = type;
+    }
+
     // sort by weekday order
     const weekdayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 
-    const shifts = await Shift.find().lean();
+    const shifts = await Shift.find(filter).select("-__v -created_at -updated_at").lean();
 
     // Sort in custom weekday + shift order
     const ordered = shifts.sort((a, b) => {
@@ -44,7 +54,7 @@ export const getAllShifts = async (req, res) => {
 
 export const getShiftById = async (req, res) => {
   try {
-    const shift = await Shift.findById(req.params.id);
+    const shift = await Shift.findById(req.params.id).select("-__v -created_at -updated_at");
     if (!shift)
       return res.status(404).json({ success: false, message: "Không tìm thấy ca làm việc." });
 
@@ -59,14 +69,14 @@ export const updateShift = async (req, res) => {
   try {
     const { work_day, shift_type, begin_time, end_time } = req.body;
 
-    // Optional: check for duplicate (if day/type changed)
+    // check for duplicate (if day/type changed)
     const duplicate = await Shift.findOne({
       _id: { $ne: req.params.id },
       work_day,
       shift_type,
     });
     if (duplicate)
-      return res.status(400).json({ success: false, message: "Shift for this day and type already exists." });
+      return res.status(400).json({ success: false, message: "Đã tồn tại ca làm có cùng ngày và cùng buổi." });
 
     const shift = await Shift.findByIdAndUpdate(
       req.params.id,

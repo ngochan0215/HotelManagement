@@ -40,5 +40,12 @@ const roomStatusLogSchema = new mongoose.Schema(
   }
 );
 
+roomStatusLogSchema.index({
+  room_id: 1,
+  start_time: -1,
+  end_time: 1,
+});
+
+
 const RoomStatusLog = mongoose.models.RoomStatusLog || mongoose.model("RoomStatusLog", roomStatusLogSchema);
 export default RoomStatusLog;

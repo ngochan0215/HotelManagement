@@ -31,6 +31,10 @@ const attendanceSchema = new mongoose.Schema(
       default: "absent",
     },
 
+    late_minutes: { type: Number, default: 0 },
+    early_leave_minutes: { type: Number, default: 0 },
+    work_hours: { type: Number, default: 0 }, // tổng giờ làm thực tế
+
     note: {
       type: String,
       trim: true,

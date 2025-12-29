@@ -5,7 +5,9 @@ const equipmentTicketSchema = new mongoose.Schema(
     {
         employee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
         import_date: { type: Date, required: true },
-        status: { type: String, enum: ["pending", "completed"], default: "pending" }
+        status: { type: String, enum: ["pending", "waiting_confirm", "completed"], default: "pending" },
+        confirmed_by: { type: mongoose.Schema.Types.ObjectId },
+        confirmed_at: { type: Date }
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

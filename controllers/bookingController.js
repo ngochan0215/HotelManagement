@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Booking, BookingDetail, Customer, Room, RoomCancellation, Employee } from "../models/index.js";
+import { Booking, BookingDetail, Customer, Room, RoomCancellation, Employee, RoomStatusLog } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 
 // BOOKING //
@@ -40,10 +40,18 @@ export const createBooking = async (req, res) => {
         return res.status(400).json({ message: "Ngày check-out dự kiến phải sau ngày check-in dự kiến." });
       }
 
+      if ( new Date(room.expected_checkout) <= new Date() ) {
+        return res.status(400).json({ message: "Ngày check-out dự kiến không được trong quá khứ." });
+      }
+
+      if ( new Date(room.expected_checkin) <= new Date() ) {
+        return res.status(400).json({ message: "Ngày check-in dự kiến không được trong quá khứ." });
+      }
+
       const roomExists = await Room.exists({ _id: room.room_id });
       if (!roomExists) {
         return res.status(404).json({ message: `Không tìm thấy phòng với ID: ${room.room_id}.`});
-      }
+      } 
     }
 
     const expected_checkin = new Date(
@@ -132,6 +140,31 @@ export const confirmBooking = async (req, res) => {
       { $set: { room_status: "booked" } },
       { session }
     );
+
+    for (const bd of bookingDetails) {
+      const conflict = await RoomStatusLog.findOne({
+        room_id: bd.room_id,
+        status: { $in: ["booked", "occupied"] },
+        start_time: { $lt: bd.expected_checkout },
+        end_time: { $gt: bd.expected_checkin },
+      }).session(session);
+
+      if (conflict) {
+        throw new Error(`Phòng ${bd.room_id} đã được giữ trong khoảng thời gian này`);
+      }
+    }
+
+    // tạo log booked
+    const roomStatusLogs = bookingDetails.map(bd => ({
+      room_id: bd.room_id,
+      status: "booked",
+      start_time: bd.expected_checkin,
+      end_time: bd.expected_checkout,
+      note: `Booking confirmed: ${booking._id}`,
+      handled_by: booking.handled_by,
+    }));
+
+    await RoomStatusLog.insertMany(roomStatusLogs, { session });
 
     // update trạng thái booking
     booking.status = "confirmed";
@@ -274,13 +307,38 @@ export const updateBookingStatus = async (req, res) => {
     }
 
     const bookingDetails = await BookingDetail.find({ booking_id })
+      .populate("room_id")
       .session(session);
 
+    const now = new Date();
+
     const roomIds = bookingDetails.map(bd => bd.room_id);
+
+    // hàm kiểm tra nếu như 
+    const hasConflict = async (roomId, start, end, statuses) => {
+      return RoomStatusLog.findOne({
+        room_id: roomId,
+        status: { $in: statuses },
+        start_time: { $lt: end },
+        end_time: { $gt: start },
+      }).session(session);
+    };
 
     switch (status) {
       case "cancelled":
       case "expired":
+        for (const bd of bookingDetails) {
+          await RoomStatusLog.updateMany(
+            {
+              room_id: bd.room_id._id,
+              status: "booked",
+              end_time: { $gt: now },
+            },
+            { $set: { end_time: now } },
+            { session }
+          );
+        }
+        
         await Room.updateMany(
           { _id: { $in: roomIds } },
           { $set: { room_status: "available" } },
@@ -288,29 +346,107 @@ export const updateBookingStatus = async (req, res) => {
         );
         break;
 
-      case "confirmed":
+      case "confirmed": {
+        for (const bd of bookingDetails) {
+          const conflict = await hasConflict(
+            bd.room_id._id,
+            bd.expected_checkin,
+            bd.expected_checkout,
+            ["booked", "occupied", "maintenance"]
+          );
+
+          if (conflict) {
+            throw new Error(`Phòng ${bd.room_id.room_number} đã có lịch`);
+          }
+
+          await RoomStatusLog.create(
+            [{
+              room_id: bd.room_id._id,
+              status: "booked",
+              start_time: bd.expected_checkin,
+              end_time: bd.expected_checkout,
+              note: `Booking ${booking._id} confirmed`,
+            }],
+            { session }
+          );
+        }
+
         await Room.updateMany(
-          { _id: { $in: roomIds } },
+          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
           { $set: { room_status: "booked" } },
           { session }
         );
         break;
+      }
 
-      case "checked_in":
+      case "checked_in": {
+        for (const bd of bookingDetails) {
+          const conflict = await hasConflict(
+            bd.room_id._id,
+            now,
+            bd.expected_checkout,
+            ["occupied"]
+          );
+
+          if (conflict) {
+            throw new Error(`Phòng ${bd.room_id.room_number} đang được sử dụng`);
+          }
+
+          await RoomStatusLog.create(
+            [{
+              room_id: bd.room_id._id,
+              status: "occupied",
+              start_time: now,
+              end_time: bd.expected_checkout,
+              note: `Booking ${booking._id} checked-in`,
+            }],
+            { session }
+          );
+        }
+
         await Room.updateMany(
-          { _id: { $in: roomIds } },
+          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
           { $set: { room_status: "occupied" } },
           { session }
         );
         break;
+      }
 
-      case "checked_out":
+      case "checked_out": {
+        for (const bd of bookingDetails) {
+          // đóng log mà ghi nhận phòng occupied
+          await RoomStatusLog.findOneAndUpdate(
+            {
+              room_id: bd.room_id._id,
+              status: "occupied",
+              end_time: { $gt: now },
+            },
+            { $set: { end_time: now } },
+            { session }
+          );
+
+          // tạo cleaning log
+          const cleaningEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+          await RoomStatusLog.create(
+            [{
+              room_id: bd.room_id._id,
+              status: "cleaning",
+              start_time: now,
+              end_time: cleaningEnd,
+              note: `Cleaning after checkout booking ${booking._id}`,
+            }],
+            { session }
+          );
+        }
+
         await Room.updateMany(
-          { _id: { $in: roomIds } },
+          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
           { $set: { room_status: "cleaning" } },
           { session }
         );
         break;
+      }
     }
 
     booking.status = status;
@@ -397,6 +533,7 @@ export const addRoomsToBooking = async (req, res) => {
   }
 };
 
+// lấy mọi booking
 export const getAllBookings = async (req, res) => {
   try {
     const totalBookings = await Booking.countDocuments();
@@ -443,38 +580,315 @@ export const getAllBookings = async (req, res) => {
   }
 };
 
+const calculateBookingStatus = (details) => {
+  if (details.every(d => d.status === "cancelled")) {
+    return "cancelled";
+  }
+
+  if (details.every(d =>
+    ["checked_out", "cancelled"].includes(d.status)
+  )) {
+    return "completed";
+  }
+
+  if (details.some(d => d.status === "checked_in")) {
+    return "in_progress";
+  }
+
+  return "confirmed";
+};
+
+// checkin 1 phòng trong booking
+export const checkinBookingDetail = async (req, res) => {
+  const { bookingId, detailId } = req.params;
+  const now = new Date();
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) {
+      throw new Error("Không tìm thấy booking.");
+    }
+
+    const detail = await BookingDetail.findOne({
+      _id: detailId,
+      booking_id: bookingId,
+    }).session(session);
+
+    if (!detail) {
+      throw new Error("Không tìm thấy phòng trong booking.");
+    }
+
+    if (detail.status !== "confirmed") {
+      throw new Error("Phòng này không ở trạng thái có thể check-in.");
+    }
+
+    // check conflict phòng
+    const conflict = await RoomStatusLog.findOne({
+      room_id: detail.room_id,
+      start_time: { $lt: detail.expected_checkout },
+      end_time: { $gt: now },
+      status: { $in: ["booked", "occupied", "maintenance", "cleaning"] },
+    }).session(session);
+
+    if (conflict) {
+      throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này.");
+    }
+
+    // cắt log booked hiện tại (nếu có)
+    await RoomStatusLog.updateMany(
+      {
+        room_id: detail.room_id,
+        status: "booked",
+        end_time: { $gt: now },
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // tạo log occupied
+    await RoomStatusLog.create(
+      [{
+        room_id: detail.room_id,
+        status: "occupied",
+        start_time: now,
+        end_time: detail.expected_checkout,
+        note: `Check-in booking ${booking._id}`,
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
+
+    // update BookingDetail
+    detail.status = "checked_in";
+    detail.actual_checkin = now;
+    await detail.save({ session });
+
+    // update room hiện tại
+    await Room.findByIdAndUpdate(
+      detail.room_id,
+      { room_status: "occupied" },
+      { session }
+    );
+
+    // cập nhật trạng thái (chung) của booking
+    const allDetails = await BookingDetail
+      .find({ booking_id: bookingId })
+      .session(session);
+
+    booking.status = calculateBookingStatus(allDetails);
+    await booking.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      message: "Check-in phòng thành công.",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(400).json({
+      message: error.message || "Không thể check-in phòng.",
+    });
+  }
+};
+
+// checkout 1 phòng trong booking
+export const checkoutBookingDetail = async (req, res) => {
+  const { bookingId, detailId } = req.params;
+  const now = new Date();
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) {
+      throw new Error("Không tìm thấy booking.");
+    }
+
+    const detail = await BookingDetail.findOne({
+      _id: detailId,
+      booking_id: bookingId,
+    }).session(session);
+
+    if (!detail) {
+      throw new Error("Không tìm thấy phòng trong booking.");
+    }
+
+    if (detail.status !== "checked_in") {
+      throw new Error("Phòng này chưa được check-in.");
+    }
+
+    // cắt log occupied hiện tại
+    await RoomStatusLog.updateMany(
+      {
+        room_id: detail.room_id,
+        status: "occupied",
+        end_time: { $gt: now },
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // tạo log cleaning
+    await RoomStatusLog.create(
+      [{
+        room_id: detail.room_id,
+        status: "cleaning",
+        start_time: now,
+        end_time: null,
+        note: `Checkout booking ${booking._id} and is currently in cleaning session.`,
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
+
+    // update BookingDetail
+    detail.status = "checked_out";
+    detail.actual_checkout = now;
+    await detail.save({ session });
+
+    // update room hiện tại
+    await Room.findByIdAndUpdate(
+      detail.room_id,
+      { room_status: "cleaning" },
+      { session }
+    );
+
+    // cập nhật trạng thái chung của booking (expect completed)
+    const allDetails = await BookingDetail
+      .find({ booking_id: bookingId })
+      .session(session);
+
+    booking.status = calculateBookingStatus(allDetails);
+    await booking.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      message: "Checkout phòng thành công.",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(400).json({
+      message: error.message || "Không thể checkout phòng.",
+    });
+  }
+};
 
 // BOOKING CANCELLATION//
 
 // hủy một phòng cụ thể trong booking
-export const cancelRoomInBooking = async (req, res) => {
-  const { bookingDetailId } = req.params;
+export const cancelBookingDetail = async (req, res) => {
+  const { bookingId, detailId } = req.params;
   const { reason } = req.body;
+  const now = new Date();
 
-  const detail = await BookingDetail.findById(bookingDetailId).populate("booking_id");
-  if (!detail)
-    return res.status(404).json({ message: "Không tìm thấy phòng đặt." });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  const booking = detail.booking_id;
+  try {
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) {
+      throw new Error("Không tìm thấy booking.");
+    }
 
-  if (!["pending", "confirmed"].includes(booking.status))
-    return res.status(400).json({ message: "Không thể hủy phòng trong booking này." });
+    if (!["pending", "confirmed"].includes(booking.status)) {
+      throw new Error("Không thể hủy phòng trong booking này.");
+    }
 
-  if (new Date() >= new Date(detail.expected_checkin))
-    return res.status(400).json({ message: "Không thể hủy phòng sau ngày check-in." });
+    const detail = await BookingDetail.findOne({
+      _id: detailId,
+      booking_id: bookingId,
+    })
+      .populate("room_id")
+      .session(session);
 
-  detail.status = "cancelled";
-  await detail.save();
+    if (!detail) {
+      throw new Error("Không tìm thấy phòng trong booking.");
+    }
 
-  await RoomCancellation.create({
-    booking_id: booking._id,
-    room_id: detail.room_id,
-    user_id: req.user._id,
-    cancelled_by: req.user.system_role === "customer" ? "customer" : "employee",
-    reason,
-  });
+    if (detail.status === "cancelled") {
+      throw new Error("Phòng này đã bị hủy trước đó.");
+    }
 
-  res.json({ message: "Đã hủy phòng thành công." });
+    if (now >= new Date(detail.expected_checkin)) {
+      throw new Error("Không thể hủy phòng sau ngày check-in.");
+    }
+
+    const roomId = detail.room_id._id;
+
+    detail.status = "cancelled";
+    await detail.save({ session });
+
+    // cắt RoomStatusLog booked/confirmed trong tương lai
+    await RoomStatusLog.updateMany(
+      {
+        room_id: roomId,
+        status: { $in: ["booked", "confirmed"] },
+        start_time: { $gte: now },
+      },
+      { $set: { start_time: now, end_time: now } },
+      { session }
+    );
+
+    // nếu phòng đang booked thì trả về available
+    const room = await Room.findById(roomId).session(session);
+    if (room && room.room_status === "booked") {
+      room.room_status = "available";
+      await room.save({ session });
+
+      await RoomStatusLog.create(
+        [{
+          room_id: roomId,
+          status: "available",
+          start_time: now,
+          end_time: null,
+          note: "Hủy phòng khỏi booking",
+          handled_by: req.user?._id || null,
+        }],
+        { session }
+      );
+    }
+
+    // log hủy
+    await RoomCancellation.create(
+      [{
+        booking_id: booking._id,
+        room_id: roomId,
+        user_id: req.user._id,
+        cancelled_by:
+          req.user.system_role === "customer" ? "customer" : "employee",
+        reason,
+      }],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      message: "Đã hủy phòng khỏi booking thành công.",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(400).json({
+      message: error.message || "Không thể hủy phòng.",
+    });
+  }
 };
 
 // hủy toàn bộ phòng = nguyên cái booking

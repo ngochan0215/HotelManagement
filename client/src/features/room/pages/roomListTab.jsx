@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX } from "react-icons/fi";
 import { roomApi } from "../../api/roomApi";
+import dayjs from "dayjs";
 
 const STATUS_MAP = {
   available: { label: "Trống", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
@@ -24,7 +25,6 @@ export default function RoomListTab() {
     fetchData();
   }, []);
 
-  // --- HÀM FETCH DATA THÔNG MINH (TỰ ĐỘNG NHẬN DIỆN CẤU TRÚC) ---
   const fetchData = async () => {
     try {
       const [roomsRes, catsRes] = await Promise.all([
@@ -32,55 +32,27 @@ export default function RoomListTab() {
         roomApi.getAllCategories()
       ]);
 
-      console.log("👉 API Rooms trả về:", roomsRes); // Check log xem data thực tế
+      console.log("👉 API Rooms trả về:", roomsRes);
       console.log("👉 API Categories trả về:", catsRes);
 
-      // 1. XỬ LÝ DỮ LIỆU PHÒNG
-      if (Array.isArray(roomsRes)) {
-        setRooms(roomsRes); // Trường hợp 1: Trả về mảng trực tiếp [..]
-      } else if (roomsRes && Array.isArray(roomsRes.data)) {
-        setRooms(roomsRes.data); // Trường hợp 2: { data: [..] }
-      } else if (roomsRes && Array.isArray(roomsRes.rooms)) {
-        setRooms(roomsRes.rooms); // Trường hợp 3: { rooms: [..] }
+      if (roomsRes && Array.isArray(roomsRes.rooms)) {
+        setRooms(roomsRes.rooms);
       } else {
         console.warn("⚠️ Không tìm thấy mảng phòng trong response:", roomsRes);
         setRooms([]);
       }
 
-      // 2. XỬ LÝ DỮ LIỆU LOẠI PHÒNG
       if (Array.isArray(catsRes)) {
         setCategories(catsRes);
-      } else if (catsRes && Array.isArray(catsRes.data)) {
-        setCategories(catsRes.data);
-      } else if (catsRes && Array.isArray(catsRes.categories)) { // Hoặc key là categories
-        setCategories(catsRes.categories);
       } else {
         setCategories([]);
       }
 
     } catch (error) {
       console.error("❌ Lỗi tải dữ liệu:", error);
-      setRooms([]); // Fallback về mảng rỗng để không crash
+      setRooms([]);
     }
   };
-
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   try {
-  //     if (editingItem) {
-  //       await roomApi.updateRoom(editingItem._id, formData);
-  //     } else {
-  //       await roomApi.createRoom(formData);
-  //     }
-  //     setIsModalOpen(false);
-  //     setFormData({ room_number: "", category_id: "", room_status: "available" });
-  //     setEditingItem(null);
-  //     fetchData();
-  //     alert("Thành công!");
-  //   } catch (error) {
-  //     alert("Lỗi: " + (error.response?.data?.message || error.message));
-  //   }
-  // };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -88,25 +60,20 @@ export default function RoomListTab() {
     const payload = { ...formData };
 
     console.log("PAYLOAD IN HANDLESUBMIT: ", payload);
-    if (["cleaning", "maintenance"].includes(formData.room_status)) {
-      if (!formData.start_time || !formData.end_time) {
-        return alert("Vui lòng chọn thời gian bắt đầu và kết thúc!");
-      }
+    if (!formData.start_time || !formData.end_time) {
+      return alert("Vui lòng chọn thời gian bắt đầu và kết thúc!");
+    }
 
-      if (new Date(formData.end_time) <= new Date(formData.start_time)) {
-        return alert("Thời gian kết thúc phải sau thời gian bắt đầu!");
-      }
-    } else {
-      // Không gửi timeline nếu không cần
-      delete payload.start_time;
-      delete payload.end_time;
+    if (new Date(formData.end_time) <= new Date(formData.start_time)) {
+      return alert("Thời gian kết thúc phải sau thời gian bắt đầu!");
     }
 
     console.log("editingItem: ", editingItem);
     try {
       if (editingItem) {
         console.log("I AM HERE");
-        await roomApi.updateRoom(editingItem._id, payload);
+        const data = await roomApi.updateRoom(editingItem._id, payload);
+        console.log("RESPONSE: ", data.room);
       } else {
         await roomApi.createRoom(payload);
       }
@@ -122,6 +89,7 @@ export default function RoomListTab() {
       });
 
       fetchData();
+      
       alert("Thành công!");
     } catch (error) {
       alert("Lỗi: " + (error.response?.data?.message || error.message));
@@ -179,11 +147,11 @@ const openEdit = async (item) => {
   try {
     const res = await roomApi.getRoomById(item._id);
 
-    // CHỐT CHẶN DATA Ở ĐÂY
     const data = res.data || res;
     const room = data.room;
-    const log = data.roomStatusLog;
+    const log = room.roomStatusLog;
 
+    console.log("openEdit: ", log);
     if (!room) {
       alert("Không tìm thấy dữ liệu phòng!");
       return;
@@ -193,11 +161,20 @@ const openEdit = async (item) => {
 
     setFormData({
       room_number: room.room_number,
-      category_id: room.category_id?._id || room.category_id || "",
-      room_status: room.room_status,
-      start_time: log?.start_time ? log.start_time.slice(0, 16) : "",
-      end_time: log?.end_time ? log.end_time.slice(0, 16) : "",
+      category_id: room.category_id?._id || "",
+      room_status: log?.status || room.room_status,
+
+      start_time: log?.start_time
+        ? dayjs(log.start_time).format("YYYY-MM-DDTHH:mm")
+        : "",
+
+      end_time: log?.end_time
+        ? dayjs(log.end_time).format("YYYY-MM-DDTHH:mm")
+        : "",
     });
+
+    console.log("RAW:", log.start_time);
+    console.log("FORMAT:", dayjs(log.start_time).format("YYYY-MM-DDTHH:mm"));
 
     setIsModalOpen(true);
   } catch (error) {
@@ -319,7 +296,7 @@ const openEdit = async (item) => {
                     </select>
                 </div>
 
-                {["cleaning", "maintenance"].includes(formData.room_status) && (
+                {editingItem && (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -329,7 +306,7 @@ const openEdit = async (item) => {
                         type="datetime-local"
                         required
                         className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={formData.start_time}
+                        value={formData.start_time || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, start_time: e.target.value })
                         }
@@ -344,7 +321,7 @@ const openEdit = async (item) => {
                         type="datetime-local"
                         required
                         className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={formData.end_time}
+                        value={formData.end_time || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, end_time: e.target.value })
                         }

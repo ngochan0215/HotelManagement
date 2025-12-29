@@ -6,16 +6,20 @@ import { defaultAvatars } from "../config/avatars.js";
 
 export const viewProfile = async (req, res) => {
     try {
-        const { id, role } = req.user;
-
+        const { userId, role } = req.user;
+        console.log("User ID:", userId, "Role:", role);
         let profile;
 
         if (role === "customer") {
-            profile = await Customer.findOne({ user_id: id }).populate("user_id", "-password -__v -booking_count");
+            profile = await Customer.findOne({ user_id: userId })
+                .select("-__v -createdAt -updatedAt -updated_at -created_at")
+                .populate("user_id", "email system_role avatar");
         } else if (role === "employee") {
-            profile = await Employee.findOne({ user_id: id }).populate("user_id", "-password -__v");
+            profile = await Employee.findOne({ user_id: userId })
+                .select("-__v -createdAt -updatedAt -updated_at -created_at")
+                .populate("user_id", "email system_role avatar");
         } else if (role === "manager") {
-            profile = await User.findById(id).select("email system_role");
+            profile = await User.findById(userId).select("email system_role avatar");
         }
 
         if (!profile) {
@@ -30,19 +34,13 @@ export const viewProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
     try {
-        const { name, phone, dob, nationality, avatar } = req.body;
+        const userId = req.user.userId;
+        const { name, phone, dob, nationality, cccd } = req.body;
 
-        const user = await User.findById(req.user._id);
+        const user = await User.findById(userId).select("email system_role avatar");
         if (!user) {
             return res.status(404).json({ message: "Không tìm thấy người dùng." });
         }
-
-        if (avatar && !defaultAvatars.includes(avatar)) {
-            return res.status(400).json({ message: "Avatar không hợp lệ." });
-        }
-
-        if (avatar) user.avatar = avatar;
-        await user.save();
 
         let profileModel = null;
         if (user.system_role === "customer") {
@@ -55,24 +53,58 @@ export const updateProfile = async (req, res) => {
             return res.status(400).json({ message: "Loại người dùng không hợp lệ." });
         }
 
-        const profile = await profileModel.findOne({ user_id: user._id });
+        const profile = await profileModel.findOne({ user_id: user._id }).select("-__v -createdAt -updatedAt -updated_at -created_at");
         if (!profile) {
             return res.status(404).json({ message: "Không tìm thấy hồ sơ cá nhân." });
         }
 
-        if (name) profile.full_name = name;
-        if (phone) profile.phone_number = phone;
-        if (dob) profile.date_birth = dob;
-        if (nationality) profile.nationality = nationality;
-        await profile.save();
+        if (name) {
+            if (typeof name !== "string" || !name.trim()) {
+                return res.status(404).json({ message: "Tên không hợp lệ." });
+            }
+            profile.full_name = name;
+        }
 
-        const updatedUser = await User.findById(user._id).select("-password -__v");
-        const updatedProfile = await profileModel.findOne({ user_id: user._id });
+        if (phone) {
+            if (!/^\d{9,11}$/.test(phone)) {
+                return res.status(400).json({ message: "Số điện thoại không hợp lệ." });
+            }
+            const phoneExists = await profileModel.findOne({ phone_number: phone, _id: { $ne: profile._id }});
+            if (phoneExists) {
+                return res.status(400).json({ message: "Số điện thoại đã được sử dụng." });
+            }
+            profile.phone_number = phone;
+        }
+
+        if (cccd) {
+            const cccdExists = await profileModel.findOne({ CCCD: cccd, _id: { $ne: profile._id }});
+            if (cccdExists) {
+                return res.status(400).json({ message: "Căn cước công dân đã được sử dụng." });
+            }
+            profile.CCCD = cccd;
+        }
+
+        if (dob) {
+            const date = new Date(dob);
+            if (isNaN(date.getTime())) {
+                return res.status(400).json({ message: "Ngày sinh không hợp lệ." });
+            }
+            profile.date_birth = date;
+        }
+
+        if (nationality) {
+            if (typeof nationality !== "string" || !nationality.trim()) {
+                return res.status(400).json({ message: "Quốc tịch không hợp lệ." });
+            }
+            profile.nationality = nationality.trim();
+        }
+
+        await profile.save();
 
         res.json({
             message: "Cập nhật thông tin thành công.",
-            user: updatedUser,
-            profile: updatedProfile
+            user: user,
+            profile: profile
         });
     } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -82,7 +114,7 @@ export const updateProfile = async (req, res) => {
 export const changePassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
-        const user = await User.findById(req.user._id).select("+password");
+        const user = await User.findById(req.user.userId).select("+password");
         if(!user){
             return res.status(404).json({ message: "Không tìm thấy người dùng." });
         }
@@ -90,6 +122,11 @@ export const changePassword = async (req, res) => {
         const isMatch = await bcrypt.compare(oldPassword, user.password);
         if(!isMatch) {
             return res.status(400).json({ message: "Mật khẩu cũ không đúng." });
+        }
+
+        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        if(!regex.test(newPassword)) {
+            return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm một chữ hoa, chữ thường, số và ký tự đặc biệt." });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -105,9 +142,14 @@ export const changePassword = async (req, res) => {
 export const sendEmail = async (req, res) => {
     try {
         const { newEmail } = req.body;
-        const user = await User.findById(req.user._id).select("+password");
+        const user = await User.findById(req.user.userId).select("+password");
         if(!user){
             return res.status(404).json({ message: "Không tìm thấy người dùng." });
+        }
+
+        const emailExists = await User.findOne({ email: newEmail, _id: { $ne: user._id }});
+        if(emailExists) {
+            return res.status(400).json({ message: "Email đã được sử dụng." });
         }
 
         const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
@@ -127,7 +169,7 @@ export const sendEmail = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const { otp } = req.body;
-    const user = await User.findById(req.user._id).select("+password");
+    const user = await User.findById(req.user.userId).select("+password");
     if(!user){
         return res.status(404).json({ message: "Không tìm thấy người dùng." });
     }
@@ -148,22 +190,25 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
-
 export const updateAvatar = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.userId;
 
     if (!req.file || !req.file.path) {
       return res.status(400).json({ message: "Không có file nào được chọn." });
     }
 
     const avatarUrl = req.file.path; // URL Cloudinary
-
+    
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { avatar: avatarUrl },
       { new: true }
     );
+
+    if (!updatedUser) {
+        return res.status(404).json({ message: "Không tìm thấy người dùng."});
+    }
 
     res.status(200).json({
       success: true,

@@ -32,6 +32,13 @@ export const isCustomer = (req, res, next) => {
     next();
 };
 
+export const isNotCustomer = (req, res, next) => {
+    if (req.user.role === "customer") {
+        return res.status(403).json({ message: "Bạn không phải Nhân viên hoặc Quản lý, không có quyền truy cập." });
+    }
+    next();    
+};
+
 export const isManager = (req, res, next) => {
     if (req.user.role !== "manager") {
         return res.status(403).json({ message: "Bạn không phải Quản lý, không có quyền truy cập." });
@@ -71,7 +78,6 @@ export const canAccessBooking = async (req, res, next) => {
     req.booking = booking;
     next();
 };
-
 
 export const verifyTokenForProfile = async (req, res, next) => {
     const authHeader = req.headers.authorization;

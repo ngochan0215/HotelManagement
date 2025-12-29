@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// chi tiết phiếu nhập thiết bị (một phiếu có thể nhập nhiều thiết bị)
+// chi tiết phiếu nhập thiết bị (một phiếu có thể nhập nhiều danh mục thiết bị)
 const equipmentImportSchema = new mongoose.Schema(
     {
         ticket_id: { type: mongoose.Schema.Types.ObjectId, ref: "EquipmentTicket", required: true },

@@ -8,7 +8,7 @@ const equipmentCategorySchema = new mongoose.Schema(
         unit: { type: String, enum: ["item", "box"], default: "item" },
         price: { type: Number, min: 1, required: true },
         storage_quantity: { type: Number, default: 0 },
-        avatar: { type: String }
+        image: { type: String }
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

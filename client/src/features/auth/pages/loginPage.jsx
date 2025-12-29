@@ -29,7 +29,7 @@ const LoginPage = () => {
       await login(credentials);
       navigate("/dashboard");
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError("Lỗi đăng nhập: " + err.message || "Login failed");
     }
   };
 

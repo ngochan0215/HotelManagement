@@ -7,9 +7,12 @@ import {
     deleteRoom,
     getRoomsByCategory,
     getRoomStatusSummary,
-    getTopBookedRoomCategories
+    getTopBookedRoomCategories,
+    getLatestStatusOfAllRooms,
+    completeCleaning,
+    completeMaintenance
 } from "../controllers/roomController.js";
-import { isManager, verifyToken } from "../middleware/authMiddleware.js";
+import { isManager, isNotCustomer, verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -20,9 +23,16 @@ router.get("/all", getAllRooms);
 router.get("/statistic/status", verifyToken, isManager, getRoomStatusSummary);
 // trả về top các loại phòng được đặt nhiều nhất, có tên và giá
 router.get("/statistic/top-booked", verifyToken, isManager, getTopBookedRoomCategories);
+// trả về top các loại phòng được đặt nhiều nhất, có tên và giá
+router.get("/status/latest", verifyToken, getLatestStatusOfAllRooms);
 
 router.get("/by-category", getRoomsByCategory);
 router.get("/:id", getRoomById);
 router.put("/:id", verifyToken, isManager, updateRoom);
 router.delete("/:id", verifyToken, isManager, deleteRoom);
+
+// xác nhận hoàn thành dọn dẹp
+router.post("/:roomId/cleaning/complete", verifyToken, completeCleaning);
+// xác nhận hoàn thành bảo trì
+router.post("/:roomId/maintenance/complete", verifyToken, completeMaintenance);
 export default router;

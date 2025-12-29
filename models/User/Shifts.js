@@ -7,18 +7,21 @@ const shiftSchema = new mongoose.Schema(
       enum: ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'],
       required: true,
     },
-    type: {
+    shift_type: {
       type: String,
       enum: ['morning','afternoon','night'],
       required: true,
     },
-    begin_time: { type: Date, required: true },
-    end_time: { type: Date, required: true },
+
+    begin_time: { type: String, required: true },
+    end_time: { type: String, required: true },
+
     required_staff: {
       receptionist: { type: Number, default: 0 },
       technician: { type: Number, default: 0 },
       customer_service: { type: Number, default: 0 },
       housekeeper: { type: Number, default: 0 },
+      manager: { type: Number, default: 0 },
     },
   },
   {

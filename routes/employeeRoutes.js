@@ -1,21 +1,32 @@
 import express from "express";
-import { registerEmployee, getAllEmployess, updateEmployee, getEmployeeById, registerSchedule,
-    viewMySchedule, updateSchedule
+import { registerEmployee, getAllEmployees, updateEmployee, getEmployeeById, registerSchedule,
+    viewMySchedule, updateSchedule,
+    checkInShift,
+    checkOutShift,
+    getAllSchedules,
+    getScheduleById,
+    deleteSchedule,
 } from "../controllers/employeeController.js";
-import { verifyToken, isManager, isEmployee } from "../middleware/authMiddleware.js";
+import { verifyToken, isManager, isEmployee, isNotCustomer } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // EMPLOYEE
 router.post("/add", verifyToken, isManager, registerEmployee);
-router.get("/all", verifyToken, isManager, getAllEmployess);
-router.get("/:id", verifyToken, getEmployeeById);
-router.put("/:id", verifyToken, isManager, updateEmployee);
+router.get("/all", verifyToken, isManager, getAllEmployees);
+router.get("/:id", verifyToken, isManager, getEmployeeById);
+router.patch("/:id", verifyToken, isManager, updateEmployee);
 
 // SCHEDULES
-router.post("/schedule/register", verifyToken, isEmployee, registerSchedule);
-router.get("/schedule", verifyToken, isEmployee, viewMySchedule);
-router.put("/schedule/:id", verifyToken, isEmployee, updateEmployee);
+router.post("/schedules/register", verifyToken, isEmployee, registerSchedule);
+router.get("/schedules/my", verifyToken, isEmployee, viewMySchedule);
+router.patch("/schedules/:id", verifyToken, isEmployee, updateSchedule);
+router.delete("/schedules/:id", verifyToken, isEmployee, deleteSchedule);
+router.get("/schedules/all", verifyToken, isManager, getAllSchedules);
+router.get("/schedules/:id", verifyToken, isNotCustomer, getScheduleById);
+
+// ATTENDANCE
+router.post("/attendance/checkin", verifyToken, isEmployee, checkInShift);
+router.post("/attendance/checkout", verifyToken, isEmployee, checkOutShift);
 
 export default router;
-    

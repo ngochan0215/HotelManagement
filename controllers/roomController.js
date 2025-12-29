@@ -95,8 +95,8 @@ export const getRoomById = async (req, res) => {
             .populate({
                 path: "roomStatusLog",
                 match: {
-                start_time: { $lte: new Date() },
-                end_time: { $gte: new Date() },
+                    start_time: { $lte: new Date() },
+                    end_time: { $gte: new Date() },
                 },
                 select: "status start_time end_time note",
             })
@@ -152,30 +152,27 @@ export const updateRoom = async (req, res) => {
             if (!validStatuses.includes(room_status))
                 return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
 
-            // Nếu là cleaning / maintenance thì bắt buộc có timeline
-            if (["cleaning", "maintenance"].includes(room_status)) {
-                if (!start_time || !end_time)
-                    return res.status(400).json({
-                        success: false,
-                        message: "Cần cung cấp start_time và end_time cho cleaning / maintenance!",
-                    });
-
-                if (new Date(end_time) <= new Date(start_time))
-                    return res.status(400).json({
-                        success: false,
-                        message: "end_time phải sau start_time!",
-                    });
-
-                // Ghi log trạng thái phòng
-                await RoomStatusLog.create({
-                    room_id: room._id,
-                    status: room_status,
-                    start_time,
-                    end_time,
-                    note: note || "",
-                    handled_by: req.user?._id || null,
+            if (!start_time || !end_time)
+                return res.status(400).json({
+                    success: false,
+                    message: "Cần cung cấp start_time và end_time!",
                 });
-            }
+
+            if (new Date(end_time) <= new Date(start_time))
+                return res.status(400).json({
+                    success: false,
+                    message: "end_time phải sau start_time!",
+                });
+
+            // Ghi log trạng thái phòng
+            await RoomStatusLog.create({
+                room_id: room._id,
+                status: room_status,
+                start_time,
+                end_time,
+                note: note || "",
+                handled_by: req.user?._id || null,
+            });
 
             room.room_status = room_status;
         }
@@ -228,6 +225,132 @@ export const deleteRoom = async (req, res) => {
         console.error(err);
         return res.status(500).json({ success: false, message: "SERVER ERROR", err: err.message });
     }
+};
+
+// xác nhận hoàn thành dọn dẹp
+export const completeCleaning = async (req, res) => {
+  const { roomId } = req.params;
+  const now = new Date();
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const room = await Room.findById(roomId).session(session);
+    if (!room) {
+      throw new Error("Không tìm thấy phòng.");
+    }
+
+    if (room.room_status !== "cleaning") {
+      throw new Error("Phòng không ở trạng thái đang dọn.");
+    }
+
+    // cắt log cleaning hiện tại
+    await RoomStatusLog.updateMany(
+      {
+        room_id: roomId,
+        status: "cleaning",
+        end_time: null,
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // tạo log available
+    await RoomStatusLog.create(
+      [{
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Housekeeping xác nhận dọn xong",
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
+
+    // update Room
+    room.room_status = "available";
+    await room.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      message: "Phòng đã sẵn sàng để bán.",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(400).json({
+      message: error.message || "Không thể xác nhận dọn phòng.",
+    });
+  }
+};
+
+// xác nhận hoàn thành bảo trì
+export const completeMaintenance = async (req, res) => {
+  const { roomId } = req.params;
+  const now = new Date();
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const room = await Room.findById(roomId).session(session);
+    if (!room) {
+      throw new Error("Không tìm thấy phòng.");
+    }
+
+    if (room.room_status !== "maintenance") {
+      throw new Error("Phòng không ở trạng thái bảo trì.");
+    }
+
+    // cắt log maintenance
+    await RoomStatusLog.updateMany(
+      {
+        room_id: roomId,
+        status: "maintenance",
+        end_time: null,
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // tạo log available
+    await RoomStatusLog.create(
+      [{
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Kỹ thuật xác nhận bảo trì xong",
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
+
+    // update Room
+    room.room_status = "available";
+    await room.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      message: "Phòng đã hoàn tất bảo trì.",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(400).json({
+      message: error.message || "Không thể xác nhận bảo trì.",
+    });
+  }
 };
 
 
@@ -444,4 +567,45 @@ export const getTopBookedRoomCategories = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// trả về các log trạng thái mới nhất của các phòng
+export const getLatestStatusOfAllRooms = async () => {
+  return await RoomStatusLog.aggregate([
+    {
+      $sort: {
+        room_id: 1,
+        start_time: -1,
+      },
+    },
+
+    // gom theo phòng, lấy bản ghi đầu tiên
+    {
+      $group: {
+        _id: "$room_id",
+        latestStatus: { $first: "$$ROOT" },
+      },
+    },
+
+    // trả về document gốc
+    {
+      $replaceRoot: { newRoot: "$latestStatus" },
+    },
+
+    // populate phòng
+    {
+      $lookup: {
+        from: "rooms",
+        localField: "room_id",
+        foreignField: "_id",
+        as: "room",
+      },
+    },
+    {
+      $unwind: {
+        path: "$room",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ]);
 };
