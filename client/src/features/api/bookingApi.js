@@ -19,7 +19,9 @@ export const bookingApi = {
         return res.data.data;
     },
 
-    createBooking: async() => {
+    createBooking: async(data) => {
+        const res = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+        return res.data;
     },
 
     updateBookingStatus: async (bookingId, status) => {
@@ -43,5 +45,20 @@ export const bookingApi = {
         }
         );
         return response.data;
+    },
+
+    getAllBookings: async () => {
+        const res = await axios.get(`${BASE_URL}/all`, getAuthHeader());
+        return res.data;
+    },
+
+    confirmBooking: async (bookingId) => {
+        const res = await axios.put(`${BASE_URL}/${bookingId}/confirm`, {}, getAuthHeader());
+        return res.data;
+    },
+
+    cancelBooking: async (bookingId, reason) => {
+        const res = await axios.patch(`${BASE_URL}/${bookingId}/cancel`, { reason }, getAuthHeader());
+        return res.data;
     },
 };

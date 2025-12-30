@@ -5,6 +5,7 @@ import Dashboard from '../features/dashboard/pages/dashboard.jsx';
 import RoomPage from '../features/room/pages/RoomPage.jsx';
 import { useAuth } from '../features/auth/hooks/authContext.jsx';
 import MainLayout from "../core/layout/mainLayout.jsx";
+import BookingList from '../features/booking/pages/bookingList.jsx';
 
 export default function AppRoutes() {
   const { user } = useAuth();
@@ -28,6 +29,10 @@ export default function AppRoutes() {
         path="/room-types"
         element={user ? <RoomPage /> : <Navigate to="/login" replace />}
       />
+      <Route
+              path="/booking-management"
+              element={user ? <BookingList /> : <Navigate to="/login" replace />}
+            />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
