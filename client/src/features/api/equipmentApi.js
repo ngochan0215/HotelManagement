@@ -1,48 +1,40 @@
 import axios from "axios";
 
-const BASE_URL = "http://localhost:3000/equipment";
-
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
+const BASE_URL = "http://localhost:3000/equipment";
+
 export const equipmentApi = {
-  // equipment-category
   getAllCategories: async () => {
-    const response = await axios.get(`${BASE_URL}/category/all`, getAuthHeader());
-    return response.data.categories;
+    const res = await axios.get(`${BASE_URL}/category/all`, getAuthHeader());
+    return res.data;
   },
-
-  getCategoryById: async (id) => {
-    const response = await axios.get(`${BASE_URL}/category/${id}`);
-    return response.data;
+  createCategory: async (data) => {
+    const res = await axios.post(`${BASE_URL}/category/add`, data, getAuthHeader());
+    return res.data;
   },
-
-  createCategory: async (formData) => {
-    const response = await axios.post(`${BASE_URL}/category/add`, formData, {
-      headers: {
-        ...getAuthHeader().headers,
-        "Content-Type": "multipart/form-data"
-      },
-    });
-    return response.data;
+  updateCategory: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/category/${id}`, data, getAuthHeader());
+    return res.data;
   },
-
-  updateCategory: async (id, formData) => {
-    const response = await axios.put(`${BASE_URL}/category/${id}`, formData, {
-      headers: {
-        ...getAuthHeader().headers,
-        "Content-Type": "multipart/form-data"
-      },
-    });
-    return response.data;
-  },
-
   deleteCategory: async (id) => {
-    const response = await axios.delete(`${BASE_URL}/category/${id}`, getAuthHeader());
-    return response.data;
+    const res = await axios.delete(`${BASE_URL}/category/${id}`, getAuthHeader());
+    return res.data;
   },
 
-  // equipment
+  getAllEquipments: async () => {
+    const res = await axios.get(`${BASE_URL}/all`, getAuthHeader());
+    return res.data;
+  },
+  updateEquipment: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+  deleteEquipment: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/${id}`, getAuthHeader());
+    return res.data;
+  }
 };
