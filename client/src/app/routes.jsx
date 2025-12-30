@@ -7,6 +7,7 @@ import RoomCalendar from '../features/booking/pages/roomCalendar.jsx';
 import RoomPage from '../features/room/pages/RoomPage.jsx';
 import BookingList from '../features/booking/pages/bookingList.jsx';
 import CustomerPage from '../features/customer/pages/customerPage.jsx';
+import EmployeePage from '../features/employee/pages/EmployeePage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -40,6 +41,11 @@ export default function AppRoutes() {
         path="/customers"
         element={user ? <CustomerPage /> : <Navigate to="/login" replace />}
       />
+
+      <Route
+              path="/employees"
+              element={user ? <EmployeePage /> : <Navigate to="/login" replace />}
+            />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

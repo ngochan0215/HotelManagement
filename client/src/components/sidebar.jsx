@@ -22,7 +22,7 @@ const sidebarConfig = [
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar },
       { name: "Check-in / Check-out", path: "/checkin-checkout", icon: FiKey },
       { name: "Khách hàng", path: "/customers", icon: FiUser },
-      { name: "Nhân viên", path: "/staff", icon: FiUsers },
+      { name: "Nhân viên", path: "/employees", icon: FiUsers },
       { name: "Thiết bị", path: "/equipment", icon: FiSettings },
       { name: "Thiết bị trong phòng", path: "/room-equipment", icon: FiSettings },
       { name: "Dịch vụ & Sản phẩm", path: "/services-products", icon: FiBox },

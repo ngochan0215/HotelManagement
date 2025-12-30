@@ -2,22 +2,21 @@ import React, { useState, useEffect } from "react";
 import { format, parseISO, addDays } from "date-fns";
 import { FiPlus, FiX, FiTrash2, FiCalendar } from "react-icons/fi";
 import axios from "axios";
-
 import Sidebar from "../../../components/sidebar";
 import Topbar from "../../../components/topbar";
 import ConfirmModal from "../../../components/confirmModal";
-
+import { StatusPill } from "../../../components/ui/label";
 import { bookingApi } from "../../api/bookingApi";
 import { roomApi } from "../../api/roomApi";
 import { useAuth } from "../../auth/hooks/authContext";
 
 const STATUS_MAP = {
-  pending: { label: "Chờ cọc", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  confirmed: { label: "Đã cọc", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  checked_in: { label: "Đang ở", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  occupied: { label: "Đang ở", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  checked_out: { label: "Đã trả", color: "bg-gray-100 text-gray-700 border-gray-200" },
-  cancelled: { label: "Đã hủy", color: "bg-red-50 text-red-600 border-red-100" },
+  pending:     { label: "Chờ cọc", color: "yellow" },
+  confirmed:   { label: "Đã cọc",  color: "blue" },
+  checked_in:  { label: "Đang ở",  color: "indigo" },
+  occupied:    { label: "Đang ở",  color: "indigo" },
+  checked_out: { label: "Đã trả",  color: "gray" },
+  cancelled:   { label: "Đã hủy",  color: "red" },
 };
 
 export default function BookingList() {
@@ -52,12 +51,12 @@ export default function BookingList() {
 
       setBookings(Array.isArray(bookRes.result) ? bookRes.result : []);
       setRoomsList(roomRes.rooms || []);
-
       const token = localStorage.getItem("token");
       const custRes = await axios.get("http://localhost:3000/customers/all", {
           headers: { Authorization: `Bearer ${token}` }
       });
       setCustomersList(Array.isArray(custRes.data) ? custRes.data : []);
+      if (custRes.data.customers) setCustomersList(custRes.data.customers);
     } catch (error) {
       console.error(error);
     }
@@ -201,10 +200,12 @@ export default function BookingList() {
                         </td>
                         <td className="py-4 font-bold">{b.deposit?.toLocaleString()}</td>
                         <td className="py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${status.color}`}>
-                                {status.label}
-                            </span>
+                            <StatusPill
+                                label={status.label}
+                                color={status.color}
+                            />
                         </td>
+
                         <td className="py-4 text-right pr-4">
                             {b.status === 'pending' && (
                                 <button onClick={() => actionConfirm(b._id)} className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded text-xs mr-2 font-medium hover:bg-emerald-100">

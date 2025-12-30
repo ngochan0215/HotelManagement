@@ -3,12 +3,13 @@ import { FiEdit, FiTrash2, FiPlus, FiX } from "react-icons/fi";
 import { roomApi } from "../../api/roomApi";
 import dayjs from "dayjs";
 
+import { StatusPill } from "../../../components/ui/label";
 const STATUS_MAP = {
-  available: { label: "Trống", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  booked: { label: "Đã đặt", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  occupied: { label: "Đang ở", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  cleaning: { label: "Dọn dẹp", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  maintenance: { label: "Bảo trì", color: "bg-rose-100 text-rose-700 border-rose-200" },
+  available:   { label: "Trống",    color: "emerald" },
+  booked:      { label: "Đã đặt",   color: "blue" },
+  occupied:    { label: "Đang ở",   color: "indigo" },
+  cleaning:    { label: "Dọn dẹp",  color: "orange" },
+  maintenance: { label: "Bảo trì",  color: "red" },
 };
 
 export default function RoomListTab() {
@@ -32,13 +33,9 @@ export default function RoomListTab() {
         roomApi.getAllCategories()
       ]);
 
-      console.log("👉 API Rooms trả về:", roomsRes);
-      console.log("👉 API Categories trả về:", catsRes);
-
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
         setRooms(roomsRes.rooms);
       } else {
-        console.warn("⚠️ Không tìm thấy mảng phòng trong response:", roomsRes);
         setRooms([]);
       }
 
@@ -49,53 +46,34 @@ export default function RoomListTab() {
       }
 
     } catch (error) {
-      console.error("❌ Lỗi tải dữ liệu:", error);
+      console.error("Lỗi tải dữ liệu:", error);
       setRooms([]);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const payload = { ...formData };
 
-    console.log("PAYLOAD IN HANDLESUBMIT: ", payload);
     if (!formData.start_time || !formData.end_time) {
-      return alert("Vui lòng chọn thời gian bắt đầu và kết thúc!");
     }
-
-    if (new Date(formData.end_time) <= new Date(formData.start_time)) {
-      return alert("Thời gian kết thúc phải sau thời gian bắt đầu!");
-    }
-
-    console.log("editingItem: ", editingItem);
     try {
       if (editingItem) {
-        console.log("I AM HERE");
-        const data = await roomApi.updateRoom(editingItem._id, payload);
-        console.log("RESPONSE: ", data.room);
+        await roomApi.updateRoom(editingItem._id, payload);
       } else {
         await roomApi.createRoom(payload);
       }
-
       setIsModalOpen(false);
       setEditingItem(null);
       setFormData({
-        room_number: "",
-        category_id: "",
-        room_status: "available",
-        start_time: "",
-        end_time: "",
+        room_number: "", category_id: "", room_status: "available", start_time: "", end_time: "",
       });
-
       fetchData();
-      
       alert("Thành công!");
     } catch (error) {
       alert("Lỗi: " + (error.response?.data?.message || error.message));
     }
   };
-
 
   const handleDelete = async (id) => {
     if (window.confirm("Xóa phòng này?")) {
@@ -108,80 +86,31 @@ export default function RoomListTab() {
     }
   };
 
-  // const openEdit = (item) => {
-  //   setEditingItem(item);
-  //   setFormData({
-  //     room_number: item.room_number,
-  //     category_id: item.category_id?._id || item.category_id || "",
-  //     room_status: item.room_status,
-  //     start_time: item.start_time || "",
-  //     end_time: item.start_time || "",
-  //   });
-  //   setIsModalOpen(true);
-  // };
+  const openEdit = async (item) => {
+    try {
+      const res = await roomApi.getRoomById(item._id);
+      const data = res.data || res;
+      const room = data.room;
+      const log = room.roomStatusLog;
 
-//   const openEdit = async (item) => {
-//   try {
-//     const res = await roomApi.getRoomById(item._id);
-//     const room = res.room || res.data?.room;
-//     const log = room.roomStatusLog || room?.roomStatusLog;
-
-//     setEditingItem(room);
-
-//     setFormData({
-//       room_number: room.room_number,
-//       category_id: room.category_id?._id || room.category_id || "",
-//       room_status: room.room_status,
-//       start_time: log?.start_time ? log.start_time.slice(0, 16) : "",
-//       end_time: log?.end_time ? log.end_time.slice(0, 16) : "",
-//     });
-
-//     setIsModalOpen(true);
-//   } catch (error) {
-//     alert("Không tải được dữ liệu phòng!");
-//     console.error(error);
-//   }
-// };
-
-const openEdit = async (item) => {
-  try {
-    const res = await roomApi.getRoomById(item._id);
-
-    const data = res.data || res;
-    const room = data.room;
-    const log = room.roomStatusLog;
-
-    console.log("openEdit: ", log);
-    if (!room) {
-      alert("Không tìm thấy dữ liệu phòng!");
-      return;
+      if (!room) {
+        alert("Không tìm thấy dữ liệu phòng!");
+        return;
+      }
+      setEditingItem(room);
+      setFormData({
+        room_number: room.room_number,
+        category_id: room.category_id?._id || "",
+        room_status: log?.status || room.room_status,
+        start_time: log?.start_time ? dayjs(log.start_time).format("YYYY-MM-DDTHH:mm") : "",
+        end_time: log?.end_time ? dayjs(log.end_time).format("YYYY-MM-DDTHH:mm") : "",
+      });
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      alert("Không tải được dữ liệu phòng!");
     }
-
-    setEditingItem(room);
-
-    setFormData({
-      room_number: room.room_number,
-      category_id: room.category_id?._id || "",
-      room_status: log?.status || room.room_status,
-
-      start_time: log?.start_time
-        ? dayjs(log.start_time).format("YYYY-MM-DDTHH:mm")
-        : "",
-
-      end_time: log?.end_time
-        ? dayjs(log.end_time).format("YYYY-MM-DDTHH:mm")
-        : "",
-    });
-
-    console.log("RAW:", log.start_time);
-    console.log("FORMAT:", dayjs(log.start_time).format("YYYY-MM-DDTHH:mm"));
-
-    setIsModalOpen(true);
-  } catch (error) {
-    console.error(error);
-    alert("Không tải được dữ liệu phòng!");
-  }
-};
+  };
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -191,9 +120,8 @@ const openEdit = async (item) => {
             onClick={() => {
               setEditingItem(null);
               setIsModalOpen(true);
-              // Tự chọn loại phòng đầu tiên nếu có
               const firstCatId = categories.length > 0 ? categories[0]._id : "";
-              setFormData({ room_number: "", category_id: "", room_status: "available" });
+              setFormData({ room_number: "", category_id: firstCatId, room_status: "available" });
             }}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition"
         >
@@ -217,13 +145,10 @@ const openEdit = async (item) => {
             rooms.map((room) => {
               const statusInfo = STATUS_MAP[room.room_status] || STATUS_MAP.available;
               const start_time = room.roomStatusLog?.start_time
-                ? new Date(room.roomStatusLog.start_time).toLocaleString()
-                : "—";
+                ? new Date(room.roomStatusLog.start_time).toLocaleString() : "—";
               const end_time = room.roomStatusLog?.end_time
-                ? new Date(room.roomStatusLog.end_time).toLocaleString()
-                : "—";
+                ? new Date(room.roomStatusLog.end_time).toLocaleString() : "—";
 
-              // Tìm tên loại phòng an toàn
               let catName = "---";
               if (room.category_id && room.category_id.category_name) {
                 catName = room.category_id.category_name;
@@ -239,10 +164,12 @@ const openEdit = async (item) => {
                   </td>
                   <td className="py-4 font-medium text-gray-600">{catName}</td>
                   <td className="py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusInfo.color}`}>
-                      {statusInfo.label}
-                    </span>
+                    <StatusPill
+                        label={statusInfo.label}
+                        color={statusInfo.color}
+                    />
                   </td>
+
                   <td className="py-4 font-medium text-gray-600">{start_time}</td>
                   <td className="py-4 font-medium text-gray-600">{end_time}</td>
                   <td className="py-4 text-right pr-4">
@@ -254,14 +181,13 @@ const openEdit = async (item) => {
             })
           ) : (
             <tr>
-              <td colSpan="4" className="text-center py-8 text-gray-400">
+              <td colSpan="6" className="text-center py-8 text-gray-400">
                  {rooms === null ? "Đang tải dữ liệu..." : "Chưa có dữ liệu phòng nào."}
               </td>
             </tr>
           )}
         </tbody>
       </table>
-
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl w-[400px] shadow-2xl">
@@ -273,7 +199,6 @@ const openEdit = async (item) => {
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Số phòng</label>
                     <input type="text" required className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                        placeholder="VD: 101"
                         value={formData.room_number} onChange={e => setFormData({...formData, room_number: e.target.value})} />
                 </div>
                 <div>
@@ -299,33 +224,14 @@ const openEdit = async (item) => {
                 {editingItem && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Thời gian bắt đầu
-                      </label>
-                      <input
-                        type="datetime-local"
-                        required
-                        className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={formData.start_time || ""}
-                        onChange={(e) =>
-                          setFormData({ ...formData, start_time: e.target.value })
-                        }
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Thời gian bắt đầu</label>
+                      <input type="datetime-local" className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
+                        value={formData.start_time || ""} onChange={(e) => setFormData({ ...formData, start_time: e.target.value })} />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Thời gian kết thúc
-                      </label>
-                      <input
-                        type="datetime-local"
-                        required
-                        className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={formData.end_time || ""}
-                        onChange={(e) =>
-                          setFormData({ ...formData, end_time: e.target.value })
-                        }
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Thời gian kết thúc</label>
+                      <input type="datetime-local" className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
+                        value={formData.end_time || ""} onChange={(e) => setFormData({ ...formData, end_time: e.target.value })} />
                     </div>
                   </>
                 )}

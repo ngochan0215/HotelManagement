@@ -9,17 +9,39 @@ import Topbar from "../../../components/topbar";
 import ConfirmModal from "../../../components/confirmModal";
 import Toast from "../../../components/toast";
 import { customerApi } from "../../api/customerApi";
+import { RankBadge , StatusPill} from "../../../components/ui/label";
 
 const LOYALTY_MAP = {
-  bronze: { label: "Đồng", color: "bg-orange-50 text-orange-700 border-orange-200" },
-  silver: { label: "Bạc", color: "bg-gray-50 text-gray-700 border-gray-200" },
-  gold: { label: "Vàng", color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-  platinum: { label: "Bạch Kim", color: "bg-purple-50 text-purple-700 border-purple-200" }
+  bronze:   { label: "Đồng", color: "orange" },
+  silver:   { label: "Bạc", color: "gray" },
+  gold:     { label: "Vàng", color: "yellow" },
+  platinum: { label: "Bạch Kim", color: "purple" }
 };
 
 const COUNTRIES = [
-  "Vietnam", "USA", "UK", "Japan", "South Korea", "China",
-  "France", "Germany", "Australia", "Canada", "Singapore", "Thailand", "Other"
+  "Vietnam", "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+  "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi",
+  "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
+  "Denmark", "Djibouti", "Dominica", "Dominican Republic",
+  "East Timor", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia",
+  "Fiji", "Finland", "France",
+  "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana",
+  "Haiti", "Honduras", "Hungary",
+  "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Ivory Coast",
+  "Jamaica", "Japan", "Jordan",
+  "Kazakhstan", "Kenya", "Kiribati", "Korea, North", "Korea, South", "Kosovo", "Kuwait", "Kyrgyzstan",
+  "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg",
+  "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar",
+  "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Norway",
+  "Oman",
+  "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal",
+  "Qatar",
+  "Romania", "Russia", "Rwanda",
+  "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria",
+  "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
+  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan",
+  "Vanuatu", "Vatican City", "Venezuela", "Yemen",
+  "Zambia", "Zimbabwe"
 ];
 
 export default function CustomerPage() {
@@ -282,9 +304,7 @@ export default function CustomerPage() {
 
                         <td className="py-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                                <span className={`inline-block w-24 py-1 text-xs font-bold uppercase rounded border ${loyalty.color}`}>
-                                    {loyalty.label}
-                                </span>
+                                <RankBadge label={loyalty.label} color={loyalty.color} />
                                 <div className="text-xs font-medium text-gray-500 flex items-center gap-1">
                                     <FiStar className="text-yellow-500" size={12}/>
                                     {c.points ? c.points.toLocaleString() : 0} điểm
@@ -293,11 +313,12 @@ export default function CustomerPage() {
                         </td>
 
                         <td className="py-4 text-center">
-                            <span className={`inline-block w-24 py-1 text-xs font-bold rounded border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                {isActive ? 'Active' : 'Locked'}
-                            </span>
+                            <StatusPill
+                                label={isActive ? 'Hoạt động' : 'Đã khóa'}
+                                color={isActive ? 'emerald' : 'red'}
+                                iconType={isActive ? 'success' : 'error'}
+                            />
                         </td>
-
                         <td className="py-4 text-right pr-4">
                             <div className="flex justify-end gap-2">
                                 <button onClick={() => handleOpenEdit(c)} className="p-2 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100" title="Sửa thông tin">
