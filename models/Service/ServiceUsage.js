@@ -19,6 +19,8 @@ const serviceUsageSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+
+    status : { type: String, enum: ["pending", "confirmed", "completed", "cancelled"], default: "pending" },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

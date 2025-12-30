@@ -1,29 +1,44 @@
 import express from "express";
 import {
     createServiceCategory, updateServiceCategory, deleteServiceCategory, getAllServiceCategories,
-    createService, updateService, deleteService, getServiceById, listAllServices, getServicesByCategoryId
+    createService, updateService, deleteService, getServiceById, getAllServices, getServicesByCategoryId,
+    createGoodTicket,
+    getAllGoodTickets,
+    getGoodTicketById,
+    updateGoodTicket,
+    deleteGoodTicket,
+    confirmGoodTicket
 } from "../controllers/serviceController.js";
 
-import { isManager } from "../middleware/authMiddleware.js";
+import { isManager, isNotCustomer } from "../middleware/authMiddleware.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
+import { uploadServiceImages, uploadServiceCategoryImages } from "../middleware/uploadImage.js";
 
 const router = express.Router();
 
 // manager manage service 
-router.post('/service/new', verifyToken, isManager, createService);
-router.patch('/service/update/:id', verifyToken, isManager, updateService);
-router.delete('/service/delete/:id', verifyToken, isManager, deleteService);
+router.post('/add', verifyToken, isManager, uploadServiceImages.array("image", 5), createService);
+router.patch('/update/:id', verifyToken, isManager, uploadServiceImages.array("image", 5), updateService);
+router.delete('/delete/:id', verifyToken, isManager, deleteService);
 
 // manager manage service category
-router.post('/category/new', verifyToken, isManager, createServiceCategory);
-router.patch('/category/update/:id', verifyToken, isManager, updateServiceCategory);
+router.post('/category/add', verifyToken, isManager, uploadServiceCategoryImages.array("image", 5), createServiceCategory);
+router.patch('/category/update/:id', verifyToken, isManager, uploadServiceCategoryImages.array("image", 5), updateServiceCategory);
 router.delete('/category/delete/:id', verifyToken, isManager, deleteServiceCategory);
 
-// users can see all tasks and services
-router.get('/category', getAllServiceCategories);
-router.get("/category/:category_id/services", getServicesByCategoryId);
+//manager/employee manage goods import
+router.post("/import/add", verifyToken, isManager, createGoodTicket);
+router.get("/import/all", verifyToken, isNotCustomer, getAllGoodTickets);
+router.get("/import/:id", verifyToken, isNotCustomer, getGoodTicketById);
+router.patch("/import/:id", verifyToken, isManager, updateGoodTicket);
+router.delete("/import/:id", verifyToken, isManager, deleteGoodTicket);
+router.post("/import/:id/confirm", verifyToken, isManager, confirmGoodTicket);
 
-router.get('/service', listAllServices);
-router.get('/service/:id', getServiceById);
+// users can see all tasks and services
+router.get('/category/all', getAllServiceCategories);
+router.get("/category/:id", getServicesByCategoryId);
+
+router.get('/all', getAllServices);
+router.get('/:id', getServiceById);
 
 export default router;

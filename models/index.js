@@ -16,6 +16,8 @@ import ServiceCategory from "./Service/ServiceCategory.js";
 import Service from "./Service/Service.js";
 import GoodImport from "./Service/GoodImport.js";
 import GoodTicket from "./Service/GoodTicket.js";
+import ServiceUsage from "./Service/ServiceUsage.js";
+import UsageDetail from "./Service/UsageDetail.js";
 
 import Discount from "./Discount.js";
 import Notification from "./Notification.js";
@@ -33,7 +35,7 @@ import RoomCancellation from "./Booking/RoomCancellation.js";
 export {
     User, Customer, Employee, Shift, Schedule, Attendance,
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
-    Service, ServiceCategory, GoodImport, GoodTicket,
+    Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, UsageDetail,
     Discount, Notification,
     Room, RoomCategory, DefaultEquipment, RoomStatusLog,
     Booking, BookingDetail, CheckInOut, RoomCancellation, 

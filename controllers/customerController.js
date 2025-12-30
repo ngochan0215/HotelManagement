@@ -47,7 +47,7 @@ export const createAccount = async (req, res) => {
             email,
             password: hashed,
             system_role: "customer",
-            emailVerified: false, 
+            emailVerified: true, 
             verifyEmailOtp: otp,
             verifyEmailOtpExpires: Date.now() + 5 * 60 * 1000,
         });
@@ -61,9 +61,9 @@ export const createAccount = async (req, res) => {
             CCCD,
         });
 
-        await sendVerificationEmail(email, otp);
+        //await sendVerificationEmail(email, otp);
 
-        res.status(201).json({ message: "Đăng ký thành công. Vui lòng kiểm tra email để xác thực.", userID: user._id, customerId: customer._id });
+        res.status(201).json({ message: "Đăng ký thành công.", userID: user._id, customerId: customer._id });
 
     } catch (error) {
         return res.status(500).json({ message: error.message });

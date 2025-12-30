@@ -31,6 +31,9 @@ const usageDetailSchema = new mongoose.Schema(
       default: null,
     },
 
+    current_price: { type: Number, required: true },
+    unit: { type: String, enum: ["unit", "hour", "day"], default: "unit" },
+
     total_fee: {
       type: Number,
       required: true,
@@ -39,7 +42,7 @@ const usageDetailSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["cancelled", "done", "pending"],
+      enum: ["cancelled", "waiting_confirm", "done", "pending"],
       default: "pending",
     },
   },
