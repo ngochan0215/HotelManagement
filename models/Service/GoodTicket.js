@@ -14,5 +14,8 @@ const goodTicketSchema = new mongoose.Schema(
     }
 );
 
+goodTicketSchema.index({ import_date: 1 });
+goodTicketSchema.index({ status: 1 });
+
 const GoodTicket = mongoose.models.goodTicket || mongoose.model("goodTicket", goodTicketSchema);
 export default GoodTicket;

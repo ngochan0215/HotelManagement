@@ -1083,54 +1083,6 @@ export const updateEquipmentInstall = async (req, res) => {
     }
 };
 
-// export const updateEquipmentInstall = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { room_id, install_date, equipment_list } = req.body;
-
-//     const install_ticket = await EquipmentInstall.findById(id);
-//     if (!install_ticket)
-//         return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
-
-//     const now = new Date();
-//     if (install_ticket.install_date && now >= new Date(install_ticket.install_date)) {
-//         return res.status(400).json({
-//             success: false,
-//             message: "Không thể chỉnh sửa vì đã đến hoặc qua ngày lắp đặt thiết bị."
-//         });
-//     }
-
-//     if (install_date) {
-//         const installDate = new Date(install_date);
-//         const now = new Date();
-//         if (installDate < new Date(now.toDateString())) {
-//             return res.status(400).json({ success: false, message: "Ngày lắp đặt không hợp lệ! Không thể nhỏ hơn ngày hiện tại." });
-//         }
-//     }
-
-//     const install = await EquipmentInstall.findByIdAndUpdate(
-//       req.params.id,
-//       { room_id, install_date, equipment_list },
-//       { new: true }
-//     );
-
-//     // Cập nhật danh sách thiết bị (nếu có)
-//     if (equipment_list) {
-//       await InstallDetail.deleteMany({ install_id: install._id });
-//       const newDetails = equipment_list.map((eid) => ({
-//         install_id: install._id,
-//         equipment_id: eid,
-//       }));
-//       await InstallDetail.insertMany(newDetails);
-//     }
-
-//     res.status(200).json({ success: true, message: "Updated successfully.", data: install });
-
-//   } catch (error) {
-//     res.status(500).json({ success: false, message: error.message });
-//   }
-// };
-
 export const deleteEquipmentInstall = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

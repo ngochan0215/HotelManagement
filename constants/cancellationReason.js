@@ -8,3 +8,5 @@ export const CANCELLATION_REASON_LABELS = {
   force_majeure: "Bất khả kháng",
   other: "Khác",
 };
+
+export const FOOD_CATEGORY_ID = "68ffa3793c858822fdc6e1ef"; // ObjectId danh mục ăn uống

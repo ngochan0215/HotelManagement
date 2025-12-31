@@ -4,7 +4,7 @@ import cors from "cors";
 import http from "http"; 
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
-import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob } from "./config/importTicket.job.js";
+import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startServiceUsageJob } from "./config/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
 import userRoute from "./routes/userRoutes.js";
@@ -49,6 +49,7 @@ app.use("/avatars", express.static("avatars"));
 startImportTicketJob();
 startInstallTicketJob();
 startGoodTicketJob();
+startServiceUsageJob();
 
 app.set("io", io);
 

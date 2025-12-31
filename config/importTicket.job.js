@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets } from "../utils/notifyTickets.js";
+import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, notifyServiceUsageTickets } from "../utils/notifyTickets.js";
 
 export const startImportTicketJob = () => {
   // Chạy mỗi ngày lúc 00:00
@@ -31,7 +31,7 @@ export const startInstallTicketJob = () => {
 
 export const startGoodTicketJob = () => {
   // Chạy mỗi ngày lúc 00:00
-  cron.schedule("0 0 * * *", async () => {
+  cron.schedule("* * * * *", async () => {
     
     try {
       console.log("[CRON] Checking import goods tickets...");
@@ -39,6 +39,20 @@ export const startGoodTicketJob = () => {
       console.log("[CRON] DONE import");
     } catch (err) {
       console.error("[CRON] Good import ticket job error:", err);
+    }
+  });
+};
+
+export const startServiceUsageJob = () => {
+  // Chạy mỗi 5 phút
+  cron.schedule("*/5 * * * *", async () => {
+    
+    try {
+      console.log("[CRON] Checking service usage tickets...");
+      await notifyServiceUsageTickets();
+      console.log("[CRON] DONE using service");
+    } catch (err) {
+      console.error("[CRON] Service usage ticket job error:", err);
     }
   });
 };

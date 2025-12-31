@@ -23,6 +23,8 @@ const userSchema = new mongoose.Schema(
     }
 );
 
+userSchema.index({ system_role: 1 });
+
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;

@@ -1,4 +1,6 @@
-import { EquipmentTicket, Notification, User, EquipmentInstall, GoodTicket } from "../models/index.js";
+import { EquipmentTicket, Notification, User, EquipmentInstall, 
+    GoodTicket, ServiceUsage, UsageDetail } from "../models/index.js";
+import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
 
 export const notifyImportTickets = async () => {
     const start = new Date();
@@ -103,4 +105,49 @@ export const notifyGoodTickets = async () => {
 
         await Notification.insertMany(notifications);
     }
+};
+
+export const notifyServiceUsageTickets = async () => {
+
+    const now = new Date();
+
+    const details = await UsageDetail.find({
+        status: "pending",
+        use_from: { $ne: null, $lte: now },
+    }).select("_id ticket_id");
+
+    if (!details.length) return;
+
+    const detailIds = details.map(d => d._id);
+    const ticketIds = [...new Set(details.map(d => d.ticket_id.toString()))];
+
+    await UsageDetail.updateMany(
+        { _id: { $in: detailIds } },
+        { $set: { status: "waiting_confirm" } }
+    );
+
+    const users = await User.find({ system_role: { $ne: "manager" } }).select("_id");
+
+    const notifications = [];
+
+    for (const ticketId of ticketIds) {
+        for (const user of users) {
+            notifications.push({
+                user_id: user._id,
+                title: "Dịch vụ đến ngày sử dụng",
+                content: `Phiếu sử dụng dịch vụ ${ticketId} đã đến ngày đăng ký`,
+                type: "system",
+            });
+        }
+    }
+
+    if (notifications.length) {
+        await Notification.insertMany(notifications);
+    }
+
+    for (const ticketId of ticketIds) {
+        await recalcServiceUsageStatus(ticketId);
+    }
+
+    console.log(`[CRON] Updated ${detailIds.length} usage_detail → waiting_confirm`);
 };

@@ -2,15 +2,14 @@ import express from "express";
 import {
     createServiceCategory, updateServiceCategory, deleteServiceCategory, getAllServiceCategories,
     createService, updateService, deleteService, getServiceById, getAllServices, getServicesByCategoryId,
-    createGoodTicket,
-    getAllGoodTickets,
-    getGoodTicketById,
-    updateGoodTicket,
-    deleteGoodTicket,
-    confirmGoodTicket
+    createGoodTicket, getAllGoodTickets, getGoodTicketById, updateGoodTicket, deleteGoodTicket, confirmGoodTicket, 
+    createServiceUsage, updateServiceUsage, getAllServiceUsage, getServiceUsageById, deleteServiceUsage,
+    confirmUsageDetail,
+    cancelUsageDetail,
+
 } from "../controllers/serviceController.js";
 
-import { isManager, isNotCustomer } from "../middleware/authMiddleware.js";
+import { isEmployee, isManager, isNotCustomer } from "../middleware/authMiddleware.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { uploadServiceImages, uploadServiceCategoryImages } from "../middleware/uploadImage.js";
 
@@ -33,6 +32,15 @@ router.get("/import/:id", verifyToken, isNotCustomer, getGoodTicketById);
 router.patch("/import/:id", verifyToken, isManager, updateGoodTicket);
 router.delete("/import/:id", verifyToken, isManager, deleteGoodTicket);
 router.post("/import/:id/confirm", verifyToken, isManager, confirmGoodTicket);
+
+// employee manage service usage
+router.post("/usage/add", verifyToken, isNotCustomer, createServiceUsage);
+router.get("/usage/all", verifyToken, isNotCustomer, getAllServiceUsage);
+router.get("/usage/:id", verifyToken, isNotCustomer, getServiceUsageById);
+router.delete("/usage/:id/delete", verifyToken, isNotCustomer, deleteServiceUsage);
+router.patch("/usage/:id/update", verifyToken, isNotCustomer, updateServiceUsage);
+router.post("/usage-details/:id/confirm", verifyToken, isNotCustomer, confirmUsageDetail);
+router.post("/usage-details/:id/cancel", verifyToken, isNotCustomer, cancelUsageDetail);
 
 // users can see all tasks and services
 router.get('/category/all', getAllServiceCategories);

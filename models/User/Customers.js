@@ -20,5 +20,8 @@ const customerSchema = new mongoose.Schema(
     }
 );
 
+customerSchema.index({ status: 1 });
+customerSchema.index({ points: 1 });
+
 const Customer = mongoose.models.Customer || mongoose.model("Customer", customerSchema);
 export default Customer;

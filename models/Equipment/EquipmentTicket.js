@@ -14,5 +14,8 @@ const equipmentTicketSchema = new mongoose.Schema(
     }
 );
 
+equipmentTicketSchema.index({ import_date: 1 });
+equipmentTicketSchema.index({ status: 1 });
+
 const EquipmentTicket = mongoose.models.EquipmentTicket || mongoose.model("EquipmentTicket", equipmentTicketSchema);
 export default EquipmentTicket;

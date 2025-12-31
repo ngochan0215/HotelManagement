@@ -128,34 +128,6 @@ export const updateRoomCategory = async (req, res) => {
     }
 };
 
-// export const updateRoomCategory = async (req, res) => {
-//     try {
-//         const { id } = req.params;
-//         const updateData = req.body;
-
-//         if (!mongoose.Types.ObjectId.isValid(id))
-//             return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
-
-//         const roomCategory = await RoomCategory.findById(id);
-//         if (!roomCategory)
-//             return res.status(404).json({ success: false, message: "Không tìm thấy loại phòng!" });
-
-//         // Prevent duplicate name
-//         if (updateData.category_name) {
-//             const duplicate = await RoomCategory.findOne({ category_name: updateData.category_name, _id: { $ne: id } });
-//             if (duplicate)
-//             return res.status(400).json({ success: false, message: "Tên loại phòng đã tồn tại!" });
-//         }
-
-//         const updated = await RoomCategory.findByIdAndUpdate(id, updateData, { new: true });
-//         return res.status(200).json({ success: true, message: "Cập nhật thành công!", roomCategory: updated });
-
-//     } catch (err) {
-//         console.error(err);
-//         return res.status(500).json({ success: false, message: "SERVER ERROR", err: err.message });
-//     }
-// };
-
 export const deleteRoomCategory = async (req, res) => {
     try {
         const { id } = req.params;
@@ -187,17 +159,6 @@ export const deleteRoomCategory = async (req, res) => {
         return res.status(500).json({ success: false, message: "SERVER ERROR", err: err.message });
     }
 };
-
-// export const getAllRoomCategories = async (req, res) => {
-//   try {
-//     const categories = await RoomCategory.find().populate("default_equipment.equipment", "name type").select("-created_at -updated_at -__v");
-//     return res.status(200).json({ success: true, count: categories.length, categories });
-
-//   } catch (err) {
-//     console.error(err);
-//     return res.status(500).json({ success: false, message: "SERVER ERROR", err: err.message });
-//   }
-// };
 
 export const getAllRoomCategories = async (req, res) => {
     try {

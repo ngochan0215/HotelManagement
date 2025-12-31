@@ -10,8 +10,15 @@ export default function EquipmentCategoryTab() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({ name: "", description: "", unit: "cái" });
+  const [formData, setFormData] = useState({ name: "", description: "", unit: "cái", price: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
+
+  const UNIT_MAP = {
+    item: "Cái",
+    box: "Bộ"
+  };
+  const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
+
 
   useEffect(() => {
     loadData();
@@ -50,14 +57,25 @@ export default function EquipmentCategoryTab() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const unitMap = {
+        "cái": "item",
+        "bộ": "box",
+      };
+
+      const payload = {
+        ...formData,
+        unit: unitMap[formData.unit] || formData.unit,
+      };
+
       if (editingItem) {
-        await equipmentApi.updateCategory(editingItem._id, formData);
+        await equipmentApi.updateCategory(editingItem._id, payload);
       } else {
-        await equipmentApi.createCategory(formData);
+        await equipmentApi.createCategory(payload);
       }
+
       setIsModalOpen(false);
       setEditingItem(null);
-      setFormData({ name: "", description: "", unit: "cái" });
+      setFormData({ name: "", description: "", unit: "cái", price: "" });
       loadData();
       alert("Thành công!");
     } catch (error) {
@@ -83,7 +101,7 @@ export default function EquipmentCategoryTab() {
             <p className="text-sm text-gray-500">Quản lý các loại tài sản và thống kê tồn kho.</p>
         </div>
         <button
-            onClick={() => { setEditingItem(null); setFormData({ name: "", description: "", unit: "cái" }); setIsModalOpen(true); }}
+            onClick={() => { setEditingItem(null); setFormData({ name: "", description: "", unit: "cái", price: "" }); setIsModalOpen(true); }}
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition"
         >
           <FiPlus /> Tạo danh mục
@@ -108,7 +126,9 @@ export default function EquipmentCategoryTab() {
               <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50 transition">
                 <td className="py-4 pl-4 font-bold text-indigo-900">{item.name}</td>
                 <td className="py-4 text-center">
-                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">{item.unit || "Cái"}</span>
+                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                      {formatUnit(item.unit) || "Cái"} 
+                    </span>
                 </td>
 
                 <td className="py-4 text-center font-bold">{item.total_count || 0}</td>
@@ -117,7 +137,7 @@ export default function EquipmentCategoryTab() {
                 <td className="py-4 text-center font-bold text-red-500">{item.broken_count || 0}</td>
 
                 <td className="py-4 text-right pr-4">
-                  <button onClick={() => { setEditingItem(item); setFormData({name: item.name, description: item.description, unit: item.unit}); setIsModalOpen(true); }}
+                  <button onClick={() => { setEditingItem(item); setFormData({name: item.name, description: item.description, unit: formatUnit(item.unit), price: item.price }); setIsModalOpen(true); }}
                     className="text-indigo-600 hover:text-indigo-800 mr-3"><FiEdit size={18}/></button>
                   <button onClick={() => setConfirmDelete({ open: true, id: item._id })} className="text-gray-400 hover:text-red-500"><FiTrash2 size={18}/></button>
                 </td>
@@ -138,7 +158,19 @@ export default function EquipmentCategoryTab() {
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div><label className="block text-sm font-medium mb-1">Tên</label><input type="text" required className="w-full border rounded p-2" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium mb-1">Đơn vị</label><input type="text" className="w-full border rounded p-2" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} /></div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Đơn vị</label>
+                  {/* <input type="text" className="w-full border rounded p-2" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} /> */}
+                  <select
+                    className="w-full border rounded p-2 bg-white"
+                    value={formData.unit}
+                    onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                  >
+                    <option value="item">Cái</option>
+                    <option value="box">Bộ</option>
+                  </select>
+                </div>
+                <div><label className="block text-sm font-medium mb-1">Giá trị (VNĐ)</label><input type="number" required className="w-full border rounded p-2" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
                 <div><label className="block text-sm font-medium mb-1">Mô tả</label><textarea className="w-full border rounded p-2 h-20" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
                 <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded font-bold">Lưu</button>
             </form>

@@ -17,5 +17,10 @@ const equipmentSchema = new mongoose.Schema(
     }
 );
 
+equipmentSchema.index({ category_id: 1 });
+equipmentSchema.index({ room_id: 1 });
+equipmentSchema.index({ status : 1 });
+equipmentSchema.index({ condition: 1 });
+
 const Equipment = mongoose.models.Equipment || mongoose.model("Equipment", equipmentSchema);
 export default Equipment;

@@ -15,5 +15,8 @@ const equipmentCategorySchema = new mongoose.Schema(
     }
 );
 
+equipmentCategorySchema.index({ price: 1 });
+equipmentCategorySchema.index({ storage_quantity: 1 });
+
 const EquipmentCategory = mongoose.models.EquipmentCategory || mongoose.model("EquipmentCategory", equipmentCategorySchema);
 export default EquipmentCategory;

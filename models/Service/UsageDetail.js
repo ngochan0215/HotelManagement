@@ -22,7 +22,8 @@ const usageDetailSchema = new mongoose.Schema(
 
     use_from: {
       type: Date,
-      required: true,
+      default: null,
+      required: false,
     },
 
     finish_at: {
@@ -42,7 +43,7 @@ const usageDetailSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["cancelled", "waiting_confirm", "done", "pending"],
+      enum: ["cancelled", "waiting_confirm", "completed", "pending"],
       default: "pending",
     },
   },

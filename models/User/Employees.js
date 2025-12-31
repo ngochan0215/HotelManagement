@@ -19,6 +19,9 @@ const employeeSchema = new mongoose.Schema(
     }
 );
 
+employeeSchema.index({ position: 1 });
+employeeSchema.index({ status: 1 });
+
 const Employee = mongoose.models.Employee || mongoose.model("Employee", employeeSchema);
 export default Employee;
 

@@ -13,6 +13,7 @@ const roomSchema = new mongoose.Schema(
 );
 
 roomSchema.index({ category_id: 1 });
+roomSchema.index({ room_status: 1 });
 
 roomSchema.virtual("roomStatusLog", {
   ref: "RoomStatusLog",
