@@ -826,25 +826,17 @@ export const createServiceUsage = async (req, res) => {
 
   try {
     const { booking_id, customer_id, services } = req.body;
+    const employee_id = req.user.userId;
 
-    /* ================= VALIDATE INPUT ================= */
-    if (
-      !booking_id ||
-      !customer_id ||
-      !Array.isArray(services) ||
-      services.length === 0
-    ) {
+    if ( !booking_id || !customer_id || !Array.isArray(services) || services.length === 0) {
       throw { status: 400, message: "Yêu cầu nhập đầy đủ thông tin." };
     }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(booking_id) ||
-      !mongoose.Types.ObjectId.isValid(customer_id)
+    if ( !mongoose.Types.ObjectId.isValid(booking_id) || !mongoose.Types.ObjectId.isValid(customer_id)
     ) {
       throw { status: 400, message: "booking_id hoặc customer_id không hợp lệ." };
     }
 
-    /* ================= CHECK BOOKING ================= */
     const booking = await Booking.findById(booking_id).session(session);
     if (!booking) {
       throw { status: 404, message: "Không tìm thấy booking." };

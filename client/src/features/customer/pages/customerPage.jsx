@@ -117,7 +117,7 @@ export default function CustomerPage() {
       message: "Bạn có chắc muốn KHÓA khách hàng này không? Họ sẽ không thể đặt phòng mới.",
       onConfirm: async () => {
         try {
-          await customerApi.deleteCustomer(id);
+          await customerApi.banCustomer(id);
           showToast("Đã khóa khách hàng thành công.", "success");
           fetchCustomers();
           setConfirmState(prev => ({ ...prev, open: false }));

@@ -20,4 +20,14 @@ export const customerApi = {
     const res = await axios.post(`${BASE_URL}/register`, data, getAuthHeader());
     return res.data;
   },
+
+  updateCustomer: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  banCustomer: async (id) => {
+    const res = await axios.patch(`${BASE_URL}/${id}/ban`, {}, getAuthHeader());
+    return res.data;
+  },
 };

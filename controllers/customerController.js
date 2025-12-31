@@ -1,6 +1,10 @@
 import bcrypt from "bcrypt";
 import { User, Customer } from "../models/index.js";
 import { sendVerificationEmail } from "../utils/sendEmails.js";
+import mongoose from "mongoose";
+
+const CCCD_REGEX = /^[0-9]{12}$/;
+const PHONE_REGEX = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
 
 export const createAccount = async (req, res) => {
     try {
@@ -125,6 +129,174 @@ export const getAllCustomers = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+export const updateCustomer = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            email,
+            full_name,
+            date_birth,
+            phone_number,
+            nationality,
+            CCCD,
+        } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "ID khách hàng không hợp lệ.",
+            });
+        }
+
+        const customer = await Customer.findById(id);
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy khách hàng.",
+            });
+        }
+
+        if (email !== undefined) {
+            const user = await User.findById(customer.user_id);
+                if (!user) {
+                    return res.status(404).json({
+                    success: false,
+                    message: "Không tìm thấy tài khoản tương ứng.",
+                });
+            }
+
+            if (email !== user.email) {
+                const existEmail = await User.findOne({ email });
+                if (existEmail) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "Email đã tồn tại.",
+                    });
+                }
+                user.email = email;
+                await user.save();
+            }
+        }
+
+        if (CCCD !== undefined) {
+            if (!CCCD_REGEX.test(CCCD)) {
+                return res.status(400).json({ success: false, message: "CCCD không hợp lệ (phải gồm 12 chữ số)." });
+            }
+
+            if (CCCD !== customer.CCCD) {
+                const existCCCD = await Customer.findOne({ CCCD });
+                if (existCCCD) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "CCCD đã tồn tại.",
+                    });
+                }
+            }
+        }
+
+        if (phone_number !== undefined) {
+            if (!PHONE_REGEX.test(phone_number)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Số điện thoại không hợp lệ.",
+                });
+            }
+
+            if (phone_number !== customer.phone_number) {
+                const existPhone = await Customer.findOne({ phone_number });
+                if (existPhone) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "Số điện thoại đã tồn tại.",
+                    });
+                }
+            }
+        }
+
+        // cập nhật các field cho phép
+        if (full_name !== undefined) customer.full_name = full_name;
+        if (date_birth !== undefined) customer.date_birth = date_birth;
+        if (phone_number !== undefined) customer.phone_number = phone_number;
+        if (nationality !== undefined) customer.nationality = nationality;
+        if (CCCD !== undefined) customer.CCCD = CCCD;
+
+        await customer.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Cập nhật thông tin khách hàng thành công.",
+            data: customer,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+export const banCustomer = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params; // customer _id
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "ID khách hàng không hợp lệ.",
+            });
+        }
+
+        const customer = await Customer.findById(id).session(session);
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy khách hàng.",
+            });
+        }
+
+        if (customer.status === "inactive") {
+            return res.status(400).json({
+                success: false,
+                message: "Tài khoản đã bị vô hiệu hóa trước đó.",
+            });
+        }
+
+        // cập nhật customer
+        customer.status = "inactive";
+        await customer.save({ session });
+
+        // cập nhật user liên kết
+        const user = await User.findByIdAndUpdate(
+            customer.user_id,
+            { emailVerified: false },
+            { new: true, session }
+        );
+
+        if (!user) {
+            throw new Error("Không tìm thấy user liên kết với customer.");
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({
+            success: true,
+            message: "Đã vô hiệu hóa tài khoản khách hàng.",
+        });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
     }
 };
 

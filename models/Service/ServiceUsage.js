@@ -14,6 +14,12 @@ const serviceUsageSchema = new mongoose.Schema(
       required: true,
     },
 
+    employee_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      required: true,
+    },
+
     total_fee: {
       type: Number, 
       required: true,
