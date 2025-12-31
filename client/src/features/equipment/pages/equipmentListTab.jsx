@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { FiEdit, FiTrash2, FiX, FiSearch } from "react-icons/fi";
+import React, { useState, useEffect, useMemo } from "react";
+import { FiEdit, FiTrash2, FiX, FiSearch, FiFilter, FiList, FiChevronDown } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi";
+import { roomApi } from "../../api/roomApi";
 import ConfirmModal from "../../../components/confirmModal";
 import { StatusPill } from "../../../components/ui/label";
 
 const CONDITION_MAP = {
-  new: { label: "Mới 100%", color: "emerald" },
+  new: { label: "Mới", color: "emerald" },
   good: { label: "Tốt", color: "blue" },
   maintenance: { label: "Bảo trì", color: "yellow" },
   broken: { label: "Hỏng", color: "red" }
@@ -20,35 +21,81 @@ const STATUS_MAP = {
   "disposed": { label: "Đã hủy", color: "red", icon: "error" }
 };
 
+const ALLOWED_UPDATE_STATUSES = ["maintenance", "lost", "disposed"];
+
 export default function EquipmentListTab() {
   const [equipments, setEquipments] = useState([]);
+  const [rooms, setRooms] = useState([]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCondition, setFilterCondition] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
+
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ condition: "", status: "", note: "" });
+
+  const [formData, setFormData] = useState({ condition: "", status: "", note: "", room_id: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   useEffect(() => {
     loadData();
+
   }, []);
 
   const loadData = async () => {
     try {
       const res = await equipmentApi.getAllEquipments();
       setEquipments((res && Array.isArray(res.equipments)) ? res.equipments : []);
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) { console.error(error); }
   };
+
+  const filteredEquipments = useMemo(() => {
+    let result = [...equipments];
+
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        result = result.filter(item => {
+            const name = item.category_id?.name?.toLowerCase() || "";
+            const code = (item.code || item._id.slice(-6)).toLowerCase();
+            const room = item.room_id?.room_number?.toString().toLowerCase() || "";
+            return name.includes(lowerTerm) || code.includes(lowerTerm) || room.includes(lowerTerm);
+        });
+    }
+
+    if (filterStatus !== 'all') {
+        result = result.filter(item => item.status === filterStatus);
+    }
+
+    if (filterCondition !== 'all') {
+        result = result.filter(item => item.condition === filterCondition);
+    }
+
+    result.sort((a, b) => {
+        if (sortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        if (sortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        if (sortOrder === 'a-z') return (a.category_id?.name || "").localeCompare(b.category_id?.name || "");
+        return 0;
+    });
+
+    return result;
+  }, [equipments, searchTerm, filterStatus, filterCondition, sortOrder]);
+
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
-      await equipmentApi.updateEquipment(editingItem._id, formData);
+      const payload = { ...formData };
+      if (['lost', 'disposed', 'in-stock'].includes(payload.status)) {
+          payload.room_id = null;
+      }
+
+      await equipmentApi.updateEquipment(editingItem._id, payload);
       setIsModalOpen(false);
       loadData();
       alert("Cập nhật thành công!");
     } catch (error) {
-      alert("Lỗi: " + error.message);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
     }
   };
 
@@ -56,28 +103,71 @@ export default function EquipmentListTab() {
     try {
       await equipmentApi.deleteEquipment(confirmDelete.id);
       loadData();
-      setConfirmDelete({ open: false });
+      setConfirmDelete({ open: false, id: null });
+      alert("Đã xóa thiết bị thành công.");
     } catch (error) {
-      alert("Lỗi xóa: " + error.message);
+      alert("Lỗi xóa: " + (error.response?.data?.message || error.message));
+      setConfirmDelete({ open: false, id: null });
     }
   };
 
   const openEdit = (item) => {
-    setEditingItem(item);
-    setFormData({ condition: item.condition, status: item.status, note: item.note || "" });
-    setIsModalOpen(true);
+      setEditingItem(item);
+      setFormData({
+          condition: item.condition,
+          status: item.status,
+          room_id: item.room_id?._id || "",
+          note: item.note || ""
+      });
+      setIsModalOpen(true);
   };
 
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-            <h2 className="text-lg font-bold text-gray-800">Kho Thiết bị Chi tiết</h2>
-            <p className="text-xs text-gray-500 italic">*Thiết bị mới được thêm thông qua Phiếu Nhập.</p>
+
+
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
+            <button onClick={() => setFilterStatus('all')} className={`px-4 py-1.5 rounded-md text-sm font-bold capitalize transition-all whitespace-nowrap ${filterStatus === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Tất cả</button>
+            {Object.keys(STATUS_MAP).map(key => (
+                <button key={key} onClick={() => setFilterStatus(key)} className={`px-4 py-1.5 rounded-md text-sm font-bold capitalize transition-all whitespace-nowrap ${filterStatus === key ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{STATUS_MAP[key].label}</button>
+            ))}
+        </div>
+
+        {/* Tìm kiếm & Dropdowns */}
+        <div className="flex flex-col lg:flex-row gap-4 justify-between">
+            <div className="relative w-full lg:w-96">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                <input type="text" placeholder="Tìm tên, mã TB, số phòng..." className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-0 transition"
+                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-1">
+                <div className="relative min-w-[200px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiFilter className="text-gray-500" size={16} /></div>
+                    <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm"
+                        value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
+                        <option value="all">Tất cả Tình trạng</option>
+                        {Object.keys(CONDITION_MAP).map(k => <option key={k} value={k}>{CONDITION_MAP[k].label}</option>)}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
+                </div>
+
+                <div className="relative min-w-[180px]">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiList className="text-gray-500" size={16} /></div>
+                    <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm"
+                        value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                        <option value="newest">Mới nhất</option>
+                        <option value="oldest">Cũ nhất</option>
+                        <option value="a-z">Tên: A - Z</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
+                </div>
+            </div>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto min-h-[400px]">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-100 bg-gray-50/50">
@@ -91,30 +181,20 @@ export default function EquipmentListTab() {
             </tr>
           </thead>
           <tbody className="text-gray-700 text-sm">
-            {equipments.length === 0 ?
-                <tr><td colSpan="7" className="text-center py-8 text-gray-400">Kho trống</td></tr> :
-                equipments.map((item) => {
+            {filteredEquipments.length === 0 ?
+                <tr><td colSpan="7" className="text-center py-12 text-gray-400"><div className="flex flex-col items-center gap-2"><FiSearch size={24} className="opacity-50"/><span>Không tìm thấy thiết bị nào.</span></div></td></tr>
+                :
+                filteredEquipments.map((item) => {
                     const cond = CONDITION_MAP[item.condition] || CONDITION_MAP.good;
                     const st = STATUS_MAP[item.status] || STATUS_MAP["in-stock"];
                     const displayId = item.code ? item.code : item._id.slice(-6).toUpperCase();
 
                     return (
                     <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-4 pl-4 font-mono font-bold text-gray-500 text-xs">
-                            #{displayId}
-                        </td>
-
-                        <td className="py-4 font-medium text-gray-900">
-                            {item.category_id?.name || "---"}
-                        </td>
+                        <td className="py-4 pl-4 font-mono font-bold text-gray-500 text-xs">#{displayId}</td>
+                        <td className="py-4 font-medium text-gray-900">{item.category_id?.name || "---"}</td>
                         <td className="py-4 text-gray-600">
-                            {item.room_id ? (
-                                <span className="flex items-center gap-1 font-bold text-indigo-600">
-                                    P.{item.room_id.room_number}
-                                </span>
-                            ) : (
-                                <span className="text-gray-400 italic">Kho</span>
-                            )}
+                            {item.room_id ? <span className="flex items-center gap-1 font-bold text-indigo-600">P.{item.room_id.room_number || "..."}</span> : <span className="text-gray-400 italic">Kho</span>}
                         </td>
                         <td className="py-4"><StatusPill label={cond.label} color={cond.color} /></td>
                         <td className="py-4"><StatusPill label={st.label} color={st.color} iconType={st.icon} /></td>
@@ -130,9 +210,10 @@ export default function EquipmentListTab() {
           </tbody>
         </table>
       </div>
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl w-[400px]">
+          <div className="bg-white p-6 rounded-xl w-[400px] shadow-2xl">
             <div className="flex justify-between mb-4">
                 <h3 className="font-bold text-lg">Cập nhật trạng thái</h3>
                 <button onClick={() => setIsModalOpen(false)}><FiX size={24}/></button>
@@ -140,27 +221,48 @@ export default function EquipmentListTab() {
             <form onSubmit={handleUpdate} className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium mb-1">Tình trạng vật lý</label>
-                    <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500" value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
+                    <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500"
+                        value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
                         {Object.keys(CONDITION_MAP).map(k => <option key={k} value={k}>{CONDITION_MAP[k].label}</option>)}
                     </select>
                 </div>
+
                 <div>
-                    <label className="block text-sm font-medium mb-1">Trạng thái lưu trú</label>
-                    <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                        {Object.keys(STATUS_MAP).map(k => <option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
+                    <label className="block text-sm font-medium mb-1">Trạng thái xử lý</label>
+                    <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500"
+                        value={formData.status}
+                        onChange={e => setFormData({...formData, status: e.target.value})}>
+                        {!ALLOWED_UPDATE_STATUSES.includes(formData.status) && (
+                           <option value={formData.status} disabled>
+                                {STATUS_MAP[formData.status]?.label || formData.status}
+                           </option>
+                        )}
+                        {ALLOWED_UPDATE_STATUSES.map(k => (
+                            <option key={k} value={k}>{STATUS_MAP[k].label}</option>
+                        ))}
                     </select>
                 </div>
+
                 <div>
                     <label className="block text-sm font-medium mb-1">Ghi chú</label>
-                    <textarea className="w-full border rounded-lg p-2.5 outline-none focus:border-indigo-500" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
+                    <textarea className="w-full border rounded-lg p-2.5 outline-none focus:border-indigo-500" rows="3"
+                        value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
                 </div>
+
                 <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700">Lưu thay đổi</button>
             </form>
           </div>
         </div>
       )}
 
-      {confirmDelete.open && (<ConfirmModal open={confirmDelete.open} title="Xóa thiết bị" message="Xác nhận xóa thiết bị này khỏi hệ thống?" confirmText="Xóa" cancelText="Hủy" onConfirm={handleDelete} onCancel={() => setConfirmDelete({ open: false })} />)}
+      {confirmDelete.open && (
+        <ConfirmModal
+            open={confirmDelete.open} title="Xóa thiết bị" message="Xác nhận xóa thiết bị này khỏi hệ thống?"
+            confirmText="Xóa" cancelText="Hủy"
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmDelete({ open: false, id: null })}
+        />
+      )}
     </div>
   );
 }
