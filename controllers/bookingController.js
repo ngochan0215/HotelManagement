@@ -21,11 +21,15 @@ export const createBooking = async (req, res) => {
 
     const customer = await Customer.findById(customer_id);
     if (!customer)
-      return res.status(404).json({ message: "Không tìm thấy khách hàng." });
+    return res.status(404).json({ message: "Không tìm thấy khách hàng." });
+    let employee = await Employee.findOne({ user_id: handled_by });
+    if (!employee) {
+        employee = await Employee.findById(handled_by);
+    }
 
-    const employee = await Employee.findById(handled_by);
-    if (!employee)
-      return res.status(404).json({ message: "Không tìm thấy nhân viên." });
+    if (!employee) {
+      return res.status(404).json({ message: `Không tìm thấy hồ sơ Nhân viên (User/Emp ID: ${handled_by}).` });
+    }
 
     if (!Array.isArray(rooms) || rooms.length === 0) {
       return res.status(400).json({ message: "Phải đặt ít nhất một phòng!" });
@@ -35,39 +39,30 @@ export const createBooking = async (req, res) => {
       if ( !room.room_id || !room.expected_checkin || !room.expected_checkout) {
         return res.status(400).json({ message: "Phải điền đầy đủ thông tin check-in, check-out dự kiến của mỗi phòng đặt." });
       }
-
       if ( new Date(room.expected_checkout) <= new Date(room.expected_checkin) ) {
         return res.status(400).json({ message: "Ngày check-out dự kiến phải sau ngày check-in dự kiến." });
       }
-
       if ( new Date(room.expected_checkout) <= new Date() ) {
         return res.status(400).json({ message: "Ngày check-out dự kiến không được trong quá khứ." });
       }
-
       if ( new Date(room.expected_checkin) <= new Date() ) {
         return res.status(400).json({ message: "Ngày check-in dự kiến không được trong quá khứ." });
       }
-
       const roomExists = await Room.exists({ _id: room.room_id });
       if (!roomExists) {
         return res.status(404).json({ message: `Không tìm thấy phòng với ID: ${room.room_id}.`});
-      } 
+      }
     }
 
-    const expected_checkin = new Date(
-      Math.min(...rooms.map(r => new Date(r.expected_checkin)))
-    );
-
-    const expected_checkout = new Date(
-      Math.max(...rooms.map(r => new Date(r.expected_checkout)))
-    );
+    const expected_checkin = new Date(Math.min(...rooms.map(r => new Date(r.expected_checkin))));
+    const expected_checkout = new Date(Math.max(...rooms.map(r => new Date(r.expected_checkout))));
 
     // tạo booking
     const booking = await Booking.create(
       [
         {
           customer_id,
-          handled_by,
+          handled_by: employee._id,
           adults,
           children,
           deposit,
@@ -102,7 +97,6 @@ export const createBooking = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-
     return res.status(500).json({
       message: error.message || "Không thể đặt phòng.",
     });
