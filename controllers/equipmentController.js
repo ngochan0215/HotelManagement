@@ -164,7 +164,7 @@ export const getAllEquipments = async (req, res) => {
         }
 
         if (status) {
-            const validStatuses = ["in-stock", "in-use", "maintenance", "lost", "disposed"];
+            const validStatuses = ["in-stock", "maintenance", "lost", "disposed"];
             if (!validStatuses.includes(status))
                 return res.status(400).json({ success: false, message: "Trạng thái thiết bị không hợp lệ!" });
             filter.status = status;
@@ -179,6 +179,7 @@ export const getAllEquipments = async (req, res) => {
 
         const equipments = await Equipment.find(filter)
             .populate("category_id", "name unit price")
+            .populate("room_id", "room_number room_status")
             .select("-__v -created_at -updated_at")
             .sort({ created_at: -1 });
 

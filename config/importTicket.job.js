@@ -31,7 +31,7 @@ export const startInstallTicketJob = () => {
 
 export const startGoodTicketJob = () => {
   // Chạy mỗi ngày lúc 00:00
-  cron.schedule("* * * * *", async () => {
+  cron.schedule("0 0 * * *", async () => {
     
     try {
       console.log("[CRON] Checking import goods tickets...");
