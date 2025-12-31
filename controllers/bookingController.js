@@ -615,8 +615,8 @@ export const checkinBookingDetail = async (req, res) => {
       throw new Error("Không tìm thấy phòng trong booking.");
     }
 
-    if (detail.status !== "confirmed") {
-      throw new Error("Phòng này không ở trạng thái có thể check-in.");
+    if (!["reserved", "confirmed"].includes(detail.status)) {
+      throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể check-in.`);
     }
 
     // check conflict phòng
@@ -624,7 +624,7 @@ export const checkinBookingDetail = async (req, res) => {
       room_id: detail.room_id,
       start_time: { $lt: detail.expected_checkout },
       end_time: { $gt: now },
-      status: { $in: ["booked", "occupied", "maintenance", "cleaning"] },
+      status: { $in: ["occupied", "maintenance", "cleaning"] }, // <-- Đã xóa "booked"
     }).session(session);
 
     if (conflict) {
@@ -686,6 +686,8 @@ export const checkinBookingDetail = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
+    console.error("Lỗi Check-in:", error.message);
+
     return res.status(400).json({
       message: error.message || "Không thể check-in phòng.",
     });
@@ -716,7 +718,7 @@ export const checkoutBookingDetail = async (req, res) => {
     }
 
     if (detail.status !== "checked_in") {
-      throw new Error("Phòng này chưa được check-in.");
+      throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể checkout.`);
     }
 
     // cắt log occupied hiện tại
@@ -730,14 +732,16 @@ export const checkoutBookingDetail = async (req, res) => {
       { session }
     );
 
-    // tạo log cleaning
+    const cleaningDuration = 2 * 60 * 60 * 1000; // 2 giờ
+    const cleaningEndTime = new Date(now.getTime() + cleaningDuration);
+
     await RoomStatusLog.create(
       [{
         room_id: detail.room_id,
         status: "cleaning",
         start_time: now,
-        end_time: null,
-        note: `Checkout booking ${booking._id} and is currently in cleaning session.`,
+        end_time: cleaningEndTime,
+        note: `Checkout booking ${booking._id} -> Cleaning`,
         handled_by: req.user?._id || null,
       }],
       { session }
@@ -767,13 +771,13 @@ export const checkoutBookingDetail = async (req, res) => {
     session.endSession();
 
     return res.json({
-      message: "Checkout phòng thành công.",
+      message: "Checkout thành công. Phòng đang được dọn dẹp.",
     });
 
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-
+    console.error("Lỗi Checkout:", error.message);
     return res.status(400).json({
       message: error.message || "Không thể checkout phòng.",
     });

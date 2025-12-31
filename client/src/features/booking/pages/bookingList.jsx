@@ -40,7 +40,14 @@ export default function BookingList() {
   const [selectedCustDisplay, setSelectedCustDisplay] = useState(null);
   const dropdownRef = useRef(null);
 
-  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
+  const [confirmState, setConfirmState] = useState({
+      open: false,
+      title: "",
+      message: "",
+      confirmText: "Đồng ý",
+      type: "danger",
+      onConfirm: null
+  });
 
   const [formData, setFormData] = useState({
     customer_id: "", room_id: "", adults: 1, children: 0, deposit: 0, base_fee: 0,
@@ -105,6 +112,7 @@ export default function BookingList() {
         alert("Ngày check-out phải sau ngày check-in!");
         return;
       }
+
       let employeeId = null;
       if (user && user._id) employeeId = user._id;
       else if (user && user.token) {
@@ -171,10 +179,41 @@ export default function BookingList() {
     setFormData(prev => ({ ...prev, room_id: roomId, base_fee: selectedRoom?.category_id?.price || 0 }));
   };
 
-  const actionConfirm = (id) => setConfirmState({ open: true, title: "Xác nhận cọc", message: "Khách đã thanh toán tiền cọc?", onConfirm: async () => { try { await bookingApi.confirmBooking(id); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } } });
-  const actionCheckIn = (did, bid, rNum) => setConfirmState({ open: true, title: `Check-in P.${rNum}`, message: `Giao phòng ${rNum} cho khách?`, onConfirm: async () => { try { await bookingApi.checkinBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } } });
-  const actionCheckOut = (did, bid, rNum) => setConfirmState({ open: true, title: `Check-out P.${rNum}`, message: `Khách trả phòng ${rNum}?`, onConfirm: async () => { try { await bookingApi.checkoutBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } } });
-  const actionCancel = (id) => { const r = prompt("Lý do hủy:"); if(r) bookingApi.cancelBooking(id, r).then(()=>{alert("Đã hủy");fetchData()}).catch(e=>alert(e.message)); };
+  const actionConfirm = (id) => setConfirmState({
+      open: true,
+      title: "Xác nhận Tiền Cọc",
+      message: "Bạn có chắc chắn khách hàng đã thanh toán tiền cọc?",
+      confirmText: "Đã thu tiền",
+      type: "info",
+      onConfirm: async () => { try { await bookingApi.confirmBooking(id); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } }
+  });
+
+  const actionCheckIn = (did, bid, rNum) => setConfirmState({
+      open: true,
+      title: `Check-in Phòng ${rNum}`,
+      message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`,
+      confirmText: "Giao phòng",
+      type: "success",
+      onConfirm: async () => { try { await bookingApi.checkinBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } }
+  });
+
+  const actionCheckOut = (did, bid, rNum) => setConfirmState({
+      open: true,
+      title: `Check-out Phòng ${rNum}`,
+      message: `Xác nhận khách trả phòng ${rNum} và hoàn tất thanh toán?`,
+      confirmText: "Trả phòng",
+      type: "warning",
+      onConfirm: async () => { try { await bookingApi.checkoutBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } }
+  });
+
+  const actionCancel = (id) => {
+      const r = prompt("Lý do hủy:");
+      if(r) {
+          bookingApi.cancelBooking(id, r)
+            .then(()=>{ alert("Đã hủy thành công"); fetchData(); })
+            .catch(e=>alert(e.message));
+      }
+  };
 
   const filteredBookings = useMemo(() => {
       return bookings.filter(b => {
@@ -190,6 +229,7 @@ export default function BookingList() {
       <div className="flex-1 ml-[270px]">
         <Topbar />
         <div className="p-8 max-w-7xl mx-auto space-y-6">
+
           <div className="flex justify-between items-end border-b border-gray-200 pb-4">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">Quản lý Đặt phòng</h1>
@@ -214,15 +254,12 @@ export default function BookingList() {
                 <div className="flex justify-between items-center">
                     <div className="relative w-full lg:w-96">
                         <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                        <input
-                            type="text"
-                            placeholder="Tìm tên khách, SĐT..."
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-0 transition"
-                            value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                        />
+                        <input type="text" placeholder="Tìm tên khách, SĐT..." className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-0 transition"
+                            value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     </div>
                 </div>
             </div>
+
             <div className="overflow-x-auto min-h-[400px]">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -253,8 +290,6 @@ export default function BookingList() {
                                 </div>
                             </div>
                         </td>
-
-
                         <td className="py-4">
                             <div className="flex flex-col gap-2">
                                 {b.rooms?.map((r,i) => (
@@ -276,7 +311,6 @@ export default function BookingList() {
                         <td className="py-4 text-center">
                             <StatusPill label={statusInfo.label} color={statusInfo.color} />
                         </td>
-
                         <td className="py-4 text-right pr-4">
                             <div className="flex flex-col items-end gap-2">
                                 {b.status === 'pending' && (
@@ -297,7 +331,7 @@ export default function BookingList() {
                                         return (
                                             <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_id?.room_number)}
                                                 className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded hover:bg-orange-100 transition">
-                                                <FiLogOut/> Check-out P.{r.room_id?.room_number}
+                                                <FiLogOut/> Check-out
                                             </button>
                                         );
                                     return null;
@@ -355,9 +389,7 @@ export default function BookingList() {
                                 </div>
                             ) : (
                                 <div className="relative">
-                                    <input type="text" placeholder="Nhập Tên, SĐT hoặc CCCD..."
-                                        className="w-full pl-9 border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
-                                        value={custSearchQuery} onChange={(e) => { setCustSearchQuery(e.target.value); setShowCustDropdown(true); }} onFocus={() => setShowCustDropdown(true)} />
+                                    <input type="text" placeholder="Nhập Tên, SĐT hoặc CCCD..." className="w-full pl-9 border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white" value={custSearchQuery} onChange={(e) => { setCustSearchQuery(e.target.value); setShowCustDropdown(true); }} onFocus={() => setShowCustDropdown(true)} />
                                     <FiSearch className="absolute left-3 top-3 text-gray-400"/>
                                     {showCustDropdown && (
                                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -401,23 +433,14 @@ export default function BookingList() {
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
-                        <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50 text-sm"
-                            value={formData.expected_checkin} onChange={e => setFormData({...formData, expected_checkin: e.target.value})} />
-                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
-                        <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50 text-sm"
-                            value={formData.expected_checkout} onChange={e => setFormData({...formData, expected_checkout: e.target.value})} />
-                     </div>
+                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label><input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50 text-sm" value={formData.expected_checkin} onChange={e => setFormData({...formData, expected_checkin: e.target.value})} /></div>
+                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label><input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50 text-sm" value={formData.expected_checkout} onChange={e => setFormData({...formData, expected_checkout: e.target.value})} /></div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 pt-2">
                      <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Người lớn</label><input type="number" min="1" className="w-full border border-gray-300 rounded-lg p-2 text-center" value={formData.adults} onChange={e=>setFormData({...formData, adults: e.target.value})} /></div>
                      <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Trẻ em</label><input type="number" min="0" className="w-full border border-gray-300 rounded-lg p-2 text-center" value={formData.children} onChange={e=>setFormData({...formData, children: e.target.value})} /></div>
                      <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Cọc (VNĐ)</label><input type="number" min="0" className="w-full border border-gray-300 rounded-lg p-2 text-center font-bold text-emerald-600" value={formData.deposit} onChange={e=>setFormData({...formData, deposit: e.target.value})} /></div>
                 </div>
-
                 <div className="pt-4 mt-4 border-t border-gray-100">
                      <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
                         <FiCheckCircle size={18}/> Xác nhận Đặt Phòng
@@ -428,7 +451,18 @@ export default function BookingList() {
         </div>
       )}
 
-      {confirmState.open && (<ConfirmModal open={confirmState.open} title={confirmState.title} message={confirmState.message} confirmText="Đồng ý" cancelText="Hủy" onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(p => ({ ...p, open: false }))} />)}
+      {confirmState.open && (
+        <ConfirmModal
+            open={confirmState.open}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText={confirmState.confirmText}
+            cancelText="Đóng"
+            type={confirmState.type}
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(p => ({ ...p, open: false }))}
+        />
+      )}
     </div>
   );
 }
