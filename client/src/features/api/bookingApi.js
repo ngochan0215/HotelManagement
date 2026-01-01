@@ -38,7 +38,7 @@ export const bookingApi = {
 
     getRoomsCalendar: async (date = new Date()) => {
         const response = await axios.get(
-        `${BASE_URL_}/manager/calendar/rooms`,
+            `${BASE_URL_}/manager/calendar/rooms`,
         {
             ...getAuthHeader(),
             params: { date },
@@ -57,6 +57,30 @@ export const bookingApi = {
         return res.data;
     },
 
+    checkinBookingDetail: async (bookingId, detailId) => {
+        const res = await axios.post(
+            `${BASE_URL}/${bookingId}/details/${detailId}/checkin`,
+            {},
+            getAuthHeader()
+        );
+        return res.data;
+    },
+    checkoutBookingDetail: async (bookingId, detailId) => {
+        const res = await axios.post(
+            `${BASE_URL}/${bookingId}/details/${detailId}/checkout`,
+            {},
+            getAuthHeader()
+        );
+        return res.data;
+    },
+    cancelBookingDetail: async (bookingId, detailId) => {
+        const res = await axios.patch(
+            `${BASE_URL}/${bookingId}/details/${detailId}/cancel`,
+            {},
+            getAuthHeader()
+        );
+        return res.data;
+    },
     cancelBooking: async (bookingId, reason) => {
         const res = await axios.patch(`${BASE_URL}/${bookingId}/cancel`, { reason }, getAuthHeader());
         return res.data;

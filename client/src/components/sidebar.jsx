@@ -20,7 +20,6 @@ const sidebarConfig = [
     children: [
       { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed },
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar },
-      { name: "Check-in / Check-out", path: "/checkin-checkout", icon: FiKey },
       { name: "Khách hàng", path: "/customers", icon: FiUser },
       { name: "Nhân viên", path: "/employees", icon: FiUsers },
       { name: "Thiết bị", path: "/equipment", icon: FiSettings },
