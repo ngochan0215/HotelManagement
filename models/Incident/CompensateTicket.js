@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 
+// phiếu đền bù
 const compensateTicketSchema = new mongoose.Schema(
   {
     incident_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Incident",
+      unique: true, 
       required: true,
     },
 
@@ -14,9 +16,19 @@ const compensateTicketSchema = new mongoose.Schema(
       default: null,
     },
 
+    payer_type: {
+      type: String,
+      enum: ["customer", "employee", "hotel"],
+      required: true
+    },
+    payer_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+
     total_fee: {
       type: Number,
-      required: true,
       default: 0,
     },
 
@@ -37,5 +49,5 @@ const compensateTicketSchema = new mongoose.Schema(
   }
 );
 
-const CompensateTicket = mongoose.models.CompensateTicket || mongoose.model("compensateDetail", compensateDetailSchema);
+const CompensateTicket = mongoose.models.CompensateTicket || mongoose.model("compensateTicket", compensateTicketSchema);
 export default CompensateTicket;

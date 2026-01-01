@@ -20,7 +20,7 @@ export const bookingApi = {
     },
 
     createBooking: async(data) => {
-        const res = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+        const res = await axios.post(`${BASE_URL}/add/general`, data, getAuthHeader());
         return res.data;
     },
 

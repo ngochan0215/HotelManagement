@@ -19,7 +19,11 @@ import GoodTicket from "./Service/GoodTicket.js";
 import ServiceUsage from "./Service/ServiceUsage.js";
 import UsageDetail from "./Service/UsageDetail.js";
 
-import Discount from "./Discount.js";
+import Incident from "./Incident/Incident.js";
+import CompensateTicket from "./Incident/CompensateTicket.js";
+import CompensateDetail from "./Incident/CompensateDetail.js";
+
+import Discount from "./Booking/Discount.js";
 import Notification from "./Notification.js";
 
 import RoomCategory from "./Room/RoomCategory.js";
@@ -31,12 +35,14 @@ import Booking from "./Booking/Booking.js";
 import BookingDetail from "./Booking/BookingDetail.js";
 import CheckInOut from "./Booking/CheckInOut.js";
 import RoomCancellation from "./Booking/RoomCancellation.js";
+import BookingStatusLog from "./Booking/BookingStatusLog.js";
 
 export {
     User, Customer, Employee, Shift, Schedule, Attendance,
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
     Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, UsageDetail,
     Discount, Notification,
+    Incident, CompensateTicket, CompensateDetail,
     Room, RoomCategory, DefaultEquipment, RoomStatusLog,
-    Booking, BookingDetail, CheckInOut, RoomCancellation, 
+    Booking, BookingDetail, CheckInOut, RoomCancellation, BookingStatusLog
 };

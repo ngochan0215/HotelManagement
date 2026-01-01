@@ -42,6 +42,22 @@ export default function BookingList() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (isModalOpen) {
+      fetchAvailableRooms(
+        formData.expected_checkin,
+        formData.expected_checkout
+      );
+    }
+  }, [
+    formData.expected_checkin,
+    formData.expected_checkout,
+    formData.adults,
+    formData.children,
+    isModalOpen
+  ]);
+
+
   const fetchData = async () => {
     try {
       const [bookRes, roomRes] = await Promise.all([
@@ -52,7 +68,7 @@ export default function BookingList() {
       setBookings(Array.isArray(bookRes.result) ? bookRes.result : []);
       setRoomsList(roomRes.rooms || []);
       const token = localStorage.getItem("token");
-      const custRes = await axios.get("http://localhost:3000/customers/all", {
+      const custRes = await axios.get("http://localhost:3000/customer/all", {
           headers: { Authorization: `Bearer ${token}` }
       });
       setCustomersList(Array.isArray(custRes.data) ? custRes.data : []);
@@ -62,17 +78,52 @@ export default function BookingList() {
     }
   };
 
+  const fetchAvailableRooms = async (checkin, checkout) => {
+    if (!checkin || !checkout) return;
+
+    try {
+      const res = await roomApi.getAvailableBy({
+        checkin,
+        checkout,
+        adults: formData.adults,
+        children: formData.children,
+      });
+      console.log("AVAILABLE ROOMS: ", res);
+
+      const flatRooms = res.flatMap(c =>
+        c.rooms.map(r => ({
+          _id: r.room_id,
+          room_number: r.room_number,
+          category_name: c.name,
+          price: c.price
+        }))
+      );
+
+      console.log("FLAT ROOMS: ", flatRooms);
+      setRoomsList(flatRooms);
+    } catch (err) {
+      console.error(err);
+      setRoomsList([]);
+    }
+  };
+
+
   const handleOpenModal = () => {
     const now = new Date();
     const tomorrow = addDays(now, 1);
     tomorrow.setHours(12, 0, 0, 0);
 
+    const checkin = format(now, "yyyy-MM-dd'T'HH:mm");
+    const checkout = format(tomorrow, "yyyy-MM-dd'T'HH:mm");
+
     setFormData({
       customer_id: "", room_id: "", adults: 1, children: 0, deposit: 0, base_fee: 0,
-      expected_checkin: format(now, "dd-MM-yyyy'T'HH:mm"),
-      expected_checkout: format(tomorrow, "dd-MM-yyyy'T'HH:mm")
+      expected_checkin: "",
+      expected_checkout: format(tomorrow, "yyyy-MM-dd'T'HH:mm")
     });
+
     setIsModalOpen(true);
+    fetchAvailableRooms(checkin, checkout);
   };
 
   const handleRoomSelect = (roomId) => {
@@ -80,7 +131,8 @@ export default function BookingList() {
     setFormData(prev => ({
         ...prev,
         room_id: roomId,
-        base_fee: selectedRoom?.category_id?.price || 0
+        //base_fee: selectedRoom?.category_id?.price || 0
+        base_fee: selectedRoom?.price || 0
     }));
   };
 
@@ -259,11 +311,25 @@ export default function BookingList() {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Phòng</label>
-                        <select required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-white"
+                        {/* <select required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-white"
                             value={formData.room_id} onChange={e => handleRoomSelect(e.target.value)}>
                             <option value="">-- Chọn --</option>
                             {roomsList.map(r => <option key={r._id} value={r._id} disabled={r.room_status!=='available'}>{r.room_number}</option>)}
-                        </select>
+                        </select> */}
+                        <select
+  required
+  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-white"
+  value={formData.room_id}
+  onChange={e => handleRoomSelect(e.target.value)}
+>
+  <option value="">-- Chọn phòng trống --</option>
+  {roomsList.map(r => (
+    <option key={r._id} value={r._id}>
+      {r.room_number} ({r.category_name})
+    </option>
+  ))}
+</select>
+
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ)</label>

@@ -19,5 +19,4 @@ router.get("/all", getAllRoomCategories);
 router.get("/:id", getRoomCategoryById);
 router.put("/:id", verifyToken, isManager, uploadRoomImages.array("images", 10), updateRoomCategory);
 router.delete("/:id", verifyToken, isManager, deleteRoomCategory);
-
 export default router;

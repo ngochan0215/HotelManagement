@@ -50,6 +50,14 @@ export const roomApi = {
     return response.data;
   },
 
+  getAvailableBy: async (params) => {
+    const response = await axios.get(`${BASE_URL_}/available-by`, {
+      params,
+      ...getAuthHeader(),
+    });
+    return response.data;
+  },
+
   // room
   getAllRooms: async () => {
     const response = await axios.get(`${BASE_URL}/all`);

@@ -1,8 +1,6 @@
 import mongoose from "mongoose";
 
 // chi tiết phiếu đền bù thiết bị
-import mongoose from "mongoose";
-
 const compensateDetailSchema = new mongoose.Schema(
   {
     ticket_id: {
@@ -19,8 +17,14 @@ const compensateDetailSchema = new mongoose.Schema(
 
     broken_state: {
       type: String,
-      trim: true,
-      required: true,
+      enum: ["scratched", "cracked", "broken", "lost", "unusable"],
+      required: true
+    },
+
+    resolution: {
+      type: String,
+      enum: ["repair", "replace", "discard"],
+      required: true
     },
 
     penalty_fee: {
@@ -35,5 +39,5 @@ const compensateDetailSchema = new mongoose.Schema(
 );
 
 
-const CompensateDetail = mongoose.models.compensateDetail || mongoose.model("CompensateDetail", compensateDetailSchema);
+const CompensateDetail = mongoose.models.CompensateDetail || mongoose.model("CompensateDetail", compensateDetailSchema);
 export default CompensateDetail;

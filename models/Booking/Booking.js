@@ -46,6 +46,7 @@ const bookingSchema = new mongoose.Schema(
     adults: { type: Number, required: true, min: 1 },
     children: { type: Number, required: true, min: 0 },
 
+    total_fee: { type: Number, required: true, min: 0, default: 0 },
     deposit: { type: Number, default: 0, min: 0 },
   },
   {

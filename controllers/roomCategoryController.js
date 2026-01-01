@@ -258,42 +258,50 @@ export const getAvailableRoomCategories = async (req, res) => {
     }
 
     const data = await Room.aggregate([
-      {
-        $match: {
-          _id: { $nin: busyRoomIds },
-          room_status: { $in: ["available", "cleaning"] },
+        {
+            $match: {
+            _id: { $nin: busyRoomIds },
+            room_status: { $in: ["available", "cleaning"] },
+            },
         },
-      },
-      {
-        $group: {
-          _id: "$category_id",
-          availableRooms: { $sum: 1 },
+        {
+            $group: {
+            _id: "$category_id",
+            availableRooms: { $sum: 1 },
+            rooms: {
+                $push: {
+                room_id: "$_id",
+                room_number: "$room_number",
+                },
+            },
+            },
         },
-      },
-      {
-        $lookup: {
-          from: "roomcategories",
-          localField: "_id",
-          foreignField: "_id",
-          as: "category",
+        {
+            $lookup: {
+            from: "roomcategories",
+            localField: "_id",
+            foreignField: "_id",
+            as: "category",
+            },
         },
-      },
-      { $unwind: "$category" },
-      { $match: categoryFilter },
-      {
-        $project: {
-          _id: 0,
-          category_id: "$category._id",
-          name: "$category.category_name",
-          price: "$category.price",
-          adults: "$category.max_adults",
-          children: "$category.max_children",
-          description: "$category.description",
-          availableRooms: 1,
+        { $unwind: "$category" },
+        { $match: categoryFilter },
+        {
+            $project: {
+            _id: 0,
+            category_id: "$category._id",
+            name: "$category.category_name",
+            price: "$category.price",
+            adults: "$category.max_adults",
+            children: "$category.max_children",
+            description: "$category.description",
+            availableRooms: 1,
+            rooms: 1,
+            },
         },
-      },
-      { $sort: { price: 1 } },
+        { $sort: { price: 1 } },
     ]);
+
 
     res.json(data);
   } catch (error) {

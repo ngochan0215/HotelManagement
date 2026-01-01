@@ -14,11 +14,17 @@ const receiptSchema = new mongoose.Schema(
       required: true,
     },
 
-    discount_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Discount",
-      default: null,
-    },
+    discounts: [
+      {
+        discount_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Discount",
+        },
+        name: String,
+        percentage: Number,
+        applied_amount: Number,
+      }
+    ],
 
     compensate_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -32,7 +38,6 @@ const receiptSchema = new mongoose.Schema(
     total_amount: { type: Number, required: true },
     deposit_amount: { type: Number, required: true },
     amount_due: { type: Number, default: 0 },
-
 
     payment: {
       type: String,
@@ -62,7 +67,5 @@ const receiptSchema = new mongoose.Schema(
   }
 );
 
-const Receipt =
-  mongoose.models.Receipt || mongoose.model("Receipt", receiptSchema);
-
+const Receipt = mongoose.models.Receipt || mongoose.model("Receipt", receiptSchema);
 export default Receipt;

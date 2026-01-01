@@ -1,13 +1,25 @@
 import express from "express";
-import { createBooking, getCancellationReasonStats, getBookingDetail, updateBookingStatus, cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail, cancelBookingDetail } from "../controllers/bookingController.js";
+import { createBooking, getCancellationReasonStats, getBookingDetail, updateBookingStatus, 
+    cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail, 
+    cancelBookingDetail, previewBookingPrice, previewBookingPricee, createBookingg } from "../controllers/bookingController.js";
 import { isManager, verifyToken, isCustomer, isEmployee, canAccessBooking } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 router.get("/all", verifyToken, isManager, getAllBookings);
-router.post("/add", verifyToken, createBooking);
 router.get("/:id", verifyToken, getBookingDetail);
+
+// preview và thêm booking cho checkin-out chung
+router.post("/preview/general", verifyToken, previewBookingPrice);
+router.post("/add/general", verifyToken, createBooking);
+
+// preview và thêm booking cho checkin-out riêng
+router.post("/preview/particular", verifyToken, previewBookingPricee);
+router.post("/add/particular", verifyToken, createBookingg);
+
+// update trạng thái toàn bộ booking (nên dùng cho booking có checkin-out chung)
 router.put("/:booking_id/update", verifyToken, updateBookingStatus);
+// xác nhận khách đã đặt cọc
 router.put("/:booking_id/confirm", verifyToken, confirmBooking);
 
 // checkin một phòng bất kì trong booking
