@@ -5,7 +5,7 @@ import Sidebar from "../../../components/sidebar";
 import Topbar from "../../../components/topbar";
 import EquipmentCategoryTab from "./equipmentCategoryTab";
 import EquipmentListTab from "./equipmentListTab";
-import EquipmentTicketTab from "./EquipmentTicketTab";
+import EquipmentTicketTab from "./equipmentTicketTab";
 
 
 export default function EquipmentPage() {

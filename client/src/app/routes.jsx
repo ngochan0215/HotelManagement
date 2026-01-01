@@ -9,6 +9,7 @@ import BookingList from '../features/booking/pages/bookingList.jsx';
 import CustomerPage from '../features/customer/pages/customerPage.jsx';
 import EmployeePage from '../features/employee/pages/EmployeePage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
+import ServicePage from '../features/service/pages/servicePage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -53,6 +54,10 @@ export default function AppRoutes() {
       element={user ? <EquipmentPage /> : <Navigate to="/login" replace />}
     />
 
+    <Route
+          path="/service"
+          element={user ? <ServicePage /> : <Navigate to="/login" replace />}
+    />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
