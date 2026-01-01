@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { FiSettings, FiGrid, FiList } from "react-icons/fi";
+import { FiGrid, FiList, FiClipboard } from "react-icons/fi";
 
 import Sidebar from "../../../components/sidebar";
 import Topbar from "../../../components/topbar";
 import EquipmentCategoryTab from "./equipmentCategoryTab";
 import EquipmentListTab from "./equipmentListTab";
+import EquipmentTicketTab from "./EquipmentTicketTab";
+
 
 export default function EquipmentPage() {
   const [activeTab, setActiveTab] = useState("category");
@@ -25,7 +27,7 @@ export default function EquipmentPage() {
             <div className="bg-gray-200 p-1 rounded-xl flex gap-1">
                 <button
                     onClick={() => setActiveTab("category")}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                         activeTab === "category"
                         ? "bg-white text-indigo-600 shadow-sm"
                         : "text-gray-500 hover:text-gray-700"
@@ -35,7 +37,7 @@ export default function EquipmentPage() {
                 </button>
                 <button
                     onClick={() => setActiveTab("list")}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                         activeTab === "list"
                         ? "bg-white text-indigo-600 shadow-sm"
                         : "text-gray-500 hover:text-gray-700"
@@ -43,10 +45,23 @@ export default function EquipmentPage() {
                 >
                     <FiList size={16} /> Kho chi tiết
                 </button>
+
+                <button
+                    onClick={() => setActiveTab("tickets")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === "tickets"
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                >
+                    <FiClipboard size={16} /> Phiếu nhập & Lắp đặt
+                </button>
             </div>
           </div>
           <div className="min-h-[500px]">
-            {activeTab === "category" ? <EquipmentCategoryTab /> : <EquipmentListTab />}
+            {activeTab === "category" && <EquipmentCategoryTab />}
+            {activeTab === "list" && <EquipmentListTab />}
+            {activeTab === "tickets" && <EquipmentTicketTab />}
           </div>
 
         </div>

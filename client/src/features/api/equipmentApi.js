@@ -24,7 +24,6 @@ export const equipmentApi = {
     const res = await axios.delete(`${BASE_URL}/category/${id}`, getAuthHeader());
     return res.data;
   },
-
   getAllEquipments: async () => {
     const res = await axios.get(`${BASE_URL}/all`, getAuthHeader());
     return res.data;
@@ -35,6 +34,32 @@ export const equipmentApi = {
   },
   deleteEquipment: async (id) => {
     const res = await axios.delete(`${BASE_URL}/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  getAllImportTickets: async () => {
+    const res = await axios.get(`${BASE_URL}/ticket/all`, getAuthHeader());
+    return res.data;
+  },
+  createImportTicket: async (data) => {
+    const res = await axios.post(`${BASE_URL}/ticket/add`, data, getAuthHeader());
+    return res.data;
+  },
+  confirmImportTicket: async (id) => {
+    const res = await axios.post(`${BASE_URL}/ticket/${id}/confirm-import`, {}, getAuthHeader());
+    return res.data;
+  },
+
+  getAllInstallTickets: async () => {
+    const res = await axios.get(`${BASE_URL}/install/all`, getAuthHeader());
+    return res.data;
+  },
+  createInstallTicket: async (data) => {
+    const res = await axios.post(`${BASE_URL}/install/add`, data, getAuthHeader());
+    return res.data;
+  },
+  confirmInstallTicket: async (id) => {
+    const res = await axios.post(`${BASE_URL}/install/${id}/confirm-install`, {}, getAuthHeader());
     return res.data;
   }
 };
