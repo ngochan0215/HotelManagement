@@ -132,24 +132,29 @@ export default function BookingList() {
     const now = new Date();
     const checkin = setMinutes(setHours(now, 14), 0);
     const checkout = setMinutes(setHours(addDays(now, 1), 12), 0);
-    const availableRooms = roomsList.filter(r => r.room_status === 'available');
-    const defaultRoom = availableRooms.length > 0 ? availableRooms[0] : null;
+
+    // const availableRooms = roomsList.filter(r => r.room_status === 'available');
+    // const defaultRoom = availableRooms.length > 0 ? availableRooms[0] : null;
 
     setFormData({
       customer_id: "",
-      room_id: defaultRoom ? defaultRoom._id : "",
-      base_fee: defaultRoom ? (defaultRoom.category_id?.price || 0) : 0,
-      adults: 1, children: 0, deposit: 0,
+      room_id: "",
+      // room_id: defaultRoom ? defaultRoom._id : "",
+      // base_fee: defaultRoom ? (defaultRoom.category_id?.price || 0) : 0,
+      adults: 1, children: 0, 
+      deposit: 0, base_fee: 0,
       expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"),
       expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm")
     });
+
     setNewCustomer({ email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: "" });
     setCustomerMode("existing");
     setCustSearchQuery("");
     setSelectedCustDisplay(null);
     setShowCustDropdown(false);
     setIsModalOpen(true);
-    fetchAvailableRooms(checkin, checkout);
+
+    fetchAvailableRooms(format(checkin, "yyyy-MM-dd'T'HH:mm"), format(checkout, "yyyy-MM-dd'T'HH:mm"));
   };
 
   const handleSubmit = async (e) => {
@@ -221,9 +226,19 @@ export default function BookingList() {
   });
   const selectCustomer = (c) => { setFormData({ ...formData, customer_id: c._id }); setSelectedCustDisplay(c); setCustSearchQuery(""); setShowCustDropdown(false); };
   const clearSelectedCustomer = () => { setFormData({ ...formData, customer_id: "" }); setSelectedCustDisplay(null); setCustSearchQuery(""); };
+  
+  // const handleRoomSelect = (roomId) => {
+  //   const selectedRoom = roomsList.find(r => r._id === roomId);
+  //   setFormData(prev => ({ ...prev, room_id: roomId, base_fee: selectedRoom?.category_id?.price || 0 }));
+  // };
   const handleRoomSelect = (roomId) => {
     const selectedRoom = roomsList.find(r => r._id === roomId);
-    setFormData(prev => ({ ...prev, room_id: roomId, base_fee: selectedRoom?.category_id?.price || 0 }));
+
+    setFormData(prev => ({
+      ...prev,
+      room_id: roomId,
+      base_fee: selectedRoom?.price || 0
+    }));
   };
 
   const actionConfirm = (id) => setConfirmState({
@@ -465,13 +480,26 @@ export default function BookingList() {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Chọn Phòng <span className="text-red-500">*</span></label>
-                        <select required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50"
+                        {/* <select required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-gray-50"
                             value={formData.room_id} onChange={e => handleRoomSelect(e.target.value)}>
                             <option value="">-- Chọn phòng trống --</option>
                             {roomsList.filter(r => r.room_status === 'available').map(r => (
                                 <option key={r._id} value={r._id}>P.{r.room_number} ({r.category_id?.category_name})</option>
                             ))}
-                        </select>
+                        </select> */}
+                        <select
+                          required
+                          className="w-full border border-gray-300 rounded-lg p-2.5 outline-none bg-white"
+                          value={formData.room_id}
+                          onChange={e => handleRoomSelect(e.target.value)}
+                        >
+                          <option value="">-- Chọn phòng trống --</option>
+                          {roomsList.map(r => (
+                            <option key={r._id} value={r._id}>
+                              {r.room_number} ({r.category_name})
+                            </option>
+                          ))}
+                      </select>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Giá phòng (VNĐ)</label>
