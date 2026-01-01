@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { equipmentApi } from "../../api/equipmentApi";
-import { FiCheckCircle, FiPlus, FiClock, FiTruck } from "react-icons/fi";
-
+import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiAlertCircle } from "react-icons/fi";
 import AddInstallTicketModal from "../components/AddInstallTicketModal";
 import AddImportTicketModal from "../components/AddImportTicketModal";
 
@@ -9,7 +8,6 @@ export default function EquipmentTicketTab() {
   const [imports, setImports] = useState([]);
   const [installs, setInstalls] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [showImportModal, setShowImportModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
 
@@ -20,11 +18,10 @@ export default function EquipmentTicketTab() {
         equipmentApi.getAllImportTickets(),
         equipmentApi.getAllInstallTickets()
       ]);
-
       setImports(resImport.tickets || []);
       setInstalls(resInstall.installs || []);
     } catch (error) {
-      console.error("Lỗi tải dữ liệu phiếu:", error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -57,176 +54,118 @@ export default function EquipmentTicketTab() {
   };
 
   const renderStatus = (status) => {
-    const statusMap = {
-      pending: {
-          label: "Chờ đến hạn",
-          className: "bg-gray-100 text-gray-600 border border-gray-200"
-      },
-      waiting_confirm: {
-          label: "Cần xác nhận",
-          className: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300 animate-pulse"
-      },
-      completed: {
-          label: "Hoàn tất",
-          className: "bg-green-100 text-green-700 border border-green-200"
-      },
+    const config = {
+      pending: { label: "Chờ đến ngày", class: "bg-gray-100 text-gray-500 border border-gray-200" },
+      waiting_confirm: { label: "Cần duyệt", class: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300 animate-pulse" },
+      completed: { label: "Đã hoàn thành", class: "bg-green-100 text-green-700 border border-green-200" },
     };
-
-    const s = statusMap[status] || { label: status, className: "bg-gray-100" };
-
-    return (
-      <span className={`px-2 py-1 rounded-md text-xs whitespace-nowrap ${s.className}`}>
-        {s.label}
-      </span>
-    );
+    const s = config[status] || config.pending;
+    return <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${s.class}`}>{s.label}</span>;
   };
 
   return (
     <div className="space-y-8 pb-10 animate-fade-in relative">
 
-      {showInstallModal && (
-        <AddInstallTicketModal
-            onClose={() => setShowInstallModal(false)}
-            onSuccess={fetchTickets}
-        />
-      )}
-      {showImportModal && (
-        <AddImportTicketModal
-            onClose={() => setShowImportModal(false)}
-            onSuccess={fetchTickets}
-        />
-      )}
+      {showInstallModal && <AddInstallTicketModal onClose={() => setShowInstallModal(false)} onSuccess={fetchTickets} />}
+      {showImportModal && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <FiClock className="text-orange-500" /> Phiếu Lắp Đặt & Điều Chuyển
-                </h2>
-            </div>
-            <button
-                onClick={() => setShowInstallModal(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all"
-            >
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
+                <FiClock className="text-orange-500" /> Quản lý Lắp Đặt & Điều Chuyển
+            </h2>
+            <button onClick={() => setShowInstallModal(true)} className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-orange-700">
                 <FiPlus /> Tạo phiếu lắp
             </button>
         </div>
 
         <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse">
-                <thead className="bg-gray-50 text-gray-600 font-semibold uppercase text-xs border-b border-gray-200">
+            <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                     <tr>
-                        <th className="px-4 py-3 min-w-[100px]">Phòng</th>
-                        <th className="px-4 py-3 min-w-[120px]">Ngày lắp</th>
-                        <th className="px-4 py-3 min-w-[150px]">Người tạo</th>
-                        <th className="px-4 py-3 text-center min-w-[120px]">Trạng thái</th>
-                        <th className="px-4 py-3 text-right min-w-[150px]">Hành động</th>
+                        <th className="px-4 py-3">Phòng</th>
+                        <th className="px-4 py-3">Ngày dự kiến</th>
+                        <th className="px-4 py-3">Người tạo</th>
+                        <th className="px-4 py-3 text-center">Trạng thái</th>
+                        <th className="px-4 py-3 text-right">Hành động</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {installs.length === 0 && !loading && (
-                        <tr><td colSpan="5" className="text-center py-8 text-gray-400 italic">Chưa có phiếu lắp đặt nào</td></tr>
-                    )}
                     {installs.map((item) => (
-                        <tr key={item._id} className="hover:bg-orange-50 transition-colors group">
-                            <td className="px-4 py-3 font-bold text-gray-800">
-                                {item.room_id?.room_number ? `Phòng ${item.room_id.room_number}` : <span className="text-red-400">Chưa gán</span>}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-gray-600">
-                                {new Date(item.install_date).toLocaleDateString('vi-VN')}
-                            </td>
-                            <td className="px-4 py-3 text-gray-600">
-                                {item.employee_id?.name || "Admin"}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                                {renderStatus(item.status)}
-                            </td>
+                        <tr key={item._id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-bold">{item.room_id?.room_number || "---"}</td>
+                            <td className="px-4 py-3">{new Date(item.install_date).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-4 py-3">{item.employee_id?.name || "System"}</td>
+                            <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
-                                {item.status === 'waiting_confirm' && (
+                                {item.status === 'waiting_confirm' ? (
                                     <button
                                         onClick={() => handleConfirmInstall(item._id)}
-                                        className="inline-flex items-center gap-1 bg-white border border-green-500 text-green-600 px-3 py-1.5 rounded-md hover:bg-green-50 transition-all font-medium text-xs shadow-sm ml-auto"
-                                        title="Xác nhận đã lắp xong"
+                                        className="inline-flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm ml-auto"
                                     >
-                                        <FiCheckCircle /> Hoàn tất
+                                        <FiCheckCircle /> Xác nhận
                                     </button>
+                                ) : (
+                                    <span className="text-gray-300 text-xs italic">
+                                        {item.status === 'completed' ? '---' : 'Chưa đến hạn'}
+                                    </span>
                                 )}
                             </td>
                         </tr>
                     ))}
+                    {installs.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                 </tbody>
             </table>
         </div>
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <FiTruck className="text-blue-500" /> Phiếu Nhập Kho
-                </h2>
-            </div>
-            <button
-                 onClick={() => setShowImportModal(true)}
-                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all"
-            >
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
+                <FiTruck className="text-blue-500" /> Quản lý Nhập Kho
+            </h2>
+            <button onClick={() => setShowImportModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700">
                 <FiPlus /> Tạo phiếu nhập
             </button>
         </div>
 
         <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse">
-                <thead className="bg-gray-50 text-gray-600 font-semibold uppercase text-xs border-b border-gray-200">
+            <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                     <tr>
-                        <th className="px-4 py-3 min-w-[100px]">Mã phiếu</th>
-                        <th className="px-4 py-3 min-w-[120px]">Ngày nhập</th>
-                        <th className="px-4 py-3">Chi tiết hàng hóa</th>
-                        <th className="px-4 py-3 text-center min-w-[120px]">Trạng thái</th>
-                        <th className="px-4 py-3 text-right min-w-[150px]">Hành động</th>
+                        <th className="px-4 py-3">Mã phiếu</th>
+                        <th className="px-4 py-3">Ngày nhập</th>
+                        <th className="px-4 py-3">Chi tiết</th>
+                        <th className="px-4 py-3 text-center">Trạng thái</th>
+                        <th className="px-4 py-3 text-right">Hành động</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {imports.length === 0 && !loading && (
-                        <tr><td colSpan="5" className="text-center py-8 text-gray-400 italic">Chưa có phiếu nhập hàng</td></tr>
-                    )}
                     {imports.map((item) => (
-                        <tr key={item._id} className="hover:bg-blue-50 transition-colors">
-                            <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                                #{item._id.slice(-6).toUpperCase()}
+                        <tr key={item._id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-mono text-xs">#{item._id.slice(-6).toUpperCase()}</td>
+                            <td className="px-4 py-3">{new Date(item.import_date).toLocaleDateString('vi-VN')}</td>
+                            <td className="px-4 py-3 text-xs max-w-[250px] truncate">
+                                {item.import_details?.map(d => `${d.category_id?.name} (x${d.import_quantity})`).join(", ")}
                             </td>
-                            <td className="px-4 py-3 font-mono text-gray-600">
-                                {new Date(item.import_date).toLocaleDateString('vi-VN')}
-                            </td>
-                            <td className="px-4 py-3 text-xs text-gray-600 max-w-[300px]">
-                                {item.import_details && item.import_details.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                        {item.import_details.map((detail, idx) => (
-                                            <span key={idx} className="bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                                                {detail.category_id?.name || "Thiết bị"}
-                                                <b className="ml-1 text-blue-600">x{detail.import_quantity}</b>
-                                            </span>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <span className="italic text-gray-400">Không có chi tiết</span>
-                                )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                                {renderStatus(item.status)}
-                            </td>
+                            <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
-                                {item.status === 'waiting_confirm' && (
+                                {item.status === 'waiting_confirm' ? (
                                     <button
                                         onClick={() => handleConfirmImport(item._id)}
-                                        className="inline-flex items-center gap-1 bg-white border border-blue-500 text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-50 transition-all font-medium text-xs shadow-sm ml-auto"
-                                        title="Xác nhận nhập kho"
+                                        className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm ml-auto"
                                     >
                                         <FiCheckCircle /> Nhập kho
                                     </button>
+                                ) : (
+                                    <span className="text-gray-300 text-xs italic">
+                                        {item.status === 'completed' ? '---' : 'Chưa đến hạn'}
+                                    </span>
                                 )}
                             </td>
                         </tr>
                     ))}
+                     {imports.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                 </tbody>
             </table>
         </div>
