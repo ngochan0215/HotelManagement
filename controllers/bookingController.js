@@ -342,9 +342,9 @@ export const createBooking = async (req, res) => {
 
     const employee_id = req.user.userId;
 
-    if (!customer_id || !adults || !children || !deposit || !total_fee ) {
-      return res.status(400).json({ message: "Phải điền đầy đủ các thông tin bắt buộc!"});
-    }
+    if (!customer_id || !adults || children === undefined || deposit === undefined || total_fee === undefined ) {
+          return res.status(400).json({ message: "Phải điền đầy đủ các thông tin bắt buộc!"});
+        }
 
     if (!mongoose.Types.ObjectId.isValid(customer_id)){
       return res.status(400).json({ message: "customer_id hoặc employee_id (handled_by) không hợp lệ!"});
@@ -568,6 +568,7 @@ export const createBookingg = async (req, res) => {
 // xác nhận thanh toán tiền cọc thành công
 export const confirmBooking = async (req, res) => {
   const { booking_id } = req.params;
+  const employee_id = req.user.userId;
   const session = await mongoose.startSession();
   session.startTransaction();
 
