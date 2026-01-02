@@ -10,9 +10,7 @@ const router = express.Router();
 // manage incidents
 router.post("/add", verifyToken, isNotCustomer, createIncident);
 router.get("/all", verifyToken, isManager, getAllIncidents);
-router.get("/:id", verifyToken, isManager, getIncidentById);
-router.patch("/update/:id", verifyToken, updateIncident);
-router.patch("/delete/:id", verifyToken, deleteIncident);
+
 
 // manage compensation tickets
 router.post("/:incident_id/compensation-ticket/add", verifyToken, isNotCustomer, createCompensateTicket);
@@ -22,6 +20,8 @@ router.patch("/compensation-ticket/:id", verifyToken, isNotCustomer, updateCompe
 
 // xác nhận đã bồi thường sự cố xong, có thể gọi API song song sau khi khách hàng thanh toán hóa đơn booking
 router.post("/compensation-ticket/confirmed-done", verifyToken, isNotCustomer, confirmCompensationPaid);
-
+router.get("/:id", verifyToken, isManager, getIncidentById);
+router.patch("/update/:id", verifyToken, updateIncident);
+router.patch("/delete/:id", verifyToken, deleteIncident);
 
 export default router;
