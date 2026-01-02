@@ -23,7 +23,6 @@ const sidebarConfig = [
       { name: "Khách hàng", path: "/customers", icon: FiUser },
       { name: "Nhân viên", path: "/employees", icon: FiUsers },
       { name: "Thiết bị", path: "/equipment", icon: FiSettings },
-      { name: "Thiết bị trong phòng", path: "/room-equipment", icon: FiSettings },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText },
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag },

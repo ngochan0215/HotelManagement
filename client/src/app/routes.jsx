@@ -12,6 +12,7 @@ import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import ServicePage from '../features/service/pages/servicePage.jsx';
 import IncidentPage from '../features/incident/pages/incidentPage.jsx';
 import DiscountPage from '../features/discount/pages/discountPage.jsx';
+import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -69,6 +70,11 @@ export default function AppRoutes() {
         <Route
               path="/promotions"
               element={user ? <DiscountPage /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+              path="/invoices"
+              element={user ? <ReceiptPage /> : <Navigate to="/login" replace />}
         />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
