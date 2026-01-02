@@ -8,6 +8,9 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const UNIT_MAP = { item: "Cái", box: "Bộ" };
+  const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
+
   const [formData, setFormData] = useState({
     room_id: "",
     install_date: new Date().toISOString().split("T")[0],
@@ -25,6 +28,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         ]);
         setCategories(catRes.categories || []);
         setRooms(roomRes.data?.rooms || roomRes.data || []);
+        console.log("ROOM RES: ", roomRes.data?.rooms);
       } catch (error) {
         console.error("Lỗi tải dữ liệu:", error);
       }
@@ -112,7 +116,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                         >
                             <option value="">-- Chọn phòng --</option>
                             {rooms.map(r => (
-                                <option key={r._id} value={r._id}>Phòng {r.room_number} - {r.type || 'Standard'}</option>
+                                <option key={r._id} value={r._id}>Phòng {r.room_number} - {r.category_id.category_name || 'Standard'}</option>
                             ))}
                         </select>
                     </div>
@@ -182,7 +186,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                                                 />
                                             </td>
                                             <td className="px-4 py-2 text-gray-500">
-                                                {selectedCat?.unit || "-"}
+                                                {formatUnit(selectedCat?.unit) || "-"}
                                             </td>
                                             <td className="px-4 py-2 text-center">
                                                 {formData.items.length > 1 && (

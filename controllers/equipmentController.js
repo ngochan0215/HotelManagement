@@ -394,27 +394,43 @@ export const createEquipmentTicket = async (req, res) => {
         const employee_id = req.user.userId;
         const { import_date, items } = req.body;
 
-        // đầu tiên, tạo phiếu nhập thiết bị trước
         if (!employee_id || !import_date)
             return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
+
+        const employee = await Employee.findOne({ user_id: employee_id }).session(session);
+        if (!employee) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
 
         const existing = await EquipmentTicket.findOne({ import_date }).session(session);
         if (existing)
             return res.status(400).json({ success: false, message: "Có một phiếu nhập trùng ngày nhập, bạn có thể tìm kiếm và thêm thiết bị nhập ở phiếu đó." });
 
         const importDate = new Date(import_date);
-        const now = new Date();
-        if (importDate < new Date(now.toDateString())) {
-            return res.status(400).json({ success: false, message: "Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại." });
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        importDate.setHours(0, 0, 0, 0);
+
+        if (importDate < today) {
+            return res.status(400).json({
+                success: false,
+                message: "Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại."
+            });
         }
 
+        const status = importDate.getTime() === today.getTime()
+                ? "waiting_confirm" : "pending";
+
+        // tạo phiếu nhập thiết bị
+        const employeeId = employee._id;
         const ticket = await EquipmentTicket.create(
-            [ { employee_id, import_date },],
+            [ { employee_id: employeeId, import_date, status },],
             { session });
 
         const ticketId = ticket[0]._id;
 
-        // tiếp theo, tạo từng chi tiết phiếu nhập
+        // tạo từng chi tiết phiếu nhập
         await validateImportItems(items);
 
         const importDetails = items.map((item) => ({
@@ -505,6 +521,7 @@ export const getAllEquipmentTickets = async (req, res) => {
         const tickets = await EquipmentTicket.find(filter)
             .sort({ import_date: -1 })
             .select("-__v -updated_at -created_at")
+            .populate("employee_id", "full_name")
             .lean();
 
         const ticketIds = tickets.map(t => t._id);
@@ -577,11 +594,19 @@ export const updateEquipmentTicket = async (req, res) => {
             return res.status(400).json({ success: false, message: "Chỉ được sửa phiếu nhập ở trạng thái pending" });
         }
 
-        const now = new Date();
-        if (ticket.import_date && now >= new Date(ticket.import_date)) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        const ticketDate = new Date(ticket.import_date);
+        ticketDate.setHours(0,0,0,0);
+
+        if (ticketDate <= today) {
             await session.abortTransaction();
             session.endSession();
-            return res.status(400).json({ success: false, message: "Không thể sửa khi đã đến hoặc qua ngày nhập thiết bị" });
+            return res.status(400).json({
+                success: false,
+                message: "Không thể sửa khi đã đến hoặc qua ngày nhập thiết bị"
+            });
         }
 
         // Validate items mới
@@ -594,7 +619,19 @@ export const updateEquipmentTicket = async (req, res) => {
         await validateImportItems(items);
 
         if (import_date) {
-            ticket.import_date = new Date(import_date);
+            const importDate = new Date(import_date);
+            importDate.setHours(0, 0, 0, 0);
+
+            if (importDate < today) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ success: false, message: "Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại." });
+            }
+
+            if (importDate.getTime() === today.getTime()) 
+                ticket.status = "waiting_confirm"
+            
+            ticket.import_date = import_date;
             await ticket.save({ session });
         }
 
@@ -722,11 +759,11 @@ export const createInstallTicket = async (req, res) => {
             return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
         }
 
-        // const employee = await Employee.findOne({ user_id: employee_id }).session(session);
-        // if (!employee) {
-        //     await session.abortTransaction();
-        //     return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
-        // }
+        const employee = await Employee.findOne({ user_id: employee_id }).session(session);
+        if (!employee) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
 
         const room = await Room.findById(room_id).session(session);
         if (!room) {
@@ -744,11 +781,17 @@ export const createInstallTicket = async (req, res) => {
         const installDate = new Date(install_date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        installDate.setHours(0, 0, 0, 0);
 
         if (installDate < today) {
-            await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Ngày lắp đặt không được nhỏ hơn ngày hiện tại." });
+            return res.status(400).json({
+                success: false,
+                message: "Ngày lắp đặt không hợp lệ! Không thể nhỏ hơn ngày hiện tại."
+            });
         }
+
+        const status = installDate.getTime() === today.getTime()
+                ? "waiting_confirm" : "pending";
 
         // validate danh sách thiết bị
         // if (!Array.isArray(equipment_list) || equipment_list.length == 0) {
@@ -852,8 +895,10 @@ export const createInstallTicket = async (req, res) => {
             });
         }
         
+        const employeeId = employee._id;
+        // tạo phiếu lắp đặt trước
         const [install] = await EquipmentInstall.create(
-            [{ employee_id, room_id, install_date, status: "pending" }], { session });
+            [{ employee_id: employeeId, room_id, install_date, status }], { session });
 
         // tạo các chi tiết của phiếu
         const details = selectedEquipmentIds.map((eid) => ({
@@ -917,7 +962,10 @@ export const getAllEquipmentInstalls = async (req, res) => {
     if (status) filter.status = status;
 
     const installs = await EquipmentInstall.find(filter)
-        .sort({ install_date: -1 }).select("-created_at -updated_at -__v");
+        .sort({ install_date: -1 })
+        .select("-created_at -updated_at -__v")
+        .populate("room_id", "room_number")
+        .populate("employee_id", "full_name");
 
     res.status(200).json({ success: true, counts: installs.length, installs });
 
@@ -956,10 +1004,13 @@ export const updateEquipmentInstall = async (req, res) => {
             return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
         }
 
-        const room = await Room.findById(room_id).session(session);
-        if (!room) {
-            await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Không tìm thấy phòng." });
+        if (room_id) {
+            const room = await Room.findById(room_id).session(session);
+            if (!room) {
+                await session.abortTransaction();
+                return res.status(400).json({ success: false, message: "Không tìm thấy phòng." });
+            }
+            install_ticket.room_id = room_id;
         }
 
         if (install_ticket.status !== "pending") {
@@ -967,27 +1018,40 @@ export const updateEquipmentInstall = async (req, res) => {
             return res.status(400).json({ success: false, message: "Chỉ được chỉnh sửa phiếu ở trạng thái pending." });
         }
 
-        const now = new Date();
-        if (install_ticket.install_date && now >= new Date(install_ticket.install_date)) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        const ticketDate = new Date(install_ticket.install_date);
+        ticketDate.setHours(0,0,0,0);
+
+        if (ticketDate <= today) {
             await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Đã đến hoặc qua ngày lắp đặt, không thể chỉnh sửa." });
+            return res.status(400).json({
+                success: false,
+                message: "Không thể sửa khi đã đến hoặc qua ngày lắp đặt thiết bị"
+            });
         }
 
         // Validate ngày mới
         if (install_date) {
-            const newDate = new Date(install_date);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const installDate = new Date(install_date);
+            installDate.setHours(0, 0, 0, 0);
 
-            if (newDate < today) {
+            if (installDate < today) {
                 await session.abortTransaction();
-                return res.status(400).json({ success: false, message: "Ngày lắp đặt không được nhỏ hơn ngày hiện tại." });
+                return res.status(400).json({
+                    success: false,
+                    message: "Ngày lắp đặt không hợp lệ! Không thể nhỏ hơn ngày hiện tại."
+                });
             }
+
+            install_ticket.install_date = install_date;
+
+            if (installDate.getTime() === today.getTime()) 
+                install_ticket.status = "waiting_confirm"
         }
 
-        if (room_id) install_ticket.room_id = room_id;
-        if (install_date) install_ticket.install_date = install_date;
-        await install.save();
+        await install_ticket.save({ session });
         
         // validate danh sách thiết bị lắp đặt
         const categoryIds = [];
@@ -1046,6 +1110,15 @@ export const updateEquipmentInstall = async (req, res) => {
             return res.status(400).json({ success: false, message: "Có thiết bị đang thuộc phiếu lắp đặt khác." });
         }
 
+        const oldDetails = await InstallDetail.find({ install_id: install_ticket._id }).session(session);
+        const oldEquipmentIds = oldDetails.map(d => d.equipment_id);
+
+        await Equipment.updateMany(
+            { _id: { $in: oldEquipmentIds } },
+            { status: "in-stock" },
+            { session }
+        );
+
         // xóa chi tiết cũ
         await InstallDetail.deleteMany(
             { install_id: install_ticket._id },
@@ -1071,7 +1144,7 @@ export const updateEquipmentInstall = async (req, res) => {
         success: true,
         message: "Cập nhật phiếu lắp đặt thiết bị thành công.",
         data: {
-            install,
+            install_ticket,
             equipment_count: details.length,
         },
         }); 

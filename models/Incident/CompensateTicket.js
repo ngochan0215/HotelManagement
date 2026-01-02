@@ -10,17 +10,12 @@ const compensateTicketSchema = new mongoose.Schema(
       required: true,
     },
 
-    booking_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
-      default: null,
-    },
-
     payer_type: {
       type: String,
       enum: ["customer", "employee", "hotel"],
       required: true
     },
+
     payer_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

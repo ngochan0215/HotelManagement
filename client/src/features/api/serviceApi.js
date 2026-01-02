@@ -3,12 +3,13 @@ import axios from "axios";
 const BASE_URL = "http://localhost:3000/service";
 
 const getAuthHeader = (isMultipart = false) => {
-  const userStr = localStorage.getItem("user");
-  const token = userStr ? JSON.parse(userStr).token : "";
+  const token = localStorage.getItem("token");
   return {
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": isMultipart ? "multipart/form-data" : "application/json",
+      "Content-Type": isMultipart
+        ? "multipart/form-data"
+        : "application/json",
     },
   };
 };

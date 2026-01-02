@@ -11,6 +11,9 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
     items: [{ category_id: "", import_price: 0, import_quantity: 1 }]
   });
 
+  const UNIT_MAP = { item: "Cái", box: "Bộ" };
+  const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
+
   useEffect(() => {
     const fetchCats = async () => {
         try {
@@ -130,7 +133,7 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
                                             >
                                                 <option value="">-- Chọn thiết bị --</option>
                                                 {categories.map(c => (
-                                                    <option key={c._id} value={c._id}>{c.name} ({c.unit})</option>
+                                                    <option key={c._id} value={c._id}>{c.name} ({formatUnit(c.unit)})</option>
                                                 ))}
                                             </select>
                                         </td>
