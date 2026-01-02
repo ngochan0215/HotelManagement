@@ -1,5 +1,5 @@
 import { Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, 
-    Room, EquipmentInstall, InstallDetail, Employee } from "../models/index.js";
+    Room, EquipmentInstall, InstallDetail, Employee, EquipmentLog } from "../models/index.js";
 import mongoose from "mongoose";
 
 //------EQUIPMENT CATEGORY------//
@@ -164,7 +164,7 @@ export const getAllEquipments = async (req, res) => {
         }
 
         if (status) {
-            const validStatuses = ["in-stock", "maintenance", "lost", "disposed"];
+            const validStatuses = ["in-stock", "in-use", "maintenance", "lost", "disposed"];
             if (!validStatuses.includes(status))
                 return res.status(400).json({ success: false, message: "Trạng thái thiết bị không hợp lệ!" });
             filter.status = status;
@@ -296,6 +296,32 @@ export const updateEquipment = async (req, res) => {
         if (note) equipment.note = note;
 
         await equipment.save();
+
+        // đóng log cũ (nếu có)
+        await EquipmentLog.findOneAndUpdate(
+            {
+                equipment_id: id,
+                end_time: null,
+            },
+            {
+                end_time: now,
+            }
+        );
+    
+        // tạo log mới
+        await EquipmentLog.create(
+            {
+                room_id: equipment.room_id || null,
+                equipment_id: id,
+                condition,
+                status,
+                start_time: now,
+                end_time: null,
+                note:
+                note ||  `Update trạng thái thiết bị: ${resolution}`,
+                handled_by,
+            },
+        );
 
         const updated = await Equipment.findById(id)
             .populate("category_id", "name unit price")
@@ -478,7 +504,20 @@ export const confirmEquipmentImportTicket = async (req, res) => {
             })
         );
 
-        await Equipment.insertMany(equipments);
+        const createdEquipments = await Equipment.insertMany(equipments);
+        
+        const logs = createdEquipments.map((eq) => ({
+            equipment_id: eq._id,
+            room_id: null,
+            condition: "new",
+            status: "in-stock",
+            start_time: now,
+            end_time: null,
+            note: "Thiết bị mới nhập kho",
+            handled_by: adminId
+        }));
+
+        await EquipmentLog.insertMany(logs);
 
         await EquipmentCategory.updateOne(
             { _id: item.category_id },
@@ -1338,6 +1377,18 @@ export const confirmEquipmentInstall = async (req, res) => {
       });
     }
 
+    // đóng log cũ
+    await EquipmentLog.updateMany(
+        {
+            equipment_id: { $in: equipmentIds },
+            end_time: null,
+        },
+        {
+            $set: { end_time: now },
+        },
+        { session }
+    );
+
     // cập nhật thiết bị
     await Equipment.updateMany(
       { _id: { $in: equipmentIds } },
@@ -1349,6 +1400,19 @@ export const confirmEquipmentInstall = async (req, res) => {
       },
       { session }
     );
+
+    const logs = equipmentIds.map((equipmentId) => ({
+        equipment_id: equipmentId,
+        room_id: ticket.room_id,
+        status: "in-use",
+        condition: "good",
+        start_time: now,
+        end_time: null,
+        note: "Lắp đặt thiết bị vào phòng",
+        handled_by: ticket.employee_id || null,
+    }));
+
+    await EquipmentLog.insertMany(logs, { session });
 
     // cập nhật phiếu
     ticket.status = "completed";

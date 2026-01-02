@@ -10,7 +10,7 @@ import {
     getTopBookedRoomCategories,
     getLatestStatusOfAllRooms,
     completeCleaning,
-    completeMaintenance
+    completeMaintenance, getRoomEquipments
 } from "../controllers/roomController.js";
 import { isManager, isNotCustomer, verifyToken } from "../middleware/authMiddleware.js";
 
@@ -25,6 +25,8 @@ router.get("/statistic/status", verifyToken, isManager, getRoomStatusSummary);
 router.get("/statistic/top-booked", verifyToken, isManager, getTopBookedRoomCategories);
 // trả về top các loại phòng được đặt nhiều nhất, có tên và giá
 router.get("/status/latest", verifyToken, getLatestStatusOfAllRooms);
+// trả về danh sách thiết bị trong phòng
+router.get("/:id/equipments", verifyToken, getRoomEquipments);
 
 router.get("/by-category", getRoomsByCategory);
 router.get("/:id", getRoomById);
@@ -35,4 +37,5 @@ router.delete("/:id", verifyToken, isManager, deleteRoom);
 router.post("/:roomId/cleaning/complete", verifyToken, completeCleaning);
 // xác nhận hoàn thành bảo trì
 router.post("/:roomId/maintenance/complete", verifyToken, completeMaintenance);
+
 export default router;
