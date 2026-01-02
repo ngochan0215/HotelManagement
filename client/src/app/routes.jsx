@@ -10,6 +10,7 @@ import CustomerPage from '../features/customer/pages/customerPage.jsx';
 import EmployeePage from '../features/employee/pages/EmployeePage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import ServicePage from '../features/service/pages/servicePage.jsx';
+import IncidentPage from '../features/incident/pages/incidentPage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -58,6 +59,12 @@ export default function AppRoutes() {
           path="/service"
           element={user ? <ServicePage /> : <Navigate to="/login" replace />}
     />
+
+    <Route
+              path="/incidents"
+              element={user ? <IncidentPage /> : <Navigate to="/login" replace />}
+        />
+
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
