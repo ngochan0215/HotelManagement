@@ -10,18 +10,19 @@ const roomStatusLogSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["maintenance", "cleaning", "booked", "occupied", "available"],
+      enum: ["maintenance", "cleaning", "booked", "occupied", "available", "reserved"],
       required: true,
     },
 
     start_time: {
       type: Date,
       required: true,
+      default: null
     },
 
     end_time: {
       type: Date,
-      required: true,
+      default: null
     },
 
     note: {

@@ -27,6 +27,10 @@ const STATUS_MAP = {
 export default function BookingList() {
   const { user } = useAuth();
 
+  const [rawPrice, setRawPrice] = useState({ total: 0, deposit: 0 });
+  const [appliedDiscounts, setAppliedDiscounts] = useState([]);
+  const [isPreviewLocked, setIsPreviewLocked] = useState(false);
+
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
   const [customersList, setCustomersList] = useState([]);
@@ -64,6 +68,17 @@ export default function BookingList() {
     email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: ""
   });
 
+  const buildPreviewPayload = () => ({
+    customer_id: formData.customer_id,
+    expected_checkin: formData.expected_checkin,
+    expected_checkout: formData.expected_checkout,
+    rooms: selectedRooms.map(r => ({
+        room_id: r._id,
+        base_fee: r.price
+        }))
+    });
+
+
   useEffect(() => {
     fetchData();
     const handleClickOutside = (event) => {
@@ -91,6 +106,8 @@ export default function BookingList() {
   });
 
   useEffect(() => {
+    if (isPreviewLocked) return;
+
     if (!promotionName) {
         const total = selectedRooms.reduce((sum, r) => sum + r.price, 0);
         const deposit = isWalkIn ? 0 : (total * 0.3);
@@ -121,6 +138,73 @@ export default function BookingList() {
     } catch (error) { console.error(error); }
   };
 
+  // hàm áp dụng khuyến mãi
+  const handleAutoApplyDiscount = async () => {
+
+    if (!formData.customer_id) {
+        alert("Vui lòng chọn khách hàng trước");
+        return;
+    }
+
+    if (!selectedRooms.length) {
+        alert("Vui lòng chọn ít nhất 1 phòng");
+        return;
+    }
+
+    try {
+        const payload = buildPreviewPayload();
+        const res = await bookingApi.previewBooking(payload);
+
+        const { base_total, final_total, deposit, discounts } = res;
+
+        // Lưu giá gốc để undo
+        //const rawTotal = selectedRooms.reduce((s, r) => s + r.price, 0);
+        const rawDeposit = isWalkIn ? 0 : Math.round(base_total * 0.3);
+
+        setRawPrice({ total: base_total, deposit: rawDeposit });
+
+        // Áp dụng kết quả preview
+        setCalcValues({
+            total_price: final_total,
+            deposit_required: isWalkIn ? 0 : deposit
+        });
+
+        setFormData(prev => ({
+        ...prev,
+        deposit: isWalkIn ? 0 : deposit
+        }));
+
+        // Lưu discount để hiển thị & submit
+        setAppliedDiscounts(discounts);
+
+        if (discounts.length) {
+            setPromotionName(discounts.map(d => d.name).join(", "));
+            setPromotionCode(discounts.map(d => d.discount_id).join(","));
+        }
+        setIsPreviewLocked(true);
+    } catch (err) {
+        alert(err.response?.data?.message || "Không thể áp dụng khuyến mãi");
+    }
+  };
+
+  // hàm hủy áp dụng khuyến mãi
+  const handleUndoDiscount = () => {
+    setCalcValues({
+        total_price: rawPrice.total,
+        deposit_required: rawPrice.deposit
+    });
+
+    setFormData(prev => ({
+        ...prev,
+        deposit: rawPrice.deposit
+    }));
+
+    setAppliedDiscounts([]);
+    setPromotionName("");
+    setPromotionCode("");
+    setIsPreviewLocked(true);
+  };
+
   const fetchAvailableRooms = async (checkin, checkout) => {
     if (!checkin || !checkout) return;
     try {
@@ -140,6 +224,7 @@ export default function BookingList() {
         }))
       );
       setRoomsList(flatRooms);
+      console.log("FLAT ROOMS: ", flatRooms);
     } catch (err) {
       console.error(err);
       setRoomsList([]);
@@ -175,6 +260,7 @@ export default function BookingList() {
   };
 
   const handleAddRoom = () => {
+    setIsPreviewLocked(false);
       if (!tempRoomId) return;
       const roomToAdd = roomsList.find(r => r._id === tempRoomId);
       if (roomToAdd) {
@@ -190,6 +276,7 @@ export default function BookingList() {
   };
 
   const handleRemoveRoom = (roomId) => {
+    setIsPreviewLocked(false);
       setSelectedRooms(selectedRooms.filter(r => r._id !== roomId));
       if (promotionName) {
           setPromotionName("");
@@ -226,7 +313,6 @@ export default function BookingList() {
           alert("Lỗi tính toán: " + error.message);
       }
   };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -277,7 +363,10 @@ export default function BookingList() {
         children: Number(formData.children),
         deposit: Number(formData.deposit),
         total_fee: Number(calcValues.total_price),
-        promotion_code: promotionName ? promotionCode : null,
+        //promotion_code: promotionName ? promotionCode : null,
+        promotion_code: appliedDiscounts.length
+            ? appliedDiscounts.map(d => d.discount_id)
+            : null,
 
         expected_checkin: new Date(formData.expected_checkin).toISOString(),
         expected_checkout: new Date(formData.expected_checkout).toISOString(),
@@ -606,7 +695,7 @@ export default function BookingList() {
                     </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-3">
+                {/* <div className="border-t border-gray-100 pt-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Mã Khuyến mãi</label>
                     <div className="flex gap-2 mb-2">
                         <div className="relative flex-1">
@@ -655,8 +744,60 @@ export default function BookingList() {
                             />
                         </div>
                     </div>
-                </div>
+                </div> */}
+                <div className="border-t border-gray-100 pt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Khuyến mãi
+                    </label>
 
+                    <div className="flex gap-2 mb-2">
+                        <button
+                        type="button"
+                        onClick={handleAutoApplyDiscount}
+                        className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition"
+                        >
+                        Tự động áp dụng khuyến mãi
+                        </button>
+
+                        {promotionName && (
+                        <button
+                            type="button"
+                            onClick={handleUndoDiscount}
+                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition"
+                        >
+                            Hoàn tác
+                        </button>
+                        )}
+                    </div>
+
+                    {promotionName && (
+                        <div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1">
+                        <FiCheckCircle /> Đã áp dụng: {promotionName}
+                        </div>
+                    )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label>
+                            <input
+                                type="text"
+                                disabled
+                                className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed"
+                                value={calcValues.total_price.toLocaleString()}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Cọc (VNĐ)</label>
+                            <input
+                                type="number"
+                                disabled={isWalkIn}
+                                className={`w-full border rounded-lg p-2 text-center font-bold outline-none transition
+                                    ${isWalkIn ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-white text-emerald-600 border-gray-300 focus:ring-2 focus:ring-emerald-500'}`}
+                                value={formData.deposit}
+                                onChange={(e) => setFormData({...formData, deposit: e.target.value})}
+                            />
+                        </div>
+                    </div>
                 <div className="pt-4 mt-4 border-t border-gray-100">
                      <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
                         <FiCheckCircle size={18}/> Xác nhận Đặt Phòng

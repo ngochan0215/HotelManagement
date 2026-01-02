@@ -14,29 +14,24 @@ const receiptSchema = new mongoose.Schema(
       required: true,
     },
 
-    discounts: [
-      {
-        discount_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Discount",
-        },
-        name: String,
-        percentage: Number,
-        applied_amount: Number,
-      }
-    ],
-
-    compensate_id: {
+    compensate_ticket_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CompensateTicket",
       default: null,
     },
 
-    total_room_fee: { type: Number, required: true },
-    service_fee: { type: Number, default: 0 },
-    compensate_fee: { type: Number, default: 0 },
-    total_amount: { type: Number, required: true },
-    deposit_amount: { type: Number, required: true },
+    service_usage_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceUsage",
+      default: null,
+    },
+
+    total_fee: { type: Number, required: true },      // total_fee from booking (applied discount already)
+    service_fee: { type: Number, default: 0 },        // total_fee from service usage ticket
+    compensate_fee: { type: Number, default: 0 },     // total_fee from compensate ticket
+    deposit_amount: { type: Number, required: true }, // depost from booking (applied discount already)
+    
+    final_amount: { type: Number, default: 0, required: true },
     amount_due: { type: Number, default: 0 },
 
     payment: {

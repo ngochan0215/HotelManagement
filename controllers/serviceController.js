@@ -1130,14 +1130,13 @@ export const updateServiceUsage = async (req, res) => {
 };
 
 export const recalcServiceUsageStatus = async (ticketId) => {
+
   const details = await UsageDetail.find(
-    { ticket_id: ticketId },
-    { status: 1 });
+    { ticket_id: ticketId });
 
   if (!details.length) return;
 
   const statuses = details.map(d => d.status);
-
   let newStatus = "pending";
 
   if (statuses.every(s => s === "pending")) {
@@ -1164,6 +1163,8 @@ export const confirmUsageDetail = async (req, res) => {
 
   try {
     const { id } = req.params;
+    const employee_id = req.user.userId;
+    const employee = await Employee.findOne({ user_id: employee_id });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       await session.abortTransaction();
@@ -1192,10 +1193,9 @@ export const confirmUsageDetail = async (req, res) => {
 
     usageDetail.status = "completed";
     usageDetail.confirmed_at = new Date();
-    await usageDetail.save({ session });
+    usageDetail.confirmed_by = employee._id;
 
-    // Tự cập nhật service_usage
-    await recalcServiceUsageStatus(usageDetail.ticket_id, session);
+    await usageDetail.save({ session });
 
     // trừ kho cho những dịch vụ là vật thể
     const service = await Service.findById(usageDetail.service_id).session(session);
@@ -1224,6 +1224,9 @@ export const confirmUsageDetail = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Tự cập nhật service_usage
+    await recalcServiceUsageStatus(usageDetail.ticket_id);
+
     return res.status(200).json({
       success: true,
       message: "Xác nhận sử dụng dịch vụ thành công",
@@ -1246,6 +1249,8 @@ export const cancelUsageDetail = async (req, res) => {
 
   try {
     const { id } = req.params;
+    const employee_id = req.user.userId;
+    const employee = await Employee.findOne({ user_id: employee_id });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       await session.abortTransaction();
@@ -1282,13 +1287,15 @@ export const cancelUsageDetail = async (req, res) => {
 
     usageDetail.status = "cancelled";
     usageDetail.cancelled_at = new Date();
-    await usageDetail.save({ session });
+    usageDetail.confirmed_by = employee._id;
 
-    // Tự cập nhật service_usage
-    await recalcServiceUsageStatus(usageDetail.ticket_id, session);
+    await usageDetail.save({ session });
 
     await session.commitTransaction();
     session.endSession();
+
+    // Tự cập nhật service_usage
+    await recalcServiceUsageStatus(usageDetail.ticket_id);
 
     return res.status(200).json({
       success: true,

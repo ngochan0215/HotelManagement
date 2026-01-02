@@ -10,7 +10,7 @@ const calcNights = (expected_checkin, expected_checkout) => {
 };
 
 // hàm tính tổng tiền booking đối với booking chỉ cho phép checkin, checkout một lượt
-export const calculateBookingPricee = async ({ customer_id, bookingDetails, expected_checkin, expected_checkout }) => {
+export const calculateBookingPrice = async ({ customer_id, bookingDetails, expected_checkin, expected_checkout }) => {
   const nights = calcNights(expected_checkin, expected_checkout);
 
   const baseTotal = bookingDetails.reduce(
@@ -56,7 +56,8 @@ export const calculateBookingPricee = async ({ customer_id, bookingDetails, expe
 
     appliedDiscounts.push({
       discount_id: best._id,
-      name: best.name,
+      name: best.description,
+      //description: best.description,
       percentage: best.percentage,
       applied_amount: amount,
     });
@@ -69,7 +70,8 @@ export const calculateBookingPricee = async ({ customer_id, bookingDetails, expe
 
     appliedDiscounts.push({
       discount_id: d._id,
-      name: d.name,
+      name: d.description,
+      //description: d.description,
       percentage: d.percentage,
       applied_amount: amount,
     });
@@ -86,7 +88,7 @@ export const calculateBookingPricee = async ({ customer_id, bookingDetails, expe
 };
 
 // hàm tính tổng tiền booking đối với booking cho phép checkin, checkout từng phòng khác nhau
-export const calculateBookingPrice = async ({
+export const calculateBookingPricee = async ({
   customer_id,
   bookingDetails,
 }) => {
@@ -227,7 +229,7 @@ export const previewBookingPrice = async (req, res) => {
     }
 
     for (const r of rooms) {
-      if ( !r.room_id || typeof r.base_fee !== "number" || r.base_fee < 0) {
+      if ( !r.room_id || r.base_fee < 0) {
         return res.status(400).json({ message: "Thông tin phòng không hợp lệ." });
       }
     }
@@ -343,8 +345,8 @@ export const createBooking = async (req, res) => {
     const employee_id = req.user.userId;
 
     if (!customer_id || !adults || children === undefined || deposit === undefined || total_fee === undefined ) {
-          return res.status(400).json({ message: "Phải điền đầy đủ các thông tin bắt buộc!"});
-        }
+        return res.status(400).json({ message: "Phải điền đầy đủ các thông tin bắt buộc!"});
+      }
 
     if (!mongoose.Types.ObjectId.isValid(customer_id)){
       return res.status(400).json({ message: "customer_id hoặc employee_id (handled_by) không hợp lệ!"});
@@ -395,6 +397,8 @@ export const createBooking = async (req, res) => {
     }
 
     const handled_by = employee._id;
+    const isScheduled = new Date(expected_checkin) > new Date();
+
     const booking = await Booking.create(
       [
         {
@@ -407,12 +411,13 @@ export const createBooking = async (req, res) => {
           expected_checkin,
           expected_checkout,
           status: "pending",
+          isScheduled
         },
       ],
       { session }
     );
 
-    // tạo bookingDetail
+    // tạo các chi tiết đặt phòng
     const bookingDetails = rooms.map(room => ({
       booking_id: booking[0]._id,
       room_id: room.room_id,
@@ -424,6 +429,7 @@ export const createBooking = async (req, res) => {
 
     await BookingDetail.insertMany(bookingDetails, { session });
 
+    // log trạng thái booking
     await BookingStatusLog.create(
       [{
         booking_id: booking[0]._id,
@@ -433,6 +439,26 @@ export const createBooking = async (req, res) => {
         note: "Đơn đặt phòng được tạo thành công, đang chờ đặt cọc",
       }], { session });
 
+
+    // update trạng thái các phòng được giữ chỗ
+    const roomIds = bookingDetails.map(bd => bd.room_id);
+    await Room.updateMany(
+      { _id: { $in: roomIds } },
+      { $set: { room_status: "reserved" } },
+      { session }
+    );
+
+    // tạo log booked cho trạng thái phòng
+    const roomStatusLogs = bookingDetails.map(bd => ({
+      room_id: bd.room_id,
+      status: "reserved",
+      start_time: bd.expected_checkin,
+      end_time: bd.expected_checkout,
+      note: `Phòng được giữ chỗ bởi: ${booking._id} trong vòng 1 tiếng kể từ khi đặt`,
+      handled_by: booking.handled_by,
+    }));
+
+    await RoomStatusLog.insertMany(roomStatusLogs, { session });
 
     await session.commitTransaction();
     session.endSession();
@@ -538,6 +564,7 @@ export const createBookingg = async (req, res) => {
 
     await BookingDetail.insertMany(bookingDetails, { session });
 
+    // log trạng thái booking
     await BookingStatusLog.create(
       [{
         booking_id: booking[0]._id,
@@ -547,6 +574,25 @@ export const createBookingg = async (req, res) => {
         note: "Đơn đặt phòng được tạo thành công, đang chờ đặt cọc",
       }], { session });
 
+    // update trạng thái các phòng được giữ chỗ
+    const roomIds = bookingDetails.map(bd => bd.room_id);
+    await Room.updateMany(
+      { _id: { $in: roomIds } },
+      { $set: { room_status: "reserved" } },
+      { session }
+    );
+
+    // tạo log booked cho trạng thái phòng
+    const roomStatusLogs = bookingDetails.map(bd => ({
+      room_id: bd.room_id,
+      status: "reserved",
+      start_time: bd.expected_checkin,
+      end_time: bd.expected_checkout,
+      note: `Phòng được giữ chỗ bởi: ${booking._id} trong vòng 1 tiếng kể từ khi đặt`,
+      handled_by: booking.handled_by,
+    }));
+
+    await RoomStatusLog.insertMany(roomStatusLogs, { session });
 
     await session.commitTransaction();
     session.endSession();
@@ -589,6 +635,24 @@ export const confirmBooking = async (req, res) => {
       return res.status(400).json({ message: "Booking không có phòng nào." });
     }
 
+    for (const bd of bookingDetails) {
+      // const conflict = await RoomStatusLog.findOne({
+      //   room_id: bd.room_id,
+      //   status: { $in: ["booked", "occupied"] },
+      //   start_time: { $lt: bd.expected_checkout },
+      //   end_time: { $gt: bd.expected_checkin },
+      // }).session(session);
+      const conflict = await Room.findOne({
+        _id: bd.room_id,
+        status: { $in: ["booked", "occupied"] },
+      }).session(session);
+
+      if (conflict) {
+        const room = await Room.findById(bd.room_id);
+        throw new Error(`Phòng ${room.room_number} đã được giữ trong khoảng thời gian này`);
+      }
+    }
+
     const roomIds = bookingDetails.map(bd => bd.room_id);
 
     // update trạng thái phòng thành booked
@@ -597,19 +661,6 @@ export const confirmBooking = async (req, res) => {
       { $set: { room_status: "booked" } },
       { session }
     );
-
-    for (const bd of bookingDetails) {
-      const conflict = await RoomStatusLog.findOne({
-        room_id: bd.room_id,
-        status: { $in: ["booked", "occupied"] },
-        start_time: { $lt: bd.expected_checkout },
-        end_time: { $gt: bd.expected_checkin },
-      }).session(session);
-
-      if (conflict) {
-        throw new Error(`Phòng ${bd.room_id} đã được giữ trong khoảng thời gian này`);
-      }
-    }
 
     // tạo log booked
     const roomStatusLogs = bookingDetails.map(bd => ({
@@ -1036,9 +1087,13 @@ export const addRoomsToBooking = async (req, res) => {
 // lấy mọi booking
 export const getAllBookings = async (req, res) => {
   try {
-    const totalBookings = await Booking.countDocuments();
+    const { isScheduled, status } = req.query;
+    const filter = {};
 
-    const bookings = await Booking.find()
+    if (isScheduled) filter.isScheduled = isScheduled;
+    if (status) filter.status = status;
+
+    const bookings = await Booking.find(filter)
       .populate("customer_id", "full_name phone_number CCCD")
       .populate("handled_by", "full_name position")
       .sort({ created_at: -1 })
@@ -1071,7 +1126,7 @@ export const getAllBookings = async (req, res) => {
       rooms: bookingDetailMap[booking._id.toString()] || []
     }));
 
-    return res.status(200).json({total: totalBookings, result});
+    return res.status(200).json({total: bookings.length, result});
 
   } catch (error) {
     return res.status(500).json({
@@ -1166,7 +1221,7 @@ export const checkinBookingDetail = async (req, res) => {
     await BookingStatusLog.create(
       [
         {
-          bookingId,
+          booking_id: bookingId,
           status: booking.status,
           start_time: new Date(),
           end_time: null,
@@ -1271,7 +1326,7 @@ export const checkoutBookingDetail = async (req, res) => {
 
     await BookingStatusLog.findOneAndUpdate(
       {
-        bookingId,
+        booking_id: bookingId,
         end_time: null,
       },
       {
@@ -1283,7 +1338,7 @@ export const checkoutBookingDetail = async (req, res) => {
     await BookingStatusLog.create(
       [
         {
-          bookingId,
+          booking_id: bookingId,
           status: booking.status,
           start_time: new Date(),
           end_time: null,

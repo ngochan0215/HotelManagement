@@ -13,6 +13,7 @@ const bookingStatusLogSchema = new mongoose.Schema(
       enum: [
         "pending",
         "confirmed",
+        "in_progress",
         "checked_in",
         "checked_out",
         "cancelled",

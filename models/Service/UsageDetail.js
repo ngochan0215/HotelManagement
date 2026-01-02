@@ -8,6 +8,22 @@ const usageDetailSchema = new mongoose.Schema(
       required: true,
     },
 
+    confirmed_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+
+    confirmed_at: {
+      type: Date,
+      default: null,
+    },
+
+    cancelled_at: {
+      type: Date,
+      default: null,
+    },
+
     service_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Service",
@@ -51,6 +67,8 @@ const usageDetailSchema = new mongoose.Schema(
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   }
 );
+
+usageDetailSchema.index({ status: 1, use_from: 1 });
 
 const UsageDetail = mongoose.models.UsageDetail || mongoose.model("UsageDetail", usageDetailSchema);
 export default UsageDetail;
