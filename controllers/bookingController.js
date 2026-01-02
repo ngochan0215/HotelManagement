@@ -568,6 +568,7 @@ export const createBookingg = async (req, res) => {
 // xác nhận thanh toán tiền cọc thành công
 export const confirmBooking = async (req, res) => {
   const { booking_id } = req.params;
+  const employee_id = req.user.userId;
   const session = await mongoose.startSession();
   session.startTransaction();
 
