@@ -11,6 +11,7 @@ import EmployeePage from '../features/employee/pages/EmployeePage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import ServicePage from '../features/service/pages/servicePage.jsx';
 import IncidentPage from '../features/incident/pages/incidentPage.jsx';
+import DiscountPage from '../features/discount/pages/discountPage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -63,6 +64,11 @@ export default function AppRoutes() {
     <Route
               path="/incidents"
               element={user ? <IncidentPage /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+              path="/promotions"
+              element={user ? <DiscountPage /> : <Navigate to="/login" replace />}
         />
 
       <Route path="*" element={<Navigate to="/login" replace />} />

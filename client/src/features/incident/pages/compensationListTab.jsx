@@ -37,7 +37,7 @@ export default function CompensationListTab() {
       <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
         <div>
           <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <FiDollarSign className="text-emerald-500"/> Hồ sơ đền bù thiết bị
+             Hồ sơ đền bù thiết bị
           </h3>
           <p className="text-xs text-gray-400 mt-1">Theo dõi các khoản thu bồi thường do hư hỏng thiết bị.</p>
         </div>

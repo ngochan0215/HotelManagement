@@ -25,4 +25,9 @@ export const incidentApi = {
     const res = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
   },
+
+  createCompensationTicket: async (data) => {
+      const res = await axios.post(`${BASE_URL}/compensation-ticket/add`, data, getAuthHeader());
+      return res.data;
+    }
 };
