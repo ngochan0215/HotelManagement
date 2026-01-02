@@ -24,4 +24,16 @@ export const employeeApi = {
     const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return res.data;
   },
+
+  getEmployeesByPosition: async (position) => {
+      const res = await axios.get(
+        `${BASE_URL}/all`,
+        {
+          ...getAuthHeader(),
+          params: { position }
+        }
+      );
+
+      return res.data?.employees ?? [];
+  },
 };
