@@ -13,7 +13,7 @@ export const notifyImportTickets = async () => {
 
     // phiếu quá hạn nhập
     const expiredTickets = await EquipmentTicket.find({
-        status: "pending",
+        status: "waiting_confirm",
         import_date: { $lt: start }
     });
 
@@ -71,7 +71,7 @@ export const notifyInstallTickets = async () => {
 
     // phiếu quá hạn nhập
     const expiredTickets = await EquipmentInstall.find({
-        status: "pending",
+        status: "waiting_confirm",
         install_date: { $lt: start }
     });
 
@@ -129,7 +129,7 @@ export const notifyGoodTickets = async () => {
     
     // phiếu quá hạn nhập
     const expiredTickets = await GoodTicket.find({
-        status: "pending",
+        status: "waiting_confirm",
         import_date: { $lt: start }
     });
 
@@ -177,45 +177,75 @@ export const notifyGoodTickets = async () => {
 };
 
 export const notifyServiceUsageTickets = async () => {
-    const now = new Date();
+  const now = new Date();
 
-    const details = await UsageDetail.find({
-        status: "pending",
-        use_from: { $ne: null, $lte: now },
-    }).select("_id ticket_id");
+  const expiredDetails = await UsageDetail.find({
+    status: "waiting_confirm",
+    finish_at: { $ne: null, $lt: now },
+  }).select("_id ticket_id");
 
-    if (!details.length) return;
+  const expiredDetailIds = expiredDetails.map(d => d._id);
+  const expiredTicketIds = [...new Set(expiredDetails.map(d => d.ticket_id.toString()))];
 
-    const detailIds = details.map(d => d._id);
-    const ticketIds = [...new Set(details.map(d => d.ticket_id.toString()))];
-
+  if (expiredDetailIds.length) {
     await UsageDetail.updateMany(
-        { _id: { $in: detailIds } },
-        { $set: { status: "waiting_confirm" } }
+      { _id: { $in: expiredDetailIds } },
+      { $set: { status: "cancelled" } }
     );
+  }
 
-    const users = await User.find({ system_role: { $ne: "manager" } }).select("_id");
+  const dueDetails = await UsageDetail.find({
+    status: "pending",
+    use_from: { $ne: null, $lte: now },
+    $or: [{ end_at: null }, { end_at: { $gte: now } }],
+  }).select("_id ticket_id");
 
-    const notifications = [];
+  const dueDetailIds = dueDetails.map(d => d._id);
+  const dueTicketIds = [...new Set(dueDetails.map(d => d.ticket_id.toString()))];
 
-    for (const ticketId of ticketIds) {
-        for (const user of users) {
-            notifications.push({
-                user_id: user._id,
-                title: "Dịch vụ đến ngày sử dụng",
-                content: `Phiếu sử dụng dịch vụ ${ticketId} đã đến ngày đăng ký`,
-                type: "system",
-            });
-        }
+  if (dueDetailIds.length) {
+    await UsageDetail.updateMany(
+      { _id: { $in: dueDetailIds } },
+      { $set: { status: "waiting_confirm" } }
+    );
+  }
+
+  const users = await User.find({ system_role: { $ne: "manager" } }).select("_id");
+  const notifications = [];
+
+  for (const ticketId of expiredTicketIds) {
+    for (const user of users) {
+      notifications.push({
+        user_id: user._id,
+        title: "Dịch vụ quá hạn",
+        content: `Phiếu sử dụng dịch vụ ${ticketId} đã quá hạn và bị hủy.`,
+        type: "system",
+      });
     }
+  }
 
-    if (notifications.length) {
-        await Notification.insertMany(notifications);
+  for (const ticketId of dueTicketIds) {
+    for (const user of users) {
+      notifications.push({
+        user_id: user._id,
+        title: "Dịch vụ đến ngày sử dụng",
+        content: `Phiếu sử dụng dịch vụ ${ticketId} đã đến ngày đăng ký.`,
+        type: "system",
+      });
     }
+  }
 
-    for (const ticketId of ticketIds) {
-        await recalcServiceUsageStatus(ticketId);
-    }
+  if (notifications.length) {
+    await Notification.insertMany(notifications);
+  }
 
-    console.log(`[CRON] Updated ${detailIds.length} usage_detail → waiting_confirm`);
+  const affectedTicketIds = [...new Set([...expiredTicketIds, ...dueTicketIds])];
+
+  for (const ticketId of affectedTicketIds) {
+    await recalcServiceUsageStatus(ticketId);
+  }
+
+  console.log(
+    `[CRON] service usage waiting_confirm: ${dueDetailIds.length}, cancelled: ${expiredDetailIds.length}`
+  );
 };
