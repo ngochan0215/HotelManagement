@@ -103,7 +103,7 @@ export const getAllEmployees = async (req, res) => {
       .select("-__v -created_at -updated_at")
       .populate({
         path: "user_id",
-        select: "email system_role avatar-_id"
+        select: "email system_role avatar _id"
       });
 
     res.status(200).json({
