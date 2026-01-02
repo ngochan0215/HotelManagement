@@ -10,7 +10,7 @@ export const receiptApi = {
   getAllReceipts: async (params = {}) => {
     const res = await axios.get(`${BASE_URL}/all`, {
       ...getAuthHeader(),
-      params
+      params,
     });
     return res.data;
   },
