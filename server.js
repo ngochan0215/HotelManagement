@@ -14,6 +14,7 @@ import managerRoute from "./routes/managerRoutes.js";
 import employeeRoute from "./routes/employeeRoutes.js";
 import customerRoute from "./routes/customerRoutes.js";
 import incidentRoute from "./routes/incidentRoutes.js";
+import receiptRoute from "./routes/receiptRoutes.js";
 
 import serviceRoute from  "./routes/serviceRoutes.js";
 import discountRoute from "./routes/discountRoutes.js";
@@ -39,6 +40,7 @@ app.use("/user", userRoute);
 app.use("/manager", managerRoute);
 app.use("/employee", employeeRoute);
 app.use("/customer", customerRoute);
+app.use("/receipt", receiptRoute);
 
 app.use("/service", serviceRoute);
 app.use("/discount", discountRoute);
