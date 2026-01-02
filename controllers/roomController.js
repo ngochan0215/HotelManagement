@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment, BookingDetail, Booking, CheckInOut, RoomStatusLog } from "../models/index.js";
+import { Room, RoomCategory, DefaultEquipment, BookingDetail, Booking, CheckInOut, RoomStatusLog, Equipment } from "../models/index.js";
 
 // ROOM
 export const createRoom = async (req, res) => {
@@ -608,4 +608,52 @@ export const getLatestStatusOfAllRooms = async () => {
       },
     },
   ]);
+};
+
+// trả về danh sách thiết bị trong phòng
+export const getRoomEquipments = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const equipments = await Equipment.find({
+      room_id: id,
+      status: { $in: ["in-use", "maintenance"] }
+    })
+      .populate({
+        path: "category_id",
+        select: "name price"
+      })
+      .select("category_id condition status note");
+
+    return res.status(200).json({
+      message: "Lấy danh sách thiết bị thành công.",
+      data: equipments
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message || "Lỗi khi lấy danh sách thiết bị."
+    });
+  }
+};
+
+// update tình trạng phòng dựa trên status+condition của thiết bị
+export const reevaluateRoomStatus = async (room_id) => {
+  if (!room_id) return;
+
+  // Lấy tất cả thiết bị critical của phòng
+  const equipments = await Equipment.find({ room_id })
+    .populate("category_id", "is_critical");
+
+  const hasCriticalProblem = equipments.some((eq) => {
+    if (!eq.category_id?.is_critical) return false;
+
+    return (
+      ["maintenance", "broken"].includes(eq.condition) ||
+      ["maintenance", "disposed", "lost"].includes(eq.status)
+    );
+  });
+
+  await Room.findByIdAndUpdate(room_id, {
+    status: hasCriticalProblem ? "maintenance" : "available",
+  });
 };

@@ -1,0 +1,54 @@
+import mongoose from "mongoose";
+
+const equipmentLogSchema = new mongoose.Schema(
+  {
+    room_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null
+    },
+
+    equipment_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Equipment",
+      default: null, required: true
+    },
+
+    condition: { 
+        type: String, enum: ["new", "good", "maintenance", "broken"], 
+        default: "good", required: true 
+    },
+    
+    status: { 
+        type: String, enum: ["in-stock", "installing", "in-use", "maintenance", "lost", "disposed"], 
+        default: "in-stock", required: true 
+    },
+
+    start_time: {
+      type: Date,
+      required: true,
+    },
+
+    end_time: {
+      type: Date,
+      required: true,
+    },
+
+    note: {
+      type: String,
+      default: "",
+    },
+
+    handled_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+  },
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+  }
+);
+
+const EquipmentLog = mongoose.models.EquipmentLog || mongoose.model("EquipmentLog", equipmentLogSchema);
+export default EquipmentLog;
