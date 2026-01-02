@@ -77,39 +77,44 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const data = new FormData();
-      data.append("name", formData.name);
-      data.append("category_id", formData.category_id);
-      data.append("unit", formData.unit);
-      data.append("price", formData.price);
-      data.append("description", formData.description);
-      data.append("status", formData.status);
+      e.preventDefault();
+      setLoading(true);
+      try {
+          const data = new FormData();
 
-      if (!initialData) {
-          data.append("storage_quantity", 0);
+          data.append("name", formData.name.trim());
+          data.append("category_id", formData.category_id);
+          data.append("unit", formData.unit);
+          const priceValue = Math.round(Number(formData.price));
+          data.append("price", priceValue);
+          data.append("description", formData.description || "");
+          data.append("status", formData.status);
+
+          if (!initialData) {
+              data.append("storage_quantity", 0);
+          }
+
+          if (selectedFiles.length > 0) {
+              selectedFiles.forEach((file) => {
+                  data.append("image", file);
+              });
+          }
+
+          if (initialData) {
+              await serviceApi.updateService(initialData._id, data);
+              alert("Cập nhật thành công!");
+          } else {
+              await serviceApi.createService(data);
+              alert("Thêm mới thành công!");
+          }
+          onSuccess();
+          onClose();
+      } catch (error) {
+          console.error("Submit Error:", error.response?.data);
+          alert("Lỗi: " + (error.response?.data?.message || error.message));
+      } finally {
+          setLoading(false);
       }
-
-      selectedFiles.forEach((file) => {
-        data.append("image", file);
-      });
-
-      if (initialData) {
-        await serviceApi.updateService(initialData._id, data);
-        alert("Cập nhật thành công!");
-      } else {
-        await serviceApi.createService(data);
-        alert("Thêm mới thành công! Vui lòng tạo phiếu nhập để tăng tồn kho.");
-      }
-      onSuccess();
-      onClose();
-    } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
-    }
   };
 
   if (!isOpen) return null;
