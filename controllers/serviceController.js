@@ -269,8 +269,15 @@ export const updateService = async (req, res) => {
       return res.status(400).json({ success: false, message: "Mô tả dịch vụ phải là chuỗi." });
     }
 
-    if (price && ( typeof price !== "number" || price <= 0 )) {
-      return res.status(400).json({ success: false, message: "Đơn giá dịch vụ phải là số nguyên lớn hơn 0." });
+    if (price !== undefined) {
+      const parsedPrice = Number(price);
+
+      if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Đơn giá dịch vụ phải là số lớn hơn 0.",
+        });
+      }
     }
 
     // if (storage_quantity && ( typeof storage_quantity !== "number" || storage_quantity <= 0 )) {
