@@ -329,7 +329,6 @@ export const previewBookingPricee = async (req, res) => {
   }
 };
 
-
 //---- BOOKING ----//
 
 // hàm thêm booking mới (đối với booking checkin, checkout một lượt tất cả)

@@ -319,7 +319,6 @@ export const createGoodTicket = async (req, res) => {
   try {
     const { import_date, goods_list } = req.body;
     const employee_id = req.user.userId;
-    console.log("EMPLOYEE_ID: ", employee_id);
 
     if (!employee_id || !import_date || !Array.isArray(goods_list)) {
       await session.abortTransaction();
@@ -383,7 +382,8 @@ export const createGoodTicket = async (req, res) => {
     }
 
     // tạo phiếu nhập sản phẩm trước
-    const ticket = await GoodTicket.create( [{ employee_id, import_date }], { session });
+    const employeeId = employee._id;
+    const ticket = await GoodTicket.create( [{ employee_id: employeeId, import_date }], { session });
 
     // thêm chi tiết nhập
     const detailDocs = goods_list.map((item) => ({
@@ -422,7 +422,7 @@ export const getAllGoodTickets = async (req, res) => {
       if (!employee) 
         return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
       
-      filter.employee_id = employee_id;
+      filter.employee_id = employee._id;
     }
 
     if (min_import_date || max_import_date) {
@@ -1299,4 +1299,3 @@ export const cancelUsageDetail = async (req, res) => {
   }
 };
 
-// t dell làm nữa đâu

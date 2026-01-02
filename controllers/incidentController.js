@@ -16,96 +16,96 @@ const isValidStatusTransition = (current, next) => {
 
 //---- INCIDENT ----//
 export const reportIncident = async (req, res) => {
-    try {
-        const { room_id, booking_id, causer_id, reporter_id, caused_by, description, type, severity, occured_at } = req.body;
-        //const reporter_id = req.user.userId;
-        
-        if (!room_id || !reporter_id || !description || !type || !caused_by || !severity || !occured_at) {
-            return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
-        }
+  try {
+      const { room_id, booking_id, causer_id, reporter_id, caused_by, description, type, severity, occured_at } = req.body;
+      //const reporter_id = req.user.userId;
+      
+      if (!room_id || !reporter_id || !description || !type || !caused_by || !severity || !occured_at) {
+          return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
+      }
 
-        if (room_id) {
-            const room = await Room.findById(room_id);
-            if (!room) {
-                return res.status(404).json({ message: "Phòng không tồn tại." });
-            }
-        }
+      if (room_id) {
+          const room = await Room.findById(room_id);
+          if (!room) {
+              return res.status(404).json({ message: "Phòng không tồn tại." });
+          }
+      }
 
-        if (booking_id) {
-            const booking = await Room.findById(booking_id);
-            if (!booking) {
-                return res.status(404).json({ message: "Đơn đặt phòng không tồn tại." });
-            }
-        }
+      if (booking_id) {
+          const booking = await Room.findById(booking_id);
+          if (!booking) {
+              return res.status(404).json({ message: "Đơn đặt phòng không tồn tại." });
+          }
+      }
 
-        if (causer_id) {
-            const causer = await User.findById(causer_id);
-            if (!causer) {
-                return res.status(404).json({ message: "Người gây ra sự cố không tồn tại." });
-            }
-        }
+      if (causer_id) {
+          const causer = await User.findById(causer_id);
+          if (!causer) {
+              return res.status(404).json({ message: "Người gây ra sự cố không tồn tại." });
+          }
+      }
 
-        const reporter = await User.findById(reporter_id);
-        if (!reporter) {
-            return res.status(404).json({ message: "Người báo cáo không tồn tại." });
-        }
+      const reporter = await User.findById(reporter_id);
+      if (!reporter) {
+          return res.status(404).json({ message: "Người báo cáo không tồn tại." });
+      }
 
-        if (caused_by !== "other" && !causer_id) {
-            return res.status(400).json({ message: "Cần xác định người gây ra sự cố." });
-        }
+      if (caused_by !== "other" && !causer_id) {
+          return res.status(400).json({ message: "Cần xác định người gây ra sự cố." });
+      }
 
-        const validTypes = ["equipment", "technical", "facility", "service", "safety", "other"];
-        if (!validTypes.includes(type)) {
-            return res.status(400).json({ message: "Loại sự cố không hợp lệ." });
-        }
+      const validTypes = ["equipment", "technical", "facility", "service", "safety", "other"];
+      if (!validTypes.includes(type)) {
+          return res.status(400).json({ message: "Loại sự cố không hợp lệ." });
+      }
 
-        const validSeverity = ["low", "medium", "high", "critical"];
-        if (!validSeverity.includes(severity)) {
-            return res.status(400).json({ message: "Mức độ nghiêm trọng không hợp lệ." });
-        }
+      const validSeverity = ["low", "medium", "high", "critical"];
+      if (!validSeverity.includes(severity)) {
+          return res.status(400).json({ message: "Mức độ nghiêm trọng không hợp lệ." });
+      }
 
-        const validCauseby = ["employee", "customer", "other"];
-        if (!validCauseby.includes(caused_by)) {
-            return res.status(400).json({ message: "Loại người gây ra sự cố không hợp lệ." });
-        }
+      const validCauseby = ["employee", "customer", "other"];
+      if (!validCauseby.includes(caused_by)) {
+          return res.status(400).json({ message: "Loại người gây ra sự cố không hợp lệ." });
+      }
 
-        const occuredDate = new Date(occured_at);
-        if (isNaN(occuredDate.getTime())) {
-            return res.status(400).json({ message: "Thời điểm xảy ra sự cố không hợp lệ." });
-        }
+      const occuredDate = new Date(occured_at);
+      if (isNaN(occuredDate.getTime())) {
+          return res.status(400).json({ message: "Thời điểm xảy ra sự cố không hợp lệ." });
+      }
 
-        if (occuredDate > new Date()) {
-            return res.status(400).json({ message: "Thời điểm xảy ra sự cố không được ở tương lai." });
-        }
+      if (occuredDate > new Date()) {
+          return res.status(400).json({ message: "Thời điểm xảy ra sự cố không được ở tương lai." });
+      }
 
-        const diffDays = (Date.now() - occuredDate.getTime()) / (1000 * 60 * 60 * 24);
-        if (diffDays > MAX_DAYS) {
-        return res.status(400).json({ message: "Sự cố đã xảy ra quá 30 ngày, không thể báo cáo." });
-        }
+      const diffDays = (Date.now() - occuredDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > MAX_DAYS) {
+      return res.status(400).json({ message: "Sự cố đã xảy ra quá 30 ngày, không thể báo cáo." });
+      }
 
-        const incident = await Incident.create({
-            room_id: room_id || null,
-            reporter_id,
-            causer_id: causer_id || null,
-            booking_id: booking_id || null,
-            description,
-            type,
-            caused_by,
-            severity,
-            occured_at,
-            status: "reported",
-            compensation_status: "none",
-        });
+      const incident = await Incident.create({
+          room_id: room_id || null,
+          reporter_id,
+          causer_id: causer_id || null,
+          booking_id: booking_id || null,
+          description,
+          type,
+          caused_by,
+          severity,
+          occured_at,
+          status: "reported",
+          compensation_status: "none",
+      });
 
-        await incident.save();
+      await incident.save();
 
-        return res.status(201).json({
-            message: "Thêm sự cố thành công.",
-            data: incident,
-        });
-    } catch (err) {
-        return res.status(500).json({ message: "SERVER ERROR: " + err.message || "Lỗi khi tạo sự cố."});
-    }
+      return res.status(201).json({
+          message: "Thêm sự cố thành công.",
+          data: incident,
+      });
+  } catch (err) {
+      return res.status(500).json({ message: "SERVER ERROR: " + err.message || "Lỗi khi tạo sự cố."});
+  }
 };
 
 export const updateIncident = async (req, res) => {

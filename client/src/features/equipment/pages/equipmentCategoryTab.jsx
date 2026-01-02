@@ -17,11 +17,7 @@ export default function EquipmentCategoryTab() {
   const [formData, setFormData] = useState({ name: "", description: "", unit: "item", price: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
-  const UNIT_MAP = {
-    item: "Cái",
-    box: "Bộ"
-  };
-
+  const UNIT_MAP = { item: "Cái", box: "Bộ" };
   const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
 
   useEffect(() => {

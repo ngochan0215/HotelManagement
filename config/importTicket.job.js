@@ -2,8 +2,8 @@ import cron from "node-cron";
 import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, notifyServiceUsageTickets } from "../utils/notifyTickets.js";
 
 export const startImportTicketJob = () => {
-  // Chạy mỗi ngày lúc 00:00
-  cron.schedule("0 0 * * *", async () => {
+  // Chạy mỗi 5 phút
+  cron.schedule("*/5 * * * *", async () => {
     
     try {
       console.log("[CRON] Checking import tickets...");
@@ -16,8 +16,8 @@ export const startImportTicketJob = () => {
 };
 
 export const startInstallTicketJob = () => {
-  // Chạy mỗi ngày lúc 00:00
-  cron.schedule("0 0 * * *", async () => {
+  // Chạy mỗi 5 phút
+  cron.schedule("*/5 * * * *", async () => {
     
     try {
       console.log("[CRON] Checking install equipment tickets...");
@@ -30,8 +30,8 @@ export const startInstallTicketJob = () => {
 };
 
 export const startGoodTicketJob = () => {
-  // Chạy mỗi ngày lúc 00:00
-  cron.schedule("0 0 * * *", async () => {
+  // Chạy mỗi 5 phút
+  cron.schedule("*/5 * * * *", async () => {
     
     try {
       console.log("[CRON] Checking import goods tickets...");

@@ -20,6 +20,7 @@ export default function EquipmentTicketTab() {
       ]);
       setImports(resImport.tickets || []);
       setInstalls(resInstall.installs || []);
+      console.log("INSTALLS RES: ", resInstall.installs);
     } catch (error) {
       console.error(error);
     } finally {
@@ -58,6 +59,7 @@ export default function EquipmentTicketTab() {
       pending: { label: "Chờ đến ngày", class: "bg-gray-100 text-gray-500 border border-gray-200" },
       waiting_confirm: { label: "Cần duyệt", class: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300 animate-pulse" },
       completed: { label: "Đã hoàn thành", class: "bg-green-100 text-green-700 border border-green-200" },
+      expired: { label: "Đã quá hạn", class: "bg-red-100 text-red-700 border border-red-200" },
     };
     const s = config[status] || config.pending;
     return <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${s.class}`}>{s.label}</span>;
@@ -95,7 +97,7 @@ export default function EquipmentTicketTab() {
                         <tr key={item._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-bold">{item.room_id?.room_number || "---"}</td>
                             <td className="px-4 py-3">{new Date(item.install_date).toLocaleDateString('vi-VN')}</td>
-                            <td className="px-4 py-3">{item.employee_id?.name || "System"}</td>
+                            <td className="px-4 py-3">{item.employee_id?.full_name || "System"}</td>
                             <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
                                 {item.status === 'waiting_confirm' ? (
@@ -107,8 +109,14 @@ export default function EquipmentTicketTab() {
                                     </button>
                                 ) : (
                                     <span className="text-gray-300 text-xs italic">
-                                        {item.status === 'completed' ? '---' : 'Chưa đến hạn'}
+                                        {{
+                                            completed: "---",
+                                            pending: "Đang chờ ngày",
+                                            expired: "Quá hạn",
+                                        }[item.status] || ""}
                                     </span>
+
+                                    
                                 )}
                             </td>
                         </tr>
@@ -159,7 +167,7 @@ export default function EquipmentTicketTab() {
                                     </button>
                                 ) : (
                                     <span className="text-gray-300 text-xs italic">
-                                        {item.status === 'completed' ? '---' : 'Chưa đến hạn'}
+                                        {item.status === 'completed' ? '---' : 'Đã quá hạn'}
                                     </span>
                                 )}
                             </td>

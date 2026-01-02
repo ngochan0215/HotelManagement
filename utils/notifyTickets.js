@@ -9,31 +9,54 @@ export const notifyImportTickets = async () => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    const tickets = await EquipmentTicket.find({
-        status: "pending",
-        import_date: { $gte: start, $lte: end }
-    }).populate({
-        path: "employee_id",
-        select: "user_id",
-    });
-
-    if (tickets.length === 0) return;
-
     const managers = await User.find({ system_role: "manager" }).select("_id");
 
-    for (const ticket of tickets) {
-        ticket.status = "waiting_confirm";
-        await ticket.save();
+    // phiếu quá hạn nhập
+    const expiredTickets = await EquipmentTicket.find({
+        status: "pending",
+        import_date: { $lt: start }
+    });
 
-        // Tạo thông báo cho mỗi quản lý
-        const notifications = managers.map(manager => ({
-            user_id: manager._id,
-            title: "Phiếu nhập thiết bị đến ngày",
-            content: `Phiếu nhập ${ticket._id} đã đến ngày nhập kho`,
-            type: "system",
-        }));
+    if (expiredTickets.length > 0) {
+        await EquipmentTicket.updateMany(
+            { _id: { $in: expiredTickets.map(t => t._id) } },
+            { status: "expired" }
+        );
 
-        await Notification.insertMany(notifications);
+        const expiredNotifications = expiredTickets.flatMap(ticket =>
+            managers.map(manager => ({
+                user_id: manager._id,
+                title: "Phiếu nhập thiết bị quá hạn",
+                content: `Phiếu nhập ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
+                type: "system",
+            }))
+        );
+
+        await Notification.insertMany(expiredNotifications);
+    }
+
+    // phiếu đến ngày
+    const todayTickets = await EquipmentTicket.find({
+        status: "pending",
+        import_date: { $gte: start, $lte: end }
+    });
+
+    if (todayTickets.length > 0) {
+        await EquipmentTicket.updateMany(
+            { _id: { $in: todayTickets.map(t => t._id) } },
+            { status: "waiting_confirm" }
+        );
+
+        const todayNotifications = todayTickets.flatMap(ticket =>
+                managers.map(manager => ({
+                    user_id: manager._id,
+                    title: "Phiếu nhập thiết bị đến ngày",
+                    content: `Phiếu nhập ${ticket._id} đã đến ngày nhập kho.`,
+                    type: "system",
+                }))
+            );
+
+        await Notification.insertMany(todayNotifications);
     }
 };
 
@@ -44,31 +67,54 @@ export const notifyInstallTickets = async () => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    const tickets = await EquipmentInstall.find({
-        status: "pending",
-        install_date: { $gte: start, $lte: end }
-    }).populate({
-        path: "employee_id",
-        select: "user_id",
-    });
-
-    if (tickets.length === 0) return;
-
     const managers = await User.find({ system_role: "manager" }).select("_id");
 
-    for (const ticket of tickets) {
-        ticket.status = "waiting_confirm";
-        await ticket.save();
+    // phiếu quá hạn nhập
+    const expiredTickets = await EquipmentInstall.find({
+        status: "pending",
+        install_date: { $lt: start }
+    });
 
-        // Tạo thông báo cho mỗi quản lý
-        const notifications = managers.map(manager => ({
-            user_id: manager._id,
-            title: "Phiếu lắp đặt thiết bị đến ngày",
-            content: `Phiếu lắp đặt thiết bị ${ticket._id} đã đến ngày lắp đặt`,
-            type: "system",
-        }));
+    if (expiredTickets.length > 0) {
+        await EquipmentInstall.updateMany(
+            { _id: { $in: expiredTickets.map(t => t._id) } },
+            { status: "expired" }
+        );
 
-        await Notification.insertMany(notifications);
+        const expiredNotifications = expiredTickets.flatMap(ticket =>
+            managers.map(manager => ({
+                user_id: manager._id,
+                title: "Phiếu lắp đặt thiết bị quá hạn",
+                content: `Phiếu lắp đặt ${ticket._id} đã quá ngày lắp đặt và bị chuyển sang trạng thái quá hạn.`,
+                type: "system",
+            }))
+        );
+
+        await Notification.insertMany(expiredNotifications);
+    }
+
+    // phiếu đến ngày
+    const todayTickets = await EquipmentInstall.find({
+        status: "pending",
+        install_date: { $gte: start, $lte: end }
+    });
+
+    if (todayTickets.length > 0) {
+        await EquipmentTicket.updateMany(
+            { _id: { $in: todayTickets.map(t => t._id) } },
+            { status: "waiting_confirm" }
+        );
+
+        const todayNotifications = todayTickets.flatMap(ticket =>
+                managers.map(manager => ({
+                    user_id: manager._id,
+                    title: "Phiếu lắp đặt thiết bị đến ngày",
+                    content: `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
+                    type: "system",
+                }))
+            );
+
+        await Notification.insertMany(todayNotifications);
     }
 };
 
@@ -79,36 +125,58 @@ export const notifyGoodTickets = async () => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    const tickets = await GoodTicket.find({
+    const managers = await User.find({ system_role: "manager" }).select("_id");
+    
+    // phiếu quá hạn nhập
+    const expiredTickets = await GoodTicket.find({
         status: "pending",
-        import_date: { $gte: start, $lte: end }
-    }).populate({
-        path: "employee_id",
-        select: "user_id",
+        import_date: { $lt: start }
     });
 
-    if (tickets.length === 0) return;
+    if (expiredTickets.length > 0) {
+        await GoodTicket.updateMany(
+            { _id: { $in: expiredTickets.map(t => t._id) } },
+            { status: "expired" }
+        );
 
-    const managers = await User.find({ system_role: "manager" }).select("_id");
+        const expiredNotifications = expiredTickets.flatMap(ticket =>
+            managers.map(manager => ({
+                user_id: manager._id,
+                title: "Phiếu nhập sản phẩm quá hạn",
+                content: `Phiếu nhập sản phẩm ${ticket._id} đã quá ngày nhập và bị chuyển sang trạng thái quá hạn.`,
+                type: "system",
+            }))
+        );
 
-    for (const ticket of tickets) {
-        ticket.status = "waiting_confirm";
-        await ticket.save();
+        await Notification.insertMany(expiredNotifications);
+    }
 
-        // Tạo thông báo cho mỗi quản lý
-        const notifications = managers.map(manager => ({
-            user_id: manager._id,
-            title: "Phiếu nhập sản phẩm đến ngày",
-            content: `Phiếu nhập sản phẩ ${ticket._id} đã đến ngày nhập`,
-            type: "system",
-        }));
+    // phiếu đến ngày
+    const todayTickets = await GoodTicket.find({
+        status: "pending",
+        import_date: { $gte: start, $lte: end }
+    });
 
-        await Notification.insertMany(notifications);
+    if (todayTickets.length > 0) {
+        await GoodTicket.updateMany(
+            { _id: { $in: todayTickets.map(t => t._id) } },
+            { status: "waiting_confirm" }
+        );
+
+        const todayNotifications = todayTickets.flatMap(ticket =>
+                managers.map(manager => ({
+                    user_id: manager._id,
+                    title: "Phiếu nhập sản phẩm đến ngày",
+                    content: `Phiếu nhập sản phẩm ${ticket._id} đã đến ngày nhập kho.`,
+                    type: "system",
+                }))
+            );
+
+        await Notification.insertMany(todayNotifications);
     }
 };
 
 export const notifyServiceUsageTickets = async () => {
-
     const now = new Date();
 
     const details = await UsageDetail.find({
