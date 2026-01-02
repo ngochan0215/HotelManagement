@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
         token,
         ...decoded,
         _id: decoded.userId || decoded._id || decoded.id,
-        role: decoded.role || decoded.system_role
+        role: (decoded.role || decoded.system_role || "").toLowerCase()
       };
     } catch (error) {
       console.error("Lỗi giải mã token:", error);

@@ -119,7 +119,7 @@ export const getAllCustomers = async (req, res) => {
         }
 
         const customers = await Customer.find(filter)
-            .select("-_id, -updated_at -created_at -__v")
+            .select("-updated_at -created_at -__v")
             .populate("user_id", "email system_role avatar");
 
         res.status(200).json({

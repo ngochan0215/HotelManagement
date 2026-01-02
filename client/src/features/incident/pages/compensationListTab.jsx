@@ -6,28 +6,26 @@ export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchTickets();
-  }, []);
-
   const fetchTickets = async () => {
-      setLoading(true);
-      try {
-        const res = await incidentApi.getAllCompensateTickets();
-        setTickets(res.data || []);
-      } catch (err) {
-        console.error("Lỗi fetch bồi thường:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(true);
+    try {
+      const data = await incidentApi.getAllCompensateTickets(); // ⬅ data = res.data
+      setTickets(data || []);
+    } catch (err) {
+      console.error("Lỗi fetch bồi thường:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchTickets(); }, []);
 
   const handleConfirmPaid = async (ticketId) => {
-    if (!window.confirm("Xác nhận khách hàng/nhân viên đã thanh toán khoản bồi thường này?")) return;
+    if (!window.confirm("Xác nhận khoản bồi thường này đã được thanh toán?")) return;
 
     try {
-      await incidentApi.confirmCompensationPaid(ticketId);
-      alert("Đã xác nhận thanh toán thành công. Sự cố liên quan đã được đóng.");
+      await incidentApi.confirmCompensationPaid(ticketId); // ⬅ gọi đúng mapping
+      alert("Đã xác nhận thanh toán. Sự cố liên quan đã được đóng.");
       fetchTickets();
     } catch (err) {
       alert("Lỗi: " + (err.response?.data?.message || err.message));
@@ -67,7 +65,7 @@ export default function CompensationListTab() {
             ) : tickets.length === 0 ? (
               <tr>
                 <td colSpan="6" className="py-20 text-center text-gray-400 italic">
-                  <FiAlertCircle className="inline mb-1" /> Chưa có phiếu bồi thường nào được tạo.
+                  <FiAlertCircle className="inline mb-1" /> Chưa có phiếu bồi thường nào.
                 </td>
               </tr>
             ) : (
@@ -79,30 +77,33 @@ export default function CompensationListTab() {
                   <td className="py-4 px-6">
                     <div className="flex flex-col">
                       <span className="font-bold text-gray-800 capitalize">
-                        {t.payer_type === 'customer' ? 'Khách hàng' : t.payer_type === 'employee' ? 'Nhân viên' : 'Khách sạn'}
+                        {t.payer_type === 'customer' ? 'Khách hàng' :
+                         t.payer_type === 'employee' ? 'Nhân viên' : 'Khách sạn'}
                       </span>
                       <span className="text-xs text-gray-400">{t.incident?.causer_name || "N/A"}</span>
                     </div>
                   </td>
-                  <td className="py-4 px-6">
-                    <div className="text-xs">
-                       <div className="font-medium text-gray-600">Sự cố: {t.incident_id?.type}</div>
-                       <div className="text-gray-400 italic truncate max-w-[150px]">{t.incident_id?.description}</div>
+                  <td className="py-4 px-6 text-xs">
+                    <div className="font-medium text-gray-600">Sự cố: {t.incident_id?.type}</div>
+                    <div className="text-gray-400 italic truncate max-w-[150px]">
+                      {t.incident_id?.description}
                     </div>
                   </td>
                   <td className="py-4 px-6 text-right font-bold text-red-600">
                     {t.total_fee?.toLocaleString()} <span className="text-[10px] text-gray-400">đ</span>
                   </td>
                   <td className="py-4 px-6 text-center">
-                     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${
-                       t.status === 'paid'
-                       ? 'bg-emerald-100 text-emerald-700'
-                       : t.status === 'cancelled'
-                       ? 'bg-gray-100 text-gray-400'
-                       : 'bg-orange-100 text-orange-700'
-                     }`}>
-                       {t.status === 'paid' ? "Đã thanh toán" : t.status === 'cancelled' ? "Đã hủy" : "Chờ thu tiền"}
-                     </span>
+                    <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${
+                      t.status === 'paid'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : t.status === 'cancelled'
+                        ? 'bg-gray-100 text-gray-400'
+                        : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {t.status === 'paid' ? "Đã thanh toán"
+                        : t.status === 'cancelled' ? "Đã hủy"
+                        : "Chờ thu tiền"}
+                    </span>
                   </td>
                   <td className="py-4 px-6 text-right">
                     {t.status === 'pending' && (
