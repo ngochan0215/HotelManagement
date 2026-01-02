@@ -93,10 +93,6 @@ export default function BookingList() {
   useEffect(() => {
     if (isModalOpen) {
       fetchAvailableRooms(formData.expected_checkin, formData.expected_checkout);
-      setSelectedRooms([]);
-      setCalcValues({ total_price: 0, deposit_required: 0 });
-      setPromotionName("");
-      setPromotionCode("");
     }
   }, [formData.expected_checkin, formData.expected_checkout, formData.adults, formData.children, isModalOpen]);
 
@@ -187,7 +183,6 @@ export default function BookingList() {
     }
   };
 
-  // hàm hủy áp dụng khuyến mãi
   const handleUndoDiscount = () => {
     setCalcValues({
         total_price: rawPrice.total,
