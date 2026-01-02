@@ -49,7 +49,9 @@ const bookingSchema = new mongoose.Schema(
     total_fee: { type: Number, required: true, min: 0, default: 0 },
     deposit: { type: Number, default: 0, min: 0 },
 
-    isScheduled: { type: Boolean, default: false }
+    isScheduled: { type: Boolean, default: false },
+    isLateCheckin: { type: Boolean, default: false }
+    
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

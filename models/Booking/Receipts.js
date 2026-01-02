@@ -14,25 +14,26 @@ const receiptSchema = new mongoose.Schema(
       required: true,
     },
 
-    compensate_ticket_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "CompensateTicket",
-      default: null,
-    },
-
     service_usage_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ServiceUsage",
       default: null,
     },
 
-    total_fee: { type: Number, required: true },      // total_fee from booking (applied discount already)
-    service_fee: { type: Number, default: 0 },        // total_fee from service usage ticket
-    compensate_fee: { type: Number, default: 0 },     // total_fee from compensate ticket
-    deposit_amount: { type: Number, required: true }, // depost from booking (applied discount already)
-    
-    final_amount: { type: Number, default: 0, required: true },
-    amount_due: { type: Number, default: 0 },
+    compensate_ticket_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CompensateTicket",
+      default: null,
+    },
+
+    // Snapshot tiền
+    total_fee: { type: Number, required: true },       // từ booking (đã discount)
+    service_fee: { type: Number, default: 0 },
+    compensate_fee: { type: Number, default: 0 },
+    deposit_amount: { type: Number, required: true }, // từ booking (đã discount)
+
+    final_amount: { type: Number, required: true },    // tổng trước cọc
+    amount_due: { type: Number, required: true },      // còn phải trả
 
     payment: {
       type: String,
@@ -42,25 +43,19 @@ const receiptSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "paid", "refunded"],
+      enum: ["pending", "paid", "half-paid", "refunded"],
       default: "pending",
     },
 
-    paid_at: { 
-      type: Date, 
-      default: null 
-    },
-
-    note: { 
-      type: String, 
-      default: "" 
-    },
+    paid_at: { type: Date, default: null },
+    cancelled_at: { type: Date, default: null },
+    note: { type: String, default: "" },
   },
-
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   }
 );
+
 
 const Receipt = mongoose.models.Receipt || mongoose.model("Receipt", receiptSchema);
 export default Receipt;

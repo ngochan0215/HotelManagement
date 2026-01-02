@@ -314,6 +314,7 @@ export const cancelCheckinLateBookings = async () => {
 
   for (const booking of bookings) {
     booking.status = "cancelled";
+    booking.isLateCheckin = true;
     await booking.save();
 
     const bookingDetails = await BookingDetail.find({
