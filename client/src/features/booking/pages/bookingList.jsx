@@ -746,37 +746,37 @@ export default function BookingList() {
                     </div>
                 </div> */}
                 <div className="border-t border-gray-100 pt-3">
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    Khuyến mãi
-  </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Khuyến mãi
+                    </label>
 
-  <div className="flex gap-2 mb-2">
-    <button
-      type="button"
-      onClick={handleAutoApplyDiscount}
-      className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition"
-    >
-      Tự động áp dụng khuyến mãi
-    </button>
+                    <div className="flex gap-2 mb-2">
+                        <button
+                        type="button"
+                        onClick={handleAutoApplyDiscount}
+                        className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition"
+                        >
+                        Tự động áp dụng khuyến mãi
+                        </button>
 
-    {promotionName && (
-      <button
-        type="button"
-        onClick={handleUndoDiscount}
-        className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition"
-      >
-        Hoàn tác
-      </button>
-    )}
-  </div>
+                        {promotionName && (
+                        <button
+                            type="button"
+                            onClick={handleUndoDiscount}
+                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition"
+                        >
+                            Hoàn tác
+                        </button>
+                        )}
+                    </div>
 
-  {promotionName && (
-    <div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1">
-      <FiCheckCircle /> Đã áp dụng: {promotionName}
-    </div>
-  )}
-</div>
-<div className="grid grid-cols-2 gap-4">
+                    {promotionName && (
+                        <div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1">
+                        <FiCheckCircle /> Đã áp dụng: {promotionName}
+                        </div>
+                    )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label>
                             <input
@@ -798,8 +798,6 @@ export default function BookingList() {
                             />
                         </div>
                     </div>
-
-
                 <div className="pt-4 mt-4 border-t border-gray-100">
                      <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
                         <FiCheckCircle size={18}/> Xác nhận Đặt Phòng

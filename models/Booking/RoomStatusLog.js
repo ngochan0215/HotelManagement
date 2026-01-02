@@ -17,11 +17,12 @@ const roomStatusLogSchema = new mongoose.Schema(
     start_time: {
       type: Date,
       required: true,
+      default: null
     },
 
     end_time: {
       type: Date,
-      required: true,
+      default: null
     },
 
     note: {

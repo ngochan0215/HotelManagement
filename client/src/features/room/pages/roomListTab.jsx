@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 
 import { StatusPill } from "../../../components/ui/label";
 const STATUS_MAP = {
+  reserved:    { label: "Đang giữ", color: "orange" },
   available:   { label: "Trống",    color: "emerald" },
   booked:      { label: "Đã đặt",   color: "blue" },
   occupied:    { label: "Đang ở",   color: "indigo" },

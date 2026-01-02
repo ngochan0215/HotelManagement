@@ -635,6 +635,24 @@ export const confirmBooking = async (req, res) => {
       return res.status(400).json({ message: "Booking không có phòng nào." });
     }
 
+    for (const bd of bookingDetails) {
+      // const conflict = await RoomStatusLog.findOne({
+      //   room_id: bd.room_id,
+      //   status: { $in: ["booked", "occupied"] },
+      //   start_time: { $lt: bd.expected_checkout },
+      //   end_time: { $gt: bd.expected_checkin },
+      // }).session(session);
+      const conflict = await Room.findOne({
+        _id: bd.room_id,
+        status: { $in: ["booked", "occupied"] },
+      }).session(session);
+
+      if (conflict) {
+        const room = await Room.findById(bd.room_id);
+        throw new Error(`Phòng ${room.room_number} đã được giữ trong khoảng thời gian này`);
+      }
+    }
+
     const roomIds = bookingDetails.map(bd => bd.room_id);
 
     // update trạng thái phòng thành booked
@@ -643,19 +661,6 @@ export const confirmBooking = async (req, res) => {
       { $set: { room_status: "booked" } },
       { session }
     );
-
-    for (const bd of bookingDetails) {
-      const conflict = await RoomStatusLog.findOne({
-        room_id: bd.room_id,
-        status: { $in: ["booked", "occupied"] },
-        start_time: { $lt: bd.expected_checkout },
-        end_time: { $gt: bd.expected_checkin },
-      }).session(session);
-
-      if (conflict) {
-        throw new Error(`Phòng ${bd.room_id} đã được giữ trong khoảng thời gian này`);
-      }
-    }
 
     // tạo log booked
     const roomStatusLogs = bookingDetails.map(bd => ({
@@ -1216,7 +1221,7 @@ export const checkinBookingDetail = async (req, res) => {
     await BookingStatusLog.create(
       [
         {
-          bookingId,
+          booking_id: bookingId,
           status: booking.status,
           start_time: new Date(),
           end_time: null,
@@ -1321,7 +1326,7 @@ export const checkoutBookingDetail = async (req, res) => {
 
     await BookingStatusLog.findOneAndUpdate(
       {
-        bookingId,
+        booking_id: bookingId,
         end_time: null,
       },
       {
@@ -1333,7 +1338,7 @@ export const checkoutBookingDetail = async (req, res) => {
     await BookingStatusLog.create(
       [
         {
-          bookingId,
+          booking_id: bookingId,
           status: booking.status,
           start_time: new Date(),
           end_time: null,

@@ -148,14 +148,14 @@ export const updateRoom = async (req, res) => {
         }
 
         if (room_status) {
-            const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance"];
+            const validStatuses = ["available", "reserved", "booked", "occupied", "cleaning", "maintenance"];
             if (!validStatuses.includes(room_status))
                 return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
 
-            if (!start_time || !end_time)
+            if (room_status !== "available" && (!start_time || !end_time))
                 return res.status(400).json({
                     success: false,
-                    message: "Cần cung cấp start_time và end_time!",
+                    message: "Cần cung cấp start_time và end_time! BE",
                 });
 
             if (new Date(end_time) <= new Date(start_time))
@@ -168,8 +168,8 @@ export const updateRoom = async (req, res) => {
             await RoomStatusLog.create({
                 room_id: room._id,
                 status: room_status,
-                start_time,
-                end_time,
+                start_time: start_time || new Date(),
+                end_time: end_time || null,
                 note: note || "",
                 handled_by: req.user?._id || null,
             });
@@ -193,8 +193,7 @@ export const updateRoom = async (req, res) => {
         console.error(err);
         return res.status(500).json({
             success: false,
-            message: "SERVER ERROR",
-            err: err.message,
+            message: "SERVER ERROR" + err.message,
         });
     }
 };
@@ -352,7 +351,6 @@ export const completeMaintenance = async (req, res) => {
     });
   }
 };
-
 
 // Group all rooms by category (including categories with zero rooms)
 export const getRoomsByCategory = async (req, res) => {
