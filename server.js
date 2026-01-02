@@ -4,7 +4,9 @@ import cors from "cors";
 import http from "http"; 
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
-import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startServiceUsageJob } from "./config/importTicket.job.js";
+import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, 
+    startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob 
+} from "./config/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
 import userRoute from "./routes/userRoutes.js";
@@ -52,6 +54,8 @@ startImportTicketJob();
 startInstallTicketJob();
 startGoodTicketJob();
 startServiceUsageJob();
+startCancelPendingBookingJob();
+startCancelCheckinLateBookingJob();
 
 app.set("io", io);
 

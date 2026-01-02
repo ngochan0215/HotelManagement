@@ -24,6 +24,11 @@ export const bookingApi = {
         return res.data;
     },
 
+    previewBooking: async(data) => {
+        const res = await axios.post(`${BASE_URL}/preview/general`, data, getAuthHeader());
+        return res.data;
+    },
+
     updateBookingStatus: async (bookingId, status) => {
         const res = await axios.put(
             `${BASE_URL}/${bookingId}/update`,

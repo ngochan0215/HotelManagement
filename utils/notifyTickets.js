@@ -1,5 +1,7 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, 
-    GoodTicket, ServiceUsage, UsageDetail } from "../models/index.js";
+    GoodTicket, ServiceUsage, UsageDetail, Booking, BookingDetail,
+    BookingStatusLog, Room, RoomStatusLog
+} from "../models/index.js";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
 
 export const notifyImportTickets = async () => {
@@ -248,4 +250,108 @@ export const notifyServiceUsageTickets = async () => {
   console.log(
     `[CRON] service usage waiting_confirm: ${dueDetailIds.length}, cancelled: ${expiredDetailIds.length}`
   );
+};
+
+export const cancelExpiredDepositBookings = async () => {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  const expiredBookings = await Booking.find({
+    status: "pending",
+    created_at: { $lte: oneHourAgo },
+  });
+
+  for (const booking of expiredBookings) {
+    booking.status = "cancelled";
+    await booking.save();
+
+    const bookingDetails = await BookingDetail.find({
+      booking_id: booking._id,
+    });
+
+    // trả phòng
+    const roomIds = bookingDetails.map(b => b.room_id);
+
+    await Room.updateMany(
+      { _id: { $in: roomIds } },
+      { $set: { room_status: "available" } }
+    );
+
+    await RoomStatusLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        note: { $regex: booking._id.toString() },
+        end_time: null,
+      },
+      { $set: { end_time: new Date() } }
+    );
+
+    await BookingDetail.updateMany(
+      { booking_id: booking._id },
+      { $set: { status: "cancelled" } }
+    );
+
+    await BookingStatusLog.findOneAndUpdate(
+      { booking_id: booking._id, end_time: null },
+      { end_time: new Date() }
+    );
+
+    await BookingStatusLog.create({
+      booking_id: booking._id,
+      status: "cancelled",
+      start_time: new Date(),
+      note: "Booking bị hủy do quá 1 giờ chưa đặt cọc.",
+    });
+  }
+};
+
+export const cancelCheckinLateBookings = async () => {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  const bookings = await Booking.find({
+    status: "confirmed",
+    expected_checkin: { $lte: oneHourAgo },
+  });
+
+  for (const booking of bookings) {
+    booking.status = "cancelled";
+    await booking.save();
+
+    const bookingDetails = await BookingDetail.find({
+      booking_id: booking._id,
+    });
+
+    // trả phòng
+    const roomIds = bookingDetails.map(b => b.room_id);
+
+    await Room.updateMany(
+      { _id: { $in: roomIds } },
+      { $set: { room_status: "available" } }
+    );
+
+    await RoomStatusLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        note: { $regex: booking._id.toString() },
+        end_time: null,
+      },
+      { $set: { end_time: new Date() } }
+    );
+
+    await BookingDetail.updateMany(
+      { booking_id: booking._id },
+      { $set: { status: "cancelled" } }
+    );
+
+    await BookingStatusLog.findOneAndUpdate(
+      { booking_id: booking._id, end_time: null },
+      { end_time: new Date() }
+    );
+
+    await BookingStatusLog.create({
+      booking_id: booking._id,
+      status: "cancelled",
+      start_time: new Date(),
+      note: "Tự động hủy: khách không đến sau 1 giờ kể từ thời điểm check-in dự kiến.",
+    });
+  }
 };
