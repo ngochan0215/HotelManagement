@@ -100,4 +100,14 @@ export const roomApi = {
     return response.data;
   },
 
+  completeCleaning: async (roomId) => {
+      const res = await axios.post(`${BASE_URL}/${roomId}/cleaning/complete`, {}, getAuthHeader());
+      return res.data;
+    },
+
+    completeMaintenance: async (roomId) => {
+      const res = await axios.post(`${BASE_URL}/${roomId}/maintenance/complete`, {}, getAuthHeader());
+      return res.data;
+    },
+
 };
