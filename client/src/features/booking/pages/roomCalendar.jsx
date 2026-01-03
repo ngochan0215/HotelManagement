@@ -1,141 +1,169 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   format, addDays, subDays, startOfDay, endOfDay,
-  eachHourOfInterval, isSameDay, differenceInMinutes,
-  parseISO, isValid
+  eachHourOfInterval, differenceInMinutes, parseISO, isValid, isSameDay
 } from "date-fns";
 import { vi } from "date-fns/locale";
-import {
-  FiChevronLeft, FiChevronRight, FiPlus,
-  FiXCircle, FiCheck, FiTool, FiRefreshCw, FiClock, FiSearch, FiFilter,
-  FiLogIn, FiLogOut, FiShoppingCart, FiCalendar
-} from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 import Sidebar from "../../../components/sidebar";
 import Topbar from "../../../components/topbar";
 import { bookingApi } from "../../api/bookingApi";
+import { roomApi } from "../../api/roomApi";
+import { serviceApi } from "../../api/serviceApi";
 
-// --- CẤU HÌNH ---
-const HOUR_WIDTH = 100;
-const ROW_HEIGHT = 80;
-const ROOM_COL_WIDTH = 200;
+const HOUR_WIDTH = 120;
+const ROW_HEIGHT = 90;
+const ROOM_COL_WIDTH = 220;
 
 const STATUS_CONFIG = {
-  available: { id: "available", color: "bg-white", border: "border-gray-300", label: "Trống", text: "text-gray-600", icon: null },
-  booked: { id: "booked", color: "bg-blue-500", border: "border-blue-700", label: "Đã đặt", text: "text-white", icon: <FiCalendar /> },
-  occupied: { id: "occupied", color: "bg-rose-500", border: "border-rose-700", label: "Đang ở", text: "text-white", icon: <FiCheck /> },
-  cleaning: { id: "cleaning", color: "bg-amber-400", border: "border-amber-600", label: "Dọn dẹp", text: "text-amber-900", icon: <FiRefreshCw className="animate-spin-slow"/> },
-  maintenance: { id: "maintenance", color: "bg-slate-700", border: "border-slate-900", label: "Bảo trì", text: "text-slate-200", icon: <FiTool /> },
+  pending: {
+    label: "Chờ cọc",
+    style: "bg-yellow-100 border-l-4 border-yellow-500 text-yellow-900 hover:bg-yellow-200",
+  },
+  confirmed: {
+    label: "Đã cọc",
+    style: "bg-blue-100 border-l-4 border-blue-600 text-blue-900 hover:bg-blue-200",
+  },
+  occupied: {
+    label: "Đang ở",
+    style: "bg-rose-100 border-l-4 border-rose-600 text-rose-900 hover:bg-rose-200",
+  },
+  cleaning: {
+    label: "Dọn dẹp",
+    style: "bg-teal-100 border-l-4 border-teal-600 text-teal-900 hover:bg-teal-200",
+  },
+  maintenance: {
+    label: "Bảo trì",
+    style: "bg-slate-200 border-l-4 border-slate-600 text-slate-800 hover:bg-slate-300",
+  },
+  completed: {
+    label: "Đã xong",
+    style: "bg-gray-200 border-l-4 border-gray-400 text-gray-500 opacity-80 hover:bg-gray-300",
+  },
 };
-
-const normalizeStatus = (status) => {
-  switch (status) {
-    case "confirmed": return "booked";
-    case "checked_in": return "occupied";
-    case "checked_out": return "cleaning";
-    case "cancelled": 
-    case "expired":
-        return "available";
-    default:
-        return status;
-  }
-};
-
-// --- DỮ LIỆU CỐ ĐỊNH (FIXED MOCK DATA) ---
-// Dùng thời gian thực để làm mốc, nhưng cộng trừ ngày cố định
-const now = new Date();
-const y = now.getFullYear();
-const m = now.getMonth();
-const d = now.getDate();
 
 export default function RoomCalendar() {
+    const navigate = useNavigate();
     const [currentDate, setCurrentDate] = useState(new Date());
-
     const [rooms, setRooms] = useState([]);
     const [events, setEvents] = useState([]);
+    const [services, setServices] = useState([]);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("all");
-    const [filterStatus, setFilterStatus] = useState("all");
 
     const [selectedEvent, setSelectedEvent] = useState(null);
-    const [selectedSlot, setSelectedSlot] = useState(null);
+    const [showServiceModal, setShowServiceModal] = useState(false);
+    const [selectedServicesToAdd, setSelectedServicesToAdd] = useState([]);
 
-    useEffect(() => {
-        const fetchCalendar = async () => {
-            try {
-            const data = await bookingApi.getRoomsCalendar(
-                format(currentDate, "yyyy-MM-dd")
-            );
-            console.log("getCalendarRooms result returns: ", data);
-            setRooms(data.rooms);
-
-            const mappedEvents = data.events.map(e => ({
-                _id: e.id,
-                room_id: e.room_id,
-                room_number: e.room_number,
-                start: e.start,
-                end: e.end,
-                status: e.status,
-                title: e.title,
-                note: e.note,
-                handled_by: e.handled_by,
-            }));
-            setEvents(mappedEvents);
-
-            } catch (err) {
-                alert(err.response?.data?.message || "Không tải được lịch phòng");
-            }
-        };
-        fetchCalendar();
+    const currentTimePosition = useMemo(() => {
+        const now = new Date();
+        const start = startOfDay(currentDate);
+        if (!isSameDay(now, currentDate)) return null;
+        const diffMinutes = differenceInMinutes(now, start);
+        return (diffMinutes / 60) * HOUR_WIDTH;
     }, [currentDate]);
 
+    const fetchCalendar = async () => {
+        try {
+            const [roomsRes, bookingsRes] = await Promise.all([
+                roomApi.getAllRooms(),
+                bookingApi.getAllBookings()
+            ]);
 
-    // logic lọc phòng để tìm kiếm
-    const filteredRooms = useMemo(() => {
-        const keyword = searchTerm.trim().toLowerCase();
+            const roomList = roomsRes.rooms || [];
+            const bookingList = bookingsRes.result || [];
+            setRooms(roomList);
 
-        return rooms.filter(room => {
-            // tìm theo số phòng
-            const matchName = !keyword || room.room_number?.toLowerCase().includes(keyword);
+            const processedEvents = [];
+            const dayStart = startOfDay(currentDate);
+            const dayEnd = endOfDay(currentDate);
+            const now = new Date();
 
-            // lọc theo loại phòng
-            const matchType = filterType === "all" || room.category_id?.category_name === filterType;
+            bookingList.forEach(booking => {
+                const customerId = booking.customer_id?._id || booking.customer_id;
+                const customerName = booking.customer_id?.full_name || "Khách vãng lai";
+                const customerPhone = booking.customer_id?.phone_number || "";
+                const customerCCCD = booking.customer_id?.CCCD || "";
+                const bookingCode = booking._id.toString().slice(-6).toUpperCase();
 
-            // lọc theo trạng thái phòng
-            let matchStatus = true;
-            const roomEvents = events.filter(e => e.room_id === room._id);
+                if (Array.isArray(booking.rooms)) {
+                    booking.rooms.forEach(detail => {
+                        const roomId = detail.room_id?._id || detail.room_id;
+                        const roomNumber = detail.room_id?.room_number || "N/A";
 
-            if (filterStatus === "available") {
-                matchStatus = roomEvents.every(e => e.status !== "occupied" && e.status !== "booked" && e.status!== "maintenance");
-            } else if (filterStatus !== "all") {
-                matchStatus = roomEvents.some(e => e.status === filterStatus);
-            }
+                        const start = detail.actual_checkin ? new Date(detail.actual_checkin) : new Date(detail.expected_checkin);
+                        const end = detail.actual_checkout ? new Date(detail.actual_checkout) : new Date(detail.expected_checkout);
 
-            return matchName && matchType && matchStatus;
-        });
-    }, [rooms, events, searchTerm, filterType, filterStatus]);
+                        if (end <= dayStart || start >= dayEnd) return;
 
-    // danh sách các loại phòng
-    const uniqueTypes = useMemo(() => {
-        const types = rooms
-            .map(r => r.category_id?.category_name)
-            .filter(Boolean);
-        return [...new Set(types)];
-    }, [rooms]);
+                        let status = 'pending';
+                        let isCompleted = false;
 
-    const hoursInDay = useMemo(() => {
-        return eachHourOfInterval({ start: startOfDay(currentDate), end: endOfDay(currentDate) });
-    }, [currentDate]);
+                        if (booking.status === 'pending') status = 'pending';
+                        else if (booking.status === 'confirmed') status = 'confirmed';
+                        if (detail.status === 'checked_in') status = 'occupied';
 
-    const totalCalendarWidth = hoursInDay.length * HOUR_WIDTH;
+                        if (['checked_out', 'cancelled'].includes(detail.status) || ['cancelled', 'expired', 'completed'].includes(booking.status)) {
+                            status = 'completed';
+                            isCompleted = true;
+                        } else if (status !== 'occupied' && end < now) {
+                            status = 'completed';
+                            isCompleted = true;
+                        }
 
-    const handleDateChange = (e) => {
-        const date = parseISO(e.target.value);
-        if (isValid(date)) setCurrentDate(date);
+                        processedEvents.push({
+                            _id: detail._id,
+                            booking_id: booking._id,
+                            customer_id: customerId,
+                            room_id: roomId,
+                            room_number: roomNumber,
+                            start: start.toISOString(),
+                            end: end.toISOString(),
+                            status: status,
+                            title: status === 'occupied' ? 'Đang ở' : 'Đặt phòng',
+                            customer_name: customerName,
+                            customer_phone: customerPhone,
+                            customer_cccd: customerCCCD,
+                            booking_code: bookingCode,
+                            isCompleted: isCompleted,
+                            note: booking.note || ""
+                        });
+                    });
+                }
+            });
+
+            roomList.forEach(room => {
+                if (['cleaning', 'maintenance'].includes(room.room_status)) {
+                    processedEvents.push({
+                        _id: `log-${room._id}`,
+                        room_id: room._id,
+                        room_number: room.room_number,
+                        start: new Date().toISOString(),
+                        end: endOfDay(currentDate).toISOString(),
+                        status: room.room_status,
+                        title: room.room_status === 'cleaning' ? 'Đang dọn' : 'Bảo trì',
+                        customer_name: room.room_status === 'cleaning' ? 'Buồng phòng' : 'Kỹ thuật',
+                        isCompleted: false
+                    });
+                }
+            });
+
+            setEvents(processedEvents);
+        } catch (err) { console.error(err); }
     };
 
-    const handleSlotClick = (room, time) => setSelectedSlot({ room, time });
+    const fetchServices = async () => {
+        try {
+            const res = await serviceApi.getAllServices({ status: 'active' });
+            setServices(res.services || []);
+        } catch (error) { console.error(error); }
+    };
+
+    useEffect(() => {
+        fetchCalendar();
+    }, [currentDate]);
 
     const getEventStyle = (event) => {
         const eventStart = parseISO(event.start);
@@ -143,300 +171,228 @@ export default function RoomCalendar() {
         const dayStart = startOfDay(currentDate);
         const dayEnd = endOfDay(currentDate);
 
-        // Cắt event nếu nó tràn ra ngoài ngày hiện tại
+        if (eventEnd <= dayStart || eventStart >= dayEnd) return null;
+
         const drawStart = eventStart < dayStart ? dayStart : eventStart;
         const drawEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
 
-        if (drawStart >= drawEnd) return null; // Không thuộc ngày này
-
         const diffMinutesStart = differenceInMinutes(drawStart, dayStart);
         const durationMinutes = differenceInMinutes(drawEnd, drawStart);
-        return { left: (diffMinutesStart / 60) * HOUR_WIDTH, width: (durationMinutes / 60) * HOUR_WIDTH };
+
+        const width = (durationMinutes / 60) * HOUR_WIDTH - 1;
+
+        return { left: (diffMinutesStart / 60) * HOUR_WIDTH, width: Math.max(width, 40) };
     };
 
-    // TODO: thêm logic tạo phòng
-    const handleCreateBooking = (type) => {
-        // Logic check-in/out cố định
-        const start = type === 'walk-in' ? new Date() : new Date(selectedSlot.time.getFullYear(), selectedSlot.time.getMonth(), selectedSlot.time.getDate(), 14, 0);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-        end.setHours(12, 0, 0, 0);
-
-        const newEvent = {
-            _id: `new-${Date.now()}`,
-            roomId: selectedSlot.room._id,
-            title: type === 'walk-in' ? "Khách Vãng Lai" : "Đặt Trước Mới",
-            start: start.toISOString(),
-            end: end.toISOString(),
-            status: type === 'walk-in' ? 'occupied' : 'booked',
-            price: 0
-        };
-        setEvents([...events, newEvent]);
-        setSelectedSlot(null);
+    const handleConfirmDeposit = async () => {
+        if (!window.confirm("Xác nhận khách đã đóng tiền cọc?")) return;
+        try { await bookingApi.confirmBooking(selectedEvent.booking_id); alert("Thành công!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
     };
 
-    const handleCheckIn = async (bookingId) => {
+    const handleCheckIn = () => navigate('/booking-management');
+    const handleCheckOut = () => navigate('/booking-management');
+
+    const handleCompleteCleaning = async () => {
+        try { await roomApi.completeCleaning(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
+    };
+    const handleCompleteMaintenance = async () => {
+        try { await roomApi.completeMaintenance(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
+    };
+
+    const openAddServiceModal = () => {
+        if (!services.length) fetchServices();
+        setShowServiceModal(true);
+        setSelectedServicesToAdd([{ service_id: "", quantity: 1 }]);
+    };
+
+    const handleSubmitService = async () => {
         try {
-            await bookingApi.updateBookingStatus(bookingId, "checked_in");
-            alert("Check-in thành công");
-            fetchCalendar(); 
+            const valid = selectedServicesToAdd.filter(s => s.service_id && s.quantity > 0);
+            if (!valid.length) { alert("Chọn dịch vụ"); return; }
+
+            if (!selectedEvent.customer_id) {
+                alert("Lỗi: Không tìm thấy thông tin khách hàng trong booking này.");
+                return;
+            }
+
+            const payload = {
+                booking_id: selectedEvent.booking_id,
+                customer_id: selectedEvent.customer_id, // Lấy trực tiếp từ event (đã thêm ở trên)
+                services: valid.map(item => ({
+                    service_id: item.service_id,
+                    quantity: Number(item.quantity), // Ép kiểu số
+                    use_from: new Date().toISOString() // Thêm trường bắt buộc này
+                }))
+            };
+
+            await serviceApi.createServiceUsage(payload);
+
+            alert("Thêm dịch vụ thành công!");
+            setShowServiceModal(false);
+            setSelectedEvent(null);
         } catch (err) {
-            alert(err.response?.data?.message || "Không thể check-in");
+            console.error(err);
+            alert("Lỗi: " + (err.response?.data?.message || err.message));
         }
     };
 
-    const handleCheckOut = async (bookingId) => {
-        try {
-            await bookingApi.updateBookingStatus(bookingId, "checked_out");
-            alert("Check-out thành công");
-            fetchCalendar();
-        } catch (err) {
-            alert(err.response?.data?.message || "Không thể check-out");
-        }
-    };
+    const handleEmptySlotClick = () => navigate('/booking-management');
+    const hoursInDay = useMemo(() => eachHourOfInterval({ start: startOfDay(currentDate), end: endOfDay(currentDate) }), [currentDate]);
+    const totalCalendarWidth = hoursInDay.length * HOUR_WIDTH;
 
-    // TODO: thêm logic hủy đặt phòng
-    const handleCancelBooking = async (bookingId) => {
-        if (!window.confirm("Bạn có chắc muốn hủy booking này?")) return;
-        try {
-            await bookingApi.updateBookingStatus(bookingId, "cancelled");
-            toast.success("Hủy booking thành công");
-            refetchBookings();
-        } catch (err) {
-            alert(err.response?.data?.message || "Không thể hủy booking");
-        }
-    };
+    const filteredRooms = useMemo(() => rooms.filter(r =>
+        (!searchTerm || r.room_number.includes(searchTerm)) &&
+        (filterType==='all' || r.category_id?.category_name === filterType)
+    ), [rooms, searchTerm, filterType]);
+    const uniqueTypes = useMemo(() => [...new Set(rooms.map(r => r.category_id?.category_name).filter(Boolean))], [rooms]);
 
     return (
-        <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
-        <Sidebar />
-        <div className="flex-1 ml-[270px] flex flex-col h-screen overflow-hidden">
-            <Topbar />
-
-            <div className="flex-1 flex flex-col bg-white overflow-hidden">
-
-                <div className="border-b border-gray-200 bg-white shadow-sm z-50 shrink-0">
-                    <div className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
-                        <div className="flex items-center gap-4">
-                            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                <span className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><FiClock size={20}/></span>
-                                Lịch Theo Giờ
-                            </h1>
-                            <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 p-1 shadow-sm relative group">
-                                <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-1.5 hover:bg-white rounded-lg transition text-gray-500"><FiChevronLeft/></button>
-                                <div className="relative">
-                                    <span className="w-48 text-center font-bold text-gray-700 capitalize text-sm select-none px-4 block cursor-pointer hover:text-indigo-600 transition">{format(currentDate, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
-                                    <input type="date" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleDateChange} value={format(currentDate, "yyyy-MM-dd")}/>
+        <div className="flex bg-[#F1F5F9] min-h-screen font-sans text-slate-800">
+            <Sidebar />
+            <div className="flex-1 ml-[270px] flex flex-col h-screen overflow-hidden">
+                <Topbar />
+                <div className="flex-1 flex flex-col bg-white overflow-hidden m-4 rounded-xl shadow border border-slate-200">
+                    <div className="border-b border-slate-200 bg-white z-50 shrink-0 p-4 pb-0">
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">Lịch Phòng</h1>
+                                <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-1">
+                                    <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-2 w-8 h-8 flex items-center justify-center hover:bg-white rounded-md transition font-bold text-slate-500">{'<'}</button>
+                                    <span className="w-48 text-center font-bold text-slate-700 capitalize text-sm">{format(currentDate, "EEEE, dd/MM/yyyy", { locale: vi })}</span>
+                                    <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-2 w-8 h-8 flex items-center justify-center hover:bg-white rounded-md transition font-bold text-slate-500">{'>'}</button>
                                 </div>
-                                <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-1.5 hover:bg-white rounded-lg transition text-gray-500"><FiChevronRight/></button>
+                                <button onClick={() => setCurrentDate(new Date())} className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2.5 rounded-lg transition">Hôm nay</button>
                             </div>
-                            <button onClick={() => setCurrentDate(new Date())} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 transition">Hôm nay</button>
+                            <div className="flex gap-3">
+                                <div className="relative"><input className="px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-lg text-sm outline-none focus:border-indigo-500 w-48 font-medium" placeholder="Tìm số phòng..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/></div>
+                                <select className="border border-slate-200 bg-slate-50 rounded-lg px-4 py-2.5 text-sm outline-none font-medium text-slate-600" value={filterType} onChange={e=>setFilterType(e.target.value)}><option value="all">Tất cả loại</option>{uniqueTypes.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                            </div>
                         </div>
-                        <div className="flex gap-4 items-center">
-                            <div className="text-xs text-gray-400 font-medium">Tìm thấy {filteredRooms.length} phòng</div>
-                            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-md"><FiPlus size={14}/> Tạo Mới</button>
-                        </div>
-                    </div>
-
-                    <div className="px-6 py-3 bg-gray-50 flex items-center gap-4 overflow-x-auto">
-                        <div className="relative">
-                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text" placeholder="Tìm số phòng..."
-                                className="pl-9 pr-4 py-1.5 border border-gray-200 rounded-lg text-sm w-40 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-gray-500"><FiFilter className="inline mr-1"/>Loại:</span>
-                            <select className="py-1.5 px-3 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                                <option value="all">Tất cả</option>
-                                {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-gray-500">Tình trạng:</span>
-                            <select className="py-1.5 px-3 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer font-medium text-gray-700" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                                <option value="all">Tất cả trạng thái</option>
-                                {Object.values(STATUS_CONFIG).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                            </select>
-                        </div>
-                        <div className="ml-auto flex gap-3 opacity-80">
-                            {Object.values(STATUS_CONFIG).map(conf => (
-                                <div key={conf.id} className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600">
-                                    <span className={`w-2 h-2 rounded-full border ${conf.id === 'available' ? 'border-gray-400 bg-white' : conf.color}`}></span>
-                                    {conf.label}
-                                </div>
-                            ))}
+                        <div className="flex gap-6 overflow-x-auto pb-3">
+                             {Object.entries(STATUS_CONFIG).map(([key, conf]) => (
+                                 <div key={key} className="flex items-center gap-2 text-xs font-bold text-slate-600 whitespace-nowrap">
+                                     <span className={`w-3 h-3 rounded-full shadow-sm ${conf.style.split(' ')[0]}`}></span>{conf.label}
+                                 </div>
+                             ))}
                         </div>
                     </div>
-                </div>
 
-                <div className="flex-1 overflow-auto relative custom-scrollbar">
-                    <div className="relative" style={{ minWidth: ROOM_COL_WIDTH + totalCalendarWidth }}>
-                        <div className="sticky top-0 z-40 flex h-10 bg-gray-100 border-b border-gray-300 text-xs text-gray-500 font-bold">
-                            <div className="sticky left-0 z-50 bg-gray-200 border-r border-gray-300 flex items-center justify-center uppercase tracking-wider shadow-sm text-gray-600" style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH }}>Phòng ({filteredRooms.length})</div>
-                            {hoursInDay.map((hour) => (
-                                <div key={hour.toString()} style={{ width: HOUR_WIDTH, minWidth: HOUR_WIDTH }} className="flex items-center justify-start pl-2 border-r border-gray-300">{format(hour, "HH:00")}</div>
-                            ))}
-                        </div>
+                    <div className="flex-1 overflow-auto relative custom-scrollbar">
+                        <div className="relative" style={{ minWidth: ROOM_COL_WIDTH + totalCalendarWidth }}>
+                            <div className="sticky top-0 z-40 flex h-12 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-bold shadow-sm">
+                                <div className="sticky left-0 z-50 bg-slate-50 border-r border-slate-200 flex items-center justify-center w-[220px]">PHÒNG</div>
+                                {hoursInDay.map(h => <div key={h} style={{width:HOUR_WIDTH}} className="flex items-center justify-center border-r border-slate-200">{format(h,"HH:00")}</div>)}
+                            </div>
+                            <div className="relative pb-10 bg-white">
+                                {currentTimePosition !== null && <div className="absolute top-0 bottom-0 z-30 border-l-2 border-red-500 pointer-events-none" style={{left:ROOM_COL_WIDTH+currentTimePosition}}><div className="absolute -top-1.5 -left-[6px] w-3 h-3 bg-red-500 rounded-full shadow-sm ring-2 ring-white"></div></div>}
+                                {filteredRooms.map(room => (
+                                    <div key={room._id} className="flex border-b border-slate-100 hover:bg-slate-50 transition" style={{height:ROW_HEIGHT}}>
+                                        <div className="sticky left-0 z-30 bg-white border-r border-slate-200 flex flex-col justify-center px-5 w-[220px] shrink-0 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                            <div className="flex justify-between items-center"><span className="font-bold text-slate-800 text-lg">{room.room_number}</span><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">T{room.floor||1}</span></div>
+                                            <div className="text-xs text-slate-500 mt-1 truncate">{room.category_id?.category_name}</div>
+                                        </div>
+                                        <div className="relative flex" style={{width:totalCalendarWidth}}>
+                                            {hoursInDay.map(h => (
+                                                <div
+                                                    key={h}
+                                                    style={{width:HOUR_WIDTH}}
+                                                    className="border-r border-slate-100 h-full cursor-pointer hover:bg-indigo-50/30 transition-colors"
+                                                    onClick={handleEmptySlotClick}
+                                                    title="Click để tạo đặt phòng mới"
+                                                ></div>
+                                            ))}
 
-                        <div className="relative">
-                            {filteredRooms.map((room) => (
-                                <div key={room._id} className="flex border-b border-gray-200 hover:bg-gray-50/50 transition-colors group relative" style={{ height: ROW_HEIGHT }}>
-                                    <div className="sticky left-0 z-30 bg-white border-r border-gray-300 flex flex-col justify-center px-4 shrink-0 group-hover:bg-gray-50 transition-colors shadow-[4px_0_10px_-5px_rgba(0,0,0,0.05)]" style={{ width: ROOM_COL_WIDTH, minWidth: ROOM_COL_WIDTH }}>
-                                        <div className="flex justify-between items-center mb-1"><span className="font-bold text-gray-800 text-lg">{room.room_number}</span><span className="text-[10px] text-gray-400 font-bold">T{room.floor}</span></div>
-                                        <div className="flex items-center gap-2"><span className={`text-[10px] px-2 py-0.5 rounded font-medium border bg-gray-50 text-gray-600 border-gray-100`}>{room.category_id.category_name}</span></div>
-                                    </div>
+                                            {events.filter(e=>e.room_id===room._id).map(evt => {
+                                                const style=getEventStyle(evt); if(!style) return null;
+                                                const conf = evt.isCompleted ? STATUS_CONFIG.completed : (STATUS_CONFIG[evt.status] || STATUS_CONFIG.pending);
 
-                                    <div className="relative flex" style={{ width: totalCalendarWidth }}>
-
-                                        {hoursInDay.map((hour) => (
-                                            <div
-                                                key={hour.toString()}
-                                                style={{ width: HOUR_WIDTH, minWidth: HOUR_WIDTH }}
-                                                className="border-r border-gray-300 h-full relative group/cell cursor-pointer hover:bg-indigo-50/30 transition"
-                                                onClick={() => handleSlotClick(room, hour)}
-                                            >
-                                                <div className="absolute inset-0 opacity-0 group-hover/cell:opacity-100 flex items-center justify-center text-indigo-300 pointer-events-none">
-                                                    <FiPlus />
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {events
-                                            .filter(e => e.room_id.toString() === room._id.toString())
-                                            .map(event => {
-                                                const position = getEventStyle(event);
-                                                if (!position) return null;
-                                                console.log("LOG IN MAP:", event.status, STATUS_CONFIG[event.status]);
-                                                const config = STATUS_CONFIG[event.status] || STATUS_CONFIG.available;
                                                 return (
-                                                    <div
-                                                        key={event._id}
-                                                        onClick={(e) => { e.stopPropagation(); setSelectedEvent(event); }}
-                                                        style={{ left: `${position.left}px`, width: `${position.width}px` }}
-                                                        className={`absolute top-2 bottom-2 rounded-lg shadow-sm cursor-pointer ${config.color} border-l-4 ${config.border} flex flex-col justify-center px-2 ${config.text} hover:brightness-110 hover:shadow-md hover:-translate-y-0.5 transition-all z-10 overflow-hidden text-xs`}
+                                                    <div key={evt._id}
+                                                        onClick={(e)=>{e.stopPropagation();setSelectedEvent(evt);setShowServiceModal(false)}}
+                                                        style={{left:style.left, width:style.width}}
+                                                        className={`absolute top-2 bottom-2 rounded-md cursor-pointer flex flex-col justify-center px-3 transition-all overflow-hidden whitespace-nowrap border border-white/60 shadow-sm hover:shadow-md hover:scale-[1.01] hover:z-20 ${conf.style} ${evt.isCompleted ? 'z-0' : 'z-10'}`}
+                                                        title={`${evt.title} - ${evt.customer_name}`}
                                                     >
-                                                        <div className="font-bold truncate flex items-center gap-1">{config.icon && <span className="opacity-80 scale-75">{config.icon}</span>}{event.title}</div>
-                                                        {position.width > 60 && <div className="opacity-80 text-[10px] truncate mt-0.5 font-medium">{format(parseISO(event.start), "HH:mm")} - {format(parseISO(event.end), "HH:mm")}</div>}
+                                                        <div className="flex items-center gap-1.5 mb-0.5 font-bold"><span className="truncate">{evt.customer_name}</span></div>
+                                                        {style.width>60 && <div className="text-[10px] font-medium opacity-90 flex justify-between"><span>{format(parseISO(evt.start),"HH:mm")} - {format(parseISO(evt.end),"HH:mm")}</span></div>}
                                                     </div>
                                                 )
-                                            })
-                                        }
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                {selectedEvent && !showServiceModal && (
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[450px] overflow-hidden animate-zoom-in border border-gray-100">
+                            <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-start">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1"><span className="text-xl font-bold text-slate-800">{selectedEvent.room_number}</span><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${STATUS_CONFIG[selectedEvent.status]?.style.split(' ')[0]} ${STATUS_CONFIG[selectedEvent.status]?.style.split(' ')[2]} border-transparent`}>{STATUS_CONFIG[selectedEvent.status]?.label}</span></div>
+                                    <div className="text-xs text-slate-400">Mã đơn: #{selectedEvent.booking_code || "---"}</div>
+                                </div>
+                                <button onClick={()=>setSelectedEvent(null)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400 font-bold text-xl px-3">✕</button>
+                            </div>
+                            <div className="p-6 space-y-5">
+                                {['pending','confirmed','occupied','completed'].includes(selectedEvent.status) && (
+                                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm">KH</div>
+                                            <div><div className="font-bold text-slate-800">{selectedEvent.customer_name}</div><div className="text-xs text-slate-500">Khách hàng</div></div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-indigo-200/50">
+                                            <div><div className="text-[10px] font-bold text-slate-400 uppercase">SĐT</div><div className="font-medium text-slate-700">{selectedEvent.customer_phone||'--'}</div></div>
+                                            <div><div className="text-[10px] font-bold text-slate-400 uppercase">CCCD</div><div className="font-medium text-slate-700">{selectedEvent.customer_cccd||'--'}</div></div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex justify-between bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                    <div><div className="text-xs text-slate-400 font-bold uppercase mb-1">Check-in</div><div className="font-bold text-slate-700 text-lg">{format(parseISO(selectedEvent.start),"HH:mm")}</div><div className="text-xs text-slate-500">{format(parseISO(selectedEvent.start),"dd/MM")}</div></div>
+                                    <div className="w-[1px] bg-slate-200 h-10 self-center"></div>
+                                    <div><div className="text-xs text-slate-400 font-bold uppercase mb-1">Check-out</div><div className="font-bold text-slate-700 text-lg">{format(parseISO(selectedEvent.end),"HH:mm")}</div><div className="text-xs text-slate-500">{format(parseISO(selectedEvent.end),"dd/MM")}</div></div>
+                                </div>
+                                {selectedEvent.isCompleted ? <div className="bg-gray-100 p-3 rounded text-center text-sm text-gray-500 font-bold">Đã hoàn tất/Lịch sử</div> : (
+                                    <div className="grid gap-3">
+                                        {selectedEvent.status==='pending' && <button onClick={handleConfirmDeposit} className="btn-action bg-yellow-500 hover:bg-yellow-600 text-white">Xác nhận cọc</button>}
+                                        {selectedEvent.status==='confirmed' && <button onClick={handleCheckIn} className="btn-action bg-blue-600 hover:bg-blue-700 text-white">Check-in</button>}
+                                        {selectedEvent.status==='occupied' && <div className="grid grid-cols-2 gap-3"><button onClick={openAddServiceModal} className="btn-action bg-white border-2 border-indigo-100 text-indigo-600">Dịch vụ</button><button onClick={handleCheckOut} className="btn-action bg-rose-500 hover:bg-rose-600 text-white">Trả phòng</button></div>}
+                                        {selectedEvent.status==='cleaning' && <button onClick={handleCompleteCleaning} className="btn-action bg-teal-600 hover:bg-teal-700 text-white">Xong dọn dẹp</button>}
+                                        {selectedEvent.status==='maintenance' && <button onClick={handleCompleteMaintenance} className="btn-action bg-slate-600 hover:bg-slate-700 text-white">Xong bảo trì</button>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showServiceModal && (
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[550px] max-h-[90vh] flex flex-col overflow-hidden animate-zoom-in">
+                            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
+                                <div><h3 className="font-bold text-xl text-slate-800">Thêm Dịch Vụ</h3><p className="text-sm text-slate-500">Phòng {selectedEvent?.room_number}</p></div>
+                                <button onClick={() => setShowServiceModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
+                            </div>
+                            <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50">
+                                {selectedServicesToAdd.map((item, idx) => (
+                                    <div key={idx} className="flex gap-3 mb-3 items-end bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                        <div className="flex-1"><label className="text-xs font-bold text-slate-500 block mb-1">Dịch vụ</label><select className="w-full border border-gray-200 rounded-lg p-2.5 text-sm outline-none focus:border-indigo-500 bg-white" value={item.service_id} onChange={e => {const newList=[...selectedServicesToAdd];newList[idx].service_id=e.target.value;setSelectedServicesToAdd(newList)}}><option value="">-- Chọn --</option>{services.map(s=><option key={s._id} value={s._id}>{s.name} ({s.price.toLocaleString()}đ)</option>)}</select></div>
+                                        <div className="w-24"><label className="text-xs font-bold text-slate-500 block mb-1">SL</label><input type="number" min="1" className="w-full border border-gray-200 rounded-lg p-2.5 text-sm text-center outline-none focus:border-indigo-500" value={item.quantity} onChange={e=>{const newList=[...selectedServicesToAdd];newList[idx].quantity=parseInt(e.target.value)||0;setSelectedServicesToAdd(newList)}}/></div>
+                                        <button onClick={()=>{const newList=selectedServicesToAdd.filter((_,i)=>i!==idx);setSelectedServicesToAdd(newList)}} className="text-slate-400 hover:text-red-500 p-2.5 mb-0.5 bg-gray-50 rounded-lg font-bold">Xóa</button>
+                                    </div>
+                                ))}
+                                <button onClick={()=>setSelectedServicesToAdd([...selectedServicesToAdd,{service_id:"",quantity:1}])} className="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-600 font-bold rounded-xl hover:bg-indigo-50 transition flex items-center justify-center gap-2 mt-2">Thêm dòng</button>
+                            </div>
+                            <div className="p-5 border-t border-gray-100 bg-white flex justify-end gap-3">
+                                <button onClick={()=>setShowServiceModal(false)} className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl">Hủy</button>
+                                <button onClick={handleSubmitService} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200">Lưu & Xác nhận</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
-
-            {selectedSlot && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-zoom-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-[450px] p-6 relative">
-                        <button onClick={() => setSelectedSlot(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><FiXCircle size={24}/></button>
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">Tạo Đặt Phòng Mới</h3>
-                        <p className="text-sm text-gray-500 mb-6">
-                            Phòng <span className="font-bold text-indigo-600">{selectedSlot.room.room_number}</span> •
-                            Giờ chọn <span className="font-bold text-gray-800">{format(selectedSlot.time, "HH:mm")}</span>
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleCreateBooking('reservation')} className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition group">
-                                <div className="bg-white p-3 rounded-full shadow-sm group-hover:scale-110 transition"><FiCalendar size={24}/></div>
-                                <span className="font-bold">Đặt Trước (14:00)</span>
-                            </button>
-
-                            <button onClick={() => handleCreateBooking('walk-in')} className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition group">
-                                <div className="bg-white p-3 rounded-full shadow-sm group-hover:scale-110 transition"><FiLogIn size={24}/></div>
-                                <span className="font-bold">Check-in Ngay</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {selectedEvent && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-zoom-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-[400px] overflow-hidden">
-                        <div className={`${STATUS_CONFIG[selectedEvent.status]?.color} p-5 text-white flex justify-between items-start`}>
-                            <div>
-                                <h3 className="font-bold text-lg">{selectedEvent.title}</h3>
-                                <p className="text-xs opacity-80 mt-1">Mã: #{selectedEvent._id}</p>
-                            </div>
-                            <button onClick={() => setSelectedEvent(null)} className="bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"><FiXCircle size={20}/></button>
-                        </div>
-
-                        <div className="p-6 space-y-4">
-                            <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-3">
-                                <span className="text-gray-500">Trạng thái:</span>
-                                <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${STATUS_CONFIG[selectedEvent.status]?.color} ${STATUS_CONFIG[selectedEvent.status]?.text} bg-opacity-90`}>
-                                    {STATUS_CONFIG[selectedEvent.status]?.label.toUpperCase()}
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <span className="text-xs text-gray-400 block mb-1">Bắt đầu:</span>
-                                    <span className="font-semibold text-gray-800">{format(parseISO(selectedEvent.start), "HH:mm dd/MM")}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-gray-400 block mb-1">Kết thúc:</span>
-                                    <span className="font-semibold text-gray-800">{format(parseISO(selectedEvent.end), "HH:mm dd/MM")}</span>
-                                </div>
-                            </div>
-
-                            <div className="pt-4 grid gap-3">
-                                {selectedEvent.status === 'booked' && (
-                                    <>
-                                        <button
-                                        onClick={() => handleCheckIn(selectedEvent._id)}
-                                        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold transition shadow-lg shadow-emerald-200"
-                                        >
-                                        <FiLogIn /> Nhận Phòng (Check-in)
-                                        </button>
-
-                                        <button
-                                        onClick={handleCancelBooking}
-                                        className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl font-bold transition"
-                                        >
-                                        <FiXCircle /> Hủy Đặt Phòng
-                                        </button>
-                                    </>
-                                )}
-
-
-                                {selectedEvent.status === 'occupied' && (
-                                    <>
-                                        <button
-                                        onClick={() => alert("Mở form thêm dịch vụ...")}
-                                        className="w-full flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2.5 rounded-xl font-bold transition"
-                                        >
-                                        <FiShoppingCart /> Thêm Dịch Vụ
-                                        </button>
-
-                                        <button
-                                        onClick={handleCheckOut}
-                                        className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl font-bold transition shadow-lg shadow-orange-200"
-                                        >
-                                        <FiLogOut /> Trả Phòng (Check-out)
-                                        </button>
-                                    </>
-                                )}
-
-                                {/* TODO: THÊM LOGIC UPDATE STATUS PHÒNG SANG AVAILABLE */}
-                                {["cleaning", "maintenance"].includes(selectedEvent.status) && (
-                                    <button onClick={() => setSelectedEvent(null)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold transition">
-                                        Xác nhận hoàn thành
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            <style jsx>{` .btn-action { @apply w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95; } `}</style>
         </div>
     );
 }
