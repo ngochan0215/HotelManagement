@@ -3,7 +3,7 @@ import { format, addDays, setHours, setMinutes } from "date-fns";
 import {
   FiPlus, FiX, FiTrash2, FiSearch, FiCheckCircle, FiLogOut, FiUser,
   FiUserPlus, FiUsers, FiTag, FiLogIn, FiMinusCircle, FiCheckSquare, FiSquare,
-  FiCalendar, FiMapPin
+  FiCalendar, FiMapPin, FiAlertTriangle
 } from "react-icons/fi";
 import { jwtDecode } from "jwt-decode";
 import Sidebar from "../../../components/sidebar";
@@ -13,7 +13,7 @@ import { StatusPill } from "../../../components/ui/label";
 import { bookingApi } from "../../api/bookingApi";
 import { roomApi } from "../../api/roomApi";
 import { customerApi } from "../../api/customerApi";
-import { receiptApi } from "../../api/receiptApi"; // <--- ĐÃ THÊM IMPORT NÀY
+import { receiptApi } from "../../api/receiptApi";
 import { useAuth } from "../../auth/hooks/authContext";
 
 const STATUS_MAP = {
@@ -25,30 +25,33 @@ const STATUS_MAP = {
   expired:     { label: "Hết hạn", color: "gray" },
 };
 
+const CANCELLATION_REASONS = [
+  { value: "change_plan", label: "Thay đổi lịch trình" },
+  { value: "price_issue", label: "Giá không phù hợp" },
+  { value: "found_better_option", label: "Tìm được chỗ khác" },
+  { value: "personal_reason", label: "Lý do cá nhân" },
+  { value: "no_show", label: "Khách không đến (No-show)" },
+  { value: "overbooking", label: "Hết phòng (Overbooking)" },
+  { value: "force_majeure", label: "Bất khả kháng (Thiên tai, dịch bệnh)" },
+  { value: "other", label: "Khác" },
+];
+
 export default function BookingList() {
   const { user } = useAuth();
-  const [rawPrice, setRawPrice] = useState({ total: 0, deposit: 0 });
-  const [appliedDiscounts, setAppliedDiscounts] = useState([]);
-  const [isPreviewLocked, setIsPreviewLocked] = useState(false);
-  const [promotionName, setPromotionName] = useState("");
+
 
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
   const [customersList, setCustomersList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerMode, setCustomerMode] = useState("existing");
-
-  // State tìm kiếm khách hàng
   const [custSearchQuery, setCustSearchQuery] = useState("");
   const [showCustDropdown, setShowCustDropdown] = useState(false);
   const [selectedCustDisplay, setSelectedCustDisplay] = useState(null);
   const dropdownRef = useRef(null);
-
-  const [confirmState, setConfirmState] = useState({
-      open: false, title: "", message: "", confirmText: "Đồng ý", type: "danger", onConfirm: null
-  });
 
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -58,21 +61,28 @@ export default function BookingList() {
     expected_checkout: "",
     deposit: 0
   });
-
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [tempRoomId, setTempRoomId] = useState("");
   const [isWalkIn, setIsWalkIn] = useState(false);
-
-  // State hiển thị giá trị tính toán
-  const [calcValues, setCalcValues] = useState({
-      total_price: 0,
-      deposit_required: 0
-  });
-
+  const [rawPrice, setRawPrice] = useState({ total: 0, deposit: 0 });
+  const [appliedDiscounts, setAppliedDiscounts] = useState([]);
+  const [isPreviewLocked, setIsPreviewLocked] = useState(false);
+  const [promotionName, setPromotionName] = useState("");
+  const [calcValues, setCalcValues] = useState({ total_price: 0, deposit_required: 0 });
   const [newCustomer, setNewCustomer] = useState({
     email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: ""
   });
 
+  const [confirmState, setConfirmState] = useState({
+      open: false, title: "", message: "", confirmText: "Đồng ý", type: "danger", onConfirm: null
+  });
+
+  const [cancelModal, setCancelModal] = useState({
+    open: false,
+    bookingId: null,
+    reason: "change_plan",
+    loading: false
+  });
 
   useEffect(() => {
     fetchData();
@@ -93,17 +103,10 @@ export default function BookingList() {
 
   useEffect(() => {
     if (isPreviewLocked) return;
-
     const total = selectedRooms.reduce((sum, r) => sum + r.price, 0);
     const deposit = isWalkIn ? 0 : (total * 0.3);
-
-    setCalcValues({
-        total_price: total,
-        deposit_required: deposit
-    });
-
+    setCalcValues({ total_price: total, deposit_required: deposit });
     setFormData(prev => ({...prev, deposit: deposit}));
-
   }, [selectedRooms, isWalkIn, isPreviewLocked]);
 
 
@@ -123,227 +126,110 @@ export default function BookingList() {
     if (!checkin || !checkout) return;
     try {
       const res = await roomApi.getAvailableBy({
-        checkin,
-        checkout,
-        adults: formData.adults,
-        children: formData.children,
+        checkin, checkout, adults: formData.adults, children: formData.children,
       });
-
-      const flatRooms = res.flatMap(c =>
-        c.rooms.map(r => ({
-          _id: r.room_id || r._id,
-          room_number: r.room_number,
-          category_name: c.name || c.category_name,
-          price: c.price
+      const flatRooms = res.flatMap(c => c.rooms.map(r => ({
+          _id: r.room_id || r._id, room_number: r.room_number, category_name: c.name || c.category_name, price: c.price
         }))
       );
       setRoomsList(flatRooms);
-    } catch (err) {
-      console.error(err);
-      setRoomsList([]);
-    }
+    } catch (err) { setRoomsList([]); }
   };
 
-
-  const buildPreviewPayload = () => ({
-    customer_id: formData.customer_id,
-    expected_checkin: formData.expected_checkin,
-    expected_checkout: formData.expected_checkout,
-    rooms: selectedRooms.map(r => ({
-        room_id: r._id,
-        expected_checkin: formData.expected_checkin,
-        expected_checkout: formData.expected_checkout,
-        base_fee: r.price
-    }))
-  });
-
   const handleAutoApplyDiscount = async () => {
-    if (!formData.customer_id) {
-        alert("Vui lòng chọn khách hàng trước");
-        return;
-    }
-    if (!selectedRooms.length) {
-        alert("Vui lòng chọn ít nhất 1 phòng");
-        return;
-    }
-
+    if (!formData.customer_id) return alert("Vui lòng chọn khách hàng trước");
+    if (!selectedRooms.length) return alert("Vui lòng chọn ít nhất 1 phòng");
     try {
-        const payload = buildPreviewPayload();
+        const payload = {
+            customer_id: formData.customer_id,
+            expected_checkin: formData.expected_checkin,
+            expected_checkout: formData.expected_checkout,
+            rooms: selectedRooms.map(r => ({
+                room_id: r._id, expected_checkin: formData.expected_checkin, expected_checkout: formData.expected_checkout, base_fee: r.price
+            }))
+        };
         const res = await bookingApi.previewBooking(payload);
         const { base_total, final_total, deposit, discounts } = res;
-
         const rawDeposit = isWalkIn ? 0 : Math.round(base_total * 0.3);
         setRawPrice({ total: base_total, deposit: rawDeposit });
-
-        setCalcValues({
-            total_price: final_total,
-            deposit_required: isWalkIn ? 0 : deposit
-        });
-        setFormData(prev => ({
-            ...prev,
-            deposit: isWalkIn ? 0 : deposit
-        }));
-
+        setCalcValues({ total_price: final_total, deposit_required: isWalkIn ? 0 : deposit });
+        setFormData(prev => ({ ...prev, deposit: isWalkIn ? 0 : deposit }));
         setAppliedDiscounts(discounts);
-        if (discounts && discounts.length) {
-            setPromotionName(discounts.map(d => d.name).join(", "));
-        } else {
-            setPromotionName("Không có khuyến mãi phù hợp");
-        }
-
+        setPromotionName(discounts && discounts.length ? discounts.map(d => d.name).join(", ") : "Không có khuyến mãi phù hợp");
         setIsPreviewLocked(true);
-
-    } catch (err) {
-        alert(err.response?.data?.message || "Không thể áp dụng khuyến mãi");
-    }
+    } catch (err) { alert(err.response?.data?.message || "Không thể áp dụng khuyến mãi"); }
   };
 
   const handleUndoDiscount = () => {
-    setCalcValues({
-        total_price: rawPrice.total,
-        deposit_required: rawPrice.deposit
-    });
-    setFormData(prev => ({
-        ...prev,
-        deposit: rawPrice.deposit
-    }));
-
-    setAppliedDiscounts([]);
-    setPromotionName("");
-    setIsPreviewLocked(true);
+    setCalcValues({ total_price: rawPrice.total, deposit_required: rawPrice.deposit });
+    setFormData(prev => ({ ...prev, deposit: rawPrice.deposit }));
+    setAppliedDiscounts([]); setPromotionName(""); setIsPreviewLocked(true);
   };
 
-
   const handleAddRoom = () => {
-      setIsPreviewLocked(false);
-      setPromotionName("");
-      setAppliedDiscounts([]);
-
+      setIsPreviewLocked(false); setPromotionName(""); setAppliedDiscounts([]);
       if (!tempRoomId) return;
       const roomToAdd = roomsList.find(r => r._id === tempRoomId);
-      if (roomToAdd) {
-          if (!selectedRooms.some(r => r._id === roomToAdd._id)) {
-              setSelectedRooms([...selectedRooms, roomToAdd]);
-          }
-          setTempRoomId("");
+      if (roomToAdd && !selectedRooms.some(r => r._id === roomToAdd._id)) {
+          setSelectedRooms([...selectedRooms, roomToAdd]);
       }
+      setTempRoomId("");
   };
 
   const handleRemoveRoom = (roomId) => {
-      setIsPreviewLocked(false);
-      setPromotionName("");
-      setAppliedDiscounts([]);
+      setIsPreviewLocked(false); setPromotionName(""); setAppliedDiscounts([]);
       setSelectedRooms(selectedRooms.filter(r => r._id !== roomId));
   };
-
 
   const handleOpenModal = () => {
     const now = new Date();
     const checkin = setMinutes(setHours(now, 14), 0);
     const checkout = setMinutes(setHours(addDays(now, 1), 12), 0);
-
-    setFormData({
-      customer_id: "",
-      adults: 1, children: 0,
-      expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"),
-      expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"),
-      deposit: 0
-    });
-
-    setSelectedRooms([]);
-    setTempRoomId("");
-    setPromotionName("");
-    setAppliedDiscounts([]);
-    setIsWalkIn(false);
-    setIsPreviewLocked(false);
-    setCalcValues({ total_price: 0, deposit_required: 0 });
-
+    setFormData({ customer_id: "", adults: 1, children: 0, expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"), expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"), deposit: 0 });
+    setSelectedRooms([]); setTempRoomId(""); setPromotionName(""); setAppliedDiscounts([]); setIsWalkIn(false); setIsPreviewLocked(false); setCalcValues({ total_price: 0, deposit_required: 0 });
     setNewCustomer({ email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: "" });
-    setCustomerMode("existing");
-    setCustSearchQuery("");
-    setSelectedCustDisplay(null);
-    setShowCustDropdown(false);
+    setCustomerMode("existing"); setCustSearchQuery(""); setSelectedCustDisplay(null); setShowCustDropdown(false);
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (new Date(formData.expected_checkout) <= new Date(formData.expected_checkin)) {
-        alert("Ngày check-out phải sau ngày check-in!");
-        return;
-      }
+      if (new Date(formData.expected_checkout) <= new Date(formData.expected_checkin)) return alert("Ngày check-out phải sau ngày check-in!");
 
-      let employeeId = null;
-      if (user && user._id) employeeId = user._id;
-      else if (user && user.token) {
-          try {
-              const decoded = jwtDecode(user.token);
-              employeeId = decoded.userId || decoded._id || decoded.id;
-          } catch (err) {}
+      let employeeId = user?._id;
+      if (!employeeId && user?.token) {
+          try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
       }
-
-      if (!employeeId) {
-          alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
-          return;
-      }
-
-      if (selectedRooms.length === 0) {
-          alert("Vui lòng chọn ít nhất một phòng!");
-          return;
-      }
+      if (!employeeId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+      if (selectedRooms.length === 0) return alert("Vui lòng chọn ít nhất một phòng!");
 
       let finalCustomerId = formData.customer_id;
       if (customerMode === "new") {
           const randomPassword = "Khach@" + Math.floor(1000 + Math.random() * 9000);
           let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
-          const payloadRegister = { ...newCustomer, email: emailToUse, password: randomPassword };
-          const resCust = await customerApi.createCustomer(payloadRegister);
+          const resCust = await customerApi.createCustomer({ ...newCustomer, email: emailToUse, password: randomPassword });
           if (resCust && resCust.customerId) finalCustomerId = resCust.customerId;
           else throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
       }
-
-      if (!finalCustomerId) {
-          alert("Vui lòng chọn khách hàng!");
-          return;
-      }
+      if (!finalCustomerId) return alert("Vui lòng chọn khách hàng!");
 
       const payloadBooking = {
-        customer_id: finalCustomerId,
-        handled_by: employeeId,
-        adults: Number(formData.adults),
-        children: Number(formData.children),
-        deposit: Number(formData.deposit),
-        total_fee: Number(calcValues.total_price),
-
-        promotion_code: appliedDiscounts.length > 0
-            ? appliedDiscounts.map(d => d.discount_id)
-            : null,
-
-        expected_checkin: new Date(formData.expected_checkin).toISOString(),
-        expected_checkout: new Date(formData.expected_checkout).toISOString(),
-
+        customer_id: finalCustomerId, handled_by: employeeId, adults: Number(formData.adults), children: Number(formData.children),
+        deposit: Number(formData.deposit), total_fee: Number(calcValues.total_price),
+        promotion_code: appliedDiscounts.length > 0 ? appliedDiscounts.map(d => d.discount_id) : null,
+        expected_checkin: new Date(formData.expected_checkin).toISOString(), expected_checkout: new Date(formData.expected_checkout).toISOString(),
         rooms: selectedRooms.map(r => ({
-            room_id: r._id,
-            expected_checkin: new Date(formData.expected_checkin).toISOString(),
-            expected_checkout: new Date(formData.expected_checkout).toISOString(),
-            base_fee: Number(r.price)
+            room_id: r._id, expected_checkin: new Date(formData.expected_checkin).toISOString(), expected_checkout: new Date(formData.expected_checkout).toISOString(), base_fee: Number(r.price)
         }))
       };
 
       await bookingApi.createBooking(payloadBooking);
-      alert("Tạo đặt phòng thành công!");
-      setIsModalOpen(false);
-      fetchData();
-    } catch (error) {
-        alert("Lỗi: " + (error.response?.data?.message || error.message));
-    }
+      alert("Tạo đặt phòng thành công!"); setIsModalOpen(false); fetchData();
+    } catch (error) { alert("Lỗi: " + (error.response?.data?.message || error.message)); }
   };
 
-  const filteredCustomers = customersList.filter(c => {
-      const query = custSearchQuery.toLowerCase();
-      return c.full_name?.toLowerCase().includes(query) || c.phone_number?.includes(query);
-  });
+  const filteredCustomers = customersList.filter(c => c.full_name?.toLowerCase().includes(custSearchQuery.toLowerCase()) || c.phone_number?.includes(custSearchQuery));
   const selectCustomer = (c) => { setFormData({ ...formData, customer_id: c._id }); setSelectedCustDisplay(c); setCustSearchQuery(""); setShowCustDropdown(false); };
   const clearSelectedCustomer = () => { setFormData({ ...formData, customer_id: "" }); setSelectedCustDisplay(null); setCustSearchQuery(""); };
 
@@ -353,61 +239,57 @@ export default function BookingList() {
   });
 
   const actionCheckIn = (did, bid, rNum) => setConfirmState({
-        open: true,
-        title: `Check-in Phòng ${rNum}`,
-        message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`,
-        confirmText: "Giao phòng",
-        type: "success",
+        open: true, title: `Check-in Phòng ${rNum}`, message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`, confirmText: "Giao phòng", type: "success",
         onConfirm: async () => {
-            try {
-                await bookingApi.checkinBookingDetail(bid, did);
-
-                fetchData();
-                setConfirmState(p => ({...p, open: false}));
-                alert(`Check-in phòng ${rNum} thành công!`);
-
-            } catch(err) {
-                console.error("Lỗi Check-in:", err);
-                const serverError = err.response?.data?.message || err.message;
-                alert(`Không thể Check-in phòng ${rNum}.\nLý do: ${serverError}`);
-            }
+            try { await bookingApi.checkinBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); alert(`Check-in phòng ${rNum} thành công!`); }
+            catch(err) { alert(`Lỗi: ${err.response?.data?.message || err.message}`); }
         }
     });
+
   const actionCheckOut = (did, bid, rNum) => setConfirmState({
-        open: true,
-        title: `Check-out Phòng ${rNum}`,
-        message: `Xác nhận khách trả phòng ${rNum} và hoàn tất thanh toán?`,
-        confirmText: "Trả phòng",
-        type: "warning",
+        open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
         onConfirm: async () => {
             try {
                 await bookingApi.checkoutBookingDetail(bid, did);
-                try {
-                    await receiptApi.createReceipt({
-                        booking_id: bid,
-                        payment: "cash",
-                        note: "Hóa đơn tạo tự động khi checkout"
-                    });
-                    alert("Check-out và tạo hóa đơn THÀNH CÔNG!");
-
-                } catch (err) {
-                    console.error("Chi tiết lỗi:", err);
-                    const serverError = err.response?.data?.message || err.message;
-                    alert(`Check-out xong nhưng KHÔNG TẠO ĐƯỢC HÓA ĐƠN.\nLỗi server báo: ${serverError}`);
-                }
-
-                fetchData();
-                setConfirmState(p => ({...p, open: false}));
-
-            } catch(e) {
-                alert("Lỗi chính khi checkout: " + e.message);
-            }
+                try { await receiptApi.createReceipt({ booking_id: bid, payment: "cash", note: "Hóa đơn tạo tự động khi checkout" }); alert("Check-out và tạo hóa đơn THÀNH CÔNG!"); }
+                catch (err) { alert(`Check-out xong nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`); }
+                fetchData(); setConfirmState(p => ({...p, open: false}));
+            } catch(e) { alert("Lỗi: " + e.message); }
         }
     });
 
-  const actionCancel = (id) => {
-      const r = prompt("Lý do hủy:");
-      if(r) bookingApi.cancelBooking(id, r).then(()=>{ alert("Đã hủy thành công"); fetchData(); }).catch(e=>alert(e.message));
+  const openCancelModal = (id) => {
+    setCancelModal({
+      open: true,
+      bookingId: id,
+      reason: "change_plan",
+      loading: false
+    });
+  };
+
+  const submitCancelBooking = async () => {
+    setCancelModal(prev => ({ ...prev, loading: true }));
+    try {
+      await bookingApi.cancelBooking(cancelModal.bookingId, cancelModal.reason);
+
+      alert("Hủy đặt phòng thành công!");
+      fetchData();
+      setCancelModal({ open: false, bookingId: null, reason: "change_plan", loading: false });
+    } catch (err) {
+      console.error("Cancel Error:", err);
+      if (err.response?.data?.message?.includes("reason") && err.response?.data?.message?.includes("required")) {
+         try {
+             await bookingApi.cancelBooking(cancelModal.bookingId, { reason: cancelModal.reason });
+             alert("Hủy đặt phòng thành công!");
+             fetchData();
+             setCancelModal({ open: false, bookingId: null, reason: "change_plan", loading: false });
+             return;
+         } catch(e) {}
+      }
+
+      alert("Lỗi khi hủy: " + (err.response?.data?.message || err.message));
+      setCancelModal(prev => ({ ...prev, loading: false }));
+    }
   };
 
   const filteredBookings = useMemo(() => {
@@ -532,7 +414,7 @@ export default function BookingList() {
                                     return null;
                                 })}
                                 {['pending', 'confirmed'].includes(b.status) && (
-                                    <button onClick={() => actionCancel(b._id)} className="text-xs text-red-400 hover:text-red-600 hover:underline">
+                                    <button onClick={() => openCancelModal(b._id)} className="text-xs text-red-400 hover:text-red-600 hover:underline">
                                         Hủy đơn
                                     </button>
                                 )}
@@ -653,107 +535,100 @@ export default function BookingList() {
 
                 <div className="border rounded-lg p-4 border-gray-200">
                     <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-1"><FiMapPin/> Chọn Phòng</label>
-
                     <div className="flex gap-2 mb-3">
                         <select
                           className="flex-1 border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
-                          value={tempRoomId}
-                          onChange={e => setTempRoomId(e.target.value)}
+                          value={tempRoomId} onChange={e => setTempRoomId(e.target.value)}
                         >
                           <option value="">-- Chọn phòng phù hợp --</option>
-                          {roomsList
-                             .filter(r => !selectedRooms.some(selected => selected._id === r._id))
-                             .map(r => (
-                                <option key={r._id} value={r._id}>
-                                  {r.room_number} - {r.category_name} ({r.price.toLocaleString()} đ)
-                                </option>
+                          {roomsList.filter(r => !selectedRooms.some(selected => selected._id === r._id)).map(r => (
+                                <option key={r._id} value={r._id}>{r.room_number} - {r.category_name} ({r.price.toLocaleString()} đ)</option>
                           ))}
                         </select>
-                        <button type="button" onClick={handleAddRoom} className="bg-indigo-600 text-white p-2.5 rounded-lg hover:bg-indigo-700 transition shadow-sm">
-                            <FiPlus size={20}/>
-                        </button>
+                        <button type="button" onClick={handleAddRoom} className="bg-indigo-600 text-white p-2.5 rounded-lg hover:bg-indigo-700 transition shadow-sm"><FiPlus size={20}/></button>
                     </div>
-
                     <div className="space-y-2">
                         {selectedRooms.length === 0 && <div className="text-xs text-gray-400 italic text-center py-2 bg-gray-50 rounded">Chưa chọn phòng nào.</div>}
                         {selectedRooms.map((r, idx) => (
                             <div key={r._id} className="flex justify-between items-center bg-white border border-gray-200 p-2.5 rounded-lg shadow-sm hover:border-indigo-300 transition">
-                                <div>
-                                    <span className="font-bold text-indigo-700 text-lg mr-2">{r.room_number}</span>
-                                    <span className="text-xs text-gray-500 uppercase font-semibold">{r.category_name}</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm font-bold text-gray-700">{r.price.toLocaleString()} đ</span>
-                                    <button type="button" onClick={() => handleRemoveRoom(r._id)} className="text-gray-400 hover:text-red-500 transition">
-                                        <FiTrash2 size={18}/>
-                                    </button>
-                                </div>
+                                <div><span className="font-bold text-indigo-700 text-lg mr-2">{r.room_number}</span><span className="text-xs text-gray-500 uppercase font-semibold">{r.category_name}</span></div>
+                                <div className="flex items-center gap-3"><span className="text-sm font-bold text-gray-700">{r.price.toLocaleString()} đ</span><button type="button" onClick={() => handleRemoveRoom(r._id)} className="text-gray-400 hover:text-red-500 transition"><FiTrash2 size={18}/></button></div>
                             </div>
                         ))}
                     </div>
                 </div>
 
                 <div className="border-t border-gray-100 pt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Khuyến mãi
-                    </label>
-
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Khuyến mãi</label>
                     <div className="flex gap-2 mb-2">
-                        <button
-                        type="button"
-                        onClick={handleAutoApplyDiscount}
-                        className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition"
-                        >
-                        Tự động áp dụng khuyến mãi
-                        </button>
-
-                        {promotionName && (
-                        <button
-                            type="button"
-                            onClick={handleUndoDiscount}
-                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition"
-                        >
-                            Hoàn tác
-                        </button>
-                        )}
+                        <button type="button" onClick={handleAutoApplyDiscount} className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Tự động áp dụng khuyến mãi</button>
+                        {promotionName && (<button type="button" onClick={handleUndoDiscount} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition">Hoàn tác</button>)}
                     </div>
-
-                    {promotionName && (
-                        <div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1">
-                        <FiCheckCircle /> {promotionName}
-                        </div>
-                    )}
+                    {promotionName && (<div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1"><FiCheckCircle /> {promotionName}</div>)}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label>
-                        <input
-                            type="text"
-                            disabled
-                            className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed"
-                            value={calcValues.total_price.toLocaleString()}
-                        />
-                    </div>
+                    <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label><input type="text" disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed" value={calcValues.total_price.toLocaleString()}/></div>
                     <div>
                         <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Cọc (VNĐ)</label>
-                        <input
-                            type="number"
-                            disabled={isWalkIn}
-                            className={`w-full border rounded-lg p-2 text-center font-bold outline-none transition
-                                ${isWalkIn ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-white text-emerald-600 border-gray-300 focus:ring-2 focus:ring-emerald-500'}`}
-                            value={formData.deposit}
-                            onChange={(e) => setFormData({...formData, deposit: e.target.value})}
-                        />
+                        <input type="number" disabled={isWalkIn} className={`w-full border rounded-lg p-2 text-center font-bold outline-none transition ${isWalkIn ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-white text-emerald-600 border-gray-300 focus:ring-2 focus:ring-emerald-500'}`} value={formData.deposit} onChange={(e) => setFormData({...formData, deposit: e.target.value})}/>
                     </div>
                 </div>
 
                 <div className="pt-4 mt-4 border-t border-gray-100">
-                     <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
-                        <FiCheckCircle size={18}/> Xác nhận Đặt Phòng
-                     </button>
+                     <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2"><FiCheckCircle size={18}/> Xác nhận Đặt Phòng</button>
                 </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL HỦY ĐẶT PHÒNG --- */}
+      {cancelModal.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-[450px] max-w-full overflow-hidden animate-fade-in scale-100">
+            <div className="bg-red-50 p-4 flex items-center gap-3 border-b border-red-100">
+              <div>
+                <h3 className="text-lg font-bold text-red-700">Xác nhận Hủy Phòng</h3>
+                <p className="text-xs text-red-500">Hành động này không thể hoàn tác</p>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Vui lòng chọn lý do hủy:
+              </label>
+              <select
+                className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-red-500 bg-white text-gray-700"
+                value={cancelModal.reason}
+                onChange={(e) => setCancelModal({ ...cancelModal, reason: e.target.value })}
+              >
+                {CANCELLATION_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-3 italic bg-gray-50 p-2 rounded">
+                Lưu ý: Hủy đặt phòng có thể ảnh hưởng đến điểm uy tín của khách hàng (trừ 2 điểm).
+              </p>
+            </div>
+
+            <div className="bg-gray-50 p-4 flex justify-end gap-3 border-t border-gray-100">
+              <button
+                onClick={() => setCancelModal({ ...cancelModal, open: false })}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-100 transition"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={submitCancelBooking}
+                disabled={cancelModal.loading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition shadow-lg shadow-red-200 disabled:opacity-50 flex items-center gap-2"
+              >
+                {cancelModal.loading ? "Đang xử lý..." : "Xác nhận Hủy"}
+              </button>
+            </div>
           </div>
         </div>
       )}
