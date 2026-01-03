@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
   Employee, RoomStatusLog, Discount, RoomCategory, BookingStatusLog } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
-import { calculateMembershipTier } from "./customerController.js";
 
 // hàm tính số đêm
 const calcNights = (expected_checkin, expected_checkout) => {

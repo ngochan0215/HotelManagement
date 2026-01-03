@@ -313,7 +313,7 @@ export const updateCustomerPoints = async ({ customer_id, points, reason }) => {
     throw new Error("reason là bắt buộc");
   }
 
-  const customer = await Customer.findById(customer_id).session(session);
+  const customer = await Customer.findById(customer_id);
   if (!customer) {
     throw new Error("Không tìm thấy customer");
   }
@@ -322,7 +322,7 @@ export const updateCustomerPoints = async ({ customer_id, points, reason }) => {
   const after = Math.max(before + points, 0); // không cho âm
 
   customer.points = after;
-  await customer.save({ session });
+  await customer.save();
 
   await PointsLog.create(
     {

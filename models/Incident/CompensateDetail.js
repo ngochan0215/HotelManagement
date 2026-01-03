@@ -23,7 +23,7 @@ const compensateDetailSchema = new mongoose.Schema(
 
     resolution: {
       type: String,
-      enum: ["repair", "replace", "discard"],
+      enum: ["repair", "discard"],
       required: true
     },
 
@@ -37,7 +37,6 @@ const compensateDetailSchema = new mongoose.Schema(
     timestamps: { createdAt: "created_at", updatedAt: false },
   }
 );
-
 
 const CompensateDetail = mongoose.models.CompensateDetail || mongoose.model("CompensateDetail", compensateDetailSchema);
 export default CompensateDetail;
