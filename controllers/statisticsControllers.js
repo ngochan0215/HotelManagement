@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 import { Receipt, Booking, ServiceUsage, CompensateTicket,
     EquipmentTicket, Room, RoomStatusLog, BookingDetail,
-    BookingStatusLog
+    BookingStatusLog, Equipment, EquipmentLog, EquipmentInstall,
+    EquipmentCategory, EquipmentImport, InstallDetail,
+    Customer, Service, ServiceCategory, UsageDetail
  } from "../models/index.js";
 
 // các hàm helper
@@ -643,3 +645,573 @@ export const getBookingReport = async (req, res) => {
   const report = await generateBookingReport(from, to);
   res.json(report);
 };
+
+// THIẾT BỊ
+export const generateEquipmentReport = async (from, to) => {
+    const start = new Date(from);
+    const end = new Date(to);
+
+    const categories = await EquipmentCategory.find().lean();
+    const equipments = await Equipment.find().lean();
+
+    const categoryMap = {};
+    categories.forEach(c => {
+        categoryMap[c._id.toString()] = c;
+    });
+
+    // trạng thái mới nhất của các thiết bị
+    const latestLogs = await EquipmentLog.aggregate([
+        { $sort: { start_time: -1 } },
+        {
+        $group: {
+            _id: "$equipment_id",
+            status: { $first: "$status" },
+            condition: { $first: "$condition" },
+            room_id: { $first: "$room_id" }
+        }
+        }
+    ]);
+
+    const equipmentState = {};
+    latestLogs.forEach(l => {
+        equipmentState[l._id.toString()] = l;
+    });
+
+    const summary = {
+        total_equipment: equipments.length,
+        in_stock: 0,
+        in_use: 0,
+        maintenance: 0,
+        lost: 0,
+        disposed: 0,
+        total_asset_value: 0
+    };
+
+    equipments.forEach(e => {
+        const state = equipmentState[e._id.toString()];
+        const category = categoryMap[e.category_id.toString()];
+        const price = category?.price || 0;
+
+        summary.total_asset_value += price;
+
+        if (!state) {
+        summary.in_stock++;
+        return;
+        }
+
+        switch (state.status) {
+        case "in-use":
+            summary.in_use++;
+            break;
+        case "maintenance":
+            summary.maintenance++;
+            break;
+        case "lost":
+            summary.lost++;
+            break;
+        case "disposed":
+            summary.disposed++;
+            break;
+        default:
+            summary.in_stock++;
+        }
+    });
+
+    const byCategory = {};
+
+    equipments.forEach(e => {
+        const catId = e.category_id.toString();
+        const cat = categoryMap[catId];
+
+        if (!byCategory[catId]) {
+        byCategory[catId] = {
+            category_name: cat.name,
+            total: 0,
+            in_use: 0,
+            in_stock: 0,
+            maintenance: 0,
+            broken: 0,
+            total_value: 0
+        };
+        }
+
+        const row = byCategory[catId];
+        const state = equipmentState[e._id.toString()];
+
+        row.total++;
+        row.total_value += cat.price;
+
+        if (!state) {
+        row.in_stock++;
+        return;
+        }
+
+        if (state.condition === "broken") row.broken++;
+
+        switch (state.status) {
+        case "in-use":
+            row.in_use++;
+            break;
+        case "maintenance":
+            row.maintenance++;
+            break;
+        default:
+            row.in_stock++;
+        }
+    });
+
+    // phiếu nhập thiết bị
+    const importDetails = await EquipmentImport.find({
+        created_at: { $gte: start, $lte: end }
+    })
+        .populate("category_id", "name price")
+        .lean();
+
+    const importReport = importDetails.map(d => ({
+        category: d.category_id.name,
+        quantity: d.import_quantity,
+        unit_price: d.import_price || d.category_id.price,
+        total: d.import_quantity * (d.import_price || d.category_id.price),
+        date: d.created_at
+    }));
+
+    // phiếu lắp đặt thiết bị
+    const installDetails = await InstallDetail.find()
+        .populate({
+            path: "equipment_id",
+            populate: { path: "category_id", select: "name" }
+        })
+        .populate("install_id", "room_id")
+        .lean();
+
+    const byRoom = {};
+
+    installDetails.forEach(d => {
+        const roomId = d.install_id?.room_id?.toString() || "unknown";
+        if (!byRoom[roomId]) {
+        byRoom[roomId] = {
+            room_id: roomId,
+            total_equipment: 0
+        };
+        }
+        byRoom[roomId].total_equipment++;
+    });
+
+    
+    const maintenanceLogs = await EquipmentLog.find({
+        condition: { $in: ["maintenance", "broken"] },
+        start_time: { $gte: start, $lte: end }
+    })
+        .populate({
+        path: "equipment_id",
+        populate: { path: "category_id", select: "name" }
+        })
+        .lean();
+
+    const maintenanceReport = maintenanceLogs.map(l => ({
+        equipment_id: l.equipment_id._id,
+        category: l.equipment_id.category_id.name,
+        condition: l.condition,
+        start_time: l.start_time,
+        end_time: l.end_time
+    }));
+
+    return {
+        meta: { from, to, generated_at: new Date() },
+        summary,
+        by_category: Object.values(byCategory),
+        import_report: importReport,
+        by_room: Object.values(byRoom),
+        maintenance_report: maintenanceReport
+    };
+};
+
+export const getEquipmentsReport = async (req, res) => {
+  const { from, to } = req.query;
+  const report = await generateEquipmentReport(from, to);
+  res.json(report);
+};
+
+// DỊCH VỤ
+export const generateServiceReport = async (from, to) => {
+
+    const start = new Date(from);
+    const end = new Date(to);
+
+    const usageTickets = await ServiceUsage.find({
+        created_at: { $gte: start, $lte: end }
+    }).lean();
+
+    const ticketIds = usageTickets.map(t => t._id);
+
+    if (ticketIds.length === 0) {
+        return {
+            meta: { from, to, generated_at: new Date() },
+            summary: {},
+            tables: {},
+            charts: {}
+        };
+    }
+
+    // chi tiết phiếu dùng dịch vụ
+    const usageDetails = await UsageDetail.find({
+        ticket_id: { $in: ticketIds }
+    })
+        .populate({
+            path: "service_id",
+            populate: { path: "category_id", select: "name" }
+        }).lean();
+
+    // summary
+    const summary = {
+        total_orders: usageTickets.length,
+        total_services_used: 0,
+        total_revenue: 0
+    };
+
+    // option group by
+    const byService = {};
+    const byCategory = {};
+    const byDay = {};
+    const byRoom = {};
+
+    usageDetails.forEach(d => {
+        const service = d.service_id;
+        if (!service) return;
+
+        const serviceId = service._id.toString();
+        const serviceName = service.name;
+        const categoryName = service.category_id?.name || "Khác";
+
+        const quantity = Number(d.storage_quantity || 1);
+        const price = Number(d.price || service.price || 0);
+        const revenue = quantity * price;
+
+        summary.total_services_used += quantity;
+        summary.total_revenue += revenue;
+
+        // by service
+        if (!byService[serviceId]) {
+            byService[serviceId] = {
+                service_id: serviceId,
+                service_name: serviceName,
+                category: categoryName,
+                quantity: 0,
+                revenue: 0
+            };
+        }
+        byService[serviceId].quantity += quantity;
+        byService[serviceId].revenue += revenue;
+
+        // by category
+        if (!byCategory[categoryName]) {
+            byCategory[categoryName] = {
+                category: categoryName,
+                quantity: 0,
+                revenue: 0,
+            };
+        }
+        byCategory[categoryName].quantity += quantity;
+        byCategory[categoryName].revenue += revenue;
+
+        /* ---- by day ---- */
+        const ticket = usageTickets.find(t => t._id.toString() === d.ticket_id.toString());
+        if (ticket) {
+            const day = ticket.created_at.toISOString().split("T")[0];
+            if (!byDay[day]) {
+                byDay[day] = { date: day, quantity: 0, revenue: 0 };
+            }
+            byDay[day].quantity += quantity;
+            byDay[day].revenue += revenue;
+        }
+    });
+
+    const totalCategoryRevenue = Object.values(byCategory)
+        .reduce((s, c) => s + c.revenue, 0);
+
+    const revenueByCategoryRatio = Object.values(byCategory).map(c => ({
+        label: c.category,
+        value: Number(((c.revenue / totalCategoryRevenue) * 100).toFixed(2))
+    }));
+
+    // const usageByCategoryRatio = Object.values(byCategory).map(c => ({
+    //     label: c.category,
+    //     value: c.quantity
+    // }));
+
+    const topRevenueCategory = Object.values(byCategory)
+        .sort((a, b) => b.revenue - a.revenue)[0];
+
+    const topUsageCategory = Object.values(byCategory)
+        .sort((a, b) => b.quantity - a.quantity)[0];
+
+    const sortedServices = Object.values(byService)
+        .sort((a, b) => b.revenue - a.revenue);
+
+    const topRevenueService = sortedServices[0];
+    const topUsageService = Object.values(byService)
+        .sort((a, b) => b.quantity - a.quantity)[0];
+
+    const top3Revenue = sortedServices
+        .slice(0, 3)
+        .reduce((s, x) => s + x.revenue, 0);
+
+    const revenueConcentration = summary.total_revenue === 0
+        ? 0
+        : Number(((top3Revenue / summary.total_revenue) * 100).toFixed(2));
+
+    const servicePerformance = Object.values(byService).map(s => ({
+        service_name: s.service_name,
+        category: s.category,
+        quantity: s.quantity,
+        revenue: s.revenue,
+        revenue_per_use:
+            s.quantity === 0 ? 0 : Number((s.revenue / s.quantity).toFixed(2))
+    }));
+
+    return {
+        meta: {
+            from,
+            to,
+            generated_at: new Date()
+        },
+        summary: {
+            ...summary,
+            avg_order_value:
+                summary.total_orders === 0
+                ? 0
+                : Number((summary.total_revenue / summary.total_orders).toFixed(2)),
+
+            top_revenue_category: topRevenueCategory?.category || null,
+            top_usage_category: topUsageCategory?.category || null,
+            top_revenue_service: topRevenueService?.service_name || null,
+            top_usage_service: topUsageService?.service_name || null,
+            revenue_concentration: revenueConcentration
+        },
+        tables: {
+            service_revenue: Object.values(byService),
+            category_revenue: Object.values(byCategory),
+            usage_by_day: Object.values(byDay),
+            usage_by_room: Object.values(byRoom),
+            service_performance: servicePerformance
+        },
+        charts: {
+            revenue_by_category_ratio: revenueByCategoryRatio,
+            top_services: Object.values(byService)
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 5)
+                .map(s => ({
+                    label: s.service_name,
+                    value: s.revenue
+                })),
+            revenue_trend: Object.values(byDay).map(d => ({
+                date: d.date,
+                value: d.revenue
+        })),
+        category_distribution: Object.values(byCategory).map(c => ({
+            label: c.category,
+            value: c.revenue
+        }))
+        }
+    };
+};
+
+export const getServicesReport = async (req, res) => {
+  const { from, to } = req.query;
+  const report = await generateServiceReport(from, to);
+  res.json(report);
+};
+
+// KHÁCH HÀNG
+export const generateCustomerReport = async (from, to) => {
+    const start = new Date(from);
+    const end = new Date(to);
+
+    const customers = await Customer.find().lean();
+
+    const bookings = await Booking.find({
+        created_at: { $gte: start, $lte: end }
+    }).lean();
+
+    const bookingIds = bookings.map(b => b._id);
+
+    const statusLogs = await BookingStatusLog.aggregate([
+        { $match: { booking_id: { $in: bookingIds } } },
+        { $sort: { start_time: -1 } },
+        {
+            $group: {
+                _id: "$booking_id",
+                status: { $first: "$status" }
+            }
+        }
+    ]);
+
+    const statusMap = {};
+    statusLogs.forEach(s => {
+        statusMap[s._id.toString()] = s.status;
+    });
+
+    const summary = {
+        total_customers: customers.length,
+        active: 0,
+        inactive: 0,
+        banned: 0,
+        new_customers: 0,
+        total_booking: bookings.length,
+        total_revenue: 0
+    };
+
+    customers.forEach(c => {
+        if (c.status === "active") summary.active++;
+        else if (c.status === "inactive") summary.inactive++;
+        else if (c.status === "banned") summary.banned++;
+
+        if (c.created_at >= start && c.created_at <= end) {
+            summary.new_customers++;
+        }
+    });
+
+    // map booking to customer
+    const customerStats = {};
+
+    bookings.forEach(b => {
+        const cid = b.customer_id.toString();
+        if (!customerStats[cid]) {
+            customerStats[cid] = {
+                total_booking: 0,
+                completed: 0,
+                cancelled: 0,
+                revenue: 0,
+                last_booking: b.created_at
+            };
+        }
+
+        const status = statusMap[b._id.toString()] || "pending";
+
+        customerStats[cid].total_booking++;
+        if (b.created_at > customerStats[cid].last_booking)
+            customerStats[cid].last_booking = b.created_at;
+
+        if (status === "completed") {
+            customerStats[cid].completed++;
+            customerStats[cid].revenue += b.total_fee || 0;
+            summary.total_revenue += b.total_fee || 0;
+        }
+
+        if (status === "cancelled") {
+            customerStats[cid].cancelled++;
+        }
+    });
+    
+    // group by loyalty
+    const byLoyalty = {};
+    customers.forEach(c => {
+        if (!byLoyalty[c.loyalty]) {
+            byLoyalty[c.loyalty] = {
+                loyalty: c.loyalty,
+                customers: 0,
+                revenue: 0
+            };
+        }
+
+        byLoyalty[c.loyalty].customers++;
+        byLoyalty[c.loyalty].revenue += customerStats[c._id]?.revenue || 0;
+    });
+
+    // group by frequency
+    const byFrequency = {
+        one_time: 0,
+        returning: 0,
+        loyal: 0
+    };
+
+    customers.forEach(c => {
+        if (c.booking_count === 1) byFrequency.one_time++;
+        else if (c.booking_count >= 2 && c.booking_count <= 3) byFrequency.returning++;
+        else if (c.booking_count >= 4) byFrequency.loyal++;
+    });
+
+    // top customers
+    const topCustomers = customers
+        .map(c => ({
+            customer_id: c._id,
+            full_name: c.full_name,
+            phone_number: c.phone_number,
+            booking_count: c.booking_count,
+            total_spent: customerStats[c._id]?.revenue || 0,
+            last_booking: customerStats[c._id]?.last_booking || null
+        }))
+        .sort((a, b) => b.total_spent - a.total_spent)
+        .slice(0, 10);
+    
+    // track cancellation
+    const cancellationReport = customers
+        .map(c => {
+            const stat = customerStats[c._id];
+            if (!stat || stat.total_booking === 0) return null;
+
+            return {
+                customer_id: c._id,
+                full_name: c.full_name,
+                total_booking: stat.total_booking,
+                cancelled: stat.cancelled,
+                cancel_rate: Number(
+                    ((stat.cancelled / stat.total_booking) * 100).toFixed(2)
+                )
+            };
+        })
+        .filter(Boolean);
+
+    // group by age and nationality
+    const byNationality = {};
+    customers.forEach(c => {
+        byNationality[c.nationality] = (byNationality[c.nationality] || 0) + 1;
+    });
+
+    const byAgeGroup = {
+        "<18": 0,
+        "18-25": 0,
+        "26-35": 0,
+        "36-50": 0,
+        ">50": 0
+    };
+
+    const now = new Date();
+
+    customers.forEach(c => {
+        const age = Math.floor(
+            (now - new Date(c.date_birth)) / (365 * 24 * 60 * 60 * 1000)
+        );
+
+        if (age < 18) byAgeGroup["<18"]++;
+        else if (age <= 25) byAgeGroup["18-25"]++;
+        else if (age <= 35) byAgeGroup["26-35"]++;
+        else if (age <= 50) byAgeGroup["36-50"]++;
+        else byAgeGroup[">50"]++;
+    });
+
+    return {
+        meta: { from, to, generated_at: new Date() },
+        summary,
+        by_loyalty: Object.values(byLoyalty),
+        by_frequency: byFrequency,
+        top_customers: topCustomers,
+        cancellation_report: cancellationReport,
+        by_nationality: Object.entries(byNationality).map(([k, v]) => ({
+            nationality: k,
+            customers: v
+        })),
+        by_age_group: Object.entries(byAgeGroup).map(([k, v]) => ({
+            age_group: k,
+            customers: v
+        }))
+    };
+};
+
+export const getCustomersReport = async (req, res) => {
+  const { from, to } = req.query;
+  const report = await generateCustomerReport(from, to);
+  res.json(report);
+};
+
+// SỰ CỐ
