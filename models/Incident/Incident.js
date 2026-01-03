@@ -16,11 +16,14 @@ const incidentSchema = new mongoose.Schema(
     compensation_status: { type: String, enum: ["none", "pending", "done"], default: "none", required: true },
 
     occured_at: { type: Date, required: true },
-    fixed_date: { type: Date, default: null },
-    finish_date: { type: Date, default: null },
+    resolved_at: { type: Date, default: null },
+    closed_at: { type: Date, default: null },
 
     assignee_info: {
-      
+      assignee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
+      assignee_name: { type: String, trim: true },    
+      assignee_department: { type: String, trim: true },
+      assigned_at: { type: Date, default: null },      // thời điểm nhận xử lý
     }
   },
   {

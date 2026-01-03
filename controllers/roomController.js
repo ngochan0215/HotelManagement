@@ -651,7 +651,16 @@ export const reevaluateRoomStatus = async (room_id) => {
     );
   });
 
-  await Room.findByIdAndUpdate(room_id, {
-    status: hasCriticalProblem ? "maintenance" : "available",
+  const status = hasCriticalProblem ? "maintenance" : "available";
+  await Room.findByIdAndUpdate(room_id, { status });
+
+  // Ghi log trạng thái phòng
+  await RoomStatusLog.create({
+      room_id: room_id,
+      status,
+      start_time: new Date(),
+      end_time: null,
+      note: "Update status phòng theo sự cố + phiếu đền bù",
+      handled_by: req.user.userId || null,
   });
 };

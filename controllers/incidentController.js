@@ -1,5 +1,6 @@
 import { Incident, Room, User, CompensateTicket, Equipment,
-  EquipmentCategory, Employee, Customer, Booking, EquipmentLog
+  EquipmentCategory, Employee, Customer, Booking, EquipmentLog, 
+  IncidentLog, CompensateDetail
  } from "../models/index.js";
 import mongoose from "mongoose";
 import { reevaluateRoomStatus } from "../controllers/roomController.js";
@@ -129,7 +130,7 @@ export const updateEquipmentByResolution = async ({
       end_time: null,
       note:
         note ||
-        `Update theo resolution: ${resolution}`,
+        `Update theo sự cố và phiếu đền bù: ${resolution}`,
       handled_by,
     },
   );
@@ -240,10 +241,12 @@ export const createIncident = async (req, res) => {
   }
 };
 
+// update thông tin cơ bản
 export const updateIncident = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const actor = await Employee.findOne({ user_id: req.user.userId });
 
     const incident = await Incident.findById(id);
     if (!incident) {
@@ -256,43 +259,10 @@ export const updateIncident = async (req, res) => {
       });
     }
 
-    // xác định các field có thể update được
-    let allowedFields = [];
-
-    switch (incident.status) {
-      case "reported":
-        allowedFields = [
-          "description",
-          "severity",
-          "type",
-          "caused_by",
-          "causer_id",
-          "occured_at",
-          "room_id",
-          "booking_id",
-          "status",
-        ];
-        break;
-
-      case "fixing":
-        allowedFields = [
-          "description",
-          "severity",
-          "fixed_date",
-          "status",
-        ];
-        break;
-
-      case "fixed":
-        allowedFields = [
-          "finish_date",
-          "note",
-          "status",
-        ];
-        break;
-
-      default:
-        return res.status(400).json({ message: "Trạng thái sự cố không hợp lệ." });
+    if (incident.status !== "new") {
+      return res.status(400).json({
+        message: "Chỉ có thể chỉnh sửa thông tin cơ bản của sự cố khi nó ở trạng thái new.",
+      });
     }
 
     if (updates.reporter_id) {
@@ -306,6 +276,7 @@ export const updateIncident = async (req, res) => {
       if (!room) {
         return res.status(404).json({ message: "Phòng không tồn tại." });
       }
+      incident.room_id = updates.room_id;
     }
 
     if (updates.booking_id) {
@@ -313,6 +284,7 @@ export const updateIncident = async (req, res) => {
       if (!booking) {
         return res.status(404).json({ message: "Đơn đặt phòng không tồn tại." });
       }
+      incident.booking_id = updates.booking_id;
     }
 
     if (updates.causer_id) {
@@ -320,6 +292,7 @@ export const updateIncident = async (req, res) => {
       if (!causer) {
         return res.status(404).json({ message: "Người gây ra sự cố không tồn tại." });
       }
+      incident.causer_id = updates.causer_id;
     }
 
     if (updates.caused_by && updates.caused_by !== "other" && !updates.causer_id) {
@@ -332,61 +305,35 @@ export const updateIncident = async (req, res) => {
     if (updates.type && !validTypes.includes(updates.type)) {
       return res.status(400).json({ message: "Loại sự cố không hợp lệ." });
     }
+    incident.type = updates.type;
 
     const validSeverity = ["low", "medium", "high", "critical"];
     if (updates.severity && !validSeverity.includes(updates.severity)) {
       return res.status(400).json({ message: "Mức độ nghiêm trọng không hợp lệ." });
     }
+    incident.severity = updates.severity;
 
     const validCauseby = ["employee", "customer", "other"];
     if (updates.caused_by && !validCauseby.includes(updates.caused_by)) {
       return res.status(400).json({ message: "Loại người gây ra sự cố không hợp lệ." });
     }
-
-    if (updates.status && updates.status !== incident.status) {
-      if (!isValidStatusTransition(incident.status, updates.status)) {
-        return res.status(400).json({
-          message: `Không thể chuyển trạng thái từ ${incident.status} sang ${updates.status}`,
-        });
-      }
-
-      if (
-        updates.status === "closed" &&
-        incident.compensation_status === "pending"
-      ) {
-        return res.status(400).json({
-          message: "Chưa thể đóng sự cố khi quy trình đền bù đang diễn ra.",
-        });
-      }
-
-      console.log("updates.status:", updates.status);
-
-      if (updates.status === "fixing") {
-        if (incident.caused_by !== "other" || (updates.caused_by && updates.caused_by !== "other")) {
-          return res.status(400).json({
-            message: "Chỉ có thể chỉnh sửa trạng thái của sự cố sang fixing thông qua phiếu đền bù.",
-          });
-        }
-        incident.fixed_date = new Date();
-      }
-
-      if (updates.status === "closed") {
-        if (incident.caused_by !== "other" || (updates.caused_by && updates.caused_by !== "other")) {
-          return res.status(400).json({
-            message: "Sự cố chỉ đóng sau khi phiếu đền bù hoàn thành.",
-          });
-        }
-        incident.finish_date = new Date();
-      }
-    }
-
-    allowedFields.forEach((field) => {
-      if (updates[field] !== undefined) {
-        incident[field] = updates[field];
-      }
-    });
+    incident.caused_by = updates.caused_by;
 
     await incident.save();
+
+    const action = updates.severity ? "severity_changed" : "updated";
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action,
+      from_status: incident.status,
+      to_status: null,
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: "Cập nhật thông tin sự cố trước khi phân công xử lý."
+    });
 
     return res.status(200).json({
       message: "Cập nhật sự cố thành công.",
@@ -396,6 +343,197 @@ export const updateIncident = async (req, res) => {
     return res.status(500).json({
       message: "SERVER ERROR: " + error.message,
     });
+  }
+};
+
+// phân công người thực hiện
+export const assignIncident = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignee_id, note } = req.body;
+    const actor_id = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(assignee_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID người thực hiện không hợp lệ",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID sự cố không hợp lệ",
+      });
+    }
+
+    const incident = await Incident.findById(id);
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sự cố",
+      });
+    }
+
+    if (["resolved", "closed"].includes(incident.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể phân công sự cố đã xử lý xong",
+      });
+    }
+
+    const assignee = await Employee.findById(assignee_id);
+    if (!assignee) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhân viên được phân công",
+      });
+    }
+
+    const actor = await Employee.findOne({ user_id: actor_id });
+    if (!actor) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người phân công sự cố.",
+      });
+    }
+
+    const prevStatus = incident.status;
+
+    // cập nhật incident
+    incident.assignee_info = {
+      assignee_id: assignee._id,
+      assignee_name: assignee.full_name || assignee.username,
+      assignee_role: assignee.position,
+      assigned_at: new Date(),
+    };
+
+    incident.status = "in_progress";
+    await incident.save();
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "assigned",
+      from_status: prevStatus,
+      to_status: "in_progress",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Phân công xử lý sự cố",
+    });
+
+    return res.json({
+      success: true,
+      message: "Phân công xử lý sự cố thành công",
+      data: incident,
+    });
+  } catch (error) {
+    console.error("assignIncident error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+    });
+  }
+};
+
+// xác nhận hoàn thành, nhân viên thực hiện hoặc quản lý xác nhận đều được
+export const resolveIncident = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
+    const actor = await Employee.findOne({ user_id: userId });
+
+    if (!note)
+      return res.status(400).json({ message: "Thiếu ghi chú xử lý." });
+
+    const incident = await Incident.findById(id);
+    if (!incident)
+      return res.status(404).json({ message: "Không tìm thấy sự cố." });
+
+    if (incident.status !== "in_progress")
+      return res.status(400).json({ message: "Không thể xác nhận ở trạng thái hiện tại." });
+
+    const assignee_id = incident.assignee_info.assignee_id;
+    if (user.system_role !== "manager" && assignee_id.toString() !== userId.toString())
+      return res.status(403).json({ message: "Bạn không được phân công xử lý sự cố này." });
+
+    const oldStatus = incident.status;
+
+    incident.status = "resolved";
+    incident.resolved_at = new Date();
+
+    await incident.save();
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "resolved",
+      from_status: oldStatus,
+      to_status: "resolved",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận đã hoàn thành xử lý sự cố"
+    });
+
+    res.json({ success: true, message: "Đã xác nhận xử lý xong." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const closedIncident = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const userId = req.user.userId;
+    const actor = await Employee.findOne({ user_id: userId });
+
+    if (!note)
+      return res.status(400).json({ message: "Thiếu ghi chú xử lý." });
+
+    if (incident.caused_by !== "other") {
+      return res.status(400).json({ message: "Sự cố được tự động đóng khi đền bù hoàn thành." });
+    }
+
+    const incident = await Incident.findById(id);
+    if (!incident)
+      return res.status(404).json({ message: "Không tìm thấy sự cố." });
+
+    if (incident.status !== "resolved")
+      return res.status(400).json({ message: "Không thể xác nhận ở trạng thái hiện tại." });
+
+    if ( incident.compensation_status !== "done" ) {
+      return res.status(400).json({
+        message: "Chưa thể đóng sự cố khi quy trình đền bù chưa kết thúc.",
+      });
+    }
+
+    const oldStatus = incident.status;
+
+    incident.status = "closed";
+    incident.closed_at = new Date();
+
+    await incident.save();
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "closed",
+      from_status: oldStatus,
+      to_status: "closed",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận đã xử lý xong và đóng sự cố."
+    });
+
+    res.json({ success: true, message: "Đã xác nhận xử lý xong." });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -534,6 +672,7 @@ export const createCompensateTicket = async (req, res) => {
   try {
     const { incident_id } = req.params;
     const { payer_type, payer_id, compensation_details, note } = req.body;
+    const actor = await Employee.findOne({ user_id: req.user.userId });
 
     if ( !payer_type || !compensation_details ) {
       return res.status(404).json({ message: "Yêu cầu nhập đầy đủ thông tin." });
@@ -581,6 +720,7 @@ export const createCompensateTicket = async (req, res) => {
       });
     }
 
+    // thêm phiếu đền bù
     const ticket = await CompensateTicket.create([{
       incident_id,
       payer_type,
@@ -591,11 +731,30 @@ export const createCompensateTicket = async (req, res) => {
       status: "pending"
     }], { session });
 
+    const detailDocs = details.map(item => ({
+      ticket_id: ticket[0]._id,
+      equipment_id: item.equipment_id || null,
+      broken_state: item.broken_state,
+      resolution: item.resolution,
+      penalty_fee: item.penalty_fee,
+    }));
+
+    await CompensateDetail.insertMany(detailDocs, { session });
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "compensation_updated",
+      from_status: incident.compensation_status,
+      to_status: "pending",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận đã xử lý xong và đóng sự cố."
+    });
+
     // cập nhật tình trạng sự cố
     incident.compensation_status = "pending";
-    incident.status = "fixing";
-    incident.fixed_date = new Date();
-
     await incident.save({ session });
 
     await session.commitTransaction();
@@ -749,7 +908,7 @@ export const updateCompensateTicket = async (req, res) => {
 
     if (ticket.status !== "pending") {
       return res.status(400).json({
-        message: "Không thể cập nhật phiếu đền bù khi đã hoàn tất.",
+        message: "Không thể cập nhật phiếu đền bù khi đang trong trạng thái xử lý.",
       });
     }
 
@@ -802,14 +961,14 @@ export const updateCompensateTicket = async (req, res) => {
       updates.total_amount = totalAmount;
     }
 
-    // ✅ Validate tổng tiền (nếu update trực tiếp)
+    // Validate tổng tiền (nếu update trực tiếp)
     if (updates.total_amount != null && updates.total_amount < 0) {
       return res.status(400).json({
         message: "Tổng tiền bồi thường không hợp lệ.",
       });
     }
 
-    // ✅ Update handler (nhân viên xử lý)
+    // Update handler (nhân viên xử lý)
     if (updates.handled_by) {
       const handler = await User.findById(updates.handled_by);
       if (!handler) {
@@ -844,6 +1003,8 @@ export const confirmCompensationPaid = async (req, res) => {
 
   try {
     const { id } = req.params; // compensate ticket id
+    const userId = req.user.userId;
+    const actor = await Employee.findOne({ userId });
 
     const ticket = await CompensateTicket.findById(id)
       .session(session)
@@ -873,10 +1034,37 @@ export const confirmCompensationPaid = async (req, res) => {
     await ticket.save({ session });
 
     // update incident
+    const oldStatus = incident.status;
+
     incident.status = "closed";
     incident.compensation_status = "done";
-    incident.finish_date = new Date();
+    incident.closed_at = new Date();
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "closed",
+      from_status: oldStatus,
+      to_status: "closed",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận đã xử lý đền bù xong và đóng sự cố."
+    });
+
     await incident.save({ session });
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "compensation_updated",
+      from_status: "pending",
+      to_status: "done",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận đã xử lý xong và đóng sự cố."
+    });
 
     await reevaluateRoomStatus(ticket.room_id);
 

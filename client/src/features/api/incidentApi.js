@@ -18,6 +18,16 @@ export const incidentApi = {
     return res.data;
   },
 
+  assignIncident: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/${id}/assign`, data, getAuthHeader());
+    return res.data;
+  },
+
+  resolveIncident: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/${id}/resolved`, data, getAuthHeader());
+    return res.data;
+  },
+
   getAllIncidents: async (params = {}) => {
     const res = await axios.get(`${BASE_URL}/all`, {
       ...getAuthHeader(),
@@ -31,8 +41,8 @@ export const incidentApi = {
     return res.data;
   },
 
-  createCompensationTicket: async (data) => {
-      const res = await axios.post(`${BASE_URL}/compensation-ticket/add`, data, getAuthHeader());
-      return res.data;
-    }
+  createCompensationTicket: async (id, data) => {
+    const res = await axios.post(`${BASE_URL}/${id}/compensation-ticket/add`, data, getAuthHeader());
+    return res.data;
+  }
 };

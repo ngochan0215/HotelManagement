@@ -12,10 +12,14 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const incidentAssigneeId = incident.assignee?._id || incident.assignee || "";
 
   const isManager = user?.role === "manager" || user?.role === "admin";
-  const isAssignee = incidentAssigneeId.toString() === currentUserId.toString();
+  const isAssignee = incidentAssigneeId?.toString() === currentUserId?.toString();
 
   const [department, setDepartment] = useState(incident?.department || "");
-  const [assignee, setAssignee] = useState(incidentAssigneeId);
+  //const [assignee, setAssignee] = useState(incidentAssigneeId);
+  const [assignee, setAssignee] = useState(
+    incidentAssigneeId ? incidentAssigneeId.toString() : ""
+    );
+
   const [severityAdmin, setSeverityAdmin] = useState(incident?.severity_admin || incident?.severity_user);
 
   const [showCompensation, setShowCompensation] = useState(false);
@@ -63,7 +67,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
 
   const handleAssigneeChange = (empId) => {
     setAssignee(empId);
-    if (status === "new" && empId) setStatus("in_progress");
+    //if (status === "new" && empId) setStatus("in_progress");
   };
 
   const handleUpdate = async (nextStatus = null) => {
@@ -91,6 +95,26 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
       alert("Lỗi: " + (err.response?.data?.message || err.message));
     }
   };
+
+  const handleAssign = async () => {
+    if (!assignee) 
+        return alert("Vui lòng chọn người xử lý");
+
+    try {
+        console.log("IM CALLED");
+        await incidentApi.assignIncident(incident._id, {
+            assignee_id: assignee,
+            note: processingNote,
+        });
+
+        alert("Đã phân công xử lý sự cố");
+        onUpdated?.();
+        onClose();
+    } catch (err) {
+        alert(err.response?.data?.message || "Lỗi phân công");
+    }
+    };
+
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
@@ -157,7 +181,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
                           >
                               <option value="">-- Chọn nhân viên --</option>
                               {employees.map(e => (
-                                  <option key={e.user_id} value={e.user_id}>
+                                  <option key={e._id.toString()} value={e._id.toString()}>
                                       {e.full_name} ({getRoleLabel(e.position)})
                                   </option>
                               ))}
@@ -199,12 +223,25 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
                         </button>
                     )}
 
-                    <button
+                    {/* <button
                         onClick={() => handleUpdate()}
                         className="px-5 py-2 rounded bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-sm shadow-sm"
                     >
                         Lưu
-                    </button>
+                    </button> */}
+                    <button
+  onClick={() => {
+    if (status === "new" && assignee) {
+      handleAssign();      // gọi API assign
+    } else {
+      handleUpdate();      // update thường
+    }
+  }}
+  className="px-5 py-2 rounded bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-sm shadow-sm"
+>
+  Lưu
+</button>
+
 
                     {(status === 'resolved' || status === 'fixed') && (
                         <button

@@ -20,8 +20,7 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
 
     setLoading(true);
     try {
-      await incidentApi.createCompensationTicket({
-        incident_id: incident._id,
+      await incidentApi.createCompensationTicket(incident._id, {
         total_fee: Number(amount),
         description: note || `Bồi thường cho sự cố: ${incident.type}`,
       });
