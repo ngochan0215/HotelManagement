@@ -67,8 +67,8 @@ export const getAllRooms = async (req, res) => {
             .populate({
                 path: "roomStatusLog",
                 match: {
-                start_time: { $lte: new Date() },
-                end_time: { $gte: new Date() },
+                  start_time: { $lte: new Date() },
+                  end_time: { $gte: new Date() },
                 },
                 select: "status start_time end_time note",
             })
@@ -116,87 +116,234 @@ export const getRoomById = async (req, res) => {
     }
 };
 
+// cập nhật phòng
+// export const updateRoom = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { category_id, room_number, room_status, start_time, end_time, note } = req.body;
+
+//     if (!mongoose.Types.ObjectId.isValid(id))
+//       return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
+
+//     const room = await Room.findById(id);
+//     if (!room)
+//       return res.status(404).json({ success: false, message: "Không tìm thấy phòng!" });
+
+//     if (category_id) {
+//       if (!mongoose.Types.ObjectId.isValid(category_id))
+//         return res.status(400).json({ success: false, message: "ID loại phòng không hợp lệ!" });
+
+//       const category = await RoomCategory.findById(category_id);
+//       if (!category)
+//         return res.status(404).json({ success: false, message: "Không tìm thấy loại phòng!" });
+
+//       room.category_id = category_id;
+//     }
+
+//       if (room_number !== undefined) {
+//         const existing = await Room.findOne({ room_number, _id: { $ne: id } });
+//         if (existing)
+//           return res.status(400).json({ success: false, message: "Số phòng đã tồn tại!" });
+
+//         room.room_number = room_number;
+//       }
+
+//       if (room_status) {
+//         const validStatuses = ["available", "reserved", "booked", "occupied", "cleaning", "maintenance"];
+//         if (!validStatuses.includes(room_status))
+//           return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
+
+//         if (room_status !== "available" && (!start_time || !end_time))
+//           return res.status(400).json({
+//             success: false,
+//             message: "Cần cung cấp start_time và end_time! BE",
+//           });
+
+//         if (new Date(end_time) <= new Date(start_time))
+//           return res.status(400).json({
+//             success: false,
+//             message: "end_time phải sau start_time!",
+//           });
+
+//         // cắt log cũ
+//         await RoomStatusLog.updateMany(
+//           {
+//             room_id: id,
+//             end_time: null,
+//           },
+//           { $set: { end_time: now } },
+//           { session }
+//         );
+
+//         // ghi log trạng thái mới
+//         await RoomStatusLog.create({
+//             room_id: room._id,
+//             status: room_status,
+//             start_time: start_time || new Date(),
+//             end_time: end_time || null,
+//             note: note || "",
+//             handled_by: req.user?.userId || null,
+//         });
+
+//         room.room_status = room_status;
+//       }
+
+//       await room.save();
+
+//       const updatedRoom = await Room.findById(id)
+//           .populate("category_id", "category_name description max_adults max_children price")
+//           .select("-__v");
+
+//       return res.status(200).json({
+//           success: true,
+//           message: "Cập nhật phòng thành công!",
+//           room: updatedRoom,
+//       });
+
+//   } catch (err) {
+//       console.error(err);
+//       return res.status(500).json({
+//           success: false,
+//           message: "SERVER ERROR" + err.message,
+//       });
+//   }
+// };
 export const updateRoom = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { category_id, room_number, room_status, start_time, end_time, note } = req.body;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-        if (!mongoose.Types.ObjectId.isValid(id))
-            return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
+  try {
+    const { id } = req.params;
+    const { category_id, room_number, room_status, start_time, end_time, note } = req.body;
+    const now = new Date();
 
-        const room = await Room.findById(id);
-        if (!room)
-            return res.status(404).json({ success: false, message: "Không tìm thấy phòng!" });
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ success: false, message: "ID phòng không hợp lệ!" });
 
-        if (category_id) {
-            if (!mongoose.Types.ObjectId.isValid(category_id))
-                return res.status(400).json({ success: false, message: "ID loại phòng không hợp lệ!" });
+    const room = await Room.findById(id).session(session);
+    if (!room)
+      return res.status(404).json({ success: false, message: "Không tìm thấy phòng!" });
 
-            const category = await RoomCategory.findById(category_id);
-            if (!category)
-                return res.status(404).json({ success: false, message: "Không tìm thấy loại phòng!" });
+    if (category_id) {
+      if (!mongoose.Types.ObjectId.isValid(category_id))
+        return res.status(400).json({ success: false, message: "ID loại phòng không hợp lệ!" });
 
-            room.category_id = category_id;
-        }
+      const category = await RoomCategory.findById(category_id);
+      if (!category)
+        return res.status(404).json({ success: false, message: "Không tìm thấy loại phòng!" });
 
-        if (room_number !== undefined) {
-            const existing = await Room.findOne({ room_number, _id: { $ne: id } });
-            if (existing)
-                return res.status(400).json({ success: false, message: "Số phòng đã tồn tại!" });
-
-            room.room_number = room_number;
-        }
-
-        if (room_status) {
-            const validStatuses = ["available", "reserved", "booked", "occupied", "cleaning", "maintenance"];
-            if (!validStatuses.includes(room_status))
-                return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
-
-            if (room_status !== "available" && (!start_time || !end_time))
-                return res.status(400).json({
-                    success: false,
-                    message: "Cần cung cấp start_time và end_time! BE",
-                });
-
-            if (new Date(end_time) <= new Date(start_time))
-                return res.status(400).json({
-                    success: false,
-                    message: "end_time phải sau start_time!",
-                });
-
-            // Ghi log trạng thái phòng
-            await RoomStatusLog.create({
-                room_id: room._id,
-                status: room_status,
-                start_time: start_time || new Date(),
-                end_time: end_time || null,
-                note: note || "",
-                handled_by: req.user?._id || null,
-            });
-
-            room.room_status = room_status;
-        }
-
-        await room.save();
-
-        const updatedRoom = await Room.findById(id)
-            .populate("category_id", "category_name description max_adults max_children price")
-            .select("-__v");
-
-        return res.status(200).json({
-            success: true,
-            message: "Cập nhật phòng thành công!",
-            room: updatedRoom,
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({
-            success: false,
-            message: "SERVER ERROR" + err.message,
-        });
+      room.category_id = category_id;
     }
+
+    if (room_number !== undefined) {
+      const existing = await Room.findOne({ room_number, _id: { $ne: id } });
+      if (existing)
+        return res.status(400).json({ success: false, message: "Số phòng đã tồn tại!" });
+
+      room.room_number = room_number;
+    }
+
+    if (room_status) {
+      const ALLOWED_MANUAL_STATUS = ["maintenance", "cleaning", "available"];
+
+      if (!ALLOWED_MANUAL_STATUS.includes(room_status)) {
+        return res.status(403).json({
+          success: false,
+          message: "Không được phép chỉnh trạng thái này thủ công!",
+        });
+      }
+
+      // Lấy trạng thái hiện tại của phòng
+      const activeLog = await RoomStatusLog.findOne({
+        room_id: id,
+        start_time: { $lte: now },
+        $or: [{ end_time: null }, { end_time: { $gte: now } }],
+      }).sort({ start_time: -1 });
+
+      const currentStatus = activeLog?.status || "available";
+
+      if (["occupied"].includes(currentStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phòng đang có khách, không thể đổi trạng thái!",
+        });
+      }
+
+      if (room_status === "available") {
+        const bookingExists = await Booking.exists({
+          room_id: id,
+          status: { $in: ["confirmed", "in_progress"] },
+          check_in: { $lte: now },
+          check_out: { $gte: now },
+        });
+
+        if (bookingExists) {
+          return res.status(400).json({
+            success: false,
+            message: "Phòng đang có booking hiệu lực, không thể chuyển sang available!",
+          });
+        }
+      }
+
+      if (!start_time)
+        return res.status(400).json({
+          success: false,
+          message: "start_time là bắt buộc khi cập nhật trạng thái phòng!",
+        });
+
+      if (end_time && new Date(end_time) <= new Date(start_time))
+        return res.status(400).json({
+          success: false,
+          message: "end_time phải sau start_time!",
+        });
+
+      await RoomStatusLog.updateMany(
+        { room_id: id, end_time: null },
+        { $set: { end_time: now } },
+        { session }
+      );
+
+      await RoomStatusLog.create(
+        [
+          {
+            room_id: id,
+            status: room_status,
+            start_time: new Date(start_time),
+            end_time: end_time ? new Date(end_time) : null,
+            note: note || "",
+            handled_by: req.user?.userId || null,
+          },
+        ],
+        { session }
+      );
+
+      room.room_status = room_status;
+    }
+
+    await room.save({ session });
+    await session.commitTransaction();
+
+    const updatedRoom = await Room.findById(id)
+      .populate("category_id", "category_name description max_adults max_children price")
+      .select("-__v");
+
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật phòng thành công!",
+      room: updatedRoom,
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: "SERVER ERROR: " + err.message,
+    });
+  } finally {
+    session.endSession();
+  }
 };
+
 
 export const deleteRoom = async (req, res) => {
     try {

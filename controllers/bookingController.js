@@ -456,13 +456,13 @@ export const createBooking = async (req, res) => {
       { session }
     );
 
-    // tạo log booked cho trạng thái phòng
+    // tạo log cho trạng thái phòng
     const roomStatusLogs = bookingDetails.map(bd => ({
       room_id: bd.room_id,
       status: "reserved",
-      start_time: bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      note: `Phòng được giữ chỗ bởi: ${booking._id} trong vòng 1 tiếng kể từ khi đặt`,
+      start_time: new Date(),
+      end_time: null,
+      note: `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking.handled_by,
     }));
 
@@ -595,8 +595,8 @@ export const createBookingg = async (req, res) => {
       room_id: bd.room_id,
       status: "reserved",
       start_time: bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      note: `Phòng được giữ chỗ bởi: ${booking._id} trong vòng 1 tiếng kể từ khi đặt`,
+      end_time: null,
+      note: `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking.handled_by,
     }));
 
@@ -670,13 +670,24 @@ export const confirmBooking = async (req, res) => {
       { session }
     );
 
-    // tạo log booked
+    // cắt log cũ
+    await RoomStatusLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        status: "reserved",
+        end_time: null,
+      },
+      { $set: { end_time: new Date() } },
+      { session }
+    );
+
+    // tạo log mới
     const roomStatusLogs = bookingDetails.map(bd => ({
       room_id: bd.room_id,
       status: "booked",
-      start_time: bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      note: `Booking confirmed: ${booking._id}`,
+      start_time: new Date(),
+      end_time: null,
+      note: `Phòng được giữ vì booking ${booking_id} đã được cọc.`,
       handled_by: booking.handled_by,
     }));
 
@@ -1187,7 +1198,7 @@ export const checkinBookingDetail = async (req, res) => {
       {
         room_id: detail.room_id,
         status: "booked",
-        end_time: { $gt: now },
+        end_time: null,
       },
       { $set: { end_time: now } },
       { session }
@@ -1200,7 +1211,7 @@ export const checkinBookingDetail = async (req, res) => {
         status: "occupied",
         start_time: now,
         end_time: detail.expected_checkout,
-        note: `Check-in booking ${booking._id}`,
+        note: `Phòng đã được checkin theo booking ${booking._id}`,
         handled_by: req.user?._id || null,
       }],
       { session }
@@ -1306,7 +1317,7 @@ export const checkoutBookingDetail = async (req, res) => {
         status: "cleaning",
         start_time: now,
         end_time: cleaningEndTime,
-        note: `Checkout booking ${booking._id} -> Cleaning`,
+        note: `Phòng đã được checkout theo booking ${booking._id}, chuyển sang dọn dẹp.`,
         handled_by: req.user?._id || null,
       }],
       { session }
@@ -1575,8 +1586,7 @@ export const cancelBooking = async (req, res) => {
       await RoomStatusLog.updateMany(
         {
           room_id: bd.room_id._id,
-          status: "booked",
-          end_time: { $gt: now },
+          end_time: null,
         },
         { $set: { end_time: now } },
         { session }
@@ -1606,8 +1616,8 @@ export const cancelBooking = async (req, res) => {
     // trừ điểm khách vì đã hủy
     await updateCustomerPoints({
       customer_id: booking.customer_id,
-      points: -2,
-      reason: "Trừ 2 điểm vì hủy booking"
+      points: -20,
+      reason: "Trừ 20 điểm vì hủy booking"
     });
 
     await session.commitTransaction();

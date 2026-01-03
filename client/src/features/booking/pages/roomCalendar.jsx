@@ -21,7 +21,8 @@ const ROW_HEIGHT = 80;
 const ROOM_COL_WIDTH = 200;
 
 const STATUS_CONFIG = {
-  available: { id: "available", color: "bg-white", border: "border-gray-300", label: "Trống", text: "text-gray-600", icon: null },
+  available: { id: "available", color: "bg-green-300", border: "border-gray-300", label: "Trống", text: "text-gray-600", icon: null },
+  reserved: { id: "reserved", color: "bg-pink-100", border: "border-gray-300", label: "Đang chờ cọc", text: "text-gray-600", icon: null },
   booked: { id: "booked", color: "bg-blue-500", border: "border-blue-700", label: "Đã đặt", text: "text-white", icon: <FiCalendar /> },
   occupied: { id: "occupied", color: "bg-rose-500", border: "border-rose-700", label: "Đang ở", text: "text-white", icon: <FiCheck /> },
   cleaning: { id: "cleaning", color: "bg-amber-400", border: "border-amber-600", label: "Dọn dẹp", text: "text-amber-900", icon: <FiRefreshCw className="animate-spin-slow"/> },
@@ -40,6 +41,35 @@ const normalizeStatus = (status) => {
         return status;
   }
 };
+
+const isEventActiveInDay = (event, date) => {
+  const start = parseISO(event.start);
+  const end = parseISO(event.end);
+  return start <= endOfDay(date) && end >= startOfDay(date);
+};
+
+const getRoomCurrentStatus = (roomId, events, date) => {
+  const priority = [
+    "occupied",
+    "booked",
+    "reserved",
+    "maintenance",
+    "cleaning",
+  ];
+  const activeEvents = events.filter(
+    e =>
+      e.room_id.toString() === roomId.toString() &&
+      isEventActiveInDay(e, date)
+  );
+  for (const status of priority) {
+    if (activeEvents.some(e => e.status === status)) {
+      return status;
+    }
+  }
+  return "available";
+};
+
+
 
 // --- DỮ LIỆU CỐ ĐỊNH (FIXED MOCK DATA) ---
 // Dùng thời gian thực để làm mốc, nhưng cộng trừ ngày cố định
@@ -92,29 +122,54 @@ export default function RoomCalendar() {
 
 
     // logic lọc phòng để tìm kiếm
+    // const filteredRooms = useMemo(() => {
+    //     const keyword = searchTerm.trim().toLowerCase();
+
+    //     return rooms.filter(room => {
+    //         // tìm theo số phòng
+    //         const matchName = !keyword || room.room_number?.toLowerCase().includes(keyword);
+
+    //         // lọc theo loại phòng
+    //         const matchType = filterType === "all" || room.category_id?.category_name === filterType;
+
+    //         // lọc theo trạng thái phòng
+    //         let matchStatus = true;
+    //         //const roomEvents = events.filter(e => e.room_id === room._id);
+
+    //         if (filterStatus === "available") {
+    //             matchStatus = roomEvents.every(e => e.status !== "occupied" && e.status !== "booked" && e.status!== "maintenance" && e.status !== "reserved");
+    //         } else if (filterStatus !== "all") {
+    //             matchStatus = roomEvents.some(e => e.status === filterStatus);
+    //         }
+
+    //         return matchName && matchType && matchStatus;
+    //     });
+    // }, [rooms, events, searchTerm, filterType, filterStatus]);
+
     const filteredRooms = useMemo(() => {
         const keyword = searchTerm.trim().toLowerCase();
 
         return rooms.filter(room => {
-            // tìm theo số phòng
-            const matchName = !keyword || room.room_number?.toLowerCase().includes(keyword);
+            const matchName =
+            !keyword || room.room_number?.toLowerCase().includes(keyword);
 
-            // lọc theo loại phòng
-            const matchType = filterType === "all" || room.category_id?.category_name === filterType;
+            const matchType =
+            filterType === "all" ||
+            room.category_id?.category_name === filterType;
 
-            // lọc theo trạng thái phòng
-            let matchStatus = true;
-            const roomEvents = events.filter(e => e.room_id === room._id);
+            const currentStatus = getRoomCurrentStatus(
+            room._id,
+            events,
+            currentDate
+            );
 
-            if (filterStatus === "available") {
-                matchStatus = roomEvents.every(e => e.status !== "occupied" && e.status !== "booked" && e.status!== "maintenance");
-            } else if (filterStatus !== "all") {
-                matchStatus = roomEvents.some(e => e.status === filterStatus);
-            }
+            const matchStatus =
+            filterStatus === "all" || currentStatus === filterStatus;
 
             return matchName && matchType && matchStatus;
         });
-    }, [rooms, events, searchTerm, filterType, filterStatus]);
+    }, [rooms, events, searchTerm, filterType, filterStatus, currentDate]);
+
 
     // danh sách các loại phòng
     const uniqueTypes = useMemo(() => {

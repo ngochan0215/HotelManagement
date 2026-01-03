@@ -138,6 +138,70 @@ export const setRule = async (req, res) => {
 //   }
 // };
 
+// export const getCalendarRooms = async (req, res) => {
+//   try {
+//     const { date } = req.query;
+//     if (!date) {
+//       return res.status(400).json({ message: "Thiếu ngày cần xem lịch." });
+//     }
+
+//     const startOfDay = new Date(date);
+//     startOfDay.setHours(0, 0, 0, 0);
+
+//     const endOfDay = new Date(date);
+//     endOfDay.setHours(23, 59, 59, 999);
+
+//     // rooms
+//     const rooms = await Room.find()
+//       .select("room_number category_id")
+//       .populate("category_id", "category_name")
+//       .lean();
+
+//     // room status logs
+//     const statusLogs = await RoomStatusLog.find({
+//       start_time: { $lte: endOfDay },
+//       end_time: { $gte: startOfDay },
+//     })
+//       .populate("room_id", "room_number")
+//       .populate({
+//         path: "handled_by",
+//         select: "full_name",
+//       })
+//       .lean();
+
+//     // map to calendar events
+//     const events = statusLogs.map(log => ({
+//       id: log._id,
+//       room_id: log.room_id?._id,
+//       room_number: log.room_id?.room_number,
+
+//       title:
+//         log.status === "booked" || log.status === "occupied"
+//           ? "Occupied / Booked"
+//           : log.status === "cleaning"
+//           ? "Cleaning"
+//           : log.status === "maintenance"
+//           ? "Maintenance"
+//           : "Available",
+
+//       start: log.start_time,
+//       end: log.end_time,
+//       status: log.status,
+//       note: log.note || "",
+//       handled_by: log.handled_by?.full_name || null,
+//     }));
+
+//     return res.json({
+//       rooms,
+//       events,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       message: error.message || "Không thể tải lịch phòng.",
+//     });
+//   }
+// };
+
 export const getCalendarRooms = async (req, res) => {
   try {
     const { date } = req.query;
@@ -151,45 +215,50 @@ export const getCalendarRooms = async (req, res) => {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // 1️⃣ Rooms
     const rooms = await Room.find()
       .select("room_number category_id")
       .populate("category_id", "category_name")
       .lean();
 
-    // 2️⃣ Room status logs (single source of truth)
     const statusLogs = await RoomStatusLog.find({
       start_time: { $lte: endOfDay },
-      end_time: { $gte: startOfDay },
+      $or: [
+        { end_time: { $gte: startOfDay } },
+        { end_time: null },
+      ],
+      status: { $ne: "available" }
     })
       .populate("room_id", "room_number")
-      .populate({
-        path: "handled_by",
-        select: "full_name",
-      })
+      .populate("handled_by", "full_name")
       .lean();
 
-    // 3️⃣ Map to calendar events
-    const events = statusLogs.map(log => ({
-      id: log._id,
-      room_id: log.room_id?._id,
-      room_number: log.room_id?.room_number,
+    const STATUS_META = {
+      reserved: { title: "Reserved", color: "#FBBF24" },
+      booked: { title: "Booked", color: "#60A5FA" },
+      occupied: { title: "Occupied", color: "#EF4444" },
+      cleaning: { title: "Cleaning", color: "#34D399" },
+      maintenance: { title: "Maintenance", color: "#6B7280" },
+    };
 
-      title:
-        log.status === "booked" || log.status === "occupied"
-          ? "Occupied / Booked"
-          : log.status === "cleaning"
-          ? "Cleaning"
-          : log.status === "maintenance"
-          ? "Maintenance"
-          : "Available",
+    const events = statusLogs.map(log => {
+      const meta = STATUS_META[log.status] || {
+        title: log.status,
+        color: "#9CA3AF"
+      };
 
-      start: log.start_time,
-      end: log.end_time,
-      status: log.status,
-      note: log.note || "",
-      handled_by: log.handled_by?.full_name || null,
-    }));
+      return {
+        id: log._id,
+        room_id: log.room_id?._id,
+        room_number: log.room_id?.room_number,
+        title: meta.title,
+        start: log.start_time,
+        end: log.end_time || endOfDay,
+        status: log.status,
+        color: meta.color,
+        note: log.note || "",
+        handled_by: log.handled_by?.full_name || null,
+      };
+    });
 
     return res.json({
       rooms,

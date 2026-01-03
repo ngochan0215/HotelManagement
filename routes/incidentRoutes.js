@@ -4,7 +4,8 @@ import { createCompensateTicket, getAllCompensateTickets, getCompensateTicketByI
     confirmCompensationPaid,
     updateCompensateTicket,
     assignIncident,
-    resolveIncident} from "../controllers/incidentController.js";
+    resolveIncident,
+    createCompensateTickett} from "../controllers/incidentController.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { isManager, isEmployee, isNotCustomer } from "../middleware/authMiddleware.js";
 const router = express.Router();
@@ -18,7 +19,11 @@ router.patch("/:id/assign", verifyToken, isManager, assignIncident);
 router.patch("/:id/resolved", verifyToken, isManager, resolveIncident);
 
 // manage compensation tickets
+// hàm tạo phiếu cho sự cố thiết bị
 router.post("/:incident_id/compensation-ticket/add", verifyToken, isNotCustomer, createCompensateTicket);
+// hàm tạo phiếu cho sự cố không là thiết bị
+router.post("/:incident_id/compensation-ticket/add-one", verifyToken, isNotCustomer, createCompensateTickett);
+
 router.get("/compensation-ticket/all", verifyToken, isManager, getAllCompensateTickets);
 router.get("/compensation-ticket/:id", verifyToken, isNotCustomer, getCompensateTicketById);
 router.patch("/compensation-ticket/:id", verifyToken, isNotCustomer, updateCompensateTicket);

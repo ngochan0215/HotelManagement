@@ -15,12 +15,12 @@ const compensateTicketSchema = new mongoose.Schema(
 
         broken_state: { type: String, 
           enum: ["scratched", "cracked", "broken", "lost", "unusable"], 
-          required: true, default: "scratched"
+          default: "scratched"
         },
 
-        resolution: { type: String, enum: ["repair", "discard"], required: true },
+        resolution: { type: String, enum: ["repair", "discard"], default: "repair" },
     
-        penalty_fee: { type: Number, required: true, default: 0 },
+        penalty_fee: { type: Number, default: 0 },
       }
     ],
 

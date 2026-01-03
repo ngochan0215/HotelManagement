@@ -342,7 +342,7 @@ export const cancelExpiredDepositBookings = async () => {
     await RoomStatusLog.updateMany(
       {
         room_id: { $in: roomIds },
-        note: { $regex: booking._id.toString() },
+        status: "reserved",
         end_time: null,
       },
       { $set: { end_time: new Date() } }
@@ -402,7 +402,7 @@ export const cancelCheckinLateBookings = async () => {
     await RoomStatusLog.updateMany(
       {
         room_id: { $in: roomIds },
-        note: { $regex: booking._id.toString() },
+        status: "booked",
         end_time: null,
       },
       { $set: { end_time: new Date() } }
