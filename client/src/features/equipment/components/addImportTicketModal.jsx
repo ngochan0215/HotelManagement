@@ -30,6 +30,20 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
     setFormData({ ...formData, items: newItems });
   };
 
+  const handleCategoryChange = (index, categoryId) => {
+    const category = categories.find(c => c._id === categoryId);
+
+    const newItems = [...formData.items];
+    newItems[index] = {
+        ...newItems[index],
+        category_id: categoryId,
+        import_price: category?.price || 0
+    };
+
+    setFormData({ ...formData, items: newItems });
+    };
+
+
   const addItem = () => {
     setFormData({
       ...formData,
@@ -59,6 +73,7 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
 
         const payload = {
             ...formData,
+            total_fee: calculateTotal(),
             items: formData.items.map(i => ({
                 ...i,
                 import_price: Number(i.import_price),
@@ -125,7 +140,7 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="px-4 py-2 text-center text-gray-500">{index + 1}</td>
                                         <td className="px-4 py-2">
-                                            <select
+                                            {/* <select
                                                 className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none"
                                                 value={item.category_id}
                                                 onChange={(e) => handleItemChange(index, "category_id", e.target.value)}
@@ -135,7 +150,21 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
                                                 {categories.map(c => (
                                                     <option key={c._id} value={c._id}>{c.name} ({formatUnit(c.unit)})</option>
                                                 ))}
-                                            </select>
+                                            </select> */}
+                                            <select
+  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+  value={item.category_id}
+  onChange={(e) => handleCategoryChange(index, e.target.value)}
+  required
+>
+  <option value="">-- Chọn thiết bị --</option>
+  {categories.map(c => (
+    <option key={c._id} value={c._id}>
+      {c.name} ({formatUnit(c.unit)})
+    </option>
+  ))}
+</select>
+
                                         </td>
                                         <td className="px-4 py-2">
                                             <input

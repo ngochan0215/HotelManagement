@@ -418,7 +418,7 @@ export const createEquipmentTicket = async (req, res) => {
 
     try {
         const employee_id = req.user.userId;
-        const { import_date, items } = req.body;
+        const { import_date, total_fee, items } = req.body;
 
         if (!employee_id || !import_date)
             return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
@@ -451,7 +451,7 @@ export const createEquipmentTicket = async (req, res) => {
         // tạo phiếu nhập thiết bị
         const employeeId = employee._id;
         const ticket = await EquipmentTicket.create(
-            [ { employee_id: employeeId, import_date, status },],
+            [ { employee_id: employeeId, import_date, status, total_fee },],
             { session });
 
         const ticketId = ticket[0]._id;
@@ -612,7 +612,7 @@ export const updateEquipmentTicket = async (req, res) => {
     session.startTransaction();
     try {
         const { id } = req.params;
-        const { import_date, items } = req.body;
+        const { import_date, total_fee, items } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             await session.abortTransaction();
@@ -673,6 +673,8 @@ export const updateEquipmentTicket = async (req, res) => {
             ticket.import_date = import_date;
             await ticket.save({ session });
         }
+
+        if (total_fee) ticket.total_fee = total_fee;
 
         // xóa chi tiết cũ
         await EquipmentImport.deleteMany(

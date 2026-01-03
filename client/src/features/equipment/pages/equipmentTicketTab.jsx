@@ -167,7 +167,11 @@ export default function EquipmentTicketTab() {
                                     </button>
                                 ) : (
                                     <span className="text-gray-300 text-xs italic">
-                                        {item.status === 'completed' ? '---' : 'Đã quá hạn'}
+                                        {{
+                                          completed: "---",
+                                          pending: "Đang chờ ngày",
+                                          expired: "Quá hạn",
+                                        }[item.status] || ""}
                                     </span>
                                 )}
                             </td>
