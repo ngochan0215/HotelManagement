@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, 
+import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, updateAllCustomerTiers,
   notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings 
 } from "../utils/notifyTickets.js";
 
@@ -55,6 +55,13 @@ export const startCancelCheckinLateBookingJob = () =>
     name: "cancel checkin late bookings",
     schedule: "*/5 * * * *",
     handler: cancelCheckinLateBookings,
+  });
+
+export const startCustomerTierJob = () =>
+  startCronJob({
+    name: "calculating customer loyalty and points",
+    schedule: "*/5 * * * *",
+    handler: updateAllCustomerTiers,
   });
 
 // export const startImportTicketJob = () => {

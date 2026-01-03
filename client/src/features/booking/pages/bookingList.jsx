@@ -210,7 +210,7 @@ export default function BookingList() {
 
     setAppliedDiscounts([]);
     setPromotionName("");
-    setIsPreviewLocked(false);
+    setIsPreviewLocked(true);
   };
 
 

@@ -13,6 +13,11 @@ export const incidentApi = {
     return res.data;
   },
 
+  updateIncident: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/update/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
   getAllIncidents: async (params = {}) => {
     const res = await axios.get(`${BASE_URL}/all`, {
       ...getAuthHeader(),

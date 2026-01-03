@@ -12,13 +12,16 @@ const incidentSchema = new mongoose.Schema(
     caused_by: { type: String, enum: ["employee", "customer", "other"], required: true },
 
     severity: { type: String, enum: ["low", "medium", "high", "critical"], required: true },
-    status: { type: String, enum: ["reported", "fixing", "fixed", "closed", "cancelled"], default: "reported", required: true },
+    status: { type: String, enum: ["new", "in_progress", "resolved", "closed"], default: "new", required: true },
     compensation_status: { type: String, enum: ["none", "pending", "done"], default: "none", required: true },
 
     occured_at: { type: Date, required: true },
     fixed_date: { type: Date, default: null },
     finish_date: { type: Date, default: null },
 
+    assignee_info: {
+      
+    }
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

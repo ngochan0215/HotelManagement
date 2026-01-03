@@ -1,8 +1,9 @@
-import { EquipmentTicket, Notification, User, EquipmentInstall, 
-    GoodTicket, ServiceUsage, UsageDetail, Booking, BookingDetail,
-    BookingStatusLog, Room, RoomStatusLog
+import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
+    GoodTicket, ServiceUsage, UsageDetail, Booking, BookingDetail, 
+    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail
 } from "../models/index.js";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
+import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../controllers/customerController.js";
 
 export const notifyImportTickets = async () => {
     const start = new Date();
@@ -63,61 +64,123 @@ export const notifyImportTickets = async () => {
 };
 
 export const notifyInstallTickets = async () => {
+  // const session = await mongoose.startSession();
+  // session.startTransaction();
+  try {
+    const now = new Date();
+
     const start = new Date();
     start.setHours(0, 0, 0, 0);
 
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    const managers = await User.find({ system_role: "manager" }).select("_id");
+    const managers = await User.find({ system_role: "manager" })
+      .select("_id");
+      //.session(session);
 
-    // phiếu quá hạn nhập
+    // phiếu quá hạn
     const expiredTickets = await EquipmentInstall.find({
-        status: "waiting_confirm",
-        install_date: { $lt: start }
+      status: "waiting_confirm",
+      install_date: { $lt: start },
     });
 
-    if (expiredTickets.length > 0) {
-        await EquipmentInstall.updateMany(
-            { _id: { $in: expiredTickets.map(t => t._id) } },
-            { status: "expired" }
+    for (const ticket of expiredTickets) {
+      ticket.status = "expired";
+      await ticket.save();
+
+      // lấy chi tiết
+      const details = await InstallDetail.find({
+        install_id: ticket._id,
+      });
+
+      const equipmentIds = details.map(d => d.equipment_id);
+
+      if (equipmentIds.length) {
+        // update equipment về trạng thái gốc
+        await Equipment.updateMany(
+          { _id: { $in: equipmentIds } },
+          { status: "in-stock", condition: "new" },
+          //{ session }
         );
 
-        const expiredNotifications = expiredTickets.flatMap(ticket =>
-            managers.map(manager => ({
-                user_id: manager._id,
-                title: "Phiếu lắp đặt thiết bị quá hạn",
-                content: `Phiếu lắp đặt ${ticket._id} đã quá ngày lắp đặt và bị chuyển sang trạng thái quá hạn.`,
-                type: "system",
-            }))
+        // đóng log cũ (chỉ log của phiếu này)
+        await EquipmentLog.updateMany(
+          {
+            equipment_id: { $in: equipmentIds },
+            end_time: null,
+            //note: { $regex: ticket._id.toString() },
+          },
+          { $set: { end_time: now } }
         );
 
-        await Notification.insertMany(expiredNotifications);
+        // tạo log mới
+        const logs = equipmentIds.map(equipmentId => ({
+          equipment_id: equipmentId,
+          room_id: ticket.room_id,
+          status: "in-stock",
+          condition: "new",
+          start_time: now,
+          note: `Thiết bị quay về kho do phiếu lắp đặt ${ticket._id} quá hạn`,
+          handled_by: ticket.employee_id || null,
+        }));
+
+        await EquipmentLog.insertMany(logs);
+      }
+
+      // soft delete detail
+      await InstallDetail.deleteMany(
+        { install_id: ticket._id }
+      );
+    }
+
+    // thông báo phiếu quá hạn
+    if (expiredTickets.length) {
+      const notifications = expiredTickets.flatMap(ticket =>
+        managers.map(manager => ({
+          user_id: manager._id,
+          title: "Phiếu lắp đặt quá hạn",
+          content: `Phiếu lắp đặt ${ticket._id} đã quá hạn và bị hủy.`,
+          type: "system",
+        }))
+      );
+
+      await Notification.insertMany(notifications);
+      console.log("[CRON] done updating expired install tickets.")
     }
 
     // phiếu đến ngày
     const todayTickets = await EquipmentInstall.find({
-        status: "pending",
-        install_date: { $gte: start, $lte: end }
+      status: "pending",
+      install_date: { $gte: start, $lte: end },
     });
 
-    if (todayTickets.length > 0) {
-        await EquipmentTicket.updateMany(
-            { _id: { $in: todayTickets.map(t => t._id) } },
-            { status: "waiting_confirm" }
-        );
+    if (todayTickets.length) {
+      await EquipmentInstall.updateMany(
+        { _id: { $in: todayTickets.map(t => t._id) } },
+        { status: "waiting_confirm" },
+      );
 
-        const todayNotifications = todayTickets.flatMap(ticket =>
-                managers.map(manager => ({
-                    user_id: manager._id,
-                    title: "Phiếu lắp đặt thiết bị đến ngày",
-                    content: `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
-                    type: "system",
-                }))
-            );
+      const notifications = todayTickets.flatMap(ticket =>
+        managers.map(manager => ({
+          user_id: manager._id,
+          title: "Phiếu lắp đặt đến ngày",
+          content: `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
+          type: "system",
+        }))
+      );
 
-        await Notification.insertMany(todayNotifications);
+      await Notification.insertMany(notifications);
+      console.log("[CRON] done updating pending install tickets.");
     }
+
+    // await session.commitTransaction();
+    // session.endSession();
+  } catch (err) {
+    // await session.abortTransaction();
+    // session.endSession();
+    console.error("[CRON] notifyInstallTickets error:", err);
+  }
 };
 
 export const notifyGoodTickets = async () => {
@@ -301,6 +364,13 @@ export const cancelExpiredDepositBookings = async () => {
       start_time: new Date(),
       note: "Booking bị hủy do quá 1 giờ chưa đặt cọc.",
     });
+
+    // trừ điểm khách hàng
+    await updateCustomerPoints({
+      customer_id: booking.customer_id,
+      points: -10,
+      reason: "Trừ 10 điểm vì booking bị hủy do chưa đặt cọc."
+    });
   }
 };
 
@@ -354,5 +424,46 @@ export const cancelCheckinLateBookings = async () => {
       start_time: new Date(),
       note: "Tự động hủy: khách không đến sau 1 giờ kể từ thời điểm check-in dự kiến.",
     });
+
+    // trừ điểm khách hàng
+    await updateCustomerPoints({
+      customer_id: booking.customer_id,
+      points: -20,
+      reason: "Trừ 20 điểm vì booking bị hủy do checkin trễ."
+    });
   }
+};
+
+export const updateAllCustomerTiers = async () => {
+  const customers = await Customer.find( {},
+    "booking_count points loyalty"
+  );
+
+  const bulkOps = [];
+
+  for (const customer of customers) {
+    const newTier = calculateMembershipTier({
+      booking_count: customer.booking_count || 0,
+      points: customer.points || 0,
+    });
+
+    if (newTier !== customer.membership_tier) {
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: customer._id },
+          update: {
+            $set: {
+              loyalty: newTier,
+            },
+          },
+        },
+      });
+    }
+  }
+
+  if (bulkOps.length > 0) {
+    await Customer.bulkWrite(bulkOps);
+  }
+
+  console.log(`[CRON] Updated ${bulkOps.length} customer tiers`);
 };

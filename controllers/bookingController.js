@@ -2,11 +2,21 @@ import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
   Employee, RoomStatusLog, Discount, RoomCategory, BookingStatusLog } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
+import { calculateMembershipTier } from "./customerController.js";
 
 // hàm tính số đêm
 const calcNights = (expected_checkin, expected_checkout) => {
-  const diff = new Date(expected_checkout) - new Date(expected_checkin);
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  const diffMs = new Date(expected_checkout) - new Date(expected_checkin);
+
+  if (diffMs <= 0) {
+    throw new Error("Thời gian checkout phải lớn hơn checkin");
+  }
+
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const days = diffHours / 24;
+
+  // làm tròn lên 2 chữ số thập phân
+  return Math.ceil(days * 100) / 100;
 };
 
 // hàm tính tổng tiền booking đối với booking chỉ cho phép checkin, checkout một lượt
@@ -14,10 +24,8 @@ export const calculateBookingPrice = async ({ customer_id, bookingDetails, expec
   const nights = calcNights(expected_checkin, expected_checkout);
 
   const baseTotal = bookingDetails.reduce(
-    (sum, d) => sum + d.base_fee + (d.extra_fee || 0),
-    0 ) * nights;
+    (sum, d) => sum + (d.base_fee + (d.extra_fee || 0)) * nights, 0 );
 
-  console.log("BASE TOTAL: ", baseTotal);
   const now = new Date();
 
   // Lấy discount BOOKING đang active
@@ -112,7 +120,8 @@ export const calculateBookingPricee = async ({
       throw new Error("Dữ liệu phòng không hợp lệ");
     }
 
-    const nights = calcNights(expected_checkin, expected_checkout);
+    const baseTotal = bookingDetails.reduce(
+      (sum, d) => sum + (d.base_fee + (d.extra_fee || 0)) * nights, 0 );
 
     if (nights <= 0) {
       throw new Error("Thời gian check-in/check-out không hợp lệ");
@@ -1528,10 +1537,12 @@ export const cancelBooking = async (req, res) => {
     booking.status = "cancelled";
     await booking.save({ session });
 
+    const now = new Date();
+
     // update booking log
     await BookingStatusLog.findOneAndUpdate(
       {
-        bookingId,
+        booking_id: bookingId,
         end_time: null,
       },
       {
@@ -1543,7 +1554,7 @@ export const cancelBooking = async (req, res) => {
     await BookingStatusLog.create(
       [
         {
-          bookingId,
+          booking_id: bookingId,
           status: booking.status,
           start_time: new Date(),
           end_time: null,
@@ -1557,12 +1568,10 @@ export const cancelBooking = async (req, res) => {
     const details = await BookingDetail.find({ booking_id: bookingId })
       .populate("room_id")
       .session(session);
-
-    const now = new Date();
-
+    
     const roomIds = details.map(bd => bd.room_id);
     
-    // update room status log
+    // đóng log cũ
     for (const bd of details) {
       await RoomStatusLog.updateMany(
         {
@@ -1574,7 +1583,7 @@ export const cancelBooking = async (req, res) => {
         { session }
       );
     }
-    
+    // update status mới
     await Room.updateMany(
       { _id: { $in: roomIds } },
       { $set: { room_status: "available" } },
@@ -1594,6 +1603,13 @@ export const cancelBooking = async (req, res) => {
         booking_status: status
       }], { session });
     }
+
+    // trừ điểm khách vì đã hủy
+    await updateCustomerPoints({
+      customer_id: booking.customer_id,
+      points: -2,
+      reason: "Trừ 2 điểm vì hủy booking"
+    });
 
     await session.commitTransaction();
     session.endSession();
@@ -1660,5 +1676,4 @@ export const getCancellationReasonStats = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 

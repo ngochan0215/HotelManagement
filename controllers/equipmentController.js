@@ -254,6 +254,7 @@ export const updateEquipment = async (req, res) => {
     try {
         const { id } = req.params;
         const { room_id, status, condition, note } = req.body;
+        const employee = await Employee.findOne({ user_id: req.user.userId });
 
         if (!mongoose.Types.ObjectId.isValid(id))
             return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
@@ -304,7 +305,7 @@ export const updateEquipment = async (req, res) => {
                 end_time: null,
             },
             {
-                end_time: now,
+                end_time: new Date(),
             }
         );
     
@@ -315,11 +316,10 @@ export const updateEquipment = async (req, res) => {
                 equipment_id: id,
                 condition,
                 status,
-                start_time: now,
+                start_time: new Date(),
                 end_time: null,
-                note:
-                note ||  `Update trạng thái thiết bị: ${resolution}`,
-                handled_by,
+                note: note ||  `Update trạng thái thiết bị: ${status}`,
+                handled_by: employee._id,
             },
         );
 
@@ -952,6 +952,31 @@ export const createInstallTicket = async (req, res) => {
             { session }
         );
 
+        // đóng log cũ
+        await EquipmentLog.updateMany(
+            {
+                equipment_id: { $in: selectedEquipmentIds },
+                end_time: null,
+            },
+            {
+                $set: { end_time: now },
+            },
+            { session }
+        );
+        // thêm log mới
+        const logs = selectedEquipmentIds.map((equipmentId) => ({
+            equipment_id: equipmentId,
+            room_id: ticket.room_id,
+            status: "installing",
+            condition: "new",
+            start_time: now,
+            end_time: null,
+            note: "Thiết bị đang chờ lắp đặt",
+            handled_by: ticket.employee_id || null,
+        }));
+
+        await EquipmentLog.insertMany(logs, { session });
+
         await session.commitTransaction();
 
         return res.status(201).json({
@@ -1152,9 +1177,10 @@ export const updateEquipmentInstall = async (req, res) => {
         const oldDetails = await InstallDetail.find({ install_id: install_ticket._id }).session(session);
         const oldEquipmentIds = oldDetails.map(d => d.equipment_id);
 
+        // update condition và status của các equipment cũ
         await Equipment.updateMany(
             { _id: { $in: oldEquipmentIds } },
-            { status: "in-stock" },
+            { status: "in-stock", condition: "new" },
             { session }
         );
 
@@ -1163,6 +1189,29 @@ export const updateEquipmentInstall = async (req, res) => {
             { install_id: install_ticket._id },
             { session }
         );
+
+        // đóng log cũ
+        await EquipmentLog.updateMany(
+            {
+                equipment_id: { $in: oldEquipmentIds },
+                end_time: null,
+            },
+            { $set: { end_time: now } },
+            { session }
+        );
+        // tạo log cho condition "new" và status "in-stock" của thiết bị cũ
+        const oldEquipmentLogs = oldEquipmentIds.map((equipmentId) => ({
+            equipment_id: equipmentId,
+            room_id: ticket.room_id,
+            status: "in-stock",
+            condition: "new",
+            start_time: now,
+            end_time: null,
+            note: "Thiết bị đang ở kho",
+            handled_by: ticket.employee_id || null,
+        }));
+
+        await EquipmentLog.insertMany(oldEquipmentLogs, { session });
 
         // insert chi tiết mới
         const details = selectedEquipmentIds.map((eid) => ({
@@ -1176,6 +1225,29 @@ export const updateEquipmentInstall = async (req, res) => {
             { status: "installing" },
             { session }
         );
+
+        // đóng log cũ
+        await EquipmentLog.updateMany(
+            {
+                equipment_id: { $in: selectedEquipmentIds },
+                end_time: null,
+            },
+            { $set: { end_time: now } },
+            { session }
+        );
+        // thêm log mới
+        const logs = selectedEquipmentIds.map((equipmentId) => ({
+            equipment_id: equipmentId,
+            room_id: ticket.room_id,
+            status: "installing",
+            condition: "new",
+            start_time: now,
+            end_time: null,
+            note: "Thiết bị đang chờ lắp đặt",
+            handled_by: ticket.employee_id || null,
+        }));
+
+        await EquipmentLog.insertMany(logs, { session });
 
         await session.commitTransaction();
 
@@ -1384,7 +1456,7 @@ export const confirmEquipmentInstall = async (req, res) => {
             end_time: null,
         },
         {
-            $set: { end_time: now },
+            $set: { end_time: new Date() },
         },
         { session }
     );
@@ -1406,7 +1478,7 @@ export const confirmEquipmentInstall = async (req, res) => {
         room_id: ticket.room_id,
         status: "in-use",
         condition: "good",
-        start_time: now,
+        start_time: new Date(),
         end_time: null,
         note: "Lắp đặt thiết bị vào phòng",
         handled_by: ticket.employee_id || null,

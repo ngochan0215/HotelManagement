@@ -72,7 +72,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
       const payload = {
         department,
         assignee,
-        severity_admin: severityAdmin,
+        severity_admin: severityAdmin, 
         status: statusToSave,
         processing_note: processingNote,
         timeline_push: {

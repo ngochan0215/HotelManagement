@@ -4,7 +4,7 @@ import cors from "cors";
 import http from "http"; 
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
-import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, 
+import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
     startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob 
 } from "./config/importTicket.job.js";
 
@@ -22,6 +22,7 @@ import roomRoute from "./routes/roomRoutes.js";
 import roomCategoryRoute from "./routes/roomCategoryRoutes.js";
 import equipmentRoute from "./routes/equipmentRoutes.js";
 import bookingRoute from "./routes/bookingRoutes.js";
+import statisticRoute from "./routes/statisticsRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -41,6 +42,7 @@ app.use("/manager", managerRoute);
 app.use("/employee", employeeRoute);
 app.use("/customer", customerRoute);
 app.use("/receipt", receiptRoute);
+app.use("/statistics", statisticRoute);
 
 app.use("/service", serviceRoute);
 app.use("/discount", discountRoute);
@@ -58,6 +60,7 @@ startGoodTicketJob();
 startServiceUsageJob();
 startCancelPendingBookingJob();
 startCancelCheckinLateBookingJob();
+startCustomerTierJob();
 
 app.set("io", io);
 

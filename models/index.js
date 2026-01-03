@@ -4,6 +4,7 @@ import Employee from "./User/Employees.js";
 import Shift from "./User/Shifts.js";
 import Schedule from "./User/Schedules.js";
 import Attendance from "./User/Attendance.js";
+import PointsLog from "./User/PointsLog.js";
 
 import Equipment from "./Equipment/Equipment.js";
 import EquipmentCategory from "./Equipment/EquipmentCategory.js";
@@ -43,7 +44,7 @@ export {
     User, Customer, Employee, Shift, Schedule, Attendance,
     Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, EquipmentInstall, InstallDetail,
     Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, UsageDetail,
-    Discount, Notification, Receipt, EquipmentLog,
+    Discount, Notification, Receipt, EquipmentLog, PointsLog,
     Incident, CompensateTicket, CompensateDetail,
     Room, RoomCategory, DefaultEquipment, RoomStatusLog,
     Booking, BookingDetail, CheckInOut, RoomCancellation, BookingStatusLog

@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { User, Customer } from "../models/index.js";
+import { User, Customer, PointsLog } from "../models/index.js";
 import { sendVerificationEmail } from "../utils/sendEmails.js";
 import mongoose from "mongoose";
 
@@ -298,6 +298,68 @@ export const banCustomer = async (req, res) => {
             message: error.message,
         });
     }
+};
+
+export const updateCustomerPoints = async ({ customer_id, points, reason }) => {
+  if (!mongoose.Types.ObjectId.isValid(customer_id)) {
+    throw new Error("customer_id không hợp lệ");
+  }
+
+  if (!Number.isInteger(points) || points === 0) {
+    throw new Error("points phải là số nguyên khác 0");
+  }
+
+  if (!reason || typeof reason !== "string") {
+    throw new Error("reason là bắt buộc");
+  }
+
+  const customer = await Customer.findById(customer_id).session(session);
+  if (!customer) {
+    throw new Error("Không tìm thấy customer");
+  }
+
+  const before = customer.points || 0;
+  const after = Math.max(before + points, 0); // không cho âm
+
+  customer.points = after;
+  await customer.save({ session });
+
+  await PointsLog.create(
+    {
+        customer_id,
+        points_change: points,
+        points_before: before,
+        points_after: after,
+        reason,
+      },
+  );
+
+  return { before, after, change: points };
+};
+
+export const calculateMembershipTier = ({ booking_count, points }) => {
+  if (booking_count >= 20 && points >= 5000) return "platinum";
+  if (booking_count >= 10 && points >= 2000) return "gold";
+  if (booking_count >= 5 && points >= 500) return "silver";
+  return "bronze";
+};
+
+export const updateCustomerTier = async (customer_id, session = null) => {
+  const customer = await Customer.findById(customer_id).session(session);
+  if (!customer) 
+    throw new Error("Không tìm thấy khách hàng.");
+
+  const newTier = calculateMembershipTier({
+    booking_count: customer.booking_count || 0,
+    points: customer.points || 10,
+  });
+
+  if (customer.loyalty !== newTier) {
+    customer.loyalty = newTier;
+    await customer.save({ session });
+  }
+
+  return newTier;
 };
 
 // export const addCustomerInfo = async (req, res) => {

@@ -1,6 +1,6 @@
 import express from "express";
 import { isNotCustomer, verifyToken } from "../middleware/authMiddleware.js";
-import { createReceipt, getAllReceipts, getReceiptById, updateReceipt,  } from "../controllers/receiptControllers.js";
+import { createReceipt, getAllReceipts, getReceiptById, updateReceipt } from "../controllers/receiptControllers.js";
 
 const router = express.Router();
 

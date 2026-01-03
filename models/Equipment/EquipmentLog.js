@@ -31,7 +31,7 @@ const equipmentLogSchema = new mongoose.Schema(
 
     end_time: {
       type: Date,
-      required: true,
+      default: null,
     },
 
     note: {

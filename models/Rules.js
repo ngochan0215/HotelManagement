@@ -15,7 +15,6 @@ const ruleSchema = new mongoose.Schema(
         min_shift: { type: Number, default: 0 },        
         max_shift: { type: Number, default: 0 },   
         
-        
     }, 
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

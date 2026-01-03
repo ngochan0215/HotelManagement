@@ -225,7 +225,7 @@ export const createIncident = async (req, res) => {
         caused_by,
         severity,
         occured_at,
-        status: "reported",
+        status: "new",
         compensation_status: "none",
     });
 

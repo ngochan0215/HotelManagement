@@ -3,6 +3,7 @@ import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import { roomApi } from "../../api/roomApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
+import { statisticsApi } from "../../api/statisticApi.js";
 
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -18,7 +19,7 @@ export default function Dashboard() {
   const [cancelReasons, setCancelReasons] = useState([]);
 
   useEffect(() => {
-      const fetchRoomStatus = async () => {
+    const fetchRoomStatus = async () => {
       try {
         const data = await roomApi.getRoomStatusSummary();
         setRoomStatus(data);
@@ -55,50 +56,62 @@ export default function Dashboard() {
       }
     }
 
+    const fetchWeeklyRevenue = async () => {
+      const data = await statisticsApi.getWeeklyRevenue();
+      setOverview(data);
+    };
+
+    const fetchWeeklyBookings = async () => {
+      const data = await statisticsApi.getWeeklyBookings();
+      setBookingStats(data);
+    };
+
+    fetchWeeklyBookings();
+    fetchWeeklyRevenue();
     fetchRoomStatus();
     fetchTopRoomTypes();
     fetchCancelReasons();
 
-    const mockOverview = {
-      revenue: 7852000,
-      revenueChangePercent: 2.1,
-      revenueChart: [
-        { day: "01", current: 110, lastWeek: 130 },
-        { day: "02", current: 120, lastWeek: 145 },
-        { day: "03", current: 105, lastWeek: 125 },
-        { day: "04", current: 135, lastWeek: 160 },
-        { day: "05", current: 115, lastWeek: 140 },
-        { day: "06", current: 145, lastWeek: 170 },
-        { day: "07", current: 165, lastWeek: 140 },
-      ],
-      // cancelReasons: [
-      //   { label: "Đổi lịch trình", value: 40 },
-      //   { label: "Bận nhầm", value: 32 },
-      //   { label: "Lý do khác", value: 28 },
-      // ],
-      // topRoomTypes: [
-      //   { name: "Phòng VIP Hướng Biển", price: 1200000 },
-      //   { name: "Phòng Deluxe Đôi", price: 950000 },
-      //   { name: "Phòng Standard", price: 650000 },
-      //   { name: "Phòng Suite Cao Cấp", price: 1800000 },
-      // ],
-    };
+    // const mockOverview = {
+    //   revenue: 7852000,
+    //   revenueChangePercent: 2.1,
+    //   revenueChart: [
+    //     { day: "01", current: 110, lastWeek: 130 },
+    //     { day: "02", current: 120, lastWeek: 145 },
+    //     { day: "03", current: 105, lastWeek: 125 },
+    //     { day: "04", current: 135, lastWeek: 160 },
+    //     { day: "05", current: 115, lastWeek: 140 },
+    //     { day: "06", current: 145, lastWeek: 170 },
+    //     { day: "07", current: 165, lastWeek: 140 },
+    //   ],
+    //   // cancelReasons: [
+    //   //   { label: "Đổi lịch trình", value: 40 },
+    //   //   { label: "Bận nhầm", value: 32 },
+    //   //   { label: "Lý do khác", value: 28 },
+    //   // ],
+    //   // topRoomTypes: [
+    //   //   { name: "Phòng VIP Hướng Biển", price: 1200000 },
+    //   //   { name: "Phòng Deluxe Đôi", price: 950000 },
+    //   //   { name: "Phòng Standard", price: 650000 },
+    //   //   { name: "Phòng Suite Cao Cấp", price: 1800000 },
+    //   // ],
+    // };
 
-    const mockBookingStats = {
-      total: 2568,
-      percentChange: 2.1,
-      chart: [
-        { day: "01", current: 120, lastWeek: 130 },
-        { day: "02", current: 140, lastWeek: 150 },
-        { day: "03", current: 125, lastWeek: 145 },
-        { day: "04", current: 155, lastWeek: 170 },
-        { day: "05", current: 135, lastWeek: 155 },
-        { day: "06", current: 170, lastWeek: 180 },
-      ],
-    };
+    // const mockBookingStats = {
+    //   total: 2568,
+    //   percentChange: 2.1,
+    //   chart: [
+    //     { day: "01", current: 120, lastWeek: 130 },
+    //     { day: "02", current: 140, lastWeek: 150 },
+    //     { day: "03", current: 125, lastWeek: 145 },
+    //     { day: "04", current: 155, lastWeek: 170 },
+    //     { day: "05", current: 135, lastWeek: 155 },
+    //     { day: "06", current: 170, lastWeek: 180 },
+    //   ],
+    // };
 
-    setOverview(mockOverview);
-    setBookingStats(mockBookingStats);
+    //setOverview(mockOverview);
+    //setBookingStats(mockBookingStats);
   }, []);
 
   if (!overview || !bookingStats || !roomStatus || !cancelReasons) 

@@ -783,13 +783,15 @@ export const createServiceUsage = async (req, res) => {
         await session.abortTransaction();
         return res.status(400).json({ success: false, message: `service_id không hợp lệ tại phần tử thứ ${i + 1}.` });
       }
+      const service = await Service.findById(item.service_id);
+      const isFoodService = service.category_id.toString() === FOOD_CATEGORY_ID;
 
       if (!item.quantity || item.quantity < 1) {
         await session.abortTransaction();
         return res.status(400).json({ success: false, message: `quantity phải >= 1 tại phần tử thứ ${i + 1}.` });
       }
 
-      if (item.use_from || item.finish_at) {
+      if (!isFoodService && (item.use_from || item.finish_at)) {
         if (isNaN(new Date(item.use_from).getTime()) || isNaN(new Date(item.use_from).getTime())) {
           await session.abortTransaction();
           return res.status(400).json({ success: false, message: `use_from hoặc finish_at không hợp lệ tại phần tử thứ ${i + 1}.` });
