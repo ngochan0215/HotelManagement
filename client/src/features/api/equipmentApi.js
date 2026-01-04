@@ -24,10 +24,13 @@ export const equipmentApi = {
     const res = await axios.delete(`${BASE_URL}/category/${id}`, getAuthHeader());
     return res.data;
   },
-  getAllEquipments: async () => {
-    const res = await axios.get(`${BASE_URL}/all`, getAuthHeader());
-    return res.data;
-  },
+  getAllEquipments: async (params) => {
+      const res = await axios.get(`${BASE_URL}/all`, {
+          ...getAuthHeader(),
+          params: params
+      });
+      return res.data;
+    },
   updateEquipment: async (id, data) => {
     const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return res.data;
