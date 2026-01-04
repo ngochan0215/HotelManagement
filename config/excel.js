@@ -70,107 +70,63 @@ import { roomOperationReport, generateBookingReport,
 //   await workbook.xlsx.write(res);
 //   res.end();
 // };
+const safeForEach = (data, callback) => {
+    if (data && Array.isArray(data)) {
+        data.forEach(callback);
+    }
+};
 
 export const exportRoomOperationExcel = async (req, res) => {
   try {
     const { from, to } = req.query;
-
     const report = await roomOperationReport(from, to);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Hotel Management System";
-    workbook.created = new Date();
 
-    /* =======================
-       SHEET 1: TỔNG QUAN
-    ======================= */
     const summarySheet = workbook.addWorksheet("Tổng quan");
-
     summarySheet.columns = [
       { header: "Chỉ số", key: "label", width: 35 },
       { header: "Giá trị", key: "value", width: 20 }
     ];
 
     summarySheet.addRows([
-      { label: "Tổng số phòng", value: report.summary.total_rooms },
-      { label: "Phòng đang sử dụng", value: report.summary.occupied_rooms },
-      { label: "Phòng bảo trì", value: report.summary.maintenance_rooms },
-      { label: "Phòng đang dọn dẹp", value: report.summary.cleaning_rooms },
-      { label: "Phòng đang chờ cọc", value: report.summary.reserved_rooms },
-      { label: "Phòng đang được đặt", value: report.summary.booked_rooms },
-
-      { label: "Tỷ lệ lấp phòng (%)", value: report.summary.occupancy_rate },
-      { label: "Tổng giờ sử dụng phòng", value: report.summary.total_occupied_hours },
-      { label: "Giờ sử dụng TB / phòng", value: report.summary.avg_usage_hours_per_room }
+      { label: "Tổng số phòng", value: report.summary?.total_rooms || 0 },
+      { label: "Phòng đang sử dụng", value: report.summary?.occupied_rooms || 0 },
+      { label: "Phòng bảo trì", value: report.summary?.maintenance_rooms || 0 },
+      { label: "Phòng đang dọn dẹp", value: report.summary?.cleaning_rooms || 0 },
+      { label: "Tỷ lệ lấp phòng (%)", value: report.summary?.occupancy_rate || 0 },
+      { label: "Tổng giờ sử dụng phòng", value: report.summary?.total_occupied_hours || 0 }
     ]);
-
     summarySheet.getRow(1).font = { bold: true };
 
-    /* =======================
-       SHEET 2: HIỆU SUẤT PHÒNG
-    ======================= */
     const roomSheet = workbook.addWorksheet("Hiệu suất phòng");
-
     roomSheet.columns = [
       { header: "Phòng", key: "room_number", width: 15 },
       { header: "Loại phòng", key: "category", width: 25 },
       { header: "Số lần sử dụng", key: "usage_count", width: 18 },
       { header: "Giờ sử dụng", key: "occupied_hours", width: 18 },
-      { header: "Giờ bảo trì", key: "maintenance_hours", width: 18 },
-      { header: "Giờ dọn phòng", key: "cleaning_hours", width: 18 }
+      { header: "Giờ bảo trì", key: "maintenance_hours", width: 18 }
     ];
 
-    report.tables.room_performance.forEach(r => {
+    safeForEach(report.tables?.room_performance, r => {
       roomSheet.addRow({
         room_number: r.room_number,
         category: r.category,
         usage_count: r.usage_count,
-        occupied_hours: Number(r.occupied_hours.toFixed(2)),
-        maintenance_hours: Number(r.maintenance_hours.toFixed(2)),
-        cleaning_hours: Number(r.cleaning_hours.toFixed(2))
+        occupied_hours: Number(r.occupied_hours?.toFixed(2) || 0),
+        maintenance_hours: Number(r.maintenance_hours?.toFixed(2) || 0)
       });
     });
-
     roomSheet.getRow(1).font = { bold: true };
 
-    /* =======================
-       SHEET 3: CÔNG SUẤT THEO NGÀY
-    ======================= */
-    const dailySheet = workbook.addWorksheet("Công suất theo ngày");
-
-    dailySheet.columns = [
-      { header: "Ngày", key: "date", width: 15 },
-      { header: "Số phòng sử dụng", key: "occupied_rooms", width: 22 },
-      { header: "Tỷ lệ lấp phòng (%)", key: "occupancy_rate", width: 22 }
-    ];
-
-    report.tables.daily_occupancy.forEach(d => {
-      dailySheet.addRow(d);
-    });
-
-    dailySheet.getRow(1).font = { bold: true };
-
-    /* =======================
-       RESPONSE
-    ======================= */
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=bao_cao_van_hanh_phong.xlsx"
-    );
-
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=bao_cao_van_hanh_phong.xlsx");
     await workbook.xlsx.write(res);
     res.end();
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      success: false,
-      message: "Xuất báo cáo Excel thất bại"
-    });
+    console.error("Excel Room Error:", err);
+    res.status(500).json({ success: false, message: "Lỗi xuất file Phòng" });
   }
 };
 
@@ -235,85 +191,47 @@ export const exportBookingReportExcel = async (req, res) => {
 };
 
 export const exportEquipmentReportExcel = async (req, res) => {
-  const { from, to } = req.query;
-  const report = await generateEquipmentReport(from, to);
-  const wb = new ExcelJS.Workbook();
+  try {
+    const { from, to } = req.query;
+    const report = await generateEquipmentReport(from, to);
+    const wb = new ExcelJS.Workbook();
 
-  // sheet 1: tổng quan
-  const s1 = wb.addWorksheet("Summary");
-  Object.entries(report.summary).forEach(([k, v]) => {
-    s1.addRow([k, v]);
-  });
+    const s1 = wb.addWorksheet("Tổng quan");
+    if (report.summary) {
+        Object.entries(report.summary).forEach(([k, v]) => {
+            s1.addRow([k, v]);
+        });
+    }
 
-  // sheet 2: danh mục thiết bị
-  const s2 = wb.addWorksheet("By Category");
-  s2.addRow([
-    "Category",
-    "Total",
-    "In Use",
-    "In Stock",
-    "Maintenance",
-    "Broken",
-    "Total Value"
-  ]);
+    const s2 = wb.addWorksheet("Danh mục thiết bị");
+    s2.columns = [
+        { header: "Tên danh mục", key: "category_name", width: 30 },
+        { header: "Tổng số", key: "total", width: 15 },
+        { header: "Đang dùng", key: "in_use", width: 15 },
+        { header: "Trong kho", key: "in_stock", width: 15 },
+        { header: "Số máy hỏng", key: "broken", width: 15 }
+    ];
+    safeForEach(report.by_category, r => s2.addRow(r));
+    s2.getRow(1).font = { bold: true };
 
-  report.by_category.forEach(r => {
-    s2.addRow([
-      r.category_name,
-      r.total,
-      r.in_use,
-      r.in_stock,
-      r.maintenance,
-      r.broken,
-      r.total_value
-    ]);
-  });
+    const s3 = wb.addWorksheet("Danh sách bảo trì");
+    s3.columns = [
+        { header: "ID thiết bị", key: "equipment_id", width: 25 },
+        { header: "Loại", key: "category", width: 25 },
+        { header: "Tình trạng", key: "condition", width: 15 },
+        { header: "Ngày bắt đầu", key: "start_time", width: 20 }
+    ];
+    safeForEach(report.maintenance_report, r => s3.addRow(r));
+    s3.getRow(1).font = { bold: true };
 
-  // phiếu nhập
-  const s3 = wb.addWorksheet("Import Report");
-  s3.addRow(["Date", "Category", "Quantity", "Unit Price", "Total"]);
-
-  report.import_report.forEach(r => {
-    s3.addRow([
-      r.date,
-      r.category,
-      r.quantity,
-      r.unit_price,
-      r.total
-    ]);
-  });
-
-  // phiếu lắp đặt
-  const s4 = wb.addWorksheet("By Room");
-  s4.addRow(["Room ID", "Total Equipment"]);
-  report.by_room.forEach(r => {
-    s4.addRow([r.room_id, r.total_equipment]);
-  });
-
-  // bảo trì
-  const s5 = wb.addWorksheet("Maintenance");
-  s5.addRow(["Category", "Condition", "Start", "End"]);
-
-  report.maintenance_report.forEach(r => {
-    s5.addRow([
-      r.category,
-      r.condition,
-      r.start_time,
-      r.end_time
-    ]);
-  });
-
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  );
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=bao_cao_thiet_bi.xlsx"
-  );
-
-  await wb.xlsx.write(res);
-  res.end();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=bao_cao_thiet_bi.xlsx");
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Excel Equipment Error:", err);
+    res.status(500).json({ success: false, message: "Lỗi xuất file Thiết bị" });
+  }
 };
 
 export const exportCustomerReportExcel = async (req, res) => {

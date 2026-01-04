@@ -13,6 +13,7 @@ import ServicePage from '../features/service/pages/servicePage.jsx';
 import IncidentPage from '../features/incident/pages/incidentPage.jsx';
 import DiscountPage from '../features/discount/pages/discountPage.jsx';
 import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
+import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -77,6 +78,10 @@ export default function AppRoutes() {
               element={user ? <ReceiptPage /> : <Navigate to="/login" replace />}
         />
 
+        <Route
+              path="/reports"
+              element={user ? <StatisticsPage /> : <Navigate to="/login" replace />}
+        />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
