@@ -1,10 +1,11 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  FiGrid, FiUser, FiUsers, FiKey, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle
+  FiGrid, FiUser, FiUsers, FiSettings,
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
+import { useAuth } from "../features/auth/hooks/authContext.jsx";
 
 const ACTIVE_BG = "bg-indigo-600";
 const ACTIVE_TEXT = "text-white";
@@ -30,7 +31,6 @@ const sidebarConfig = [
       { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText },
     ],
   },
-
 ];
 
 const SidebarItem = ({ item, isMain }) => {
@@ -42,9 +42,9 @@ const SidebarItem = ({ item, isMain }) => {
     <Link
       to={item.path}
       className={`
-        group flex items-center rounded-lg transition-all duration-200 text-sm mb-1
-        ${isMain ? "px-4 py-3" : "pl-4 pr-4 py-2"}
-        ${isActive ? `${ACTIVE_BG} ${ACTIVE_TEXT} font-semibold shadow-lg shadow-indigo-500/20` : `${NORMAL_TEXT} ${HOVER_BG}`}
+        group flex items-center rounded-lg transition-all duration-200 mb-1.5
+        ${isMain ? "px-4 py-3 text-[15px]" : "px-4 py-2.5 text-[14px] ml-1"}
+        ${isActive ? `${ACTIVE_BG} ${ACTIVE_TEXT} font-semibold shadow-md shadow-indigo-500/20` : `${NORMAL_TEXT} ${HOVER_BG}`}
       `}
     >
       <Icon
@@ -52,24 +52,34 @@ const SidebarItem = ({ item, isMain }) => {
         className={`mr-3 transition-all duration-200
         ${isActive ? "text-white" : "text-gray-500 group-hover:text-white"}`}
       />
-      {item.name || item.title}
+      <span>{item.name || item.title}</span>
     </Link>
   );
 };
 
 export default function Sidebar() {
-  return (
-    <div className="sidebar w-[270px] min-h-screen bg-[#111827] border-r border-gray-800 fixed left-0 top-0 overflow-y-auto z-50">
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
-      <div className="sticky top-0 bg-[#111827] z-10 flex items-center gap-3 px-6 py-5 border-b border-gray-800">
+  const handleLogout = () => {
+    if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+      logout();
+      navigate("/login");
+    }
+  };
+
+  return (
+    <div className="sidebar w-[270px] h-screen bg-[#111827] border-r border-gray-800 fixed left-0 top-0 flex flex-col z-50">
+
+      <div className="bg-[#111827] flex items-center gap-3 px-6 py-6 border-b border-gray-800/50">
         <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shadow-indigo-500/50 shadow-md">
           S
         </div>
         <span className="text-xl font-bold text-white tracking-wide">SE HOTEL</span>
       </div>
 
-      <nav className="px-3 py-4">
-        <div className="pb-4 border-b border-gray-800 mb-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-6 custom-scrollbar">
+        <div className="mb-8">
           {sidebarConfig
             .filter(section => section.type === "main")
             .map((item, i) => (
@@ -81,16 +91,31 @@ export default function Sidebar() {
           .filter(section => section.type === "group")
           .map((section, i) => (
             <div key={i} className="mb-6">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-4">
+              <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-4 px-4">
                 {section.title}
               </h3>
 
-              {section.children.map((child, j) => (
-                <SidebarItem key={j} item={child} isMain={false} />
-              ))}
+              <div className="space-y-0.5">
+                {section.children.map((child, j) => (
+                  <SidebarItem key={j} item={child} isMain={false} />
+                ))}
+              </div>
             </div>
           ))}
       </nav>
-    </div>
+
+      <div className="px-3 py-4 border-t border-gray-800/50 bg-transparent">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-bold transition-all duration-300 group hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95 bg-transparent"
+              >
+
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors duration-300">
+                   <FiLogOut size={18} className="text-red-400 group-hover:text-white transition-colors" />
+                </div>
+                <span className="tracking-wide text-sm">Đăng xuất</span>
+              </button>
+            </div>
+          </div>
   );
 }
