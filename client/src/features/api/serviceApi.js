@@ -63,5 +63,13 @@ export const serviceApi = {
     createServiceUsage: async (data) => {
       const res = await axios.post(`${BASE_URL}/usage/add`, data, getAuthHeader());
       return res.data;
-    }
+    },
+    confirmServiceUsage: async (id) => {
+      const res = await axios.post(`${BASE_URL}/usage/${id}/confirm`, {}, getAuthHeader());
+      return res.data;
+    },
+    cancelServiceUsage: async (id) => {
+      const res = await axios.post(`${BASE_URL}/usage/${id}/cancel`, {}, getAuthHeader());
+      return res.data;
+    },
 };

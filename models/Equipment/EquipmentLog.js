@@ -16,7 +16,7 @@ const equipmentLogSchema = new mongoose.Schema(
 
     condition: { 
         type: String, enum: ["new", "good", "maintenance", "broken"], 
-        default: "good", required: true 
+        default: "new", required: true 
     },
     
     status: { 

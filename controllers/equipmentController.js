@@ -250,55 +250,179 @@ export const getEquipmentById = async (req, res) => {
     }
 };
 
+// export const updateEquipment = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const { room_id, status, condition, note } = req.body;
+//         const employee = await Employee.findOne({ user_id: req.user.userId });
+
+//         if (!mongoose.Types.ObjectId.isValid(id))
+//             return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
+
+//         const equipment = await Equipment.findById(id);
+//         if (!equipment)
+//             return res.status(404).json({ success: false, message: "Không tìm thấy thiết bị." });
+
+//         if (room_id !== undefined) {
+//             if (room_id === null || room_id === "") {
+//                 equipment.room_id = null; // unassign
+//             } else {
+//                 if (!mongoose.Types.ObjectId.isValid(room_id))
+//                     return res.status(400).json({ success: false, message: "ID phòng không hợp lệ!" });
+
+//                 const room = await Room.findById(room_id);
+//                 if (!room)
+//                     return res.status(404).json({ success: false, message: "Không tìm thấy phòng để gán thiết bị." });
+
+//                 equipment.room_id = room_id;
+//             }
+//         }
+
+//         if (status) {
+//             const validStatuses = ["in-stock", "in-use", "maintenance", "lost", "disposed"];
+//             if (!validStatuses.includes(status))
+//                 return res.status(400).json({ success: false, message: "Trạng thái thiết bị không hợp lệ!" });
+            
+//             equipment.status = status;
+//         }
+
+//         if (condition) {
+//             const validConditions = ["new", "good", "maintenance", "broken"];
+//             if (!validConditions.includes(condition))
+//                 return res.status(400).json({ success: false, message: "Tình trạng thiết bị không hợp lệ!" });
+
+//             equipment.condition = condition;
+//         }
+
+//         if (note) equipment.note = note;
+
+//         await equipment.save();
+
+//         // đóng log cũ (nếu có)
+//         await EquipmentLog.findOneAndUpdate(
+//             {
+//                 equipment_id: id,
+//                 end_time: null,
+//             },
+//             {
+//                 end_time: new Date(),
+//             }
+//         );
+    
+//         // tạo log mới
+//         await EquipmentLog.create(
+//             {
+//                 room_id: equipment.room_id || null,
+//                 equipment_id: id,
+//                 condition,
+//                 status,
+//                 start_time: new Date(),
+//                 end_time: null,
+//                 note: note ||  `Update trạng thái thiết bị: ${status}`,
+//                 handled_by: employee._id,
+//             },
+//         );
+
+//         const updated = await Equipment.findById(id)
+//             .populate("category_id", "name unit price")
+//             .populate("room_id", "room_number room_status")
+//             .select("-__v -created_at -updated_at");
+
+//         return res.status(200).json({ success: true, message: "Cập nhật thiết bị thành công!", equipment: updated });
+
+//     } catch (err) {
+//         return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+//     }
+// };
+
 export const updateEquipment = async (req, res) => {
     try {
         const { id } = req.params;
-        const { room_id, status, condition, note } = req.body;
-        const employee = await Employee.findOne({ user_id: req.user.userId });
+        const { status, condition, note } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id))
             return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
+
+        const employee = await Employee.findOne({ user_id: req.user.userId });
+        if (!employee)
+            return res.status(403).json({ success: false, message: "Không xác định được nhân viên." });
 
         const equipment = await Equipment.findById(id);
         if (!equipment)
             return res.status(404).json({ success: false, message: "Không tìm thấy thiết bị." });
 
-        if (room_id !== undefined) {
-            if (room_id === null || room_id === "") {
-                equipment.room_id = null; // unassign
-            } else {
-                if (!mongoose.Types.ObjectId.isValid(room_id))
-                    return res.status(400).json({ success: false, message: "ID phòng không hợp lệ!" });
+        let isChanged = false;
 
-                const room = await Room.findById(room_id);
-                if (!room)
-                    return res.status(404).json({ success: false, message: "Không tìm thấy phòng để gán thiết bị." });
+        if (condition !== undefined) {
+            const validConditions = ["good", "maintenance", "broken"];
 
-                equipment.room_id = room_id;
-            }
-        }
-
-        if (status) {
-            const validStatuses = ["in-stock", "in-use", "maintenance", "lost", "disposed"];
-            if (!validStatuses.includes(status))
-                return res.status(400).json({ success: false, message: "Trạng thái thiết bị không hợp lệ!" });
-            
-            equipment.status = status;
-        }
-
-        if (condition) {
-            const validConditions = ["new", "good", "maintenance", "broken"];
             if (!validConditions.includes(condition))
                 return res.status(400).json({ success: false, message: "Tình trạng thiết bị không hợp lệ!" });
 
-            equipment.condition = condition;
+            if ( equipment.condition === "good" && condition === "broken" && !note ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Chuyển thiết bị từ tốt sang hỏng cần ghi chú lý do."
+                });
+            }
+
+            // Chỉ cho về good khi đang maintenance
+            if (equipment.condition !== "maintenance" && condition === "good") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Chỉ có thể chuyển thiết bị về tốt từ trạng thái bảo trì."
+                });
+            }
+
+            if (equipment.condition !== condition) {
+                equipment.condition = condition;
+                isChanged = true;
+            }
         }
 
-        if (note) equipment.note = note;
+        if (status !== undefined) {
+            const allowedManualStatuses = ["lost", "maintenance", "disposed"];
+
+            if (!allowedManualStatuses.includes(status)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Không được chỉnh thủ công trạng thái này."
+                });
+            }
+            if (!note) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Vui lòng nhập lý do khi chỉnh trạng thái thiết bị."
+                });
+            }
+
+            if (status === "maintenance" && equipment.condition !== "maintenance" && condition !== "maintenance") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Trạng thái và tình trạng thiết bị phải cùng lúc bảo trì."
+                });
+            }
+
+            if (status === "disposed" && (equipment.condition !== "broken" || condition !== "broken")) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Nếu trạng thái thiết bị là disposed thì tình trạng phải là broken."
+                });
+            }
+
+            if (equipment.status !== status) {
+                equipment.status = status;
+                isChanged = true;
+            }
+        }
+
+        if (!isChanged)
+            return res.status(400).json({ success: false, message: "Không có thay đổi nào hợp lệ." });
+
+        if (status && status === "lost") condition = equipment.condition;
 
         await equipment.save();
 
-        // đóng log cũ (nếu có)
         await EquipmentLog.findOneAndUpdate(
             {
                 equipment_id: id,
@@ -308,30 +432,34 @@ export const updateEquipment = async (req, res) => {
                 end_time: new Date(),
             }
         );
-    
-        // tạo log mới
-        await EquipmentLog.create(
-            {
-                room_id: equipment.room_id || null,
-                equipment_id: id,
-                condition,
-                status,
-                start_time: new Date(),
-                end_time: null,
-                note: note ||  `Update trạng thái thiết bị: ${status}`,
-                handled_by: employee._id,
-            },
-        );
+
+        await EquipmentLog.create({
+            equipment_id: id,
+            room_id: equipment.room_id,
+            condition,
+            status,
+            start_time: new Date(),
+            end_time: null,
+            note: note || "Admin cập nhật trạng thái thiết bị thủ công.",
+            handled_by: employee._id,
+        });
 
         const updated = await Equipment.findById(id)
             .populate("category_id", "name unit price")
             .populate("room_id", "room_number room_status")
             .select("-__v -created_at -updated_at");
 
-        return res.status(200).json({ success: true, message: "Cập nhật thiết bị thành công!", equipment: updated });
+        return res.status(200).json({
+            success: true,
+            message: "Cập nhật thiết bị thành công!",
+            equipment: updated
+        });
 
     } catch (err) {
-        return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        return res.status(500).json({
+            success: false,
+            message: "SERVER ERROR: " + err.message
+        });
     }
 };
 

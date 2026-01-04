@@ -44,6 +44,29 @@ export default function ServiceTicketTab() {
     }
   };
 
+    const handleConfirmUsage = async (id) => {
+        if (!window.confirm("Xác nhận toàn bộ phiếu sử dụng dịch vụ?")) return;
+        try {
+            await serviceApi.confirmServiceUsage(id);
+            alert("Đã xác nhận phiếu sử dụng dịch vụ!");
+            fetchTickets();
+        } catch (err) {
+            alert("Lỗi: " + (err.response?.data?.message || err.message));
+        }
+    };
+
+    const handleCancelUsage = async (id) => {
+        if (!window.confirm("Hủy toàn bộ phiếu sử dụng dịch vụ?")) return;
+        try {
+            await serviceApi.cancelServiceUsage(id);
+            alert("Đã hủy phiếu sử dụng dịch vụ!");
+            fetchTickets();
+        } catch (err) {
+            alert("Lỗi: " + (err.response?.data?.message || err.message));
+        }
+    };
+
+
   const renderStatus = (status) => {
     const config = {
       pending: { label: "Đang xử lý", class: "bg-gray-100 text-gray-500 border border-gray-200" },
@@ -83,29 +106,82 @@ export default function ServiceTicketTab() {
                         <th className="px-4 py-3">Người tạo</th>
                         <th className="px-4 py-3 text-right">Tổng tiền</th>
                         <th className="px-4 py-3 text-center">Trạng thái</th>
+                        <th className="px-4 py-3 text-center">Hành động</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {usages.map((item) => (
+                        // <tr key={item._id} className="hover:bg-gray-50 transition">
+                        //     <td className="px-4 py-3 font-bold text-gray-800">
+                        //         <div className="flex items-center gap-2">
+                        //             <FiUser className="text-gray-400"/>
+                        //             {item.customer_id?.full_name || "Khách lẻ"}
+                        //         </div>
+                        //     </td>
+                        //     <td className="px-4 py-3 text-gray-600">
+                        //         {item.booking_id ? (
+                        //             <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                        //                 Theo Booking
+                        //             </span>
+                        //         ) : "Vãng lai"}
+                        //     </td>
+                        //     <td className="px-4 py-3">{item.employee_id?.full_name || "System"}</td>
+                        //     <td className="px-4 py-3 text-right font-medium text-indigo-600">
+                        //         {item.total_fee?.toLocaleString()} đ
+                        //     </td>
+                        //     <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
+                        // </tr>
                         <tr key={item._id} className="hover:bg-gray-50 transition">
                             <td className="px-4 py-3 font-bold text-gray-800">
                                 <div className="flex items-center gap-2">
-                                    <FiUser className="text-gray-400"/>
-                                    {item.customer_id?.full_name || "Khách lẻ"}
+                                <FiUser className="text-gray-400"/>
+                                {item.customer_id?.full_name || "Khách lẻ"}
                                 </div>
                             </td>
+
                             <td className="px-4 py-3 text-gray-600">
                                 {item.booking_id ? (
-                                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                                        Theo Booking
-                                    </span>
+                                <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                                    Theo Booking
+                                </span>
                                 ) : "Vãng lai"}
                             </td>
-                            <td className="px-4 py-3">{item.employee_id?.full_name || "System"}</td>
+
+                            <td className="px-4 py-3">
+                                {item.employee_id?.full_name || "System"}
+                            </td>
+
                             <td className="px-4 py-3 text-right font-medium text-indigo-600">
                                 {item.total_fee?.toLocaleString()} đ
                             </td>
-                            <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
+
+                            <td className="px-4 py-3 text-center">
+                                {renderStatus(item.status)}
+                            </td>
+
+                            <td className="px-4 py-3 text-right">
+                                {item.status === "waiting_confirm" ? (
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                    onClick={() => handleConfirmUsage(item._id)}
+                                    className="inline-flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm"
+                                    title="Xác nhận phiếu"
+                                    >
+                                    <FiCheckCircle /> Xác nhận
+                                    </button>
+
+                                    <button
+                                    onClick={() => handleCancelUsage(item._id)}
+                                    className="inline-flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-700 shadow-sm"
+                                    title="Hủy phiếu"
+                                    >
+                                    Hủy
+                                    </button>
+                                </div>
+                                ) : (
+                                <span className="text-gray-300 text-xs italic">---</span>
+                                )}
+                            </td>
                         </tr>
                     ))}
                     {usages.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}

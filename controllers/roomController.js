@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment, BookingDetail, Booking, CheckInOut, RoomStatusLog, Equipment } from "../models/index.js";
+import { Room, RoomCategory, RoomLog, BookingDetail, Booking, 
+  RoomStatusLog, Equipment, Employee 
+} from "../models/index.js";
 
 // ROOM
 export const createRoom = async (req, res) => {
@@ -216,6 +218,7 @@ export const updateRoom = async (req, res) => {
     const { id } = req.params;
     const { category_id, room_number, room_status, start_time, end_time, note } = req.body;
     const now = new Date();
+    const employee = await Employee.findOne({ user_id: req.user.userId });
 
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ success: false, message: "ID phòng không hợp lệ!" });
@@ -303,6 +306,13 @@ export const updateRoom = async (req, res) => {
         { session }
       );
 
+      // bảng mới
+      await RoomLog.updateMany(
+        { room_id: id, end_time: null },
+        { $set: { end_time: now } },
+        { session }
+      );
+
       await RoomStatusLog.create(
         [
           {
@@ -311,7 +321,21 @@ export const updateRoom = async (req, res) => {
             start_time: new Date(start_time),
             end_time: end_time ? new Date(end_time) : null,
             note: note || "",
-            handled_by: req.user?.userId || null,
+            handled_by: employee._id || null,
+          },
+        ],
+        { session }
+      );
+
+      await RoomLog.create(
+        [
+          {
+            room_id: id,
+            status: room_status,
+            start_time: new Date(start_time),
+            end_time: end_time ? new Date(end_time) : null,
+            note: note || "",
+            handled_by: employee._id || null,
           },
         ],
         { session }
@@ -343,7 +367,6 @@ export const updateRoom = async (req, res) => {
     session.endSession();
   }
 };
-
 
 export const deleteRoom = async (req, res) => {
     try {
@@ -395,8 +418,17 @@ export const completeCleaning = async (req, res) => {
     await RoomStatusLog.updateMany(
       {
         room_id: roomId,
-        status: "cleaning",
-        end_time: null,
+        status: "cleaning"
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // cắt log cleaning hiện tại (bảng mới)
+    await RoomLog.updateMany(
+      {
+        room_id: roomId,
+        status: "cleaning"
       },
       { $set: { end_time: now } },
       { session }
@@ -460,6 +492,16 @@ export const completeMaintenance = async (req, res) => {
         room_id: roomId,
         status: "maintenance",
         end_time: null,
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // cắt log maintenance
+    await RoomLog.updateMany(
+      {
+        room_id: roomId,
+        status: "maintenance"
       },
       { $set: { end_time: now } },
       { session }
@@ -803,11 +845,21 @@ export const reevaluateRoomStatus = async (room_id) => {
 
   // Ghi log trạng thái phòng
   await RoomStatusLog.create({
-      room_id: room_id,
-      status,
-      start_time: new Date(),
-      end_time: null,
-      note: "Update status phòng theo sự cố + phiếu đền bù",
-      handled_by: req.user.userId || null,
+    room_id: room_id,
+    status,
+    start_time: new Date(),
+    end_time: null,
+    note: "Update status phòng theo sự cố + phiếu đền bù",
+    handled_by: req.user.userId || null,
+  });
+
+  // Ghi log trạng thái phòng (bảng mới)
+  await RoomLog.create({
+    room_id: room_id,
+    status,
+    start_time: new Date(),
+    end_time: null,
+    note: "Update status phòng theo sự cố + phiếu đền bù",
+    handled_by: null,
   });
 };

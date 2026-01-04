@@ -818,18 +818,6 @@ export const createCompensateTickett = async (req, res) => {
       });
     }
 
-    //const { details, totalFee } = await buildCompensationDetails(compensation_details, incident);
-
-    // cập nhật condition + status thiết bị
-    // for (const item of details) {
-    //   await updateEquipmentByResolution({
-    //     equipment_id: item.equipment_id,
-    //     resolution: item.resolution,
-    //     handled_by: req.user.employee_id,
-    //     note: `Sự cố ${incident._id}`
-    //   });
-    // }
-
     // thêm phiếu đền bù
     const ticket = await CompensateTicket.create([{
       incident_id,
@@ -839,16 +827,6 @@ export const createCompensateTickett = async (req, res) => {
       total_fee: total_fee,
       status: "pending"
     }], { session });
-
-    // const detailDocs = details.map(item => ({
-    //   ticket_id: ticket[0]._id,
-    //   equipment_id: item.equipment_id || null,
-    //   broken_state: item.broken_state,
-    //   resolution: item.resolution,
-    //   penalty_fee: item.penalty_fee,
-    // }));
-
-    // await CompensateDetail.insertMany(detailDocs, { session });
 
     // ghi log
     await IncidentLog.create({

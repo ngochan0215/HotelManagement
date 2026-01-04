@@ -6,6 +6,8 @@ import {
     createServiceUsage, updateServiceUsage, getAllServiceUsage, getServiceUsageById, deleteServiceUsage,
     confirmUsageDetail,
     cancelUsageDetail,
+    confirmServiceUsage,
+    cancelServiceUsage,
 
 } from "../controllers/serviceController.js";
 
@@ -39,8 +41,12 @@ router.get("/usage/all", verifyToken, isNotCustomer, getAllServiceUsage);
 router.get("/usage/:id", verifyToken, isNotCustomer, getServiceUsageById);
 router.delete("/usage/:id/delete", verifyToken, isNotCustomer, deleteServiceUsage);
 router.patch("/usage/:id/update", verifyToken, isNotCustomer, updateServiceUsage);
+// xác thực hoàn thành hoặc hủy chi tiết
 router.post("/usage-details/:id/confirm", verifyToken, isNotCustomer, confirmUsageDetail);
 router.post("/usage-details/:id/cancel", verifyToken, isNotCustomer, cancelUsageDetail);
+// xác thực hoàn thành hoặc hủy toàn bộ phiếu
+router.post("/usage/:id/confirm", verifyToken, isNotCustomer, confirmServiceUsage);
+router.post("/usage/:id/cancel", verifyToken, isNotCustomer, cancelServiceUsage);
 
 // users can see all tasks and services
 router.get('/category/all', getAllServiceCategories);

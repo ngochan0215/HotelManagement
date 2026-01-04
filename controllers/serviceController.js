@@ -704,13 +704,11 @@ export const confirmGoodTicket = async (req, res) => {
 };
 
 //---- SERVICE USAGE ----//
-
 export const createServiceUsage = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
     const { booking_id, customer_id, services } = req.body;
-    console.log("EMPLOYEE_ID: ", req.user.userId);
 
     // validate cơ bản
     if (!booking_id || !customer_id || !Array.isArray(services) || services.length === 0) {
@@ -745,15 +743,7 @@ export const createServiceUsage = async (req, res) => {
       return res.status(400).json({ success: false, message: "Khách hàng không thuộc booking này." });
     }
 
-    // const existingUsage = await ServiceUsage.findOne({ booking_id, status: { $in: ["pending", "confirmed"] } }).session(session);
-    // if (existingUsage) {
-    //   await session.abortTransaction();
-    //   return res.status(409).json({ success: false, message: "Booking này đã có phiếu sử dụng dịch vụ đang mở, có thể cân nhắc thêm dịch vụ vào phiếu đó.", data: existingUsage });
-    // }
-
-    // validate danh sách dịch vụ
     const serviceIds = services.map((s) => s.service_id);
-
     const dbServices = await Service.find({ _id: { $in: serviceIds }, status: "active" }).session(session);
 
     if (dbServices.length !== services.length) {
@@ -767,11 +757,11 @@ export const createServiceUsage = async (req, res) => {
     // tạo phiếu sử dụng dịch vụ
     const serviceUsage = await ServiceUsage.create(
       [{
-          booking_id,
-          customer_id,
-          employee_id: req.user.userId,
-          total_fee: 0,
-        }], { session }
+        booking_id,
+        customer_id,
+        employee_id: req.user.userId,
+        total_fee: 0,
+      }], { session }
     );
 
     let totalUsageFee = 0;
@@ -791,22 +781,22 @@ export const createServiceUsage = async (req, res) => {
         return res.status(400).json({ success: false, message: `quantity phải >= 1 tại phần tử thứ ${i + 1}.` });
       }
 
-      if (!isFoodService && (item.use_from || item.finish_at)) {
-        if (isNaN(new Date(item.use_from).getTime()) || isNaN(new Date(item.use_from).getTime())) {
-          await session.abortTransaction();
-          return res.status(400).json({ success: false, message: `use_from hoặc finish_at không hợp lệ tại phần tử thứ ${i + 1}.` });
-        }
+      // if (!isFoodService && (item.use_from || item.finish_at)) {
+      //   if (isNaN(new Date(item.use_from).getTime()) || isNaN(new Date(item.use_from).getTime())) {
+      //     await session.abortTransaction();
+      //     return res.status(400).json({ success: false, message: `use_from hoặc finish_at không hợp lệ tại phần tử thứ ${i + 1}.` });
+      //   }
 
-        if (new Date(item.use_from) < new Date()) {
-          await session.abortTransaction();
-          return res.status(400).json({ success: false, message: `use_from không được ở trong quá khứ tại phần tử thứ ${i + 1}.` });
-        }
+      //   if (new Date(item.use_from) < new Date()) {
+      //     await session.abortTransaction();
+      //     return res.status(400).json({ success: false, message: `use_from không được ở trong quá khứ tại phần tử thứ ${i + 1}.` });
+      //   }
 
-        if (new Date(item.use_from) >= new Date(item.finish_at)) {
-          await session.abortTransaction();
-          return res.status(400).json({ success: false, message: `use_from phải nhỏ hơn finish_at tại phần tử thứ ${i + 1}.` });
-        }
-      }
+      //   if (new Date(item.use_from) >= new Date(item.finish_at)) {
+      //     await session.abortTransaction();
+      //     return res.status(400).json({ success: false, message: `use_from phải nhỏ hơn finish_at tại phần tử thứ ${i + 1}.` });
+      //   }
+      // }
     }
 
     const usageDetailsData = services.map((item) => {
@@ -818,11 +808,11 @@ export const createServiceUsage = async (req, res) => {
         ticket_id: serviceUsage[0]._id,
         service_id: item.service_id,
         quantity: item.quantity,
-        use_from: item.use_from ? new Date(item.use_from) : null,
+        use_from: item.use_from ? new Date(item.use_from) : new Date(),
         finish_at: item.finish_at ? new Date(item.finish_at) : null,
         current_price: service.price,
         total_fee: itemTotal,
-        status: item.use_from ? "pending" : "waiting_confirm",
+        status: "waiting_confirm",
       };
     });
 
@@ -1157,6 +1147,236 @@ export const recalcServiceUsageStatus = async (ticketId) => {
     { _id: ticketId },
     { $set: { status: newStatus } }
   );
+};
+
+export const confirmServiceUsage = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params; // service_usage_id
+    const employeeUserId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "service_usage_id không hợp lệ",
+      });
+    }
+
+    const employee = await Employee.findOne({ user_id: employeeUserId });
+    if (!employee) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhân viên",
+      });
+    }
+
+    const serviceUsage = await ServiceUsage.findById(id).session(session);
+    if (!serviceUsage) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy phiếu sử dụng dịch vụ",
+      });
+    }
+
+    const usageDetails = await UsageDetail.find({
+      ticket_id: id,
+    }).session(session);
+
+    if (usageDetails.length === 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Phiếu chưa có chi tiết sử dụng dịch vụ",
+      });
+    }
+
+    // chỉ cho confirm nếu tất cả đang waiting_confirm
+    const invalidDetail = usageDetails.find(
+      (d) => d.status !== "waiting_confirm"
+    );
+    if (invalidDetail) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Phiếu có chi tiết không ở trạng thái waiting_confirm",
+      });
+    }
+
+    // gom service để tránh query lặp
+    const serviceIds = usageDetails.map((d) => d.service_id);
+    const services = await Service.find({
+      _id: { $in: serviceIds },
+    }).session(session);
+
+    const serviceMap = {};
+    services.forEach((s) => {
+      serviceMap[s._id.toString()] = s;
+    });
+
+    // kiểm tra tồn kho trước
+    for (const detail of usageDetails) {
+      const service = serviceMap[detail.service_id.toString()];
+
+      if (!service) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: "Dịch vụ không tồn tại",
+        });
+      }
+
+      if (
+        service.category_id.toString() === FOOD_CATEGORY_ID &&
+        service.storage_quantity < detail.quantity
+      ) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `Không đủ tồn kho cho dịch vụ ${service.name}`,
+        });
+      }
+    }
+
+    // cập nhật trạng thái + trừ kho
+    for (const detail of usageDetails) {
+      const service = serviceMap[detail.service_id.toString()];
+
+      detail.status = "completed";
+      detail.confirmed_at = new Date();
+      detail.finish_at = new Date();
+      detail.confirmed_by = employee._id;
+      await detail.save({ session });
+
+      if (service.category_id.toString() === FOOD_CATEGORY_ID) {
+        await Service.updateOne(
+          {
+            _id: service._id,
+            storage_quantity: { $gte: detail.quantity },
+          },
+          {
+            $inc: { storage_quantity: -detail.quantity },
+          },
+          { session }
+        );
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // cập nhật trạng thái phiếu
+    await recalcServiceUsageStatus(serviceUsage._id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Xác nhận toàn bộ phiếu sử dụng dịch vụ thành công",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(500).json({
+      success: false,
+      message: "SERVER ERROR: " + error.message,
+    });
+  }
+};
+
+export const cancelServiceUsage = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params; // service_usage_id
+    const employeeUserId = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "service_usage_id không hợp lệ",
+      });
+    }
+
+    const employee = await Employee.findOne({ user_id: employeeUserId });
+    if (!employee) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhân viên",
+      });
+    }
+
+    const serviceUsage = await ServiceUsage.findById(id).session(session);
+    if (!serviceUsage) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy phiếu sử dụng dịch vụ",
+      });
+    }
+
+    const usageDetails = await UsageDetail.find({
+      ticket_id: id,
+    }).session(session);
+
+    if (usageDetails.length === 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Phiếu chưa có chi tiết sử dụng dịch vụ",
+      });
+    }
+
+    // Không cho hủy nếu có detail đã hoàn thành
+    const completedDetail = usageDetails.find(
+      (d) => d.status === "completed"
+    );
+    if (completedDetail) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Không thể hủy phiếu vì có dịch vụ đã hoàn thành",
+      });
+    }
+
+    // Hủy các detail chưa hủy
+    for (const detail of usageDetails) {
+      if (detail.status === "cancelled") continue;
+
+      detail.status = "cancelled";
+      detail.cancelled_at = new Date();
+      detail.confirmed_by = employee._id;
+
+      await detail.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // cập nhật trạng thái phiếu
+    await recalcServiceUsageStatus(serviceUsage._id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Hủy toàn bộ phiếu sử dụng dịch vụ thành công",
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(500).json({
+      success: false,
+      message: "SERVER ERROR: " + error.message,
+    });
+  }
 };
 
 export const confirmUsageDetail = async (req, res) => {

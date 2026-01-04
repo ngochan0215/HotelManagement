@@ -39,7 +39,7 @@ const STATUS_CONFIG = {
   },
   completed: {
     label: "Đã xong",
-    style: "bg-gray-200 border-l-4 border-gray-400 text-gray-500 opacity-80 hover:bg-gray-300",
+    style: "bg-green-200 border-l-4 border-green-400 text-green-500 opacity-80 hover:bg-green-400",
   },
 };
 
@@ -67,91 +67,69 @@ export default function RoomCalendar() {
 
     const fetchCalendar = async () => {
         try {
-            const [roomsRes, bookingsRes] = await Promise.all([
-                roomApi.getAllRooms(),
-                bookingApi.getAllBookings()
-            ]);
-
-            const roomList = roomsRes.rooms || [];
-            const bookingList = bookingsRes.result || [];
+            const dateStr = format(currentDate, 'yyyy-MM-dd');
+            const response = await bookingApi.getRoomsCalendar(dateStr);
+            
+            const roomList = response.rooms || [];
+            const eventList = response.events || [];
+            
             setRooms(roomList);
 
-            const processedEvents = [];
-            const dayStart = startOfDay(currentDate);
-            const dayEnd = endOfDay(currentDate);
+            // Map API status to component status
+            const statusMap = {
+                'reserved': 'pending',
+                'booked': 'confirmed',
+                'occupied': 'occupied',
+                'cleaning': 'cleaning',
+                'maintenance': 'maintenance'
+            };
+
             const now = new Date();
-
-            bookingList.forEach(booking => {
-                const customerId = booking.customer_id?._id || booking.customer_id;
-                const customerName = booking.customer_id?.full_name || "Khách vãng lai";
-                const customerPhone = booking.customer_id?.phone_number || "";
-                const customerCCCD = booking.customer_id?.CCCD || "";
-                const bookingCode = booking._id.toString().slice(-6).toUpperCase();
-
-                if (Array.isArray(booking.rooms)) {
-                    booking.rooms.forEach(detail => {
-                        const roomId = detail.room_id?._id || detail.room_id;
-                        const roomNumber = detail.room_id?.room_number || "N/A";
-
-                        const start = detail.actual_checkin ? new Date(detail.actual_checkin) : new Date(detail.expected_checkin);
-                        const end = detail.actual_checkout ? new Date(detail.actual_checkout) : new Date(detail.expected_checkout);
-
-                        if (end <= dayStart || start >= dayEnd) return;
-
-                        let status = 'pending';
-                        let isCompleted = false;
-
-                        if (booking.status === 'pending') status = 'pending';
-                        else if (booking.status === 'confirmed') status = 'confirmed';
-                        if (detail.status === 'checked_in') status = 'occupied';
-
-                        if (['checked_out', 'cancelled'].includes(detail.status) || ['cancelled', 'expired', 'completed'].includes(booking.status)) {
-                            status = 'completed';
-                            isCompleted = true;
-                        } else if (status !== 'occupied' && end < now) {
-                            status = 'completed';
-                            isCompleted = true;
-                        }
-
-                        processedEvents.push({
-                            _id: detail._id,
-                            booking_id: booking._id,
-                            customer_id: customerId,
-                            room_id: roomId,
-                            room_number: roomNumber,
-                            start: start.toISOString(),
-                            end: end.toISOString(),
-                            status: status,
-                            title: status === 'occupied' ? 'Đang ở' : 'Đặt phòng',
-                            customer_name: customerName,
-                            customer_phone: customerPhone,
-                            customer_cccd: customerCCCD,
-                            booking_code: bookingCode,
-                            isCompleted: isCompleted,
-                            note: booking.note || ""
-                        });
-                    });
+            
+            // Map events from API response to component format
+            const processedEvents = eventList.map(event => {
+                const booking = event.booking;
+                const apiStatus = event.status;
+                const componentStatus = statusMap[apiStatus] || apiStatus;
+                
+                // Determine if event is completed
+                let isCompleted = false;
+                if (booking && ['cancelled', 'expired', 'completed'].includes(booking.booking_status)) {
+                    isCompleted = true;
+                } else {
+                    const eventEnd = new Date(event.end);
+                    if (eventEnd < now && componentStatus !== 'occupied') {
+                        isCompleted = true;
+                    }
                 }
-            });
 
-            roomList.forEach(room => {
-                if (['cleaning', 'maintenance'].includes(room.room_status)) {
-                    processedEvents.push({
-                        _id: `log-${room._id}`,
-                        room_id: room._id,
-                        room_number: room.room_number,
-                        start: new Date().toISOString(),
-                        end: endOfDay(currentDate).toISOString(),
-                        status: room.room_status,
-                        title: room.room_status === 'cleaning' ? 'Đang dọn' : 'Bảo trì',
-                        customer_name: room.room_status === 'cleaning' ? 'Buồng phòng' : 'Kỹ thuật',
-                        isCompleted: false
-                    });
-                }
+                // Convert dates to ISO strings if they're not already
+                const startDate = event.start instanceof Date ? event.start.toISOString() : event.start;
+                const endDate = event.end instanceof Date ? event.end.toISOString() : event.end;
+
+                return {
+                    _id: event._id,
+                    room_id: event.room_id,
+                    room_number: event.room_number,
+                    start: startDate,
+                    end: endDate,
+                    status: componentStatus,
+                    title: event.title,
+                    note: event.note || "",
+                    booking_id: booking?.booking_id || null,
+                    customer_id: booking?.customer_id || null,
+                    customer_name: booking?.customer_name || (componentStatus === 'cleaning' ? 'Buồng phòng' : componentStatus === 'maintenance' ? 'Kỹ thuật' : 'N/A'),
+                    customer_phone: booking?.customer_phone || "",
+                    customer_cccd: booking?.customer_cccd || "",
+                    booking_code: booking?.booking_code || null,
+                    isCompleted: isCompleted
+                };
             });
 
             setEvents(processedEvents);
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error("Error fetching calendar:", err);
+        }
     };
 
     const fetchServices = async () => {
@@ -302,7 +280,7 @@ export default function RoomCalendar() {
                                                 ></div>
                                             ))}
 
-                                            {events.filter(e=>e.room_id===room._id).map(evt => {
+                                            {events.filter(e=>String(e.room_id)===String(room._id)).map(evt => {
                                                 const style=getEventStyle(evt); if(!style) return null;
                                                 const conf = evt.isCompleted ? STATUS_CONFIG.completed : (STATUS_CONFIG[evt.status] || STATUS_CONFIG.pending);
 

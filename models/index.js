@@ -31,6 +31,7 @@ import Receipt from "./Booking/Receipts.js";
 
 import RoomCategory from "./Room/RoomCategory.js";
 import Room from "./Room/Rooms.js";
+import RoomLog from "./Room/RoomLog.js";
 import RoomStatusLog from "./Booking/RoomStatusLog.js";
 import DefaultEquipment from "./Room/DefaultEquipment.js";
 import EquipmentLog from "./Equipment/EquipmentLog.js";
@@ -47,6 +48,6 @@ export {
     Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, UsageDetail,
     Discount, Notification, Receipt, EquipmentLog, PointsLog, 
     Incident, CompensateTicket, CompensateDetail, IncidentLog,
-    Room, RoomCategory, DefaultEquipment, RoomStatusLog,
+    Room, RoomCategory, DefaultEquipment, RoomStatusLog, RoomLog,
     Booking, BookingDetail, CheckInOut, RoomCancellation, BookingStatusLog
 };

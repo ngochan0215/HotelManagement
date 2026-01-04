@@ -1,5 +1,5 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
-    GoodTicket, ServiceUsage, UsageDetail, Booking, BookingDetail, 
+    GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
     BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail
 } from "../models/index.js";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
@@ -343,7 +343,17 @@ export const cancelExpiredDepositBookings = async () => {
       {
         room_id: { $in: roomIds },
         status: "reserved",
-        end_time: null,
+        end_time: booking.expected_checkout,
+      },
+      { $set: { end_time: new Date() } }
+    );
+
+    //(BẢNG MỚI)
+    await RoomLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        status: "reserved",
+        end_time: booking.expected_checkout,
       },
       { $set: { end_time: new Date() } }
     );
@@ -403,7 +413,17 @@ export const cancelCheckinLateBookings = async () => {
       {
         room_id: { $in: roomIds },
         status: "booked",
-        end_time: null,
+        end_time: booking.expected_checkout,
+      },
+      { $set: { end_time: new Date() } }
+    );
+
+    // BẢNG MỚI
+    await RoomLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        status: "booked",
+        end_time: booking.expected_checkout,
       },
       { $set: { end_time: new Date() } }
     );
