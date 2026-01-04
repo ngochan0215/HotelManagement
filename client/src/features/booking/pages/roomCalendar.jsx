@@ -19,29 +19,33 @@ const ROOM_COL_WIDTH = 220;
 const STATUS_CONFIG = {
   pending: {
     label: "Chờ cọc",
-    style: "bg-yellow-100 border-l-4 border-yellow-500 text-yellow-900 hover:bg-yellow-200",
+    style:
+      "bg-yellow-100 border-l-4 border-yellow-600 text-yellow-900 font-medium hover:bg-yellow-200",
   },
   confirmed: {
     label: "Đã cọc",
-    style: "bg-blue-100 border-l-4 border-blue-600 text-blue-900 hover:bg-blue-200",
+    style:
+      "bg-orange-100 border-l-4 border-orange-600 text-orange-900 font-medium hover:bg-orange-200",
   },
   occupied: {
     label: "Đang ở",
-    style: "bg-rose-100 border-l-4 border-rose-600 text-rose-900 hover:bg-rose-200",
+    style:
+      "bg-emerald-100 border-l-4 border-emerald-700 text-emerald-900 font-semibold hover:bg-emerald-200",
   },
   cleaning: {
     label: "Dọn dẹp",
-    style: "bg-teal-100 border-l-4 border-teal-600 text-teal-900 hover:bg-teal-200",
+    style:
+      "bg-purple-100 border-l-4 border-purple-700 text-purple-900 font-medium hover:bg-purple-200",
   },
   maintenance: {
     label: "Bảo trì",
-    style: "bg-slate-200 border-l-4 border-slate-600 text-slate-800 hover:bg-slate-300",
+    style:
+      "bg-red-100 border-l-4 border-red-700 text-red-900 font-semibold hover:bg-red-200",
   },
-  completed: {
-    label: "Đã xong",
-    style: "bg-green-200 border-l-4 border-green-400 text-green-500 opacity-80 hover:bg-green-400",
-  },
+
 };
+
+
 
 export default function RoomCalendar() {
     const navigate = useNavigate();
@@ -69,10 +73,10 @@ export default function RoomCalendar() {
         try {
             const dateStr = format(currentDate, 'yyyy-MM-dd');
             const response = await bookingApi.getRoomsCalendar(dateStr);
-            
+
             const roomList = response.rooms || [];
             const eventList = response.events || [];
-            
+
             setRooms(roomList);
 
             // Map API status to component status
@@ -85,13 +89,13 @@ export default function RoomCalendar() {
             };
 
             const now = new Date();
-            
+
             // Map events from API response to component format
             const processedEvents = eventList.map(event => {
                 const booking = event.booking;
                 const apiStatus = event.status;
                 const componentStatus = statusMap[apiStatus] || apiStatus;
-                
+
                 // Determine if event is completed
                 let isCompleted = false;
                 if (booking && ['cancelled', 'expired', 'completed'].includes(booking.booking_status)) {
@@ -126,8 +130,9 @@ export default function RoomCalendar() {
                 };
             });
 
-            setEvents(processedEvents);
-        } catch (err) { 
+            setEvents(processedEvents.filter(e => !e.isCompleted));
+
+        } catch (err) {
             console.error("Error fetching calendar:", err);
         }
     };

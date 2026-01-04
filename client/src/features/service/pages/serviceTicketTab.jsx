@@ -87,7 +87,7 @@ export default function ServiceTicketTab() {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
-                <FiClock className="text-orange-500" /> Lịch sử Sử dụng Dịch vụ
+                 Lịch sử Sử dụng Dịch vụ
             </h2>
             <button
                 onClick={() => setShowUsageModal(true)}
@@ -193,7 +193,7 @@ export default function ServiceTicketTab() {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
-                <FiTruck className="text-blue-500" /> Quản lý Nhập Kho
+                 Quản lý Nhập Kho
             </h2>
             <button
                 onClick={() => setShowImportModal(true)}
