@@ -7,18 +7,23 @@ import { Receipt, Booking, ServiceUsage, CompensateTicket,
  } from "../models/index.js";
 
 // các hàm helper
+const parseRange = (from, to) => {
+    const start = from ? new Date(from) : new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = to ? new Date(to) : new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+};
 function getWeekRange(date) {
-  const d = new Date(date);
-  const day = d.getDay() || 7; // CN = 7
-  const start = new Date(d);
-  start.setDate(d.getDate() - day + 1);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-
-  return { start, end };
+    const d = new Date(date);
+    const day = d.getDay() || 7;
+    const start = new Date(d);
+    start.setDate(d.getDate() - day + 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
 }
 
 function getMonthRange(date) {
@@ -200,165 +205,82 @@ export const revenueBySource = async (req, res) => {
 // PHÒNG
 // báo cáo phòng
 export const roomOperationReport = async (from, to) => {
-  const start = new Date(from);
-  const end = new Date(to);
+    const { start, end } = parseRange(from, to);
 
-  // load rooms + category
-  const rooms = await Room.find()
-    .populate("category_id", "category_name")
-    .lean();
+    const rooms = await Room.find().populate("category_id", "category_name").lean();
+    const logs = await RoomStatusLog.find({
+        start_time: { $lt: end },
+        $or: [{ end_time: { $gte: start } }, { end_time: null }]
+    }).sort({ room_id: 1, start_time: 1 }).lean();
 
-  // Load logs trong khoảng thời gian
-  const logs = await RoomStatusLog.find({
-    start_time: { $lt: end },
-    $or: [
-      { end_time: { $gte: start } },
-      { end_time: null }
-    ]
-  })
-    .sort({ room_id: 1, start_time: 1 })
-    .lean();
+    const roomStats = {};
+    rooms.forEach(r => {
+        roomStats[r._id.toString()] = {
+            room_number: r.room_number,
+            category: r.category_id?.category_name || "N/A",
+            usage_count: 0,
+            occupied_hours: 0,
+            reserved_hours: 0,
+            booked_hours: 0,
+            maintenance_hours: 0,
+            cleaning_hours: 0
+        };
+    });
 
-  // khởi tạo status cho từng phòng
-  const roomStats = {};
-  rooms.forEach(r => {
-    roomStats[r._id.toString()] = {
-      room_number: r.room_number,
-      category: r.category_id?.category_name,
-      usage_count: 0,
-      occupied_hours: 0,
-      reserved_hours: 0,
-      booked_hours: 0,
-      maintenance_hours: 0,
-      cleaning_hours: 0
+    for (const log of logs) {
+        const roomId = log.room_id.toString();
+        if (!roomStats[roomId]) continue;
+
+        const logStart = new Date(Math.max(new Date(log.start_time), start));
+        const logEnd = new Date(log.end_time ? Math.min(new Date(log.end_time), end) : end);
+        const hours = Math.max((logEnd - logStart) / 36e5, 0);
+
+        switch (log.status) {
+            case "reserved": roomStats[roomId].reserved_hours += hours; break;
+            case "booked": roomStats[roomId].booked_hours += hours; break;
+            case "occupied":
+                roomStats[roomId].occupied_hours += hours;
+                roomStats[roomId].usage_count += 1;
+                break;
+            case "maintenance": roomStats[roomId].maintenance_hours += hours; break;
+            case "cleaning": roomStats[roomId].cleaning_hours += hours; break;
+        }
+    }
+
+    const roomPerformance = Object.values(roomStats);
+    const occupiedRooms = roomPerformance.filter(r => r.occupied_hours > 0).length;
+
+    return {
+        meta: { from: start, to: end, generated_at: new Date() },
+        summary: {
+            total_rooms: rooms.length,
+            occupied_rooms: occupiedRooms,
+            maintenance_rooms: roomPerformance.filter(r => r.maintenance_hours > 0).length,
+            cleaning_rooms: roomPerformance.filter(r => r.cleaning_hours > 0).length,
+            occupancy_rate: rooms.length ? Number(((occupiedRooms / rooms.length) * 100).toFixed(2)) : 0,
+            total_occupied_hours: Number(roomPerformance.reduce((s, r) => s + r.occupied_hours, 0).toFixed(2))
+        },
+        tables: { room_performance: roomPerformance },
+        charts: {
+            room_status_distribution: [
+                { label: "Đang dùng", value: occupiedRooms },
+                { label: "Bảo trì", value: roomPerformance.filter(r => r.maintenance_hours > 0).length },
+                { label: "Trống/Khác", value: rooms.length - occupiedRooms }
+            ],
+            top_used_rooms: roomPerformance.sort((a,b) => b.occupied_hours - a.occupied_hours).slice(0, 5).map(r => ({ room: r.room_number, hours: Number(r.occupied_hours.toFixed(1)) }))
+        }
     };
-  });
-
-  // tính thời gian theo từng status
-  for (const log of logs) {
-    const roomId = log.room_id.toString();
-
-    if (!roomStats[roomId]) continue;
-
-    const logStart = new Date(Math.max(log.start_time, start));
-    const logEnd = new Date( log.end_time ? Math.min(log.end_time, end) : end );
-
-    const hours = Math.max((logEnd - logStart) / 36e5, 0);
-
-    switch (log.status) {
-        case "reserved":
-            roomStats[roomId].resered_hours += hours;
-            break;
-        case "booked":
-            roomStats[roomId].booked_hours += hours;
-            break;
-        case "occupied":
-            roomStats[roomId].occupied_hours += hours;
-            roomStats[roomId].usage_count += 1;
-            break;
-        case "maintenance":
-            roomStats[roomId].maintenance_hours += hours;
-            break;
-        case "cleaning":
-            roomStats[roomId].cleaning_hours += hours;
-            break;
-    }
-  }
-
-  // mục tổng quan 
-  const totalRooms = rooms.length;
-  const totalOccupiedHours = Object.values(roomStats)
-    .reduce((s, r) => s + r.occupied_hours, 0);
-
-  const maintenanceRooms = Object.values(roomStats)
-    .filter(r => r.maintenance_hours > 0).length;
-
-  const occupiedRooms = Object.values(roomStats)
-    .filter(r => r.occupied_hours > 0).length;
-
-  const cleaningRooms = Object.values(roomStats)
-    .filter(r => r.cleaning_hours > 0).length;
-
-  const reservedRooms = Object.values(roomStats)
-    .filter(r => r.reserved_hours > 0).length;
-
-  const bookedRooms = Object.values(roomStats)
-    .filter(r => r.booked_hours > 0).length;
-
-  // hiệu suất sử dụng
-  const dailyMap = {};
-  logs.forEach(log => {
-    if (log.status !== "occupied") return;
-
-    let d = new Date(log.start_time);
-    while (d <= (log.end_time || end)) {
-      const key = d.toISOString().split("T")[0];
-      dailyMap[key] = (dailyMap[key] || new Set());
-      dailyMap[key].add(log.room_id.toString());
-      d.setDate(d.getDate() + 1);
-    }
-  });
-
-  const dailyOccupancy = Object.entries(dailyMap).map(([date, rooms]) => ({
-    date,
-    occupied_rooms: rooms.size,
-    occupancy_rate: Number(((rooms.size / totalRooms) * 100).toFixed(2))
-  }));
-
-  // 7. Charts
-  const statusDistribution = [
-    { label: "Đang sử dụng", value: occupiedRooms },
-    { label: "Bảo trì", value: maintenanceRooms },
-    { label: "Khác", value: totalRooms - occupiedRooms - maintenanceRooms }
-  ];
-
-  const topRooms = Object.values(roomStats)
-    .sort((a, b) => b.occupied_hours - a.occupied_hours)
-    .slice(0, 5)
-    .map(r => ({
-      room: r.room_number,
-      hours: Number(r.occupied_hours.toFixed(2))
-    }));
-
-  // 8. Final report
-  return {
-    meta: {
-      from,
-      to,
-      generated_at: new Date()
-    },
-    summary: {
-      total_rooms: totalRooms,
-      occupied_rooms: occupiedRooms,
-      maintenance_rooms: maintenanceRooms,
-      cleaning_rooms: cleaningRooms,
-      reserved_rooms: reservedRooms,
-      booked_rooms: bookedRooms,
-      occupancy_rate: Number(((occupiedRooms / totalRooms) * 100).toFixed(2)),
-      total_occupied_hours: Number(totalOccupiedHours.toFixed(2)),
-      avg_usage_hours_per_room: Number(
-        (totalOccupiedHours / totalRooms).toFixed(2)
-      )
-    },
-    tables: {
-      room_performance: Object.values(roomStats),
-      daily_occupancy: dailyOccupancy
-    },
-    charts: {
-      room_status_distribution: statusDistribution,
-      occupancy_trend: dailyOccupancy.map(d => ({
-        date: d.date,
-        value: d.occupancy_rate
-      })),
-      top_used_rooms: topRooms
-    }
-  };
 };
 
 export const getRoomOperationReport = async (req, res) => {
-  const { from, to } = req.query;
-  const report = await generateRoomOperationReport(from, to);
-  res.json(report);
+    try {
+        const { from, to } = req.query;
+        const report = await roomOperationReport(from, to);
+        res.json(report);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Lỗi báo cáo phòng: " + err.message });
+    }
 };
 
 // ĐẶT PHÒNG
@@ -648,190 +570,69 @@ export const getBookingReport = async (req, res) => {
 
 // THIẾT BỊ
 export const generateEquipmentReport = async (from, to) => {
-    const start = new Date(from);
-    const end = new Date(to);
+    const { start, end } = parseRange(from, to);
 
-    const categories = await EquipmentCategory.find().lean();
-    const equipments = await Equipment.find().lean();
-
-    const categoryMap = {};
-    categories.forEach(c => {
-        categoryMap[c._id.toString()] = c;
-    });
-
-    // trạng thái mới nhất của các thiết bị
-    const latestLogs = await EquipmentLog.aggregate([
-        { $sort: { start_time: -1 } },
-        {
-        $group: {
-            _id: "$equipment_id",
-            status: { $first: "$status" },
-            condition: { $first: "$condition" },
-            room_id: { $first: "$room_id" }
-        }
-        }
+    const [categories, equipments, latestLogs] = await Promise.all([
+        EquipmentCategory.find().lean(),
+        Equipment.find().lean(),
+        EquipmentLog.aggregate([
+            { $sort: { start_time: -1 } },
+            { $group: { _id: "$equipment_id", status: { $first: "$status" }, condition: { $first: "$condition" } } }
+        ])
     ]);
 
-    const equipmentState = {};
-    latestLogs.forEach(l => {
-        equipmentState[l._id.toString()] = l;
-    });
+    const categoryMap = Object.fromEntries(categories.map(c => [c._id.toString(), c]));
+    const equipmentState = Object.fromEntries(latestLogs.map(l => [l._id.toString(), l]));
 
-    const summary = {
-        total_equipment: equipments.length,
-        in_stock: 0,
-        in_use: 0,
-        maintenance: 0,
-        lost: 0,
-        disposed: 0,
-        total_asset_value: 0
-    };
-
-    equipments.forEach(e => {
-        const state = equipmentState[e._id.toString()];
-        const category = categoryMap[e.category_id.toString()];
-        const price = category?.price || 0;
-
-        summary.total_asset_value += price;
-
-        if (!state) {
-        summary.in_stock++;
-        return;
-        }
-
-        switch (state.status) {
-        case "in-use":
-            summary.in_use++;
-            break;
-        case "maintenance":
-            summary.maintenance++;
-            break;
-        case "lost":
-            summary.lost++;
-            break;
-        case "disposed":
-            summary.disposed++;
-            break;
-        default:
-            summary.in_stock++;
-        }
-    });
-
+    const summary = { total_equipment: equipments.length, in_stock: 0, in_use: 0, maintenance: 0, lost: 0, total_asset_value: 0 };
     const byCategory = {};
 
     equipments.forEach(e => {
-        const catId = e.category_id.toString();
-        const cat = categoryMap[catId];
-
-        if (!byCategory[catId]) {
-        byCategory[catId] = {
-            category_name: cat.name,
-            total: 0,
-            in_use: 0,
-            in_stock: 0,
-            maintenance: 0,
-            broken: 0,
-            total_value: 0
-        };
-        }
-
-        const row = byCategory[catId];
+        const cat = categoryMap[e.category_id.toString()];
         const state = equipmentState[e._id.toString()];
+        summary.total_asset_value += (cat?.price || 0);
 
+        if (!byCategory[e.category_id]) {
+            byCategory[e.category_id] = { category_name: cat?.name || "N/A", total: 0, in_use: 0, in_stock: 0, broken: 0 };
+        }
+        const row = byCategory[e.category_id];
         row.total++;
-        row.total_value += cat.price;
 
-        if (!state) {
-        row.in_stock++;
-        return;
-        }
-
-        if (state.condition === "broken") row.broken++;
-
-        switch (state.status) {
-        case "in-use":
-            row.in_use++;
-            break;
-        case "maintenance":
-            row.maintenance++;
-            break;
-        default:
-            row.in_stock++;
-        }
+        const status = state?.status || "in-stock";
+        if (status === "in-use") { summary.in_use++; row.in_use++; }
+        else if (status === "maintenance") { summary.maintenance++; }
+        else { summary.in_stock++; row.in_stock++; }
+        if (state?.condition === "broken") row.broken++;
     });
 
-    // phiếu nhập thiết bị
-    const importDetails = await EquipmentImport.find({
-        created_at: { $gte: start, $lte: end }
-    })
-        .populate("category_id", "name price")
-        .lean();
-
-    const importReport = importDetails.map(d => ({
-        category: d.category_id.name,
-        quantity: d.import_quantity,
-        unit_price: d.import_price || d.category_id.price,
-        total: d.import_quantity * (d.import_price || d.category_id.price),
-        date: d.created_at
-    }));
-
-    // phiếu lắp đặt thiết bị
-    const installDetails = await InstallDetail.find()
-        .populate({
-            path: "equipment_id",
-            populate: { path: "category_id", select: "name" }
-        })
-        .populate("install_id", "room_id")
-        .lean();
-
-    const byRoom = {};
-
-    installDetails.forEach(d => {
-        const roomId = d.install_id?.room_id?.toString() || "unknown";
-        if (!byRoom[roomId]) {
-        byRoom[roomId] = {
-            room_id: roomId,
-            total_equipment: 0
-        };
-        }
-        byRoom[roomId].total_equipment++;
-    });
-
-    
     const maintenanceLogs = await EquipmentLog.find({
         condition: { $in: ["maintenance", "broken"] },
         start_time: { $gte: start, $lte: end }
-    })
-        .populate({
-        path: "equipment_id",
-        populate: { path: "category_id", select: "name" }
-        })
-        .lean();
-
-    const maintenanceReport = maintenanceLogs.map(l => ({
-        equipment_id: l.equipment_id._id,
-        category: l.equipment_id.category_id.name,
-        condition: l.condition,
-        start_time: l.start_time,
-        end_time: l.end_time
-    }));
+    }).populate({ path: "equipment_id", populate: { path: "category_id", select: "name" } }).lean();
 
     return {
-        meta: { from, to, generated_at: new Date() },
+        meta: { from: start, to: end },
         summary,
         by_category: Object.values(byCategory),
-        import_report: importReport,
-        by_room: Object.values(byRoom),
-        maintenance_report: maintenanceReport
+        maintenance_report: maintenanceLogs.map(l => ({
+            equipment_id: l.equipment_id?._id || "N/A",
+            category: l.equipment_id?.category_id?.name || "N/A",
+            condition: l.condition,
+            start_time: l.start_time
+        }))
     };
 };
 
 export const getEquipmentsReport = async (req, res) => {
-  const { from, to } = req.query;
-  const report = await generateEquipmentReport(from, to);
-  res.json(report);
+    try {
+        const { from, to } = req.query;
+        const report = await generateEquipmentReport(from, to);
+        res.json(report);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Lỗi báo cáo thiết bị: " + err.message });
+    }
 };
-
 // DỊCH VỤ
 export const generateServiceReport = async (from, to) => {
 
