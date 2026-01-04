@@ -665,6 +665,7 @@ export const buildCompensationDetails = async (detailsInput, incident) => {
 };
 
 //---- COMPENSATE TICKET ----//
+// hàm tạo phiếu đền bù cho sự cố có liên quan đến thiết bị
 export const createCompensateTicket = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -750,7 +751,115 @@ export const createCompensateTicket = async (req, res) => {
       actor_id: actor._id,
       actor_name: actor.full_name,
       actor_role: actor.position,
-      note: note || "Xác nhận đã xử lý xong và đóng sự cố."
+      note: note || "Xác nhận tạo phiếu đền bù thành công."
+    });
+
+    // cập nhật tình trạng sự cố
+    incident.compensation_status = "pending";
+    await incident.save({ session });
+
+    await session.commitTransaction();
+    return res.status(201).json({
+      message: "Tạo phiếu đền bù thành công.",
+      data: ticket[0]
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    return res.status(500).json({
+      message: err.message || "Lỗi khi tạo phiếu đền bù."
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
+// hàm tạo phiếu đền bù cho sự cố không liên quan đến thiết bị
+export const createCompensateTickett = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { incident_id } = req.params;
+    const { payer_type, payer_id, total_fee, note } = req.body;
+    const actor = await Employee.findOne({ user_id: req.user.userId });
+
+    if ( !payer_type || !total_fee ) {
+      return res.status(404).json({ message: "Yêu cầu nhập đầy đủ thông tin." });
+    }
+
+    const incident = await Incident.findById(incident_id).session(session);
+    if (!incident) {
+      return res.status(404).json({ message: "Sự cố không tồn tại." });
+    }
+
+    if (!payer_id) payer_id = incident.causer_id;
+
+    if (incident.compensation_status !== "none") {
+      return res.status(400).json({ message: "Sự cố đã có phiếu đền bù." });
+    }
+
+    const existedTicket = await CompensateTicket.findOne({ incident_id }).session(session);
+
+    if (existedTicket) {
+      return res.status(400).json({
+        message: "Sự cố này đã có phiếu đền bù."
+      });
+    }
+
+    const validPayers = ["customer", "employee", "hotel"];
+    if (!validPayers.includes(payer_type)) {
+      return res.status(400).json({ message: "payer_type không hợp lệ." });
+    }
+
+    if (payer_type !== "hotel" && !payer_id) {
+      return res.status(400).json({
+        message: "Cần xác định người chịu trách nhiệm chi trả."
+      });
+    }
+
+    //const { details, totalFee } = await buildCompensationDetails(compensation_details, incident);
+
+    // cập nhật condition + status thiết bị
+    // for (const item of details) {
+    //   await updateEquipmentByResolution({
+    //     equipment_id: item.equipment_id,
+    //     resolution: item.resolution,
+    //     handled_by: req.user.employee_id,
+    //     note: `Sự cố ${incident._id}`
+    //   });
+    // }
+
+    // thêm phiếu đền bù
+    const ticket = await CompensateTicket.create([{
+      incident_id,
+      payer_type,
+      payer_id: payer_id || null,
+      note: note || "",
+      total_fee: total_fee,
+      status: "pending"
+    }], { session });
+
+    // const detailDocs = details.map(item => ({
+    //   ticket_id: ticket[0]._id,
+    //   equipment_id: item.equipment_id || null,
+    //   broken_state: item.broken_state,
+    //   resolution: item.resolution,
+    //   penalty_fee: item.penalty_fee,
+    // }));
+
+    // await CompensateDetail.insertMany(detailDocs, { session });
+
+    // ghi log
+    await IncidentLog.create({
+      incident_id: incident._id,
+      action: "compensation_updated",
+      from_status: incident.compensation_status,
+      to_status: "pending",
+      actor_id: actor._id,
+      actor_name: actor.full_name,
+      actor_role: actor.position,
+      note: note || "Xác nhận tạo phiếu đền bù thành công."
     });
 
     // cập nhật tình trạng sự cố
