@@ -25,9 +25,9 @@ export const createRoom = async (req, res) => {
             return res.status(400).json({ success: false, message: "Số phòng đã tồn tại!" });
 
         // Validate room_status if provided
-        const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance"];
+        const validStatuses = ["available", "maintenance"];
         if (room_status && !validStatuses.includes(room_status))
-            return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
+            return res.status(400).json({ success: false, message: "Chỉ được chọn trạng thái trống hoặc bảo trì khi mới tạo phòng!" });
 
         const room = new Room({ category_id, room_number, room_status: room_status || "available" });
 
@@ -64,18 +64,20 @@ export const getAllRooms = async (req, res) => {
             filter.room_number = parseInt(room_number);
         }
 
+        const now = new Date();
+
         const rooms = await Room.find(filter)
-            .populate("category_id", "category_name description max_adults max_children price")
-            .populate({
-                path: "roomStatusLog",
-                match: {
-                  start_time: { $lte: new Date() },
-                  end_time: { $gte: new Date() },
-                },
-                select: "status start_time end_time note",
-            })
-            .select("-__v")
-            .sort({ room_number: 1 });
+          .populate("category_id", "category_name description max_adults max_children price")
+          .populate({
+              path: "roomStatusLog",
+              match: {
+                start_time: { $lte: now },
+                end_time: { $gte: now },
+              },
+              select: "status start_time end_time note",
+          })
+          .select("-__v")
+          .sort({ room_number: 1 });
 
         return res.status(200).json({ success: true, count: rooms.length, rooms });
 
@@ -92,13 +94,15 @@ export const getRoomById = async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(id))
             return res.status(400).json({ success: false, message: "ID không hợp lệ!" });
 
+        const now = new Date();
+
         const room = await Room.findById(id)
             .populate("category_id", "category_name description max_adults max_children price")
             .populate({
                 path: "roomStatusLog",
                 match: {
-                    start_time: { $lte: new Date() },
-                    end_time: { $gte: new Date() },
+                    start_time: { $lte: now },
+                    end_time: { $gte: now },
                 },
                 select: "status start_time end_time note",
             })
@@ -210,6 +214,7 @@ export const getRoomById = async (req, res) => {
 //       });
 //   }
 // };
+
 export const updateRoom = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

@@ -42,6 +42,7 @@ export default function RoomListTab() {
 
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
         setRooms(roomsRes.rooms);
+        console.log("ROOMS RES: ", roomsRes.rooms);
       } else {
         setRooms([]);
       }
@@ -114,7 +115,10 @@ export default function RoomListTab() {
       const res = await roomApi.getRoomById(item._id);
       const data = res.data || res;
       const room = data.room;
-      const log = room.roomStatusLog;
+      //const log = room.roomStatusLog;
+      const log = Array.isArray(room.roomStatusLog)
+        ? room.roomStatusLog[0]
+        : null;
 
       if (!room) {
         alert("Không tìm thấy dữ liệu phòng!");
@@ -128,6 +132,7 @@ export default function RoomListTab() {
         start_time: log?.start_time ? dayjs(log.start_time).format("YYYY-MM-DDTHH:mm") : "",
         end_time: log?.end_time ? dayjs(log.end_time).format("YYYY-MM-DDTHH:mm") : "",
       });
+      
       setIsModalOpen(true);
     } catch (error) {
       console.error(error);
@@ -166,7 +171,10 @@ export default function RoomListTab() {
         <tbody className="text-gray-700 text-sm">
           {Array.isArray(rooms) && rooms.length > 0 ? (
             rooms.map((room) => {
-              const statusInfo = STATUS_MAP[room.room_status] || STATUS_MAP.available;
+              // = STATUS_MAP[room.room_status] || STATUS_MAP.available;
+              const displayStatus = room.roomStatusLog?.status || room.room_status || "available";
+              const statusInfo = STATUS_MAP[displayStatus];
+
               const start_time = room.roomStatusLog?.start_time
                 ? new Date(room.roomStatusLog.start_time).toLocaleString("vi-VN") : "—";
               const end_time = room.roomStatusLog?.end_time

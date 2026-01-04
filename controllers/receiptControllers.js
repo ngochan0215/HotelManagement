@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
   BookingDetail, Employee, Incident, Customer
  } from "../models/index.js";
+import { updateCustomerPoints } from "./customerController.js";
 
 // export const createReceipt = async (req, res) => {
 //   const session = await mongoose.startSession();
