@@ -1,219 +1,277 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { FiX, FiPlus, FiTrash2, FiAlertCircle } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi";
-import axios from "axios";
-import { FiX, FiPlus, FiTrash2, FiCheckSquare, FiMapPin, FiCalendar } from "react-icons/fi";
+import { roomApi } from "../../api/roomApi";
+
+const CONDITION_MAP = {
+  new: "Mới",
+  good: "Tốt",
+  maintenance: "Bảo trì",
+  broken: "Hỏng"
+};
 
 export default function AddInstallTicketModal({ onClose, onSuccess }) {
+  const [mode, setMode] = useState("install");
   const [rooms, setRooms] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+  const [stockMap, setStockMap] = useState({});
+  const [installDate, setInstallDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [items, setItems] = useState([{ id: "", quantity: 1 }]);
   const [loading, setLoading] = useState(false);
 
-  const UNIT_MAP = { item: "Cái", box: "Bộ" };
-  const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
-
-  const [formData, setFormData] = useState({
-    room_id: "",
-    install_date: new Date().toISOString().split("T")[0],
-    items: [{ category_id: "", quantity: 1 }]
-  });
-
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [catRes, roomRes] = await Promise.all([
-            equipmentApi.getAllCategories(),
-            axios.get("http://localhost:3000/room/all", {
-                headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-            })
-        ]);
-        setCategories(catRes.categories || []);
-        setRooms(roomRes.data?.rooms || roomRes.data || []);
-        console.log("ROOM RES: ", roomRes.data?.rooms);
-      } catch (error) {
-        console.error("Lỗi tải dữ liệu:", error);
-      }
+    const fetchRooms = async () => {
+        try {
+            const res = await roomApi.getAllRooms();
+            setRooms(res.rooms || []);
+        } catch (error) { console.error(error); }
     };
-    loadData();
+    fetchRooms();
   }, []);
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    setFormData({ ...formData, items: newItems });
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+        setDropdownOptions([]);
+        setStockMap({});
 
-  const addItem = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { category_id: "", quantity: 1 }]
-    });
-  };
+        try {
+            let res;
+            if (mode === 'install') {
+                res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
+                const eqs = res.equipments || [];
 
-  const removeItem = (index) => {
-    if (formData.items.length === 1) return;
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
-  };
+                const map = {};
+                const uniqueCats = [];
+                const distinctMap = new Map();
 
-  const getStock = (catId) => {
-    const cat = categories.find(c => c._id === catId);
-    return cat ? cat.storage_quantity : 0;
-  };
+                eqs.forEach(eq => {
+                    const catId = eq.category_id?._id || eq.category_id;
+                    const catName = eq.category_id?.name || "Unknown";
+
+                    if (!distinctMap.has(catId)) {
+                        distinctMap.set(catId, true);
+                        uniqueCats.push({ value: catId, label: catName, type: 'category' });
+                    }
+                    map[catId] = (map[catId] || 0) + 1;
+                });
+
+                setDropdownOptions(uniqueCats);
+                setStockMap(map);
+            }
+
+            else {
+                if (!selectedRoomId) {
+                    setDropdownOptions([]);
+                    return;
+                }
+
+                res = await equipmentApi.getAllEquipments({
+                    room_id: selectedRoomId,
+                    status: 'in-use'
+                });
+
+                const eqs = res.equipments || [];
+
+                const specificOptions = eqs.map(eq => {
+                    const code = eq.code ? eq.code : eq._id.slice(-6).toUpperCase();
+                    const conditionText = CONDITION_MAP[eq.condition] || eq.condition;
+
+                    return {
+                        value: eq._id,
+                        label: `${eq.category_id?.name} (#${code}) - ${conditionText}`,
+                        type: 'specific'
+                    };
+                });
+                setDropdownOptions(specificOptions);
+            }
+
+            setItems([{ id: "", quantity: 1 }]);
+
+        } catch (error) {
+            console.error("Lỗi tải dữ liệu thiết bị:", error);
+        }
+    };
+
+    fetchData();
+  }, [mode, selectedRoomId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedRoomId) {
+        alert("Vui lòng chọn phòng.");
+        return;
+    }
+
+    for (const item of items) {
+        if (!item.id) {
+            alert("Vui lòng chọn thiết bị ở tất cả các dòng.");
+            return;
+        }
+    }
+
     setLoading(true);
     try {
-        if (!formData.room_id) { alert("Chưa chọn phòng!"); setLoading(false); return; }
-        for (let item of formData.items) {
-            if (!item.category_id) { alert("Vui lòng chọn thiết bị!"); setLoading(false); return; }
-            const stock = getStock(item.category_id);
-            if (Number(item.quantity) > stock) {
-                alert(`Lỗi: Thiết bị "${categories.find(c => c._id === item.category_id)?.name}" chỉ còn tồn ${stock}, bạn nhập ${item.quantity}.`);
-                setLoading(false);
-                return;
-            }
-        }
+      const payloadItems = items.map(item => {
+          if (mode === 'install') {
+              return { category_id: item.id, quantity: item.quantity };
+          } else {
+              return { specific_equipment_id: item.id, quantity: 1 };
+          }
+      });
 
-        const payload = {
-            ...formData,
-            items: formData.items.map(i => ({ ...i, quantity: Number(i.quantity) }))
-        };
+      const payload = {
+        install_date: installDate,
+        items: payloadItems,
+        room_id: selectedRoomId,
+        type: mode,
+        from_room_id: mode === 'uninstall' ? selectedRoomId : null,
+      };
 
-        await equipmentApi.createInstallTicket(payload);
-        onSuccess();
-        onClose();
-    } catch (err) {
-        alert("Lỗi server: " + (err.response?.data?.message || err.message));
+      await equipmentApi.createInstallTicket(payload);
+      alert("Tạo phiếu thành công!");
+      onSuccess();
+      onClose();
+    } catch (error) {
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
+  const updateItem = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
+
+  const removeItem = (index) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-      <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="px-6 py-4 border-b flex justify-between items-center bg-orange-50 rounded-t-xl">
-            <div>
-                <h2 className="text-xl font-bold text-gray-800">Tạo Phiếu Lắp Đặt</h2>
-                <p className="text-sm text-gray-500">Điều chuyển thiết bị từ kho vào phòng</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-gray-50 border-b border-gray-100">
+            <div className="flex justify-between items-center px-6 py-4">
+                <h3 className="font-bold text-lg text-gray-800">Tạo phiếu kỹ thuật</h3>
+                <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><FiX size={20}/></button>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><FiX size={20}/></button>
+
+            <div className="flex px-6 pb-4 gap-4">
+                <button
+                    onClick={() => { setMode('install'); setSelectedRoomId(""); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm transition-all ${mode === 'install' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}
+                >
+                     Lắp đặt (Kho ➝ Phòng)
+                </button>
+                <button
+                    onClick={() => { setMode('uninstall'); setSelectedRoomId(""); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm transition-all ${mode === 'uninstall' ? 'bg-orange-600 text-white shadow-md' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}
+                >
+                     Tháo dỡ (Phòng ➝ Kho)
+                </button>
+            </div>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
-            <form id="install-form" onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg border">
-                    <div>
-                        <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                            <FiMapPin className="text-orange-500"/> Chọn Phòng Lắp Đặt
-                        </label>
-                        <select
-                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 outline-none bg-white"
-                            value={formData.room_id}
-                            onChange={(e) => setFormData({...formData, room_id: e.target.value})}
-                            required
-                        >
-                            <option value="">-- Chọn phòng --</option>
-                            {rooms.map(r => (
-                                <option key={r._id} value={r._id}>Phòng {r.room_number} - {r.category_id.category_name || 'Standard'}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                            <FiCalendar className="text-orange-500"/> Ngày Thực Hiện
-                        </label>
-                        <input
-                            type="date"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 outline-none bg-white"
-                            value={formData.install_date}
-                            onChange={(e) => setFormData({...formData, install_date: e.target.value})}
-                            required
-                        />
-                    </div>
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+          <form id="install-form" onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày thực hiện</label>
+              <input type="date" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
+                value={installDate} onChange={e => setInstallDate(e.target.value)} />
+            </div>
+
+            <div className={`p-4 rounded-xl border ${mode === 'install' ? 'bg-indigo-50 border-indigo-100' : 'bg-orange-50 border-orange-100'}`}>
+                <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${mode === 'install' ? 'text-indigo-800' : 'text-orange-800'}`}>
+                    {mode === 'install' ? "Chọn Phòng cần lắp thiết bị" : "Chọn Phòng cần tháo thiết bị"}
+                </label>
+                <select className="w-full border border-gray-300 rounded-lg p-2.5 bg-white outline-none"
+                    value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)} required>
+                    <option value="">-- Chọn phòng --</option>
+                    {rooms.map(r => <option key={r._id} value={r._id}>Phòng {r.room_number}</option>)}
+                </select>
+                {mode === 'uninstall' && !selectedRoomId && <p className="text-xs text-orange-600 mt-1 italic flex items-center gap-1"><FiAlertCircle/> Vui lòng chọn phòng để tải danh sách thiết bị.</p>}
+            </div>
+
+            {(mode === 'install' || (mode === 'uninstall' && selectedRoomId)) && (
+                <div className="animate-fade-in">
+                <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-semibold text-gray-700">
+                        {mode === 'install' ? 'Chọn loại thiết bị (từ Kho)' : 'Chọn thiết bị cụ thể (đang ở Phòng này)'}
+                    </label>
                 </div>
 
-                <div>
-                    <div className="flex justify-between items-end mb-2">
-                        <label className="text-sm font-bold text-gray-700">Danh sách thiết bị xuất kho</label>
-                        <button type="button" onClick={addItem} className="text-sm text-orange-600 font-semibold hover:bg-orange-50 px-3 py-1 rounded transition-colors flex items-center gap-1">
-                            <FiPlus /> Thêm thiết bị
-                        </button>
+                {dropdownOptions.length === 0 ? (
+                    <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500 text-sm">
+                        {mode === 'install' ? "Kho đang trống." : "Phòng này chưa có thiết bị nào."}
                     </div>
-
-                    <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 font-semibold">
-                                <tr>
-                                    <th className="px-4 py-3 w-[50%]">Tên thiết bị (Tồn kho)</th>
-                                    <th className="px-4 py-3 w-[20%]">Số lượng lắp</th>
-                                    <th className="px-4 py-3 w-[20%]">Đơn vị</th>
-                                    <th className="px-4 py-3 w-[10%] text-center">Xóa</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {formData.items.map((item, index) => {
-                                    const selectedCat = categories.find(c => c._id === item.category_id);
-                                    const stock = selectedCat ? selectedCat.storage_quantity : 0;
-                                    const isError = item.category_id && item.quantity > stock;
+                ) : (
+                    <div className="space-y-3">
+                        {items.map((item, index) => (
+                        <div key={index} className="flex gap-3 items-start">
+                            <div className="flex-1">
+                            <select
+                                required
+                                className="w-full border border-gray-300 rounded-lg p-2.5 outline-none text-sm"
+                                value={item.id}
+                                onChange={e => updateItem(index, "id", e.target.value)}
+                            >
+                                <option value="">-- Chọn thiết bị --</option>
+                                {dropdownOptions.map(opt => {
+                                    const isSelectedAlready = mode === 'uninstall' && items.some((i, idx) => i.id === opt.value && idx !== index);
+                                    if (isSelectedAlready) return null;
 
                                     return (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-4 py-2">
-                                                <select
-                                                    className="w-full border rounded p-2 focus:ring-2 focus:ring-orange-500 outline-none"
-                                                    value={item.category_id}
-                                                    onChange={(e) => handleItemChange(index, "category_id", e.target.value)}
-                                                    required
-                                                >
-                                                    <option value="">-- Chọn thiết bị --</option>
-                                                    {categories.map(c => (
-                                                        <option key={c._id} value={c._id} disabled={c.storage_quantity <= 0}>
-                                                            {c.name} (Tồn: {c.storage_quantity})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                {isError && <p className="text-xs text-red-500 mt-1">Vượt quá tồn kho ({stock})</p>}
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <input
-                                                    type="number" min="1" max={stock || 999}
-                                                    className={`w-full border rounded p-2 text-center font-bold ${isError ? 'border-red-500 text-red-600' : ''}`}
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-                                                    required
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2 text-gray-500">
-                                                {formatUnit(selectedCat?.unit) || "-"}
-                                            </td>
-                                            <td className="px-4 py-2 text-center">
-                                                {formData.items.length > 1 && (
-                                                    <button type="button" onClick={() => removeItem(index)} className="text-red-400 hover:text-red-600 p-2">
-                                                        <FiTrash2 size={16}/>
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label} {mode === 'install' ? `(Tồn: ${stockMap[opt.value]})` : ''}
+                                        </option>
+                                    )
                                 })}
-                            </tbody>
-                        </table>
+                            </select>
+                            </div>
+
+                            <div className="w-24">
+                                {mode === 'install' ? (
+                                    <input
+                                        type="number" min="1" max={stockMap[item.id] || 999} required
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 outline-none text-sm text-center"
+                                        value={item.quantity} onChange={e => updateItem(index, "quantity", parseInt(e.target.value))}
+                                    />
+                                ) : (
+                                    <div className="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-center text-gray-500 font-bold cursor-not-allowed">
+                                        1 cái
+                                    </div>
+                                )}
+                            </div>
+
+                            {items.length > 1 && (
+                            <button type="button" onClick={() => removeItem(index)} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                <FiTrash2 size={18}/>
+                            </button>
+                            )}
+                        </div>
+                        ))}
+                        <button type="button" onClick={() => setItems([...items, { id: "", quantity: 1 }])}
+                            className="mt-3 text-sm flex items-center gap-1 text-indigo-600 font-semibold hover:text-indigo-700 px-2 py-1 rounded hover:bg-indigo-50 transition w-fit">
+                            <FiPlus /> Thêm dòng
+                        </button>
                     </div>
+                )}
                 </div>
-            </form>
+            )}
+
+          </form>
         </div>
 
-        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 rounded-b-xl">
-            <button onClick={onClose} className="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Hủy bỏ</button>
-            <button
-                type="submit" form="install-form" disabled={loading}
-                className="px-6 py-2 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 shadow-lg shadow-orange-200"
-            >
-                {loading ? "Đang tạo..." : <><FiCheckSquare /> Tạo Phiếu</>}
-            </button>
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-gray-600 font-medium hover:bg-gray-200 transition">Hủy</button>
+          <button type="submit" form="install-form" disabled={loading || (mode === 'uninstall' && !selectedRoomId)}
+            className={`px-6 py-2.5 rounded-lg text-white font-bold shadow-lg transition disabled:opacity-50 ${mode === 'install' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
+            {loading ? "Đang xử lý..." : (mode === 'install' ? "Tạo phiếu Lắp" : "Tạo phiếu Tháo")}
+          </button>
         </div>
+
       </div>
     </div>
   );

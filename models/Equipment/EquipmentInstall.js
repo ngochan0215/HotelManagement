@@ -4,7 +4,8 @@ import mongoose from "mongoose";
 const equipmentInstallSchema = new mongoose.Schema(
     {
         employee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-        room_id: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true },
+        room_id: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
+        type: { type: String, enum: ['install', 'uninstall'], default: 'install' },
         install_date: { type: Date, required: true },
         status: { type: String, enum: ["pending", "waiting_confirm", "completed", "expired"], default: "pending" }
     }, 
