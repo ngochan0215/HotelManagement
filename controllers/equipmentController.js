@@ -569,7 +569,6 @@ export const createEquipmentTicket = async (req, res) => {
     }
 };
 
-
 export const getAllEquipmentTickets = async (req, res) => {
     try {
         const { employee_id, min_import_date, max_import_date, status } = req.query;

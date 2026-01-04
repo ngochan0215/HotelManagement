@@ -40,9 +40,15 @@ export default function RoomCategoryTab() {
   };
 
   const loadEquipmentCategories = async () => {
-    const data = await equipmentApi.getAllCategories();
-    setEquipmentList(data);
+    try {
+      const res = await equipmentApi.getAllCategories();
+      setEquipmentList(res.categories || []);
+    } catch (error) {
+      console.error("Lỗi tải danh mục thiết bị:", error);
+      setEquipmentList([]);
+    }
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -133,6 +139,7 @@ export default function RoomCategoryTab() {
       })) || []
     );
 
+    console.log("EQUIPMENT LIST: ", equipmentList);
     setIsModalOpen(true);
   };
 
@@ -230,9 +237,9 @@ export default function RoomCategoryTab() {
                   <div className="mt-2 space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
                     {equipmentList.map(eq => {
                       const selected = selectedEquipments.find(
-                        i => i.equipment_category_id === eq._id
+                        i => i.equipment_category_id.toString() === eq._id.toString()
                       );
-                      console.log("equipmentList:", equipmentList);
+                      console.log("EQUIPMENT LIST:", equipmentList);
 
                       return (
                         <div key={eq._id} className="flex items-center gap-3">

@@ -152,6 +152,7 @@ export const createIncident = async (req, res) => {
   try {
     const { room_id, booking_id, causer_id, caused_by, description, type, severity, occured_at } = req.body;
     const reporter_id = req.user.userId;
+    const employee = await Employee.findOne({ user_id: reporter_id });
     
     if (!description || !type || !caused_by || !severity || !occured_at) {
       return res.status(400).json({ message: "Thiếu thông tin bắt buộc." });
@@ -1082,7 +1083,7 @@ export const updateCompensateTicket = async (req, res) => {
   }
 };
 
-// xác nhận đã bồi thường xong, có thể gọi API song song sau khi 
+// xác nhận đã bồi thường xong, có thể gọi API song song khi 
 // khách hàng thanh toán hóa đơn booking
 export const confirmCompensationPaid = async (req, res) => {
   const session = await mongoose.startSession();

@@ -170,7 +170,7 @@ export const createService = async (req, res) => {
       return res.status(400).json({ success: false, message: "Tên và mô tả dịch vụ phải là chuỗi." });
     }
 
-    if (typeof price !== "number" || price <= 0) {
+    if (price <= 0) {
       return res.status(400).json({ success: false, message: "Đơn giá dịch vụ phải là số nguyên lớn hơn 0." });
     }
 
@@ -388,9 +388,13 @@ export const createGoodTicket = async (req, res) => {
       return res.status(400).json({ success: false, message: "Có sản phẩm không tồn tại trong hệ thống." });
     }
 
+    const isToday = importDate === today;
+
     // tạo phiếu nhập sản phẩm trước
     const employeeId = employee._id;
-    const ticket = await GoodTicket.create( [{ employee_id: employeeId, import_date }], { session });
+    const ticket = await GoodTicket.create( 
+      [{ employee_id: employeeId, import_date, status: isToday? "pending" : "waiting_confirm" }], 
+      { session });
 
     // thêm chi tiết nhập
     const detailDocs = goods_list.map((item) => ({
@@ -819,6 +823,9 @@ export const createServiceUsage = async (req, res) => {
     await UsageDetail.insertMany(usageDetailsData, { session });
     serviceUsage[0].total_fee = totalUsageFee;
     await serviceUsage[0].save({ session });
+
+    // cập nhật trạng thái phiếu
+    await recalcServiceUsageStatus(serviceUsage[0]._id);
 
     await session.commitTransaction();
     session.endSession();
