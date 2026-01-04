@@ -70,10 +70,19 @@ export default function Dashboard() {
     fetchCancelReasons();
   }, []);
 
-  if (!overview || !bookingStats || !roomStatus || !cancelReasons) 
-    return <div className="p-6">Đang tải...</div>;
+  if (!overview || !bookingStats || !roomStatus || !cancelReasons)
+      return <div className="p-6 text-center">Đang tải dữ liệu...</div>;
 
-  const cancelColors = ["#3B82F6", "#F59E0B", "#94A3B8"];
+  const cancelColors = [
+      "#3B82F6", // Blue
+      "#F59E0B", // Amber
+      "#10B981", // Emerald
+      "#EF4444", // Red
+      "#8B5CF6", // Violet
+      "#EC4899", // Pink
+      "#06B6D4", // Cyan
+      "#94A3B8", // Slate
+    ];
   const roomStatusData = [
     { label: "Có khách", value: roomStatus.occupied, color: "#4F46E5" },
     { label: "Trống", value: roomStatus.available, color: "#10B981" },
@@ -133,43 +142,48 @@ export default function Dashboard() {
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-gray-700">Lý do hủy phòng</h2>
-              </div>
-
-              <div className="flex-1 flex flex-col items-center justify-center relative">
-                <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                    <Pie
-                        data={overviewCancelReasons}
-                        dataKey="value"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={4}
-                    >
-                        {overviewCancelReasons.map((_, i) => (
-                        <Cell key={i} fill={cancelColors[i % cancelColors.length]} strokeWidth={0} />
-                        ))}
-                    </Pie>
-                    <Tooltip />
-                    </PieChart>
-                </ResponsiveContainer>
-                <div className="w-full space-y-3 mt-2">
-                  {overviewCancelReasons.map((item, i) => (
-                    <div key={i} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ background: cancelColors[i % cancelColors.length] }}></span>
-                        <span className="text-gray-600">{item.label}</span>
-                      </div>
-                      <span className="text-sm font-bold" style={{ color: item.color }}>
-                        {item.value}%
-                      </span>
-
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                          <h2 className="font-bold text-gray-700 mb-4">Lý do hủy phòng</h2>
+                          <div className="flex-1 flex flex-col items-center justify-center">
+                            <div className="w-full h-[200px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={cancelReasons}
+                                    dataKey="value"
+                                    innerRadius={55}
+                                    outerRadius={75}
+                                    paddingAngle={4}
+                                    stroke="none"
+                                  >
+                                    {cancelReasons.map((entry, index) => (
+                                      <Cell
+                                        key={`cell-${index}`}
+                                        fill={cancelColors[index % cancelColors.length]}
+                                      />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="w-full space-y-3 mt-4">
+                              {cancelReasons.map((item, i) => (
+                                <div key={i} className="flex justify-between items-center text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className="w-3 h-3 rounded-full"
+                                      style={{ background: cancelColors[i % cancelColors.length] }}
+                                    ></span>
+                                    <span className="text-gray-600 truncate max-w-[150px]">{item.label}</span>
+                                  </div>
+                                  <span className="text-sm font-bold text-gray-800">
+                                    {item.value}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-6 text-lg border-b pb-2">Trạng thái phòng hiện tại</h3>
