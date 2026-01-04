@@ -1,16 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { FiEdit, FiTrash2, FiX, FiSearch, FiFilter, FiList, FiChevronDown } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi";
-import { roomApi } from "../../api/roomApi";
 import ConfirmModal from "../../../components/confirmModal";
 import { StatusPill } from "../../../components/ui/label";
-
-const CONDITION_MAP = {
-  new: { label: "Mới", color: "emerald" },
-  good: { label: "Tốt", color: "blue" },
-  maintenance: { label: "Bảo trì", color: "yellow" },
-  broken: { label: "Hỏng", color: "red" }
-};
 
 const STATUS_MAP = {
   "in-stock": { label: "Trong kho", color: "gray", icon: "info" },
@@ -25,22 +17,19 @@ const ALLOWED_UPDATE_STATUSES = ["maintenance", "lost", "disposed"];
 
 export default function EquipmentListTab() {
   const [equipments, setEquipments] = useState([]);
-  const [rooms, setRooms] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterCondition, setFilterCondition] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
 
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [formData, setFormData] = useState({ condition: "", status: "", note: "", room_id: "" });
+  const [formData, setFormData] = useState({ status: "", note: "", room_id: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
 
   useEffect(() => {
     loadData();
-
   }, []);
 
   const loadData = async () => {
@@ -67,10 +56,6 @@ export default function EquipmentListTab() {
         result = result.filter(item => item.status === filterStatus);
     }
 
-    if (filterCondition !== 'all') {
-        result = result.filter(item => item.condition === filterCondition);
-    }
-
     result.sort((a, b) => {
         if (sortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         if (sortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
@@ -79,7 +64,7 @@ export default function EquipmentListTab() {
     });
 
     return result;
-  }, [equipments, searchTerm, filterStatus, filterCondition, sortOrder]);
+  }, [equipments, searchTerm, filterStatus, sortOrder]);
 
 
   const handleUpdate = async (e) => {
@@ -114,7 +99,6 @@ export default function EquipmentListTab() {
   const openEdit = (item) => {
       setEditingItem(item);
       setFormData({
-          condition: item.condition,
           status: item.status,
           room_id: item.room_id?._id || "",
           note: item.note || ""
@@ -125,7 +109,6 @@ export default function EquipmentListTab() {
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
 
-
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
             <button onClick={() => setFilterStatus('all')} className={`px-4 py-1.5 rounded-md text-sm font-bold capitalize transition-all whitespace-nowrap ${filterStatus === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Tất cả</button>
@@ -134,7 +117,6 @@ export default function EquipmentListTab() {
             ))}
         </div>
 
-        {/* Tìm kiếm & Dropdowns */}
         <div className="flex flex-col lg:flex-row gap-4 justify-between">
             <div className="relative w-full lg:w-96">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
@@ -143,16 +125,6 @@ export default function EquipmentListTab() {
             </div>
 
             <div className="flex gap-3 overflow-x-auto pb-1">
-                <div className="relative min-w-[200px]">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiFilter className="text-gray-500" size={16} /></div>
-                    <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm"
-                        value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
-                        <option value="all">Tất cả Tình trạng</option>
-                        {Object.keys(CONDITION_MAP).map(k => <option key={k} value={k}>{CONDITION_MAP[k].label}</option>)}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
-                </div>
-
                 <div className="relative min-w-[180px]">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiList className="text-gray-500" size={16} /></div>
                     <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm"
@@ -174,7 +146,6 @@ export default function EquipmentListTab() {
               <th className="py-3 pl-4">Mã TB</th>
               <th className="py-3">Tên thiết bị</th>
               <th className="py-3">Vị trí</th>
-              <th className="py-3">Tình trạng</th>
               <th className="py-3">Trạng thái</th>
               <th className="py-3">Ghi chú</th>
               <th className="py-3 text-right pr-4">Hành động</th>
@@ -182,10 +153,9 @@ export default function EquipmentListTab() {
           </thead>
           <tbody className="text-gray-700 text-sm">
             {filteredEquipments.length === 0 ?
-                <tr><td colSpan="7" className="text-center py-12 text-gray-400"><div className="flex flex-col items-center gap-2"><FiSearch size={24} className="opacity-50"/><span>Không tìm thấy thiết bị nào.</span></div></td></tr>
+                <tr><td colSpan="6" className="text-center py-12 text-gray-400"><div className="flex flex-col items-center gap-2"><FiSearch size={24} className="opacity-50"/><span>Không tìm thấy thiết bị nào.</span></div></td></tr>
                 :
                 filteredEquipments.map((item) => {
-                    const cond = CONDITION_MAP[item.condition] || CONDITION_MAP.good;
                     const st = STATUS_MAP[item.status] || STATUS_MAP["in-stock"];
                     const displayId = item.code ? item.code : item._id.slice(-6).toUpperCase();
 
@@ -196,7 +166,6 @@ export default function EquipmentListTab() {
                         <td className="py-4 text-gray-600">
                             {item.room_id ? <span className="flex items-center gap-1 font-bold text-indigo-600">P.{item.room_id.room_number || "..."}</span> : <span className="text-gray-400 italic">Kho</span>}
                         </td>
-                        <td className="py-4"><StatusPill label={cond.label} color={cond.color} /></td>
                         <td className="py-4"><StatusPill label={st.label} color={st.color} iconType={st.icon} /></td>
                         <td className="py-4 text-gray-500 truncate max-w-xs text-xs">{item.note}</td>
                         <td className="py-4 text-right pr-4">
@@ -219,14 +188,6 @@ export default function EquipmentListTab() {
                 <button onClick={() => setIsModalOpen(false)}><FiX size={24}/></button>
             </div>
             <form onSubmit={handleUpdate} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium mb-1">Tình trạng vật lý</label>
-                    <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500"
-                        value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})}>
-                        {Object.keys(CONDITION_MAP).map(k => <option key={k} value={k}>{CONDITION_MAP[k].label}</option>)}
-                    </select>
-                </div>
-
                 <div>
                     <label className="block text-sm font-medium mb-1">Trạng thái xử lý</label>
                     <select className="w-full border rounded-lg p-2.5 bg-white outline-none focus:border-indigo-500"

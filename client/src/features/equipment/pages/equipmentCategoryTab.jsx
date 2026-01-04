@@ -97,14 +97,15 @@ export default function EquipmentCategoryTab() {
   };
 
   const handleDelete = async () => {
-    try {
-      await equipmentApi.deleteCategory(confirmDelete.id);
-      loadData();
-      setConfirmDelete({ open: false, id: null });
-    } catch (error) {
-      alert("Không thể xóa danh mục này (có thể đang có thiết bị sử dụng).");
-    }
-  };
+      try {
+        await equipmentApi.deleteCategory(confirmDelete.id);
+        loadData();
+        setConfirmDelete({ open: false, id: null });
+        alert("Xóa danh mục thành công!");
+      } catch (error) {
+        alert("Không thể xóa danh mục này (có thể đang có thiết bị sử dụng).");
+      }
+    };
 
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
