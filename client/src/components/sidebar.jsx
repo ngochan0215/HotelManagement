@@ -27,24 +27,10 @@ const sidebarConfig = [
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText },
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag },
       { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle },
+      { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText },
     ],
   },
 
-  {
-    type: "group",
-    title: "BÁO CÁO THỐNG KÊ",
-    children: [
-      { name: "Doanh thu", path: "/reports/revenue", icon: FiFileText },
-      { name: "Phòng trống", path: "/reports/available-rooms", icon: FiFileText },
-      { name: "Lợi nhuận", path: "/reports/profit", icon: FiFileText },
-      { name: "Chi phí vận hành", path: "/reports/operational-costs", icon: FiFileText },
-      { name: "Tỉ lệ lấp phòng", path: "/reports/occupancy-rate", icon: FiFileText },
-      { name: "Khách hàng", path: "/reports/customers", icon: FiFileText },
-      { name: "Sử dụng dịch vụ", path: "/reports/service-usage", icon: FiFileText },
-      { name: "Hiệu suất nhân viên", path: "/reports/staff-performance", icon: FiFileText },
-      { name: "Sự cố", path: "/reports/incidents", icon: FiFileText },
-    ],
-  },
 ];
 
 const SidebarItem = ({ item, isMain }) => {

@@ -3,7 +3,7 @@ import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import { roomApi } from "../../api/roomApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
-import { statisticsApi } from "../../api/statisticApi.js";
+import { statisticApi } from "../../api/statisticApi.js";
 
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -40,11 +40,8 @@ export default function Dashboard() {
     const fetchCancelReasons = async () => {
       try {
         const data = await bookingApi.getCancellationReasonStats();
-
-        // tổng số lần hủy
         const total = data.reduce((sum, item) => sum + item.total, 0);
 
-        // map về đúng format PieChart đang dùng
         const chartData = data.map(item => ({
           label: item.reason_label,
           value: Math.round((item.total / total) * 100),
@@ -57,12 +54,12 @@ export default function Dashboard() {
     }
 
     const fetchWeeklyRevenue = async () => {
-      const data = await statisticsApi.getWeeklyRevenue();
+      const data = await statisticApi.getWeeklyRevenue();
       setOverview(data);
     };
 
     const fetchWeeklyBookings = async () => {
-      const data = await statisticsApi.getWeeklyBookings();
+      const data = await statisticApi.getWeeklyBookings();
       setBookingStats(data);
     };
 
@@ -71,47 +68,6 @@ export default function Dashboard() {
     fetchRoomStatus();
     fetchTopRoomTypes();
     fetchCancelReasons();
-
-    // const mockOverview = {
-    //   revenue: 7852000,
-    //   revenueChangePercent: 2.1,
-    //   revenueChart: [
-    //     { day: "01", current: 110, lastWeek: 130 },
-    //     { day: "02", current: 120, lastWeek: 145 },
-    //     { day: "03", current: 105, lastWeek: 125 },
-    //     { day: "04", current: 135, lastWeek: 160 },
-    //     { day: "05", current: 115, lastWeek: 140 },
-    //     { day: "06", current: 145, lastWeek: 170 },
-    //     { day: "07", current: 165, lastWeek: 140 },
-    //   ],
-    //   // cancelReasons: [
-    //   //   { label: "Đổi lịch trình", value: 40 },
-    //   //   { label: "Bận nhầm", value: 32 },
-    //   //   { label: "Lý do khác", value: 28 },
-    //   // ],
-    //   // topRoomTypes: [
-    //   //   { name: "Phòng VIP Hướng Biển", price: 1200000 },
-    //   //   { name: "Phòng Deluxe Đôi", price: 950000 },
-    //   //   { name: "Phòng Standard", price: 650000 },
-    //   //   { name: "Phòng Suite Cao Cấp", price: 1800000 },
-    //   // ],
-    // };
-
-    // const mockBookingStats = {
-    //   total: 2568,
-    //   percentChange: 2.1,
-    //   chart: [
-    //     { day: "01", current: 120, lastWeek: 130 },
-    //     { day: "02", current: 140, lastWeek: 150 },
-    //     { day: "03", current: 125, lastWeek: 145 },
-    //     { day: "04", current: 155, lastWeek: 170 },
-    //     { day: "05", current: 135, lastWeek: 155 },
-    //     { day: "06", current: 170, lastWeek: 180 },
-    //   ],
-    // };
-
-    //setOverview(mockOverview);
-    //setBookingStats(mockBookingStats);
   }, []);
 
   if (!overview || !bookingStats || !roomStatus || !cancelReasons) 
@@ -263,16 +219,6 @@ export default function Dashboard() {
                 Loại phòng "Hot" nhất
               </h3>
               <ul className="space-y-4">
-                {/* {overview.topRoomTypes.map((room, i) => (
-                  <li key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                    <div className="flex items-center gap-3">
-                        <span className="text-gray-400 font-bold text-lg">#{i + 1}</span>
-                        <span className="text-gray-700 font-medium text-sm">{room.name}</span>
-                    </div>
-                    <span className="text-indigo-600 font-bold text-sm">{room.price.toLocaleString()} đ</span>
-                  </li>
-                ))} */}
-
                 {topRoomTypes.map((room, i) => (
                   <li
                     key={i}
@@ -294,7 +240,6 @@ export default function Dashboard() {
                     </div>
                   </li>
                 ))}
-
                               </ul>
                             </div>
 
@@ -321,7 +266,6 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
             </div>
-
           </div>
         </div>
       </div>
