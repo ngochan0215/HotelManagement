@@ -4,7 +4,7 @@ import { User, Booking, Customer } from "../models/index.js";
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret_key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export const verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;

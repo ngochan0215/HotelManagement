@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment, Booking, BookingDetail, CheckInOut } from "../models/index.js";
+import { Room, RoomCategory, DefaultEquipment, Booking, BookingDetail, CheckInOut 
+} from "../models/index.js";
 
 export const createRoomCategory = async (req, res) => {
     try {

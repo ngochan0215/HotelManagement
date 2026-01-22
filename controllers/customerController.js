@@ -1,102 +1,9 @@
 import bcrypt from "bcrypt";
 import { User, Customer, PointsLog } from "../models/index.js";
-import { sendVerificationEmail } from "../utils/sendEmails.js";
 import mongoose from "mongoose";
 
 const CCCD_REGEX = /^[0-9]{12}$/;
 const PHONE_REGEX = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
-
-export const createAccount = async (req, res) => {
-    try {
-        const { email, password, date_birth, full_name, phone_number, nationality, CCCD } = req.body;
-
-        if(!email || !password || !date_birth || !full_name || !phone_number || !nationality || !CCCD)
-            return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin."});
-
-        const existed = await User.findOne({ email });
-        if (existed) 
-            return res.status(400).json({ message: "Email đã tồn tại" });
-
-        const dob = new Date(date_birth);
-        if (isNaN(dob.getTime())) {
-            return res.status(400).json({ message: "Ngày sinh không hợp lệ" });
-        }
-        // Tính tuổi
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const m = today.getMonth() - dob.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-
-        if (age < 18) {
-            return res.status(403).json({ message: "Bạn phải đủ 18 tuổi để đăng ký tài khoản." });
-        }
-
-        if (await Customer.findOne({ phone_number })) {
-            return res.status(400).json({ message: "Số điện thoại đã tồn tại" });
-        }
-
-        if (await Customer.findOne({ CCCD })) {
-            return res.status(400).json({ message: "CCCD đã tồn tại" });
-        }
-
-        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
-        if(!regex.test(password)) {
-            return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm một chữ hoa, chữ thường, số và ký tự đặc biệt." });
-        }
-
-        const hashed = await bcrypt.hash(password, 10);
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const user = await User.create({
-            email,
-            password: hashed,
-            system_role: "customer",
-            emailVerified: true, 
-            verifyEmailOtp: otp,
-            verifyEmailOtpExpires: Date.now() + 5 * 60 * 1000,
-        });
-
-        const customer = await Customer.create({
-            user_id: user._id,
-            date_birth,
-            full_name,
-            phone_number,
-            nationality,
-            CCCD,
-        });
-
-        //await sendVerificationEmail(email, otp);
-
-        res.status(201).json({ message: "Đăng ký thành công.", userID: user._id, customerId: customer._id });
-
-    } catch (error) {
-        return res.status(500).json({ message: error.message });
-    }
-};
-
-export const verifyEmail = async (req, res) => {
-  try {
-    const { otp } = req.body;
-
-    const user = await User.findById(req.user.userId).select("+password");
-    if(!user){
-        return res.status(404).json({ message: "Không tìm thấy người dùng." });
-    }
-
-    if (!user.verifyEmailOtp || user.verifyEmailOtp !== otp || user.verifyEmailOtpExpires < Date.now()) {
-      return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn." });
-    }
-
-    user.emailVerified = true;
-    user.verifyEmailOtp = null;
-    user.verifyEmailOtpExpires = null;
-    await user.save();
-
-    res.status(200).json({ message: "Xác thực email thành công. Vui lòng đăng nhập!" });
-  } catch (error) {
-    res.status(500).json({ message: "SERVER ERROR: ", error: error.message });
-  }
-};
 
 export const getAllCustomers = async (req, res) => {
     try {
@@ -260,26 +167,36 @@ export const banCustomer = async (req, res) => {
             });
         }
 
-        if (customer.status === "inactive") {
+        if (customer.status === "banned") {
             return res.status(400).json({
                 success: false,
                 message: "Tài khoản đã bị vô hiệu hóa trước đó.",
             });
         }
 
+        if (customer.status === "inactive") {
+            return res.status(400).json({
+                success: false,
+                message: "Tài khoản này đã ngừng hoạt động.",
+            });
+        }
+
         // cập nhật customer
-        customer.status = "inactive";
+        customer.status = "banned";
         await customer.save({ session });
 
         // cập nhật user liên kết
         const user = await User.findByIdAndUpdate(
             customer.user_id,
-            { emailVerified: false },
+            { isBanned: true },
             { new: true, session }
         );
 
         if (!user) {
-            throw new Error("Không tìm thấy user liên kết với customer.");
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy user liên kết với customer.",
+            });
         }
 
         await session.commitTransaction();
@@ -288,6 +205,78 @@ export const banCustomer = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Đã vô hiệu hóa tài khoản khách hàng.",
+        });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+export const unbanCustomer = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params; // customer _id
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "ID khách hàng không hợp lệ.",
+            });
+        }
+
+        const customer = await Customer.findById(id).session(session);
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy khách hàng.",
+            });
+        }
+
+        if (customer.status === "active") {
+            return res.status(400).json({
+                success: false,
+                message: "Tài khoản đang hoạt động, không cần mở khóa.",
+            });
+        }
+
+        if (customer.status === "inactive") {
+            return res.status(400).json({
+                success: false,
+                message: "Tài khoản này đã ngừng hoạt động.",
+            });
+        }
+
+        // cập nhật customer
+        customer.status = "active";
+        await customer.save({ session });
+
+        // cập nhật user liên kết
+        const user = await User.findByIdAndUpdate(
+            customer.user_id,
+            { isBanned: false },
+            { new: true, session }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy user liên kết với customer.",
+            });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({
+            success: true,
+            message: "Đã mở khóa tài khoản khách hàng.",
         });
     } catch (error) {
         await session.abortTransaction();

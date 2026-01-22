@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema(
         avatar: { type: String },
 
         emailVerified: { type: Boolean, default: false },
+        isBanned: { type: Boolean, default: false },
+        
         verifyEmailOtp: { type: String },
         verifyEmailOtpExpires: { type: Date },
 
