@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiSave, FiChevronDown } from "react-icons/fi";
-import { serviceApi } from "../../api/serviceApi";
-import { bookingApi } from "../../api/bookingApi";
+import { serviceApi } from "../../api/serviceApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
 
 export default function AddServiceUsageModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);

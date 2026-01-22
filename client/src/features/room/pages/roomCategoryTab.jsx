@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX } from "react-icons/fi";
-import { roomApi } from "../../api/roomApi";
-import { equipmentApi } from "../../api/equipmentApi";
-import ConfirmModal from "../../../components/confirmModal";
+import { roomApi } from "../../api/roomApi.js";
+import { equipmentApi } from "../../api/equipmentApi.js";
+import ConfirmModal from "../../../components/confirmModal.jsx";
 
 export default function RoomCategoryTab() {
   const [categories, setCategories] = useState([]);

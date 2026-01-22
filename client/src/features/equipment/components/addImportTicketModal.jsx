@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { equipmentApi } from "../../api/equipmentApi";
+import { equipmentApi } from "../../api/equipmentApi.js";
 import { FiX, FiPlus, FiTrash2, FiSave, FiAlertCircle } from "react-icons/fi";
 
 export default function AddImportTicketModal({ onClose, onSuccess }) {

@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { FiGrid, FiList, FiClipboard } from "react-icons/fi";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import EquipmentCategoryTab from "./equipmentCategoryTab";
-import EquipmentListTab from "./equipmentListTab";
-import EquipmentTicketTab from "./equipmentTicketTab";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import EquipmentCategoryTab from "./equipmentCategoryTab.jsx";
+import EquipmentListTab from "./equipmentListTab.jsx";
+import EquipmentTicketTab from "./equipmentTicketTab.jsx";
 
 
 export default function EquipmentPage() {

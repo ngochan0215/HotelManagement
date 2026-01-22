@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { serviceApi } from "../../api/serviceApi";
+import { serviceApi } from "../../api/serviceApi.js";
 import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser } from "react-icons/fi";
-import AddImportTicketModal from "../components/addImportTicketModal";
-import AddServiceUsageModal from "../components/addServiceUsageModal";
+import AddImportTicketModal from "../components/addImportTicketModal.jsx";
+import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
 
 export default function ServiceTicketTab() {
   const [imports, setImports] = useState([]);

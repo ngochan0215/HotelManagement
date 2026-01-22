@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
-import { incidentApi } from "../../api/incidentApi";
-import { employeeApi } from "../../api/employeeApi";
-import { roomApi } from "../../api/roomApi";
-import { bookingApi } from "../../api/bookingApi";
-import { customerApi } from "../../api/customerApi";
+import { incidentApi } from "../../api/incidentApi.js";
+import { employeeApi } from "../../api/employeeApi.js";
+import { roomApi } from "../../api/roomApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
+import { customerApi } from "../../api/customerApi.js";
 
 const SearchableSelect = ({ label, options, value, onChange, placeholder }) => {
   const [isOpen, setIsOpen] = useState(false);

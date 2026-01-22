@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign } from "react-icons/fi";
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import ReceiptDetailModal from "../components/receiptDetailModal";
-import CreateReceiptModal from "../components/createReceiptModal";
-import ConfirmPaymentModal from "../components/confirmPaymentModal";
-import { receiptApi } from "../../api/receiptApi";
-import { StatusPill } from "../../../components/ui/label";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import ReceiptDetailModal from "../components/receiptDetailModal.jsx";
+import CreateReceiptModal from "../components/createReceiptModal.jsx";
+import ConfirmPaymentModal from "../components/confirmPaymentModal.jsx";
+import { receiptApi } from "../../api/receiptApi.js";
+import { StatusPill } from "../../../components/ui/label.jsx";
 
 const PAYMENT_METHOD = {
   cash: "Tiền mặt",

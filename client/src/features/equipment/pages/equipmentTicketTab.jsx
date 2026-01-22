@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { equipmentApi } from "../../api/equipmentApi";
+import { equipmentApi } from "../../api/equipmentApi.js";
 import { FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft } from "react-icons/fi";
-import AddInstallTicketModal from "../components/AddInstallTicketModal";
-import AddImportTicketModal from "../components/AddImportTicketModal";
+import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
+import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 
 export default function EquipmentTicketTab() {
   const [imports, setImports] = useState([]);

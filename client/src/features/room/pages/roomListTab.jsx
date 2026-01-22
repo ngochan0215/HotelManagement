@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX, FiAlertCircle } from "react-icons/fi";
-import { roomApi } from "../../api/roomApi";
+import { roomApi } from "../../api/roomApi.js";
 import dayjs from "dayjs";
 
-import { StatusPill } from "../../../components/ui/label";
+import { StatusPill } from "../../../components/ui/label.jsx";
 
 const STATUS_MAP = {
   reserved:    { label: "Đang giữ", color: "orange" },

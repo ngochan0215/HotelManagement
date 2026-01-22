@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { FiDollarSign, FiCheckCircle, FiLoader, FiAlertCircle } from "react-icons/fi";
-import { incidentApi } from "../../api/incidentApi";
+import { incidentApi } from "../../api/incidentApi.js";
 
 export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);

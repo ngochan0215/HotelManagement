@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { FiX, FiCheckCircle, FiActivity, FiClock, FiTool, FiLock, FiAlertTriangle, FiUserCheck, FiDollarSign } from "react-icons/fi";
-import { incidentApi } from "../../api/incidentApi";
-import { employeeApi } from "../../api/employeeApi";
-import { useAuth } from "../../auth/hooks/authContext";
-import CreateCompensationModal from "./createCompensationModal";
+import { incidentApi } from "../../api/incidentApi.js";
+import { employeeApi } from "../../api/employeeApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
+import CreateCompensationModal from "./createCompensationModal.jsx";
 
 export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const { user } = useAuth();

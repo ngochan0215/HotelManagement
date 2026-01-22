@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { FiEdit, FiTrash2, FiX, FiSearch, FiFilter, FiList, FiChevronDown } from "react-icons/fi";
-import { equipmentApi } from "../../api/equipmentApi";
-import ConfirmModal from "../../../components/confirmModal";
-import { StatusPill } from "../../../components/ui/label";
+import { equipmentApi } from "../../api/equipmentApi.js";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import { StatusPill } from "../../../components/ui/label.jsx";
 
 const STATUS_MAP = {
   "in-stock": { label: "Trong kho", color: "gray", icon: "info" },

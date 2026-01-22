@@ -15,6 +15,7 @@ import DiscountPage from '../features/discount/pages/discountPage.jsx';
 import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
+
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
 

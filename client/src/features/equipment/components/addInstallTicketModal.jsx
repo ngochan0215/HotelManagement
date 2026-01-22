@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiAlertCircle } from "react-icons/fi";
-import { equipmentApi } from "../../api/equipmentApi";
-import { roomApi } from "../../api/roomApi";
+import { equipmentApi } from "../../api/equipmentApi.js";
+import { roomApi } from "../../api/roomApi.js";
 
 const CONDITION_MAP = {
   new: "Mới",

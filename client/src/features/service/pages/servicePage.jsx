@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
 import { FiGrid, FiClipboard } from "react-icons/fi";
-import ServiceListTab from "./serviceListTab";
-import ServiceTicketTab from "./serviceTicketTab";
+import ServiceListTab from "./serviceListTab.jsx";
+import ServiceTicketTab from "./serviceTicketTab.jsx";
 
 export default function ServicePage() {
   const [activeTab, setActiveTab] = useState("list");

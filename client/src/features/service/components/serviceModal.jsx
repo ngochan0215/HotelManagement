@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiSave, FiImage, FiChevronDown } from "react-icons/fi";
-import { serviceApi } from "../../api/serviceApi";
+import { serviceApi } from "../../api/serviceApi.js";
 
 export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);

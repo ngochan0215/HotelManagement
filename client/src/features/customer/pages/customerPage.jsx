@@ -4,12 +4,12 @@ import {
   FiPlus, FiSearch, FiUser, FiPhone, FiMapPin, FiCreditCard, FiX, FiMail, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader
 } from "react-icons/fi";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import ConfirmModal from "../../../components/confirmModal";
-import Toast from "../../../components/toast";
-import { customerApi } from "../../api/customerApi";
-import { RankBadge , StatusPill} from "../../../components/ui/label";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
+import { customerApi } from "../../api/customerApi.js";
+import { RankBadge , StatusPill} from "../../../components/ui/label.jsx";
 
 const LOYALTY_MAP = {
   bronze:   { label: "Đồng", color: "orange" },

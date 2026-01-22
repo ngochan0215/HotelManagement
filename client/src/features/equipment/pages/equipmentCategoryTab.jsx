@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { FiEdit, FiTrash2, FiPlus, FiX, FiSearch, FiList, FiChevronDown, FiFilter } from "react-icons/fi";
-import { equipmentApi } from "../../api/equipmentApi";
-import ConfirmModal from "../../../components/confirmModal";
-import { RankBadge } from "../../../components/ui/label";
+import { equipmentApi } from "../../api/equipmentApi.js";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import { RankBadge } from "../../../components/ui/label.jsx";
 
 export default function EquipmentCategoryTab() {
   const [categories, setCategories] = useState([]);

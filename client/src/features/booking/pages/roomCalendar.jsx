@@ -6,11 +6,11 @@ import {
 import { vi } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import { bookingApi } from "../../api/bookingApi";
-import { roomApi } from "../../api/roomApi";
-import { serviceApi } from "../../api/serviceApi";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import { bookingApi } from "../../api/bookingApi.js";
+import { roomApi } from "../../api/roomApi.js";
+import { serviceApi } from "../../api/serviceApi.js";
 
 const HOUR_WIDTH = 120;
 const ROW_HEIGHT = 90;

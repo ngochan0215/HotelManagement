@@ -4,12 +4,12 @@ import {
   FiPlus, FiSearch, FiTag, FiCalendar, FiPercent, FiEdit, FiTrash2, FiFilter, FiChevronDown, FiLoader, FiX, FiLayers, FiType
 } from "react-icons/fi";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import ConfirmModal from "../../../components/confirmModal";
-import Toast from "../../../components/toast";
-import { StatusPill } from "../../../components/ui/label";
-import { discountApi } from "../../api/discountApi";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
+import { StatusPill } from "../../../components/ui/label.jsx";
+import { discountApi } from "../../api/discountApi.js";
 
 const SCOPE_MAP = {
   booking: "Đặt phòng (Tổng)",

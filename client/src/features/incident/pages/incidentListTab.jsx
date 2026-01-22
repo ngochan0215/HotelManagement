@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { FiClock, FiPlus, FiUser, FiMapPin, FiArrowRight, FiBriefcase } from "react-icons/fi";
-import { incidentApi } from "../../api/incidentApi";
-import { employeeApi } from "../../api/employeeApi";
-import CreateIncidentForm from "../components/createIncidentForm";
-import IncidentDetailModal from "../components/incidentDetailModal";
-import { useAuth } from "../../auth/hooks/authContext";
+import { incidentApi } from "../../api/incidentApi.js";
+import { employeeApi } from "../../api/employeeApi.js";
+import CreateIncidentForm from "../components/createIncidentForm.jsx";
+import IncidentDetailModal from "../components/incidentDetailModal.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const severityStyle = {
   critical: "bg-red-100 text-red-700 border-red-200",

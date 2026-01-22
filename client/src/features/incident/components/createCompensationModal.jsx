@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { FiX, FiDollarSign, FiAlertCircle } from "react-icons/fi";
-import { incidentApi } from "../../api/incidentApi";
+import { incidentApi } from "../../api/incidentApi.js";
 
 export default function CreateCompensationModal({ incident, onClose, onSuccess }) {
   const [amount, setAmount] = useState("");

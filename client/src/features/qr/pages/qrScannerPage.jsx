@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { qrApi } from "../../api/qrApi";
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import Toast from "../../../components/toast";
+import { qrApi } from "../../api/qrApi.js";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import Toast from "../../../components/toast.jsx";
 
 const QrScannerPage = () => {
   const [scanning, setScanning] = useState(false);

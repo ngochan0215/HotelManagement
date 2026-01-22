@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiCheckCircle, FiAlertCircle, FiSearch, FiDollarSign } from "react-icons/fi";
-import { receiptApi } from "../../api/receiptApi";
-import { bookingApi } from "../../api/bookingApi";
-import { incidentApi } from "../../api/incidentApi";
+import { receiptApi } from "../../api/receiptApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
+import { incidentApi } from "../../api/incidentApi.js";
 
 export default function CreateReceiptModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);

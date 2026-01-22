@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { FiX, FiDollarSign, FiCreditCard, FiSmartphone, FiCheckCircle, FiInfo } from "react-icons/fi";
-import { receiptApi } from "../../api/receiptApi";
+import { receiptApi } from "../../api/receiptApi.js";
 
 export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
   const [method, setMethod] = useState("cash");

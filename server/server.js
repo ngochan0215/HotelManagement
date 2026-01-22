@@ -2,8 +2,6 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import http from "http"; 
-import path from "path";
-import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,

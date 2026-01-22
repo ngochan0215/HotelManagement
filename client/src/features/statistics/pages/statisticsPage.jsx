@@ -8,10 +8,10 @@ import {
     FiDownload, FiCalendar, FiDollarSign, FiUsers, FiBox, FiActivity, FiLayers, FiGrid
 } from "react-icons/fi";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
 
-import { statisticApi } from "../../api/statisticApi";
+import { statisticApi } from "../../api/statisticApi.js";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#FF6B6B"];
 

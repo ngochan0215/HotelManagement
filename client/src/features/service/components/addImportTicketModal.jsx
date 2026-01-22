@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiSave, FiChevronDown } from "react-icons/fi";
-import { serviceApi } from "../../api/serviceApi";
+import { serviceApi } from "../../api/serviceApi.js";
 
 export default function AddImportTicketModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);

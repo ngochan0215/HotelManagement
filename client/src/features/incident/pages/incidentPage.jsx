@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { FiAlertTriangle, FiFileText } from "react-icons/fi";
 
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
 
-import IncidentListTab from "./incidentListTab";
-import CompensationListTab from "./compensationListTab";
+import IncidentListTab from "./incidentListTab.jsx";
+import CompensationListTab from "./compensationListTab.jsx";
 
 export default function IncidentPage() {
   const [activeTab, setActiveTab] = useState("incidents");

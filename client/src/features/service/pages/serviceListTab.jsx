@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiImage, FiList, FiChevronDown } from "react-icons/fi";
-import { serviceApi } from "../../api/serviceApi";
-import ServiceModal from "../components/serviceModal";
+import { serviceApi } from "../../api/serviceApi.js";
+import ServiceModal from "../components/serviceModal.jsx";
 
 export default function ServiceListTab() {
   const [services, setServices] = useState([]);

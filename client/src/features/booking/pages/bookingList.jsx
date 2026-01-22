@@ -7,17 +7,17 @@ import {
 } from "react-icons/fi";
 import { jwtDecode } from "jwt-decode";
 import { Html5Qrcode } from "html5-qrcode";
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import ConfirmModal from "../../../components/confirmModal";
-import Toast from "../../../components/toast";
-import { StatusPill } from "../../../components/ui/label";
-import { bookingApi } from "../../api/bookingApi";
-import { roomApi } from "../../api/roomApi";
-import { customerApi } from "../../api/customerApi";
-import { receiptApi } from "../../api/receiptApi";
-import { qrApi } from "../../api/qrApi";
-import { useAuth } from "../../auth/hooks/authContext";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
+import { StatusPill } from "../../../components/ui/label.jsx";
+import { bookingApi } from "../../api/bookingApi.js";
+import { roomApi } from "../../api/roomApi.js";
+import { customerApi } from "../../api/customerApi.js";
+import { receiptApi } from "../../api/receiptApi.js";
+import { qrApi } from "../../api/qrApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const STATUS_MAP = {
   pending:     { label: "Chờ cọc", color: "yellow" },

@@ -3,12 +3,12 @@ import { format, parseISO } from "date-fns";
 import {
   FiPlus, FiSearch, FiUser, FiPhone, FiMapPin, FiCreditCard, FiX, FiMail, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiBriefcase, FiDollarSign, FiLoader, FiCheckCircle, FiXCircle
 } from "react-icons/fi";
-import Sidebar from "../../../components/sidebar";
-import Topbar from "../../../components/topbar";
-import ConfirmModal from "../../../components/confirmModal";
-import Toast from "../../../components/toast";
-import { employeeApi } from "../../api/employeeApi";
-import { RankBadge, StatusPill } from "../../../components/ui/label";
+import Sidebar from "../../../components/sidebar.jsx";
+import Topbar from "../../../components/topbar.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
+import { employeeApi } from "../../api/employeeApi.js";
+import { RankBadge, StatusPill } from "../../../components/ui/label.jsx";
 
 const POSITION_MAP = {
   manager:          { label: "Quản lý", color: "purple" },
