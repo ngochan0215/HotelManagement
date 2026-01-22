@@ -1,4 +1,16 @@
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Tìm .env file: thử trong server/ trước, sau đó thử parent directory
+dotenv.config({ path: join(__dirname, "../.env") });
+if (!process.env.DB_URI) {
+  dotenv.config({ path: join(__dirname, "../../.env") });
+}
 
 const connectDB = async () => {
     try {

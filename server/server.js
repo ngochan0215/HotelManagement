@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import http from "http"; 
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
@@ -44,7 +46,6 @@ app.use("/employee", employeeRoute);
 app.use("/customer", customerRoute);
 app.use("/receipt", receiptRoute);
 app.use("/statistics", statisticRoute);
-
 app.use("/service", serviceRoute);
 app.use("/discount", discountRoute);
 app.use("/room", roomRoute);
@@ -53,8 +54,18 @@ app.use("/equipment", equipmentRoute);
 app.use("/booking", bookingRoute);
 app.use("/incident", incidentRoute);
 app.use("/qr", qrRoute);
-
 app.use("/avatars", express.static("avatars"));
+
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+
+// app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// app.get("*", (req, res) => {
+//   res.sendFile(
+//     path.join(__dirname, "../client/dist/index.html")
+//   );
+// });
 
 startImportTicketJob();
 startInstallTicketJob();

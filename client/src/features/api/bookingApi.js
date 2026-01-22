@@ -1,12 +1,13 @@
 import axios from "axios";
+import API_BASE_URL from "../../config/apiConfig.js";
 
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
-const BASE_URL = "http://localhost:3000/booking";
-const BASE_URL_ = "http://localhost:3000";
+const BASE_URL = `${API_BASE_URL}/booking`;
+const BASE_URL_ = API_BASE_URL;
 
 export const bookingApi = {
     getCancellationReasonStats: async (params = {}) => {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import axios from "axios";
+import API_BASE_URL from "../../../config/apiConfig.js";
 
-const API_URL = "http://localhost:3000/auth";
+const API_URL = `${API_BASE_URL}/auth`;
 
 export const loginUser = async (credentials) => {
   try {

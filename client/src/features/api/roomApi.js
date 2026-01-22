@@ -1,7 +1,8 @@
 import axios from "axios";
+import API_BASE_URL from "../../config/apiConfig.js";
 
-const BASE_URL = "http://localhost:3000/room";
-const BASE_URL_ = "http://localhost:3000/room-category";
+const BASE_URL = `${API_BASE_URL}/room`;
+const BASE_URL_ = `${API_BASE_URL}/room-category`;
 
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");

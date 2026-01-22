@@ -217,7 +217,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
                     <div className="flex gap-3 mt-4 overflow-x-auto pb-2 scrollbar-thin">
                         {previewImages.map((src, idx) => (
                             <div key={idx} className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 relative group shadow-sm">
-                                <img src={src.startsWith('http') || src.startsWith('blob') ? src : `http://localhost:3000/${src}`} alt="Preview" className="w-full h-full object-cover" />
+                                <img src={src.startsWith('http') || src.startsWith('blob') ? src : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/${src}`} alt="Preview" className="w-full h-full object-cover" />
                             </div>
                         ))}
                     </div>

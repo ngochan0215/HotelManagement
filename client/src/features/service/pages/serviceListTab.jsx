@@ -185,7 +185,7 @@ export default function ServiceListTab() {
                                 <div className="w-10 h-10 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 flex items-center justify-center">
                                     {item.images && item.images.length > 0 ? (
                                         <img
-                                            src={item.images[0].startsWith('http') ? item.images[0] : `http://localhost:3000/${item.images[0]}`}
+                                            src={item.images[0].startsWith('http') ? item.images[0] : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/${item.images[0]}`}
                                             alt={item.name}
                                             className="w-full h-full object-cover"
                                         />
