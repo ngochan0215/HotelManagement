@@ -36,6 +36,7 @@ export const scanQRCode = async (req, res) => {
 
     // Lấy dữ liệu từ QR code
     const qrData = code.data;
+    let parsedData = null;
 
     if (qrData.includes("||") && qrData.includes("|")) {
       const [cccd, rest] = qrData.split("||");

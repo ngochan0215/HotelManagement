@@ -7,6 +7,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  
   const parseTokenToUser = (token) => {
     try {
       const decoded = jwtDecode(token);
@@ -28,6 +29,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  };
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -35,7 +42,9 @@ export const AuthProvider = ({ children }) => {
       if (userFromToken) {
         setUser(userFromToken);
       } else {
-        logout();
+        // Token không hợp lệ hoặc hết hạn, clear và không redirect (để routes xử lý)
+        setUser(null);
+        localStorage.removeItem("token");
       }
     }
     setIsLoading(false);
@@ -54,12 +63,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       throw error;
     }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("token");
-    window.location.href = "/login";
   };
 
   return (

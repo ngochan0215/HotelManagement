@@ -110,6 +110,12 @@ export const login = async (req, res) => {
         if(!user.emailVerified)
             return res.status(401).json({ message: "Email chưa được xác thực." });
 
+        if(user.status === "active")
+            return res.status(401).json({ message: "Tài khoản này đã ngừng hoạt động." });
+
+        if(user.status === "banned")
+            return res.status(401).json({ message: "Tài khoản này đã bị ban." });
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) 
             return res.status(401).json({ message: "Sai mật khẩu" });
