@@ -57,7 +57,7 @@ export default function ReceiptList() {
           <div className="flex justify-between items-end border-b border-gray-200 pb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <FiFileText className="text-indigo-600"/> Quản lý Hóa Đơn
+                 Quản lý Hóa Đơn
               </h1>
               <p className="text-gray-500 text-sm mt-1">Theo dõi doanh thu và lịch sử thanh toán.</p>
             </div>
