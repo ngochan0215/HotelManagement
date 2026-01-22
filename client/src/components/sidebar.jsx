@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUser, FiUsers, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
 import { useAuth } from "../features/auth/hooks/authContext.jsx";
@@ -29,6 +29,7 @@ const sidebarConfig = [
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag },
       { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle },
       { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText },
+      { name: "Quét QR căn cước", path: "/qr-scanner", icon: FiCamera },
     ],
   },
 ];

@@ -23,6 +23,7 @@ import roomCategoryRoute from "./routes/roomCategoryRoutes.js";
 import equipmentRoute from "./routes/equipmentRoutes.js";
 import bookingRoute from "./routes/bookingRoutes.js";
 import statisticRoute from "./routes/statisticsRoutes.js";
+import qrRoute from "./routes/qrRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -51,6 +52,7 @@ app.use("/room-category", roomCategoryRoute);
 app.use("/equipment", equipmentRoute);
 app.use("/booking", bookingRoute);
 app.use("/incident", incidentRoute);
+app.use("/qr", qrRoute);
 
 app.use("/avatars", express.static("avatars"));
 

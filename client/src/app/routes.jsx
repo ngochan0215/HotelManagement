@@ -14,6 +14,7 @@ import IncidentPage from '../features/incident/pages/incidentPage.jsx';
 import DiscountPage from '../features/discount/pages/discountPage.jsx';
 import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
+import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 export default function AppRoutes() {
   const { user } = useAuth();
 
@@ -81,6 +82,11 @@ export default function AppRoutes() {
         <Route
               path="/reports"
               element={user ? <StatisticsPage /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+              path="/qr-scanner"
+              element={user ? <QrScannerPage /> : <Navigate to="/login" replace />}
         />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
