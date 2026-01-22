@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import http from "http"; 
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
@@ -33,7 +35,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: { origin: "*" }
 });
-
+app.set("io", io);
 app.use(cors());
 app.use(express.json());
 
@@ -54,16 +56,16 @@ app.use("/incident", incidentRoute);
 app.use("/qr", qrRoute);
 app.use("/avatars", express.static("avatars"));
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// app.use(express.static(path.join(__dirname, "../client/dist")));
+app.use(express.static(path.join(__dirname, "../client/dist")));
 
-// app.get("*", (req, res) => {
-//   res.sendFile(
-//     path.join(__dirname, "../client/dist/index.html")
-//   );
-// });
+app.get(/.*/, (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "../client/dist/index.html")
+  );
+});
 
 startImportTicketJob();
 startInstallTicketJob();
@@ -72,8 +74,6 @@ startServiceUsageJob();
 startCancelPendingBookingJob();
 startCancelCheckinLateBookingJob();
 startCustomerTierJob();
-
-app.set("io", io);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { 
