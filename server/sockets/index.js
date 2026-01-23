@@ -1,7 +1,9 @@
 import { Server } from "socket.io";
 import { socketAuth } from "../middleware/socketAuth.js";
 import { setSocketInstance } from "./instance.js";
-import registerNotificationHandlers from "./notification.handler.js";
+
+// Map để lưu trữ các socket connections của mỗi user
+const userSocketsMap = new Map();
 
 export function initSocket(httpServer) {
   console.log("IM CALLED");
@@ -19,7 +21,7 @@ export function initSocket(httpServer) {
   io.on("connection", (socket) => {
     const { userId, role } = socket.user;
 
-    console.log(`User connected: ${userId} (socket id: ${socket.id})`);
+    console.log(`User connected: ${userId} (socket id: ${socket.id}) as ${role})`);
 
     // init set nếu chưa có
     if (!userSocketsMap.has(userId)) {
@@ -30,6 +32,15 @@ export function initSocket(httpServer) {
 
     socket.join(`user:${userId}`);
 
+    // test notification
+    socket.on("test-notify", (data) => {
+        io.to(`user:${userId}`).emit("notification", {
+            title: "New Notification",
+            message: data?.message || "No message",
+            time: new Date(),
+        });
+    });
+
     socket.on("disconnect", () => {
       const set = userSocketsMap.get(userId);
       if (!set) return;
@@ -38,10 +49,10 @@ export function initSocket(httpServer) {
       if (set.size === 0) {
         userSocketsMap.delete(userId);
       }
+      console.log(`User disconnected: ${userId} (socket id: ${socket.id})`);
     });
   });
 
-  registerNotificationHandlers(io);
   setSocketInstance(io);
 
   io.engine.on("connection_error", (err) => {

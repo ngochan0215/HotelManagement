@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
-  BookingDetail, Employee, Incident, Customer
+  BookingDetail, Employee, Incident, Customer, User
  } from "../models/index.js";
 import { updateCustomerPoints } from "./customerController.js";
+import { pushNotificationToUsers } from "../services/notificationService.js";
 
 // export const createReceipt = async (req, res) => {
 //   const session = await mongoose.startSession();
@@ -447,6 +448,33 @@ export const updateReceipt = async (req, res) => {
     receipt.status = status;
     await receipt.save();
 
+    // Gửi thông báo cho tất cả user (admin, employee, customer) về thay đổi trạng thái hóa đơn
+    try {
+      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
+      const userIds = allUsers.map(u => u._id);
+      
+      const statusLabels = {
+        pending: "Đang chờ thanh toán",
+        paid: "Đã thanh toán",
+        cancelled: "Đã hủy"
+      };
+      
+      if (userIds.length > 0) {
+        await pushNotificationToUsers(
+          userIds,
+          "Thay đổi trạng thái hóa đơn",
+          `Hóa đơn #${id.toString().slice(-6)} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+      // Không throw error để không ảnh hưởng đến response chính
+    }
+
     return res.status(200).json({
       success: true,
       data: receipt
@@ -531,6 +559,27 @@ export const markReceiptAsPaid = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Gửi thông báo cho tất cả user (admin, employee, customer) về thay đổi trạng thái hóa đơn
+    try {
+      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
+      const userIds = allUsers.map(u => u._id);
+      
+      if (userIds.length > 0) {
+        await pushNotificationToUsers(
+          userIds,
+          "Thay đổi trạng thái hóa đơn",
+          `Hóa đơn #${id.toString().slice(-6)} đã chuyển sang trạng thái "Đã thanh toán"`,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+      // Không throw error để không ảnh hưởng đến response chính
+    }
 
     return res.status(200).json({
       message: "Thanh toán hóa đơn thành công.",

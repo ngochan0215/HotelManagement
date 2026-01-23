@@ -1,22 +1,5 @@
 export default function registerNotificationHandlers(io) {
-  io.on("connection", (socket) => {
-    const userId = socket.user.userId;
-    socket.join(`user:${userId}`);
-    console.log("socket connected: ", socket.id);
-    console.log(`[Notification] User ${userId} connected`);
-
-    // test notification
-    socket.on("test-notify", (data) => {
-        io.to(`user:${userId}`).emit("receive-notification", {
-            title: "New Notification",
-            message: data?.message || "No message",
-            time: new Date(),
-        });
-    });
-
-    socket.on("disconnect", (reason) => {
-        console.log("socket disconnected", socket.id, "reason:", reason);
-        console.log(`[Notification] User ${userId} disconnected`);
-    });
-  });
+  // Notification handlers are already registered in index.js
+  // This function is kept for future extension if needed
+  console.log("Notification handlers registered");
 }

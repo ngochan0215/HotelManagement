@@ -92,6 +92,7 @@ export default function ReceiptList() {
                 <option value="cash">Tiền mặt</option>
                 <option value="bank">Chuyển khoản</option>
                 <option value="card">Thẻ</option>
+                <option value="unknown">Chưa biết</option>
              </select>
              <div className="flex items-center gap-2 border px-3 py-2 rounded-lg bg-white">
                 <input type="date" className="text-sm outline-none" value={fromDate} onChange={e => setFromDate(e.target.value)} />

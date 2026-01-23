@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { serviceApi } from "../../api/serviceApi.js";
-import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser } from "react-icons/fi";
+import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser, FiEye, FiEdit, FiXCircle } from "react-icons/fi";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
+import ServiceUsageDetailModal from "../components/serviceUsageDetailModal.jsx";
+import UpdateServiceUsageModal from "../components/updateServiceUsageModal.jsx";
 
 export default function ServiceTicketTab() {
   const [imports, setImports] = useState([]);
@@ -11,6 +13,8 @@ export default function ServiceTicketTab() {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
+  const [selectedUsageId, setSelectedUsageId] = useState(null);
+  const [editingUsageId, setEditingUsageId] = useState(null);
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -69,9 +73,22 @@ export default function ServiceTicketTab() {
 
   const renderStatus = (status) => {
     const config = {
-      pending: { label: "Đang xử lý", class: "bg-gray-100 text-gray-500 border border-gray-200" },
-      waiting_confirm: { label: "Chờ duyệt", class: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300" },
+      pending: { label: "Đang chờ đến ngày nhập", class: "bg-blue-100 text-blue-700 border border-blue-200" },
+      waiting_confirm: { label: "Đã đến ngày - Chờ xác nhận nhập", class: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300" },
       completed: { label: "Hoàn thành", class: "bg-green-100 text-green-700 border border-green-200" },
+      expired: { label: "Đã hết hạn", class: "bg-red-100 text-red-700 border border-red-200" },
+      cancelled: { label: "Đã hủy", class: "bg-red-100 text-red-700 border border-red-200" },
+    };
+    const s = config[status] || config.pending;
+    return <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${s.class}`}>{s.label}</span>;
+  };
+
+  const renderUsageStatus = (status) => {
+    const config = {
+      pending: { label: "Chờ ngày sử dụng", class: "bg-blue-100 text-blue-700 border border-blue-200" },
+      waiting_confirm: { label: "Xác nhận hoàn thành", class: "bg-yellow-100 text-yellow-800 font-bold border border-yellow-300" },
+      completed: { label: "Hoàn thành", class: "bg-green-100 text-green-700 border border-green-200" },
+      expired: { label: "Đã hết hạn", class: "bg-red-100 text-red-700 border border-red-200" },
       cancelled: { label: "Đã hủy", class: "bg-red-100 text-red-700 border border-red-200" },
     };
     const s = config[status] || config.pending;
@@ -83,6 +100,8 @@ export default function ServiceTicketTab() {
 
       {showImportModal && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
       {showUsageModal && <AddServiceUsageModal onClose={() => setShowUsageModal(false)} onSuccess={fetchTickets} />}
+      {selectedUsageId && <ServiceUsageDetailModal usageId={selectedUsageId} onClose={() => setSelectedUsageId(null)} />}
+      {editingUsageId && <UpdateServiceUsageModal usageId={editingUsageId} onClose={() => setEditingUsageId(null)} onSuccess={fetchTickets} />}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
@@ -156,35 +175,59 @@ export default function ServiceTicketTab() {
                             </td>
 
                             <td className="px-4 py-3 text-center">
-                                {renderStatus(item.status)}
+                                {renderUsageStatus(item.status)}
                             </td>
 
                             <td className="px-4 py-3 text-right">
-                                {item.status === "waiting_confirm" ? (
                                 <div className="flex justify-end gap-2">
                                     <button
-                                    onClick={() => handleConfirmUsage(item._id)}
-                                    className="inline-flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm"
-                                    title="Xác nhận phiếu"
+                                        onClick={() => setSelectedUsageId(item._id)}
+                                        className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm"
+                                        title="Xem chi tiết"
                                     >
-                                    <FiCheckCircle /> Xác nhận
+                                        <FiEye /> Chi tiết
                                     </button>
-
-                                    <button
-                                    onClick={() => handleCancelUsage(item._id)}
-                                    className="inline-flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-700 shadow-sm"
-                                    title="Hủy phiếu"
-                                    >
-                                    Hủy
-                                    </button>
+                                    {item.status === "pending" && (
+                                        <>
+                                            <button
+                                                onClick={() => setEditingUsageId(item._id)}
+                                                className="inline-flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-indigo-700 shadow-sm"
+                                                title="Cập nhật phiếu"
+                                            >
+                                                <FiEdit /> Cập nhật
+                                            </button>
+                                            <button
+                                                onClick={() => handleCancelUsage(item._id)}
+                                                className="inline-flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-700 shadow-sm"
+                                                title="Hủy phiếu"
+                                            >
+                                                <FiXCircle /> Hủy
+                                            </button>
+                                        </>
+                                    )}
+                                    {item.status === "waiting_confirm" && (
+                                        <>
+                                            <button
+                                                onClick={() => handleConfirmUsage(item._id)}
+                                                className="inline-flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm"
+                                                title="Xác nhận phiếu"
+                                            >
+                                                <FiCheckCircle /> Xác nhận
+                                            </button>
+                                            <button
+                                                onClick={() => handleCancelUsage(item._id)}
+                                                className="inline-flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-700 shadow-sm"
+                                                title="Hủy phiếu"
+                                            >
+                                                <FiXCircle /> Hủy
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
-                                ) : (
-                                <span className="text-gray-300 text-xs italic">---</span>
-                                )}
                             </td>
                         </tr>
                     ))}
-                    {usages.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
+                    {usages.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
                 </tbody>
             </table>
         </div>
@@ -236,7 +279,7 @@ export default function ServiceTicketTab() {
                             </td>
                             <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
-                                {item.status === 'waiting_confirm' || item.status === 'pending' ? (
+                                {item.status === 'waiting_confirm' ? (
                                     <button
                                         onClick={() => handleConfirmImport(item._id)}
                                         className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm ml-auto"
@@ -244,10 +287,12 @@ export default function ServiceTicketTab() {
                                     >
                                         <FiCheckCircle /> Nhập kho
                                     </button>
+                                ) : item.status === 'completed' ? (
+                                    <span className="text-gray-300 text-xs italic">---</span>
+                                ) : item.status === 'expired' || item.status === 'cancelled' ? (
+                                    <span className="text-red-300 text-xs italic">Đã hết hạn</span>
                                 ) : (
-                                    <span className="text-gray-300 text-xs italic">
-                                        {item.status === 'completed' ? '---' : 'Chưa đến hạn'}
-                                    </span>
+                                    <span className="text-gray-300 text-xs italic">Chưa đến ngày nhập</span>
                                 )}
                             </td>
                         </tr>

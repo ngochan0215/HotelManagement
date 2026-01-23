@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, updateAllCustomerTiers,
-  notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings 
+  notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings, notifyCheckinReminder
 } from "../jobs/notifyTickets.js";
 
 const startCronJob = ({ name, schedule, handler }) => {
@@ -62,6 +62,13 @@ export const startCustomerTierJob = () =>
     name: "calculating customer loyalty and points",
     schedule: "*/5 * * * *",
     handler: updateAllCustomerTiers,
+  });
+
+export const startCheckinReminderJob = () =>
+  startCronJob({
+    name: "check-in reminder (2 hours before)",
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    handler: notifyCheckinReminder,
   });
 
 // export const startImportTicketJob = () => {

@@ -43,7 +43,7 @@ const receiptSchema = new mongoose.Schema(
 
     payment: {
       type: String,
-      enum: ["cash", "card", "bank", "e-wallet"],
+      enum: ["cash", "card", "bank", "e-wallet", "unknown"],
       required: true,
     },
 

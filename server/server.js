@@ -7,7 +7,8 @@ import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
-    startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob 
+    startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob, 
+    startCheckinReminderJob
 } from "./jobs/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
@@ -33,7 +34,7 @@ connectDB();
 const app = express();
 const server = http.createServer(app); 
 const io = new Server(server, {
-    cors: { origin: "*" }
+  cors: { origin: "*" }
 });
 app.set("io", io);
 app.use(cors());
@@ -74,6 +75,7 @@ startServiceUsageJob();
 startCancelPendingBookingJob();
 startCancelCheckinLateBookingJob();
 startCustomerTierJob();
+startCheckinReminderJob();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { 

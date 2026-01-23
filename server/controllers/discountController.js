@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
-import { Discount } from "../models/index.js";
+import { Discount, User } from "../models/index.js";
 import { validateDate } from "../utils/validateDate.js";
+import { pushNotificationToUsers } from "../services/notificationService.js";
 
 export const addNewDiscount = async (req, res) => {
   try {
@@ -38,6 +39,27 @@ export const addNewDiscount = async (req, res) => {
 
     const discount = new Discount({ name, description, begin_date: validDate.begin, end_date: validDate.end, percentage, scope, type });
     await discount.save();
+
+    // Gửi thông báo cho tất cả user (admin, employee, customer)
+    try {
+      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
+      const userIds = allUsers.map(u => u._id);
+      
+      if (userIds.length > 0) {
+        await pushNotificationToUsers(
+          userIds,
+          "Khuyến mãi mới",
+          `Khuyến mãi "${name}" đã được thêm với mức giảm ${percentage}%`,
+          "discount",
+          "Discount",
+          discount._id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+      // Không throw error để không ảnh hưởng đến response chính
+    }
 
     return res.status(201).json({ success: true, message: "Thêm khuyến mãi mới thành công", discount });
 

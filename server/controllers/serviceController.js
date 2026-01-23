@@ -825,7 +825,7 @@ export const createServiceUsage = async (req, res) => {
     await serviceUsage[0].save({ session });
 
     // cập nhật trạng thái phiếu
-    await recalcServiceUsageStatus(serviceUsage[0]._id);
+    await recalcServiceUsageStatus(serviceUsage[0]._id, session);
 
     await session.commitTransaction();
     session.endSession();
@@ -921,8 +921,8 @@ export const getServiceUsageById = async (req, res) => {
 
     const serviceUsage = await ServiceUsage.findById(id)
       .select("-__v -created_at -updated_at")
-      .populate("booking_id", "status")
-      .populate("customer_id", "full_name phone")
+      .populate("booking_id", "status expected_checkin expected_checkout")
+      .populate("customer_id", "full_name phone phone_number")
       .populate("employee_id", "full_name");
 
     if (!serviceUsage) {
@@ -931,6 +931,14 @@ export const getServiceUsageById = async (req, res) => {
         message: "Không tìm thấy phiếu sử dụng dịch vụ",
       });
     }
+
+    // Lấy thông tin phòng từ booking
+    const { BookingDetail } = await import("../models/index.js");
+    const bookingDetails = await BookingDetail.find({
+      booking_id: serviceUsage.booking_id._id
+    })
+      .populate("room_id", "room_number")
+      .select("room_id status");
 
     const usageDetails = await UsageDetail.find({ ticket_id: serviceUsage._id })
       .select("-__v -created_at -updated_at -ticket_id")
@@ -942,6 +950,11 @@ export const getServiceUsageById = async (req, res) => {
       data: {
         service_usage: serviceUsage,
         usage_details: usageDetails,
+        rooms: bookingDetails.map(bd => ({
+          room_id: bd.room_id?._id || bd.room_id,
+          room_number: bd.room_id?.room_number || "N/A",
+          status: bd.status
+        })),
       },
     });
   } catch (error) {
@@ -1097,7 +1110,7 @@ export const updateServiceUsage = async (req, res) => {
         finish_at: item.finish_at ? new Date(item.finish_at) : null,
         current_price: service.price,
         total_fee: itemTotal,
-        status: item.use_from ? "pending" : "waiting_confirm",
+        status: item.use_from === null ? "pending" : "waiting_confirm",
       };
     });
 
@@ -1106,6 +1119,8 @@ export const updateServiceUsage = async (req, res) => {
 
     serviceUsage.total_fee = totalUsageFee;
     await serviceUsage.save({ session });
+
+    await recalcServiceUsageStatus(serviceUsage._id, session);
 
     await session.commitTransaction();
 
@@ -1128,12 +1143,22 @@ export const updateServiceUsage = async (req, res) => {
   }
 };
 
-export const recalcServiceUsageStatus = async (ticketId) => {
+export const recalcServiceUsageStatus = async (ticketId, session = null) => {
+  console.log("Recalc status called for ticket:", ticketId);
 
-  const details = await UsageDetail.find(
-    { ticket_id: ticketId });
+  const query = UsageDetail.find({ ticket_id: ticketId });
 
-  if (!details.length) return;
+  // chỉ gắn session nếu có
+  if (session) {
+    query.session(session);
+  }
+
+  const details = await query;
+
+  if (!details.length) {
+    console.log("No usage details found for ticket:", ticketId);
+    return;
+  }
 
   const statuses = details.map(d => d.status);
   let newStatus = "pending";
@@ -1150,10 +1175,18 @@ export const recalcServiceUsageStatus = async (ticketId) => {
     newStatus = "completed";
   }
 
-  await ServiceUsage.updateOne(
+  const updateQuery = ServiceUsage.updateOne(
     { _id: ticketId },
     { $set: { status: newStatus } }
   );
+
+  if (session) {
+    updateQuery.session(session);
+  }
+
+  await updateQuery;
+
+  console.log("Service usage status updated to:", newStatus);
 };
 
 export const confirmServiceUsage = async (req, res) => {
@@ -1273,11 +1306,11 @@ export const confirmServiceUsage = async (req, res) => {
       }
     }
 
+    // cập nhật trạng thái phiếu
+    await recalcServiceUsageStatus(serviceUsage._id, session);
+
     await session.commitTransaction();
     session.endSession();
-
-    // cập nhật trạng thái phiếu
-    await recalcServiceUsageStatus(serviceUsage._id);
 
     return res.status(200).json({
       success: true,
@@ -1364,11 +1397,11 @@ export const cancelServiceUsage = async (req, res) => {
       await detail.save({ session });
     }
 
+    // cập nhật trạng thái phiếu
+    await recalcServiceUsageStatus(serviceUsage._id, session);
+
     await session.commitTransaction();
     session.endSession();
-
-    // cập nhật trạng thái phiếu
-    await recalcServiceUsageStatus(serviceUsage._id);
 
     return res.status(200).json({
       success: true,
@@ -1381,7 +1414,7 @@ export const cancelServiceUsage = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "SERVER ERROR: " + error.message,
+      message: "SERVER ERROR (im here): " + error.message,
     });
   }
 };
@@ -1411,6 +1444,8 @@ export const confirmUsageDetail = async (req, res) => {
         message: "Không tìm thấy usage detail",
       });
     }
+
+    const serviceUsage = await ServiceUsage.findById(usageDetail.ticket_id).session(session);
 
     if (usageDetail.status !== "waiting_confirm") {
       await session.abortTransaction();
@@ -1450,11 +1485,11 @@ export const confirmUsageDetail = async (req, res) => {
       );
     }
 
+    // Tự cập nhật service_usage
+    await recalcServiceUsageStatus(serviceUsage._id, session);
+
     await session.commitTransaction();
     session.endSession();
-
-    // Tự cập nhật service_usage
-    await recalcServiceUsageStatus(usageDetail.ticket_id);
 
     return res.status(200).json({
       success: true,
@@ -1498,6 +1533,8 @@ export const cancelUsageDetail = async (req, res) => {
       });
     }
 
+    const serviceUsage = await ServiceUsage.findById(usageDetail.ticket_id).session(session);
+
     if (usageDetail.status === "completed") {
       await session.abortTransaction();
       return res.status(400).json({
@@ -1520,11 +1557,11 @@ export const cancelUsageDetail = async (req, res) => {
 
     await usageDetail.save({ session });
 
+    // Tự cập nhật service_usage
+    await recalcServiceUsageStatus(serviceUsage._id, session);
+
     await session.commitTransaction();
     session.endSession();
-
-    // Tự cập nhật service_usage
-    await recalcServiceUsageStatus(usageDetail.ticket_id);
 
     return res.status(200).json({
       success: true,

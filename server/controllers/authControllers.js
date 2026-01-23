@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User } from "../models/index.js";
+import { User, Customer } from "../models/index.js";
 import { sendResetPasswordEmail } from "../utils/sendEmails.js";
 
 // khách hàng đăng ký
