@@ -18,7 +18,7 @@ export const customerApi = {
   },
 
   createCustomer: async (data) => {
-    const res = await axios.post(`${BASE_URL}/register`, data, getAuthHeader());
+    const res = await axios.post(`${API_BASE_URL}/auth/register`, data, getAuthHeader());
     return res.data;
   },
 

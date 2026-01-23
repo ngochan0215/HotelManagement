@@ -282,7 +282,6 @@ export const getAllSchedules = async (req, res) => {
   }
 };
 
-
 export const getScheduleById = async (req, res) => {
   try {
     const schedule = await Schedule.findById(req.params.id)

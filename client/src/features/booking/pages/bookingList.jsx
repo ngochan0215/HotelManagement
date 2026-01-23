@@ -4,7 +4,7 @@ import {
   FiPlus, FiX, FiTrash2, FiSearch, FiCheckCircle, FiLogOut, FiUser,
   FiUserPlus, FiUsers, FiTag, FiLogIn, FiMinusCircle, FiCheckSquare, FiSquare,
   FiCalendar, FiMapPin, FiAlertTriangle, FiCamera, FiUpload,
-  FiChevronLeft, FiChevronRight
+  FiChevronLeft, FiChevronRight, FiSave
 } from "react-icons/fi";
 import { jwtDecode } from "jwt-decode";
 import { Html5Qrcode } from "html5-qrcode";
@@ -80,6 +80,7 @@ export default function BookingList() {
   const [newCustomer, setNewCustomer] = useState({
     email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: ""
   });
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   // QR Scanner states
   const [qrScanning, setQrScanning] = useState(false);
@@ -266,6 +267,67 @@ export default function BookingList() {
       setSelectedRooms(selectedRooms.filter(r => r._id !== roomId));
   };
 
+  const handleSaveCustomer = async () => {
+    // Validate các trường bắt buộc
+    if (!newCustomer.full_name || !newCustomer.phone_number || !newCustomer.CCCD) {
+      alert("Vui lòng điền đầy đủ các trường bắt buộc: Họ tên, SĐT, CCCD");
+      return;
+    }
+
+    setSavingCustomer(true);
+    try {
+      const randomPassword = "Khach@" + Math.floor(1000 + Math.random() * 9000);
+      let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
+
+      const resCust = await customerApi.createCustomer({ 
+        ...newCustomer, 
+        email: emailToUse, 
+        password: randomPassword 
+      });
+
+      console.log("New customer created:", resCust);
+      
+      if (resCust && resCust.customerId) {
+        // Refresh danh sách khách hàng
+        const custRes = await customerApi.getAllCustomers();
+        setCustomersList(custRes.customers || []);
+
+        // Tìm khách hàng vừa tạo
+        const createdCustomer = (custRes.customers || []).find(
+          c => c._id === resCust.customerId || c.user_id === resCust.customerId
+        );
+
+        if (createdCustomer) {
+          // Chuyển sang mode existing và chọn khách hàng vừa tạo
+          setCustomerMode("existing");
+          selectCustomer(createdCustomer);
+          setFormData(prev => ({ ...prev, customer_id: createdCustomer._id || resCust.customerId }));
+          
+          // Reset form khách hàng mới
+          setNewCustomer({ 
+            email: "", 
+            full_name: "", 
+            phone_number: "", 
+            date_birth: "", 
+            nationality: "Vietnam", 
+            CCCD: "" 
+          });
+          
+          alert("Lưu khách hàng thành công! Đã tự động chọn khách hàng vừa tạo.");
+        } else {
+          alert("Lưu khách hàng thành công! Vui lòng chọn khách hàng từ danh sách.");
+        }
+      } else {
+        throw new Error("Không nhận được customerId từ server");
+      }
+    } catch (error) {
+      console.error("Error saving customer:", error);
+      alert("Lỗi khi lưu khách hàng: " + (error.response?.data?.message || error.message));
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+
   const handleOpenModal = () => {
     const now = new Date();
     const checkin = setMinutes(setHours(now, 14), 0);
@@ -276,6 +338,7 @@ export default function BookingList() {
     setCustomerMode("existing"); setCustSearchQuery(""); setSelectedCustDisplay(null); setShowCustDropdown(false);
     setShowQrScanner(false); setQrScanning(false); setQrError(null);
     setBookingMode("immediate"); // Reset về đặt liền
+    setSavingCustomer(false);
     setIsModalOpen(true);
   };
 
@@ -295,8 +358,11 @@ export default function BookingList() {
       if (customerMode === "new") {
           const randomPassword = "Khach@" + Math.floor(1000 + Math.random() * 9000);
           let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
+
           const resCust = await customerApi.createCustomer({ ...newCustomer, email: emailToUse, password: randomPassword });
-          if (resCust && resCust.customerId) finalCustomerId = resCust.customerId;
+          console.log("New customer created:", resCust);
+          if (resCust && resCust.customerId) 
+            finalCustomerId = resCust.customerId;
           else throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
       }
       if (!finalCustomerId) return alert("Vui lòng chọn khách hàng!");
@@ -552,13 +618,39 @@ export default function BookingList() {
       onConfirm: async () => { try { await bookingApi.confirmBooking(id); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } }
   });
 
-  const actionCheckIn = (did, bid, rNum) => setConfirmState({
-        open: true, title: `Check-in Phòng ${rNum}`, message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`, confirmText: "Giao phòng", type: "success",
-        onConfirm: async () => {
-            try { await bookingApi.checkinBookingDetail(bid, did); fetchData(); setConfirmState(p => ({...p, open: false})); alert(`Check-in phòng ${rNum} thành công!`); }
-            catch(err) { alert(`Lỗi: ${err.response?.data?.message || err.message}`); }
+  const actionCheckIn = (did, bid, rNum, expectedCheckin) => {
+        const now = new Date();
+        const checkinTime = new Date(expectedCheckin);
+        const twoHoursBefore = new Date(checkinTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-in
+        
+        // Kiểm tra nếu chưa đến 2h trước giờ check-in
+        if (now < twoHoursBefore) {
+            const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60)); // phút
+            const hours = Math.floor(remainingTime / 60);
+            const minutes = remainingTime % 60;
+            alert(`Chưa đến thời gian check-in! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-in (phải cách giờ check-in dự kiến ít nhất 2 giờ).`);
+            return;
         }
-    });
+        
+        setConfirmState({
+            open: true, 
+            title: `Check-in Phòng ${rNum}`, 
+            message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`, 
+            confirmText: "Giao phòng", 
+            type: "success",
+            onConfirm: async () => {
+                try { 
+                    await bookingApi.checkinBookingDetail(bid, did); 
+                    fetchData(); 
+                    setConfirmState(p => ({...p, open: false})); 
+                    alert(`Check-in phòng ${rNum} thành công!`); 
+                }
+                catch(err) { 
+                    alert(`Lỗi: ${err.response?.data?.message || err.message}`); 
+                }
+            }
+        });
+    };
 
   const actionCheckOut = (did, bid, rNum) => setConfirmState({
         open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
@@ -784,13 +876,17 @@ export default function BookingList() {
                                     </button>
                                 )}
                                 {b.rooms?.map((r, i) => {
-                                    if(b.status === 'confirmed' && r.status === 'reserved')
+                                    if(b.status === 'confirmed' && r.status === 'reserved') {
                                         return (
-                                            <button key={i} onClick={()=>actionCheckIn(r._id,b._id,r.room_id?.room_number)}
-                                                className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded hover:bg-emerald-100 transition">
+                                            <button 
+                                                key={i} 
+                                                onClick={()=>actionCheckIn(r._id, b._id, r.room_id?.room_number, b.expected_checkin)}
+                                                className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded hover:bg-emerald-100 transition"
+                                            >
                                                 <FiLogIn/> Check-in
                                             </button>
                                         );
+                                    }
                                     if(r.status === 'checked_in')
                                         return (
                                             <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_id?.room_number)}
@@ -943,6 +1039,28 @@ export default function BookingList() {
                                     <div><label className="text-xs font-bold text-gray-500">CCCD *</label><input className="w-full border border-gray-300 rounded-lg p-2 mt-1 outline-none focus:border-indigo-500 bg-white" value={newCustomer.CCCD} onChange={e=>setNewCustomer({...newCustomer, CCCD: e.target.value})}/></div>
                                     <div><label className="text-xs font-bold text-gray-500">Ngày sinh</label><input type="date" className="w-full border border-gray-300 rounded-lg p-2 mt-1 outline-none focus:border-indigo-500 bg-white" value={newCustomer.date_birth} onChange={e=>setNewCustomer({...newCustomer, date_birth: e.target.value})}/></div>
                                     <div className="col-span-2"><label className="text-xs font-bold text-gray-500">Email</label><input className="w-full border border-gray-300 rounded-lg p-2 mt-1 outline-none focus:border-indigo-500 bg-white" placeholder="Option" value={newCustomer.email} onChange={e=>setNewCustomer({...newCustomer, email: e.target.value})}/></div>
+                                </div>
+
+                                {/* Nút Lưu khách hàng */}
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveCustomer}
+                                        disabled={savingCustomer || !newCustomer.full_name || !newCustomer.phone_number || !newCustomer.CCCD}
+                                        className="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                    >
+                                        {savingCustomer ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                Đang lưu...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FiSave size={16} />
+                                                Lưu khách hàng
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
 
                                 {/* Loading/Error */}

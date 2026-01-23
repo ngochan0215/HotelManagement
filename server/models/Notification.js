@@ -1,36 +1,36 @@
 import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema(
-    {
-        user_id: {
-            type: mongoose.Schema.Types.ObjectId, 
-            ref: "User",
-            required: true,
-        },
-        type: {
-            type: String,
-            required: true,
-            enum: ["system", "info"],
-            default: "info",
-        },
-        title: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        content: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        is_read: {
-            type: Boolean,
-            default: false,
-        },
+  {
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    
+    content: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true },
+
+    type: {
+      type: String,
+      enum: ["booking", "discount", "system", "other"],
+      default: "other",
     },
-    {
-        timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
-    }
+
+    reference: {
+      kind: {
+        type: String,
+        enum: ["Order", "Discount", "Booking", "User"],
+      },
+      refId: {
+        type: mongoose.Schema.Types.ObjectId,
+        refPath: "reference.kind",
+      },
+    },
+
+    status: { type: String, enum: ["read", "unread", "deleted"] },
+    read_at: { type: Date, default: null },
+    deleted_at: { type: Date, default: null },
+  },
+  { 
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
+  }
 );
 
 const Notification = mongoose.models.Notification || mongoose.model("Notification", notificationSchema);

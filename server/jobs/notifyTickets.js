@@ -1,9 +1,10 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
     GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
-    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail
+    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail, Employee
 } from "../models/index.js";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
 import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../controllers/customerController.js";
+import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 export const notifyImportTickets = async () => {
     const start = new Date();
@@ -26,16 +27,23 @@ export const notifyImportTickets = async () => {
             { status: "expired" }
         );
 
-        const expiredNotifications = expiredTickets.flatMap(ticket =>
-            managers.map(manager => ({
-                user_id: manager._id,
-                title: "Phiếu nhập thiết bị quá hạn",
-                content: `Phiếu nhập ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
-                type: "system",
-            }))
-        );
-
-        await Notification.insertMany(expiredNotifications);
+        const managerIds = managers.map(m => m._id);
+        
+        for (const ticket of expiredTickets) {
+            try {
+                await pushNotificationToUsers(
+                    managerIds,
+                    "Phiếu nhập thiết bị quá hạn",
+                    `Phiếu nhập thiết bị ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
+                    "system",
+                    "Order",
+                    ticket._id,
+                    "unread"
+                );
+            } catch (error) {
+                console.error(`Error sending notification for expired ticket ${ticket._id}:`, error);
+            }
+        }
     }
 
     // phiếu đến ngày
@@ -50,16 +58,23 @@ export const notifyImportTickets = async () => {
             { status: "waiting_confirm" }
         );
 
-        const todayNotifications = todayTickets.flatMap(ticket =>
-                managers.map(manager => ({
-                    user_id: manager._id,
-                    title: "Phiếu nhập thiết bị đến ngày",
-                    content: `Phiếu nhập ${ticket._id} đã đến ngày nhập kho.`,
-                    type: "system",
-                }))
-            );
-
-        await Notification.insertMany(todayNotifications);
+        const managerIds = managers.map(m => m._id);
+        
+        for (const ticket of todayTickets) {
+            try {
+                await pushNotificationToUsers(
+                    managerIds,
+                    "Phiếu nhập thiết bị đến ngày",
+                    `Phiếu nhập ${ticket._id} đã đến ngày nhập kho.`,
+                    "system",
+                    "Order",
+                    ticket._id,
+                    "unread"
+                );
+            } catch (error) {
+                console.error(`Error sending notification for today ticket ${ticket._id}:`, error);
+            }
+        }
     }
 };
 
@@ -136,16 +151,23 @@ export const notifyInstallTickets = async () => {
 
     // thông báo phiếu quá hạn
     if (expiredTickets.length) {
-      const notifications = expiredTickets.flatMap(ticket =>
-        managers.map(manager => ({
-          user_id: manager._id,
-          title: "Phiếu lắp đặt quá hạn",
-          content: `Phiếu lắp đặt ${ticket._id} đã quá hạn và bị hủy.`,
-          type: "system",
-        }))
-      );
-
-      await Notification.insertMany(notifications);
+      const managerIds = managers.map(m => m._id);
+      
+      for (const ticket of expiredTickets) {
+        try {
+          await pushNotificationToUsers(
+            managerIds,
+            "Phiếu lắp đặt quá hạn",
+            `Phiếu lắp đặt ${ticket._id} đã quá hạn và bị hủy.`,
+            "system",
+            "Order",
+            ticket._id,
+            "unread"
+          );
+        } catch (error) {
+          console.error(`Error sending notification for expired install ticket ${ticket._id}:`, error);
+        }
+      }
       console.log("[CRON] done updating expired install tickets.")
     }
 
@@ -161,16 +183,23 @@ export const notifyInstallTickets = async () => {
         { status: "waiting_confirm" },
       );
 
-      const notifications = todayTickets.flatMap(ticket =>
-        managers.map(manager => ({
-          user_id: manager._id,
-          title: "Phiếu lắp đặt đến ngày",
-          content: `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
-          type: "system",
-        }))
-      );
-
-      await Notification.insertMany(notifications);
+      const managerIds = managers.map(m => m._id);
+      
+      for (const ticket of todayTickets) {
+        try {
+          await pushNotificationToUsers(
+            managerIds,
+            "Phiếu lắp đặt đến ngày",
+            `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
+            "system",
+            "Order",
+            ticket._id,
+            "unread"
+          );
+        } catch (error) {
+          console.error(`Error sending notification for today install ticket ${ticket._id}:`, error);
+        }
+      }
       console.log("[CRON] done updating pending install tickets.");
     }
 
@@ -194,26 +223,36 @@ export const notifyGoodTickets = async () => {
     
     // phiếu quá hạn nhập
     const expiredTickets = await GoodTicket.find({
-        status: "waiting_confirm",
-        import_date: { $lt: start }
+      status: ["waiting_confirm","pending"],
+      import_date: { $lt: start }
     });
 
+    console.log("Expired good tickets found:", expiredTickets.length);
     if (expiredTickets.length > 0) {
         await GoodTicket.updateMany(
             { _id: { $in: expiredTickets.map(t => t._id) } },
             { status: "expired" }
         );
 
-        const expiredNotifications = expiredTickets.flatMap(ticket =>
-            managers.map(manager => ({
-                user_id: manager._id,
-                title: "Phiếu nhập sản phẩm quá hạn",
-                content: `Phiếu nhập sản phẩm ${ticket._id} đã quá ngày nhập và bị chuyển sang trạng thái quá hạn.`,
-                type: "system",
-            }))
-        );
+        const managerIds = managers.map(m => m._id);
+        
+        for (const ticket of expiredTickets) {
+            try {
+                await pushNotificationToUsers(
+                    managerIds,
+                    "Phiếu nhập sản phẩm quá hạn",
+                    `Phiếu nhập sản phẩm ${ticket._id} đã quá ngày nhập và bị chuyển sang trạng thái quá hạn.`,
+                    "system",
+                    "Order",
+                    ticket._id,
+                    "unread"
+                );
+            } catch (error) {
+                console.error(`Error sending notification for expired good ticket ${ticket._id}:`, error);
+            }
+        }
 
-        await Notification.insertMany(expiredNotifications);
+        console.log(`[CRON] good tickets expired: ${expiredTickets.length}`);
     }
 
     // phiếu đến ngày
@@ -228,16 +267,23 @@ export const notifyGoodTickets = async () => {
             { status: "waiting_confirm" }
         );
 
-        const todayNotifications = todayTickets.flatMap(ticket =>
-                managers.map(manager => ({
-                    user_id: manager._id,
-                    title: "Phiếu nhập sản phẩm đến ngày",
-                    content: `Phiếu nhập sản phẩm ${ticket._id} đã đến ngày nhập kho.`,
-                    type: "system",
-                }))
-            );
-
-        await Notification.insertMany(todayNotifications);
+        const managerIds = managers.map(m => m._id);
+        
+        for (const ticket of todayTickets) {
+            try {
+                await pushNotificationToUsers(
+                    managerIds,
+                    "Phiếu nhập sản phẩm đến ngày",
+                    `Phiếu nhập sản phẩm ${ticket._id} đã đến ngày nhập kho.`,
+                    "system",
+                    "Order",
+                    ticket._id,
+                    "unread"
+                );
+            } catch (error) {
+                console.error(`Error sending notification for today good ticket ${ticket._id}:`, error);
+            }
+        }
     }
 };
 
@@ -276,32 +322,38 @@ export const notifyServiceUsageTickets = async () => {
   }
 
   const users = await User.find({ system_role: { $ne: "manager" } }).select("_id");
-  const notifications = [];
+  const userIds = users.map(u => u._id);
 
   for (const ticketId of expiredTicketIds) {
-    for (const user of users) {
-      notifications.push({
-        user_id: user._id,
-        title: "Dịch vụ quá hạn",
-        content: `Phiếu sử dụng dịch vụ ${ticketId} đã quá hạn và bị hủy.`,
-        type: "system",
-      });
+    try {
+      await pushNotificationToUsers(
+        userIds,
+        "Dịch vụ quá hạn",
+        `Phiếu sử dụng dịch vụ ${ticketId} đã quá hạn và bị hủy.`,
+        "system",
+        "Order",
+        ticketId,
+        "unread"
+      );
+    } catch (error) {
+      console.error(`Error sending notification for expired service ticket ${ticketId}:`, error);
     }
   }
 
   for (const ticketId of dueTicketIds) {
-    for (const user of users) {
-      notifications.push({
-        user_id: user._id,
-        title: "Dịch vụ đến ngày sử dụng",
-        content: `Phiếu sử dụng dịch vụ ${ticketId} đã đến ngày đăng ký.`,
-        type: "system",
-      });
+    try {
+      await pushNotificationToUsers(
+        userIds,
+        "Dịch vụ đến ngày sử dụng",
+        `Phiếu sử dụng dịch vụ ${ticketId} đã đến ngày đăng ký.`,
+        "system",
+        "Order",
+        ticketId,
+        "unread"
+      );
+    } catch (error) {
+      console.error(`Error sending notification for due service ticket ${ticketId}:`, error);
     }
-  }
-
-  if (notifications.length) {
-    await Notification.insertMany(notifications);
   }
 
   const affectedTicketIds = [...new Set([...expiredTicketIds, ...dueTicketIds])];
@@ -486,4 +538,116 @@ export const updateAllCustomerTiers = async () => {
   }
 
   console.log(`[CRON] Updated ${bulkOps.length} customer tiers`);
+};
+
+// Gửi thông báo 2h trước giờ check-in dự kiến
+export const notifyCheckinReminder = async () => {
+  try {
+    const now = new Date();
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 giờ sau từ bây giờ
+    
+    // Tìm các booking có expected_checkin cách hiện tại đúng 2h (± 5 phút để đảm bảo không bỏ sót khi cron chạy mỗi 5 phút)
+    const bookings = await Booking.find({
+      status: { $in: ["pending", "confirmed"] },
+      expected_checkin: {
+        $gte: new Date(twoHoursFromNow.getTime() - 5 * 60 * 1000), // Trừ 5 phút để có độ lệch
+        $lte: new Date(twoHoursFromNow.getTime() + 5 * 60 * 1000)  // Cộng 5 phút để có độ lệch
+      }
+    }).populate("customer_id", "user_id full_name");
+
+    if (bookings.length === 0) {
+      return;
+    }
+
+    // Lấy danh sách admin (manager)
+    const managers = await User.find({ 
+      system_role: "manager",
+      isBanned: { $ne: true }
+    }).select("_id");
+    const managerIds = managers.map(m => m._id);
+
+    // Lấy danh sách lễ tân (receptionist)
+    const receptionistEmployees = await Employee.find({
+      position: "receptionist",
+      status: "working"
+    }).select("user_id");
+    const receptionistUserIds = receptionistEmployees.map(e => e.user_id);
+    
+    // Lấy user_id của các lễ tân (loại bỏ null và duplicate)
+    const validReceptionistUsers = await User.find({
+      _id: { $in: receptionistUserIds },
+      isBanned: { $ne: true }
+    }).select("_id");
+    const receptionistIds = validReceptionistUsers.map(u => u._id);
+
+    // Gửi thông báo cho từng booking
+    for (const booking of bookings) {
+      const customer = booking.customer_id;
+      if (!customer || !customer.user_id) continue;
+
+      const customerUserId = customer.user_id;
+      const bookingId = booking._id;
+      const checkinTime = new Date(booking.expected_checkin);
+      const formattedTime = checkinTime.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+
+      // Gửi thông báo cho khách hàng
+      try {
+        await pushNotification(
+          customerUserId,
+          "Nhắc nhở check-in",
+          `Bạn có booking #${bookingId.toString().slice(-6)} sẽ check-in vào ${formattedTime}. Còn khoảng 2 giờ nữa!`,
+          "booking",
+          "Booking",
+          bookingId,
+          "unread"
+        );
+      } catch (error) {
+        console.error(`Error sending notification to customer for booking ${bookingId}:`, error);
+      }
+
+      // Gửi thông báo cho admin
+      if (managerIds.length > 0) {
+        try {
+          await pushNotificationToUsers(
+            managerIds,
+            "Nhắc nhở check-in",
+            `Booking #${bookingId.toString().slice(-6)} của khách ${customer.full_name || 'N/A'} sẽ check-in vào ${formattedTime}. Còn khoảng 2 giờ nữa!`,
+            "booking",
+            "Booking",
+            bookingId,
+            "unread"
+          );
+        } catch (error) {
+          console.error(`Error sending notification to managers for booking ${bookingId}:`, error);
+        }
+      }
+
+      // Gửi thông báo cho lễ tân
+      if (receptionistIds.length > 0) {
+        try {
+          await pushNotificationToUsers(
+            receptionistIds,
+            "Nhắc nhở check-in",
+            `Booking #${bookingId.toString().slice(-6)} của khách ${customer.full_name || 'N/A'} sẽ check-in vào ${formattedTime}. Còn khoảng 2 giờ nữa!`,
+            "booking",
+            "Booking",
+            bookingId,
+            "unread"
+          );
+        } catch (error) {
+          console.error(`Error sending notification to receptionists for booking ${bookingId}:`, error);
+        }
+      }
+    }
+
+    console.log(`[CRON] Sent check-in reminders for ${bookings.length} bookings`);
+  } catch (error) {
+    console.error("[CRON] notifyCheckinReminder error:", error);
+  }
 };

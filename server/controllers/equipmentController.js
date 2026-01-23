@@ -1,6 +1,7 @@
 import { Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, 
-    Room, EquipmentInstall, InstallDetail, Employee, EquipmentLog } from "../models/index.js";
+    Room, EquipmentInstall, InstallDetail, Employee, EquipmentLog, User } from "../models/index.js";
 import mongoose from "mongoose";
+import { pushNotificationToUsers } from "../services/notificationService.js";
 
 //------EQUIPMENT CATEGORY------//
 export const createEquipmentCategory = async (req, res) => {
@@ -935,6 +936,31 @@ export const createInstallTicket = async (req, res) => {
         await EquipmentLog.insertMany(logs, { session });
 
         await session.commitTransaction();
+        
+        // Gửi thông báo cho admin và employee về phiếu lắp đặt mới
+        try {
+          const adminAndEmployeeUsers = await User.find({ 
+            isBanned: { $ne: true },
+            system_role: { $in: ["manager", "employee"] }
+          }).select("_id");
+          const userIds = adminAndEmployeeUsers.map(u => u._id);
+          
+          if (userIds.length > 0) {
+            await pushNotificationToUsers(
+              userIds,
+              "Phiếu lắp đặt mới",
+              `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo`,
+              "system",
+              "Order",
+              install._id,
+              "unread"
+            );
+          }
+        } catch (notifError) {
+          console.error("Error sending notification:", notifError);
+          // Không throw error để không ảnh hưởng đến response chính
+        }
+        
         return res.status(201).json({ success: true, message: "Tạo phiếu thành công.", data: { install } });
 
     } catch (error) {

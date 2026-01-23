@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
-  Employee, RoomStatusLog, Discount, RoomLog, BookingStatusLog } from "../models/index.js";
+  Employee, RoomStatusLog, Discount, RoomLog, BookingStatusLog, User,
+  Receipt,
+} from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
-import { updateCustomerPoints } from "../controllers/customerController.js"
+import { updateCustomerPoints } from "../controllers/customerController.js";
+import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 // hàm tính số giờ khách ở
 const calcNights = (expected_checkin, expected_checkout) => {
@@ -489,52 +492,20 @@ export const createBooking = async (req, res) => {
     await RoomLog.insertMany(roomLogs, { session });
 
     // Tạo hóa đơn ngay sau khi tạo booking
-    const { Receipt, ServiceUsage, CompensateTicket } = await import("../models/index.js");
-    
-    let serviceFee = 0;
-    let serviceUsageId = null;
-    const serviceUsage = await ServiceUsage.findOne({
-      booking_id: booking[0]._id,
-      status: "completed",
-    }).session(session);
-    if (serviceUsage) {
-      serviceFee = serviceUsage.total_fee;
-      serviceUsageId = serviceUsage._id;
-    }
-
-    let compensateFee = 0;
-    let compensateTicketId = null;
-    const compensate = await CompensateTicket.findOne({
-      booking_id: booking[0]._id,
-      status: "completed",
-    }).session(session);
-    if (compensate) {
-      compensateFee = compensate.total_fee;
-      compensateTicketId = compensate._id;
-    }
 
     const totalFee = booking[0].total_fee;
     const depositAmount = booking[0].deposit || 0;
-    const finalAmount = totalFee + serviceFee + compensateFee;
+    const finalAmount = totalFee;
     const amountDue = Math.max(finalAmount - depositAmount, 0);
 
-    // Xác định payment method: nếu deposit = 0 thì là cash (đặt liền), nếu có deposit thì là bank (đặt trước)
-    const paymentMethod = depositAmount === 0 ? "cash" : "bank";
-
-    // Tạo receipt với status phù hợp
-    // Nếu deposit = 0: status = "half-paid" (đã thanh toán full ngay)
-    // Nếu deposit > 0: status = "pending" (chờ thanh toán cọc)
-    const receiptStatus = depositAmount === 0 ? "half-paid" : "pending";
+    const paymentMethod = depositAmount === 0 ? "unknown" : "bank";
+    const receiptStatus = "pending";
 
     const receipt = await Receipt.create(
       [{
         booking_id: booking[0]._id,
         employee_id: employee._id,
-        service_usage_id: serviceUsageId,
-        compensate_ticket_id: compensateTicketId,
         total_fee: totalFee,
-        service_fee: serviceFee,
-        compensate_fee: compensateFee,
         deposit_amount: depositAmount,
         final_amount: finalAmount,
         amount_due: amountDue,
@@ -547,6 +518,59 @@ export const createBooking = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // gửi thông báo cho admin
+    try {
+      const allAdmins = await User.find({ role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotification(
+          adminIds,
+          "Booking mới",
+          `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
+          "booking",
+          "Booking",
+          booking[0]._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      await pushNotification(
+        customer_id,
+        "Booking mới",
+        `Bạn đã đặt booking mới #${booking[0]._id.toString().slice(-6)} thành công! 
+          Vui lòng thanh toán tiền cọc nếu đặt trước nhe.`,
+        "booking",
+        "Booking",
+        booking[0]._id,
+        "unread"
+      );
+
+      // gửi thông báo cho tất cả lễ tân
+      const receptionistEmployees = await Employee.find(
+        { role: "receptionist" },
+        { user_id: 1 }
+      );
+      const userIds = receptionistEmployees.map(e => e.user_id);
+
+      const validUsers = await User.find({
+        _id: { $in: userIds },
+        isBanned: { $ne: true }
+      }).select("_id");
+
+      await pushNotification(
+        validUsers.map(u => u._id),
+        "Booking mới",
+        `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.email || customer.full_name || "N/A"}`,
+        "booking",
+        "Booking",
+        booking[0]._id,
+        "unread"
+      );
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+    }
 
     return res.status(201).json({
       message: "Đặt phòng thành công.",
@@ -681,6 +705,27 @@ export const createBookingg = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Gửi thông báo cho tất cả user (admin, employee, customer) về booking mới
+    try {
+      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
+      const userIds = allUsers.map(u => u._id);
+      
+      if (userIds.length > 0) {
+        await pushNotificationToUsers(
+          userIds,
+          "Booking mới",
+          `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.email || customer.full_name || 'N/A'}`,
+          "booking",
+          "Booking",
+          booking[0]._id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+      // Không throw error để không ảnh hưởng đến response chính
+    }
 
     return res.status(201).json({
       message: "Đặt phòng thành công.",
@@ -1010,6 +1055,36 @@ export const updateBookingStatus = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Gửi thông báo cho tất cả user (admin, employee, customer) về thay đổi trạng thái booking
+    try {
+      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
+      const userIds = allUsers.map(u => u._id);
+      
+      const statusLabels = {
+        pending: "Đang chờ",
+        confirmed: "Đã xác nhận",
+        checked_in: "Đã check-in",
+        checked_out: "Đã check-out",
+        cancelled: "Đã hủy",
+        expired: "Đã hết hạn"
+      };
+      
+      if (userIds.length > 0) {
+        await pushNotificationToUsers(
+          userIds,
+          "Thay đổi trạng thái booking",
+          `Booking #${booking_id.toString().slice(-6)} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
+          "booking",
+          "Booking",
+          booking_id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+      // Không throw error để không ảnh hưởng đến response chính
+    }
 
     return res.json({
       message: `Cập nhật trạng thái booking thành '${status}' thành công.`,

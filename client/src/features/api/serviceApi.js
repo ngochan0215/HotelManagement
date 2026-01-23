@@ -73,4 +73,12 @@ export const serviceApi = {
       const res = await axios.post(`${BASE_URL}/usage/${id}/cancel`, {}, getAuthHeader());
       return res.data;
     },
+    getServiceUsageById: async (id) => {
+      const res = await axios.get(`${BASE_URL}/usage/${id}`, getAuthHeader());
+      return res.data;
+    },
+    updateServiceUsage: async (id, data) => {
+      const res = await axios.patch(`${BASE_URL}/usage/${id}/update`, data, getAuthHeader());
+      return res.data;
+    },
 };
