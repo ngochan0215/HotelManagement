@@ -1,11 +1,11 @@
 import express from "express";
 import { banCustomer, getAllCustomers, updateCustomer, unbanCustomer
 } from "../controllers/customerController.js";
-import { isManager, verifyToken } from "../middleware/authMiddleware.js";
+import { isManager, verifyToken, isEmployee} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/all", verifyToken, isManager, getAllCustomers);
+router.get("/all", verifyToken, isEmployee, getAllCustomers);
 router.patch("/:id", verifyToken, isManager, updateCustomer);
 
 router.patch("/:id/ban", verifyToken, isManager, banCustomer);

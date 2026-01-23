@@ -12,16 +12,26 @@ export default function ServiceTicketTab() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
 
+  const isManager = localStorage.getItem("role") === "manager";
+
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const [resImport, resUsage] = await Promise.all([
-        serviceApi.getAllGoodTickets(),
-        serviceApi.getAllServiceUsage()
-      ]);
+      const promises = [serviceApi.getAllServiceUsage()];
+      if (isManager) {
+          promises.push(serviceApi.getAllGoodTickets());
+      }
 
-      setImports(resImport.tickets_details || resImport.tickets || []);
+      const results = await Promise.all(promises);
+      const resUsage = results[0];
+
       setUsages(resUsage.data || []);
+
+      if (isManager && results[1]) {
+          const resImport = results[1];
+          setImports(resImport.tickets_details || resImport.tickets || []);
+      }
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -81,13 +91,13 @@ export default function ServiceTicketTab() {
   return (
     <div className="space-y-8 pb-10 animate-fade-in relative">
 
-      {showImportModal && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
+      {showImportModal && isManager && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
       {showUsageModal && <AddServiceUsageModal onClose={() => setShowUsageModal(false)} onSuccess={fetchTickets} />}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
-                 Lịch sử Sử dụng Dịch vụ
+                 Lịch sử sử dụng dịch vụ
             </h2>
             <button
                 onClick={() => setShowUsageModal(true)}
@@ -111,26 +121,6 @@ export default function ServiceTicketTab() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {usages.map((item) => (
-                        // <tr key={item._id} className="hover:bg-gray-50 transition">
-                        //     <td className="px-4 py-3 font-bold text-gray-800">
-                        //         <div className="flex items-center gap-2">
-                        //             <FiUser className="text-gray-400"/>
-                        //             {item.customer_id?.full_name || "Khách lẻ"}
-                        //         </div>
-                        //     </td>
-                        //     <td className="px-4 py-3 text-gray-600">
-                        //         {item.booking_id ? (
-                        //             <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                        //                 Theo Booking
-                        //             </span>
-                        //         ) : "Vãng lai"}
-                        //     </td>
-                        //     <td className="px-4 py-3">{item.employee_id?.full_name || "System"}</td>
-                        //     <td className="px-4 py-3 text-right font-medium text-indigo-600">
-                        //         {item.total_fee?.toLocaleString()} đ
-                        //     </td>
-                        //     <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
-                        // </tr>
                         <tr key={item._id} className="hover:bg-gray-50 transition">
                             <td className="px-4 py-3 font-bold text-gray-800">
                                 <div className="flex items-center gap-2">
@@ -184,12 +174,13 @@ export default function ServiceTicketTab() {
                             </td>
                         </tr>
                     ))}
-                    {usages.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
+                    {usages.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
                 </tbody>
             </table>
         </div>
       </div>
 
+      {isManager && (
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold flex items-center gap-2 text-gray-800">
@@ -257,6 +248,7 @@ export default function ServiceTicketTab() {
             </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

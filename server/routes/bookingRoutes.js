@@ -12,7 +12,7 @@ import { isManager, verifyToken, isCustomer, isEmployee, canAccessBooking } from
 const router = express.Router();
 
 router.get("/calendar/rooms", verifyToken, isEmployee, getCalendarRooms);
-router.get("/all", verifyToken, isManager, getAllBookings);
+router.get("/all", verifyToken, isEmployee, getAllBookings);
 router.get("/:id", verifyToken, getBookingDetail);
 
 // preview và thêm booking cho checkin-out chung
