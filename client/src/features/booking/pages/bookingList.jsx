@@ -3,7 +3,8 @@ import { format, addDays, setHours, setMinutes } from "date-fns";
 import {
   FiPlus, FiX, FiTrash2, FiSearch, FiCheckCircle, FiLogOut, FiUser,
   FiUserPlus, FiUsers, FiTag, FiLogIn, FiMinusCircle, FiCheckSquare, FiSquare,
-  FiCalendar, FiMapPin, FiAlertTriangle, FiCamera, FiUpload
+  FiCalendar, FiMapPin, FiAlertTriangle, FiCamera, FiUpload,
+  FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
 import { jwtDecode } from "jwt-decode";
 import { Html5Qrcode } from "html5-qrcode";
@@ -43,12 +44,14 @@ const CANCELLATION_REASONS = [
 export default function BookingList() {
   const { user } = useAuth();
 
-
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
   const [customersList, setCustomersList] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bookingMode, setBookingMode] = useState("immediate"); // "immediate" hoặc "advance"
@@ -119,6 +122,10 @@ export default function BookingList() {
     };
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
+
   // useEffect để khởi tạo scanner sau khi modal được render
   useEffect(() => {
     if (showQrScanner && qrScanning && !html5QrCodeRef.current) {
@@ -128,11 +135,11 @@ export default function BookingList() {
           try {
             const html5QrCode = new Html5Qrcode("qr-reader-modal");
             html5QrCodeRef.current = html5QrCode;
-            
+
             scanTimeoutRef.current = setTimeout(() => {
-              setToast({ 
-                message: "Chưa quét được mã QR. Vui lòng kiểm tra ánh sáng và khoảng cách.", 
-                type: "info" 
+              setToast({
+                message: "Chưa quét được mã QR. Vui lòng kiểm tra ánh sáng và khoảng cách.",
+                type: "info"
               });
             }, 15000);
 
@@ -481,45 +488,41 @@ export default function BookingList() {
 
       if (result && result.success) {
         const qrData = result.data;
-        if (qrData) {
+
+        // Map dữ liệu từ QR vào form
+        if (qrData && typeof qrData === 'object') {
           const updatedCustomer = { ...newCustomer };
+
           if (qrData.cccd) updatedCustomer.CCCD = qrData.cccd;
           if (qrData.fullName) updatedCustomer.full_name = qrData.fullName;
           if (qrData.dateOfBirth) {
-            // Format date từ DDMMYYYY (8 số) sang YYYY-MM-DD
             let formattedDate = qrData.dateOfBirth.trim();
             if (formattedDate.length === 8 && /^\d{8}$/.test(formattedDate)) {
-              // Format DDMMYYYY -> YYYY-MM-DD
               const day = formattedDate.substring(0, 2);
               const month = formattedDate.substring(2, 4);
               const year = formattedDate.substring(4, 8);
-              // Validate date
               const dayNum = parseInt(day, 10);
               const monthNum = parseInt(month, 10);
               const yearNum = parseInt(year, 10);
               if (dayNum >= 1 && dayNum <= 31 && monthNum >= 1 && monthNum <= 12 && yearNum >= 1900 && yearNum <= 2100) {
                 formattedDate = `${year}-${month}-${day}`;
               } else {
-                // Nếu không hợp lệ, giữ nguyên
                 formattedDate = qrData.dateOfBirth;
               }
             } else if (formattedDate.length === 10 && formattedDate.includes('/')) {
-              // Format DD/MM/YYYY -> YYYY-MM-DD
               const parts = formattedDate.split('/');
               if (parts.length === 3) {
                 formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
               }
             } else if (formattedDate.length === 10 && formattedDate.includes('-')) {
-              // Đã đúng format YYYY-MM-DD hoặc DD-MM-YYYY
               const parts = formattedDate.split('-');
               if (parts.length === 3 && parts[0].length === 2) {
-                // DD-MM-YYYY -> YYYY-MM-DD
                 formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
               }
             }
             updatedCustomer.date_birth = formattedDate;
           }
-          // ngoài mấy đó ra còn trả về giới tính, địa chỉ với ngày cấp cccd
+
           setNewCustomer(updatedCustomer);
           setToast({ message: "Đã đọc thông tin từ mã QR thành công!", type: "success" });
         } else {
@@ -531,9 +534,9 @@ export default function BookingList() {
     } catch (err) {
       console.error("Error processing QR code:", err);
       setQrError(err.response?.data?.message || err.message || "Có lỗi xảy ra khi xử lý mã QR");
-      setToast({ 
-        message: err.response?.data?.message || err.message || "Có lỗi xảy ra", 
-        type: "error" 
+      setToast({
+        message: err.response?.data?.message || err.message || "Có lỗi xảy ra",
+        type: "error"
       });
     } finally {
       setQrLoading(false);
@@ -611,6 +614,79 @@ export default function BookingList() {
       });
   }, [bookings, activeTab, searchTerm]);
 
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentBookings = filteredBookings.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
       <Sidebar />
@@ -628,7 +704,7 @@ export default function BookingList() {
             </button>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-[500px]">
             <div className="flex flex-col gap-4 mb-6">
                 <div className="flex bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
                     {['all', 'pending', 'confirmed', 'in_progress', 'completed', 'cancelled'].map(t => (
@@ -648,7 +724,7 @@ export default function BookingList() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto min-h-[400px]">
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-100 bg-gray-50/50">
@@ -661,9 +737,9 @@ export default function BookingList() {
                   </tr>
                 </thead>
                 <tbody className="text-gray-700 text-sm">
-                  {filteredBookings.length === 0 ? (
+                  {currentBookings.length === 0 ? (
                       <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu đặt phòng.</td></tr>
-                  ) : filteredBookings.map((b, index) => {
+                  ) : currentBookings.map((b, index) => {
                     const statusInfo = STATUS_MAP[b.status] || STATUS_MAP.pending;
                     return (
                       <tr key={b._id || index} className="border-b border-gray-50 hover:bg-gray-50 transition group align-top">
@@ -737,6 +813,15 @@ export default function BookingList() {
                 </tbody>
               </table>
             </div>
+
+            {filteredBookings.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                    <div className="text-sm text-gray-500">
+                        Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredBookings.length)}</b> trong tổng <b>{filteredBookings.length}</b>
+                    </div>
+                    {renderPaginationButtons()}
+                </div>
+            )}
           </div>
         </div>
       </div>
