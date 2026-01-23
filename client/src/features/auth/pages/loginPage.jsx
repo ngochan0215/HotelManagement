@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/authContext.jsx';
 import Input from "../../../components/ui/Input.jsx";
 import Button from "../../../components/ui/Button.jsx";
+import { employeeApi } from "../../api/employeeApi.js";
 
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   const [credentials, setCredentials] = useState({
     email: "",
@@ -22,16 +24,42 @@ const LoginPage = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+        const userResponse = await login(credentials);
+        const role = localStorage.getItem("role") || "employee";
 
-    try {
-      await login(credentials);
-      navigate("/dashboard");
-    } catch (err) {
-      setError("Lỗi đăng nhập: " + err.message || "Login failed");
-    }
-  };
+        if (role === 'manager') {
+           localStorage.setItem("position", "manager");
+           navigate("/dashboard");
+        } else {
+           try {
+               const res = await employeeApi.getProfile();
+               if (res.employee && res.employee.position) {
+                   localStorage.setItem("position", res.employee.position);
+                   const pos = res.employee.position;
+                   if (pos === 'receptionist') navigate("/room-calendar");
+                   else if (pos === 'technician') navigate("/incidents");
+                   else navigate("/dashboard");
+               } else {
+                   localStorage.setItem("position", "employee");
+                   navigate("/dashboard");
+               }
+           } catch (err) {
+               console.error("Lỗi lấy profile:", err);
+               localStorage.setItem("position", "unknown");
+               navigate("/dashboard");
+           }
+        }
+
+      } catch (err) {
+        setError("Lỗi đăng nhập: " + (err.response?.data?.message || err.message));
+      } finally {
+          setLoading(false);
+      }
+    };
 
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
@@ -41,25 +69,12 @@ const LoginPage = () => {
         {error && <p className="text-red-500 mb-2">{error}</p>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Input type="email" placeholder="Email" name="email" value={credentials.email} onChange={handleChange} />
+          <Input type="password" placeholder="Mật khẩu" name="password" value={credentials.password} onChange={handleChange} required />
 
-          <Input
-            type="email"
-            placeholder="Email"
-            name="email"
-            value={credentials.email}
-            onChange={handleChange}
-          />
-
-          <Input
-            type="password"
-            placeholder="Mật khẩu"
-            name="password"
-            value={credentials.password}
-            onChange={handleChange}
-            required
-          />
-
-          <Button type="submit">Đăng nhập</Button>
+          <Button type="submit" disabled={loading}>
+            {loading ? "Đang xử lý..." : "Đăng nhập"}
+          </Button>
         </form>
       </div>
     </div>

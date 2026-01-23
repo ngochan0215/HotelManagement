@@ -47,10 +47,10 @@ export const isManager = (req, res, next) => {
 };
 
 export const isEmployee = (req, res, next) => {
-    if (req.user.role === "employee") {
+    if (req.user.role === "employee" || req.user.role === "manager") {
         return next();
     }
-    return res.status(403).json({ message: "Bạn không phải Nhân viên, không có quyền truy cập." });
+    return res.status(403).json({ message: "Bạn không phải Nhân viên hoặc Quản lý, không có quyền truy cập." });
 };
 
 export const canAccessBooking = async (req, res, next) => {

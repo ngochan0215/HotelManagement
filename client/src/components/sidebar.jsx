@@ -13,23 +13,29 @@ const NORMAL_TEXT = "text-gray-400";
 const HOVER_BG = "hover:bg-gray-800 hover:text-white";
 
 const sidebarConfig = [
-  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard" },
-  { type: "main", title: "Lịch phòng", icon: FiCalendar, path: "/room-calendar" },
+  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard",allowed: [] }, // Ai cũng xem được
+  {
+    type: "main",
+    title: "Lịch phòng",
+    icon: FiCalendar,
+    path: "/room-calendar",
+    allowed: ["receptionist"]
+  },
   {
     type: "group",
     title: "QUẢN LÝ",
     children: [
-      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed },
-      { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar },
-      { name: "Khách hàng", path: "/customers", icon: FiUser },
-      { name: "Nhân viên", path: "/employees", icon: FiUsers },
-      { name: "Thiết bị", path: "/equipment", icon: FiSettings },
-      { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox },
-      { name: "Hóa đơn", path: "/invoices", icon: FiFileText },
-      { name: "Khuyến mãi", path: "/promotions", icon: FiTag },
-      { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle },
-      { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText },
-      { name: "Quét QR căn cước", path: "/qr-scanner", icon: FiCamera },
+      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed, allowed: ["receptionist", "housekeeper"] },
+      { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
+      { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: ["receptionist", "customer_service"] },
+      { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
+      { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
+      { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
+      { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },
+      { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: ["receptionist", "customer_service"] },
+      { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle, allowed: ["technician", "receptionist", "housekeeper"] },
+      { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText, allowed: ["accountant"] }, // Chỉ kế toán + Manager
+      { name: "Quét QR căn cước", path: "/qr-scanner", icon: FiCamera, allowed: ["receptionist"] },
     ],
   },
 ];
@@ -59,30 +65,39 @@ const SidebarItem = ({ item, isMain }) => {
 };
 
 export default function Sidebar() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
+
+  const userPosition = localStorage.getItem("position") || "employee";
+  const userRole = user?.role || localStorage.getItem("role");
 
   const handleLogout = () => {
     if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
       logout();
+      localStorage.removeItem("position");
+      localStorage.removeItem("role");
       navigate("/login");
     }
+  };
+
+  const checkPermission = (item) => {
+    if (userRole === "manager") return true;
+    if (!item.allowed) return true;
+    return item.allowed.includes(userPosition);
   };
 
   return (
     <div className="sidebar w-[270px] h-screen bg-[#111827] border-r border-gray-800 fixed left-0 top-0 flex flex-col z-50">
 
-      <div className="bg-[#111827] flex items-center gap-3 px-6 py-6 border-b border-gray-800/50">
-        <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shadow-indigo-500/50 shadow-md">
-          S
+        <div className="bg-[#111827] flex items-center gap-3 px-6 py-6 border-b border-gray-800/50">
+            <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shadow-indigo-500/50 shadow-md">S</div>
+            <span className="text-xl font-bold text-white tracking-wide">SE HOTEL</span>
         </div>
-        <span className="text-xl font-bold text-white tracking-wide">SE HOTEL</span>
-      </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-6 custom-scrollbar">
         <div className="mb-8">
           {sidebarConfig
-            .filter(section => section.type === "main")
+            .filter(item => item.type === "main" && checkPermission(item))
             .map((item, i) => (
               <SidebarItem key={i} item={item} isMain={true} />
             ))}
@@ -90,33 +105,33 @@ export default function Sidebar() {
 
         {sidebarConfig
           .filter(section => section.type === "group")
-          .map((section, i) => (
-            <div key={i} className="mb-6">
-              <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-4 px-4">
-                {section.title}
-              </h3>
+          .map((section, i) => {
+            const visibleChildren = section.children.filter(child => checkPermission(child));
+            if (visibleChildren.length === 0) return null;
 
-              <div className="space-y-0.5">
-                {section.children.map((child, j) => (
-                  <SidebarItem key={j} item={child} isMain={false} />
-                ))}
-              </div>
-            </div>
-          ))}
-      </nav>
+            return (
+                <div key={i} className="mb-6">
+                <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-4 px-4">
+                    {section.title}
+                </h3>
 
-      <div className="px-3 py-4 border-t border-gray-800/50 bg-transparent">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-bold transition-all duration-300 group hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95 bg-transparent"
-              >
-
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors duration-300">
-                   <FiLogOut size={18} className="text-red-400 group-hover:text-white transition-colors" />
+                <div className="space-y-0.5">
+                    {visibleChildren.map((child, j) => (
+                    <SidebarItem key={j} item={child} isMain={false} />
+                    ))}
                 </div>
-                <span className="tracking-wide text-sm">Đăng xuất</span>
-              </button>
+                </div>
+            );
+          })}
+      </nav>
+      <div className="px-3 py-4 border-t border-gray-800/50 bg-transparent">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-bold transition-all duration-300 group hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95 bg-transparent">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-colors duration-300">
+                <FiLogOut size={18} className="text-red-400 group-hover:text-white transition-colors" />
             </div>
-          </div>
+            <span className="tracking-wide text-sm">Đăng xuất</span>
+          </button>
+       </div>
+    </div>
   );
 }

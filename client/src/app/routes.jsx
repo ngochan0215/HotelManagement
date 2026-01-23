@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/hooks/authContext.jsx';
 import LoginPage from '../features/auth/pages/loginPage.jsx';
 import Dashboard from '../features/dashboard/pages/dashboard.jsx';
@@ -20,7 +20,37 @@ import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
 
-  // Đợi auth state được restore từ localStorage trước khi render routes
+  const ProtectedRoute = ({ children, allowed }) => {
+    const location = useLocation();
+
+    if (!user) return <Navigate to="/login" replace />;
+
+    const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
+    const position = (localStorage.getItem("position") || "").toLowerCase();
+
+    if (role === 'manager') return children;
+
+    if (!allowed) return children;
+    const allowedLower = allowed.map(p => p.toLowerCase());
+    if (allowedLower.includes(position)) {
+        return children;
+    }
+
+    let redirectPath = "/login";
+
+    if (position === 'receptionist') redirectPath = "/room-calendar";
+    else if (position === 'technician') redirectPath = "/incidents";
+    else if (position === 'housekeeper') redirectPath = "/service";
+    else if (position === 'accountant') redirectPath = "/invoices";
+    else if (position === 'manager') redirectPath = "/dashboard";
+    else redirectPath = "/dashboard";
+    if (location.pathname === redirectPath) {
+        return <div className="p-10 text-center text-red-500">Bạn không có quyền truy cập trang này.</div>;
+    }
+
+    return <Navigate to={redirectPath} replace />;
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
@@ -35,83 +65,60 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
 
-      <Route
-        path="/dashboard"
-        element={user ? <Dashboard /> : <Navigate to="/login" replace />}
-      />
+      <Route path="/dashboard" element={
+          <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>
+      } />
 
-      <Route
-        path="/room-calendar"
-        element={user ? <RoomCalendar /> : <Navigate to="/login" replace />}
-      />
+      <Route path="/employees" element={
+        <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
+      } />
 
-      <Route
-        path="/room-types"
-        element={user ? <RoomPage /> : <Navigate to="/login" replace />}
-      />
+      {/* LỄ TÂN */}
+      <Route path="/room-calendar" element={
+        <ProtectedRoute allowed={['receptionist']}> <RoomCalendar /> </ProtectedRoute>
+      } />
+      <Route path="/booking-management" element={
+        <ProtectedRoute allowed={['receptionist']}> <BookingList /> </ProtectedRoute>
+      } />
+      <Route path="/room-types" element={
+        <ProtectedRoute allowed={['receptionist', 'housekeeper']}> <RoomPage /> </ProtectedRoute>
+      } />
+      <Route path="/customers" element={
+        <ProtectedRoute allowed={['receptionist', 'customer_service']}> <CustomerPage /> </ProtectedRoute>
+      } />
+      <Route path="/qr-scanner" element={
+        <ProtectedRoute allowed={['receptionist']}> <QrScannerPage /> </ProtectedRoute>
+      } />
 
-      <Route
-        path="/booking-management"
-        element={user ? <BookingList /> : <Navigate to="/login" replace />}
-      />
+      {/* KỸ THUẬT */}
+      <Route path="/equipment" element={
+        <ProtectedRoute allowed={['technician']}> <EquipmentPage /> </ProtectedRoute>
+      } />
+      <Route path="/incidents" element={
+        <ProtectedRoute allowed={['technician', 'receptionist', 'housekeeper']}> <IncidentPage /> </ProtectedRoute>
+      } />
 
-      <Route
-        path="/customers"
-        element={user ? <CustomerPage /> : <Navigate to="/login" replace />}
-      />
+      {/* DỊCH VỤ & HÓA ĐƠN */}
+      <Route path="/service" element={
+        <ProtectedRoute allowed={['receptionist', 'housekeeper']}> <ServicePage /> </ProtectedRoute>
+      } />
+      <Route path="/invoices" element={
+        <ProtectedRoute allowed={['receptionist', 'accountant']}> <ReceiptPage /> </ProtectedRoute>
+      } />
 
-      <Route
-        path="/employees"
-        element={user ? <EmployeePage /> : <Navigate to="/login" replace />}
-      />
+      {/* THỐNG KÊ */}
+       <Route path="/reports" element={
+        <ProtectedRoute allowed={['accountant']}> <StatisticsPage /> </ProtectedRoute>
+      } />
 
-    <Route
-      path="/equipment"
-      element={user ? <EquipmentPage /> : <Navigate to="/login" replace />}
-    />
+       {/* CÁC TRANG CHUNG */}
+       <Route path="/promotions" element={<ProtectedRoute allowed={['receptionist', 'customer_service']}><DiscountPage /></ProtectedRoute>} />
 
-    <Route
-          path="/service"
-          element={user ? <ServicePage /> : <Navigate to="/login" replace />}
-    />
+       <Route path="/payment/success" element={<PaymentResultPage />} />
+       <Route path="/payment/cancel" element={<PaymentResultPage />} />
 
-    <Route
-              path="/incidents"
-              element={user ? <IncidentPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/promotions"
-              element={user ? <DiscountPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/invoices"
-              element={user ? <ReceiptPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/reports"
-              element={user ? <StatisticsPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/qr-scanner"
-              element={user ? <QrScannerPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/payment/success"
-              element={user ? <PaymentResultPage /> : <Navigate to="/login" replace />}
-        />
-
-        <Route
-              path="/payment/cancel"
-              element={user ? <PaymentResultPage /> : <Navigate to="/login" replace />}
-        />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

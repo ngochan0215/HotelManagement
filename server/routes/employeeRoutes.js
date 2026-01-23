@@ -1,23 +1,36 @@
 import express from "express";
-import { registerEmployee, getAllEmployees, updateEmployee, getEmployeeById, registerSchedule,
-    viewMySchedule, updateSchedule,
+import {
+    registerEmployee,
+    getAllEmployees,
+    updateEmployee,
+    getEmployeeById,
+    registerSchedule,
+    viewMySchedule,
+    updateSchedule,
     checkInShift,
     checkOutShift,
     getAllSchedules,
     getScheduleById,
     deleteSchedule,
+    createAccountForExistingEmployee,
+    resetPasswordForEmployee,
+    toggleBanUser,
+    getMyProfile
 } from "../controllers/employeeController.js";
 import { verifyToken, isManager, isEmployee, isNotCustomer } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
-// EMPLOYEE
+router.get("/profile/me", verifyToken, getMyProfile);
 router.post("/add", verifyToken, isManager, registerEmployee);
 router.get("/all", verifyToken, isManager, getAllEmployees);
 router.get("/:id", verifyToken, isManager, getEmployeeById);
 router.patch("/:id", verifyToken, isManager, updateEmployee);
 
-// SCHEDULES
+router.post("/:id/create-account", verifyToken, isManager, createAccountForExistingEmployee);
+router.patch("/reset-password/:id", verifyToken, isManager, resetPasswordForEmployee);
+router.patch("/toggle-ban/:id", verifyToken, isManager, toggleBanUser);
+
+
 router.post("/schedules/register", verifyToken, isEmployee, registerSchedule);
 router.get("/schedules/my", verifyToken, isEmployee, viewMySchedule);
 router.patch("/schedules/:id", verifyToken, isEmployee, updateSchedule);

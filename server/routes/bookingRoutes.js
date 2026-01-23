@@ -1,11 +1,17 @@
 import express from "express";
-import { createBooking, getCancellationReasonStats, getBookingDetail, updateBookingStatus, 
-    cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail, 
-    cancelBookingDetail, previewBookingPrice, previewBookingPricee, createBookingg } from "../controllers/bookingController.js";
+import {
+    createBooking, getCancellationReasonStats, getBookingDetail, updateBookingStatus,
+    cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail,
+    cancelBookingDetail, previewBookingPrice, previewBookingPricee, createBookingg
+} from "../controllers/bookingController.js";
+
+import { getCalendarRooms } from "../controllers/managerController.js";
+
 import { isManager, verifyToken, isCustomer, isEmployee, canAccessBooking } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+router.get("/calendar/rooms", verifyToken, isEmployee, getCalendarRooms);
 router.get("/all", verifyToken, isManager, getAllBookings);
 router.get("/:id", verifyToken, getBookingDetail);
 
