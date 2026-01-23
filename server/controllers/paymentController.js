@@ -18,7 +18,7 @@ export const createPaymentLink = async (req, res) => {
         console.error('Lỗi khi tạo liên kết thanh toán:', error);
         res.status(500).json({ 
             success: false,
-            error: 'Lỗi khi tạo liên kết thanh toán' 
+            error: 'Lỗi khi tạo liên kết thanh toán ' + error.message
         });
     }
 };
@@ -73,37 +73,80 @@ export const initiatePayout = async (req, res) => {
 
 export const getPaymentTransactionDetail = async (req, res) => {
     try {
-        const { orderId } = req.params;
-        const transactionDetail = await getpaymentDetail(orderId);
-        res.status(200).json({ transactionDetail });
+        const { bookingId } = req.params;
+        // bookingId có thể là booking_code (Number) hoặc booking_id (ObjectId)
+        let transactionDetail = null;
+        
+        if (!isNaN(bookingId)) {
+            // Nếu là số, tìm bằng booking_code
+            transactionDetail = await getpaymentDetail(Number(bookingId));
+        } else {
+            // Nếu là ObjectId, tìm bằng booking_id
+            const { Transaction } = await import('../models/index.js');
+            transactionDetail = await Transaction.findOne({ booking_id: bookingId })
+                .populate('booking_id')
+                .populate('receipt_id')
+                .populate('user_id');
+        }
+        
+        if (!transactionDetail) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Không tìm thấy giao dịch' 
+            });
+        }
+        
+        res.status(200).json({ 
+            success: true,
+            data: transactionDetail 
+        });
     }
     catch (error) {
         console.error('Lỗi khi lấy chi tiết giao dịch:', error);
-        res.status(500).json({ error: 'Lỗi khi lấy chi tiết giao dịch' });
+        res.status(500).json({ 
+            success: false,
+            error: 'Lỗi khi lấy chi tiết giao dịch' 
+        });
     }
 }
 
 export const updateSuccessfulTransaction = async (req, res) => {
     try {
-        const { orderId } = req.params;
-        const updatedTransaction = await paymentSucceeded(orderId);
-        res.status(200).json({ updatedTransaction });
+        const { bookingId } = req.params;
+        const result = await paymentSucceeded(bookingId);
+        
+        res.status(200).json({ 
+            success: true,
+            message: 'Cập nhật giao dịch thành công',
+            data: result
+        });
     }
     catch (error) {
         console.error('Lỗi khi cập nhật giao dịch thành công:', error);
-        res.status(500).json({ error: 'Lỗi khi cập nhật giao dịch thành công' });
+        res.status(500).json({ 
+            success: false,
+            error: error.message || 'Lỗi khi cập nhật giao dịch thành công' 
+        });
     }
 }
 
 export const updateFailedTransaction = async (req, res) => {
     try {
-        const { orderId } = req.params;
-        const updatedTransaction = await paymentFailed(orderId);
-        res.status(200).json({ updatedTransaction });
+        const { bookingId } = req.params;
+        const result = await paymentFailed(bookingId);
+        
+        res.status(200).json({ 
+            success: true,
+            message: 'Cập nhật giao dịch thất bại',
+            data: result
+        });
     }
     catch (error) {
         console.error('Lỗi khi cập nhật giao dịch thất bại:', error);
-        res.status(500).json({ error: 'Lỗi khi cập nhật giao dịch thất bại' });
+        res.status(500).json({ 
+            success: false,
+            error: error.message || 'Lỗi khi cập nhật giao dịch thất bại' 
+        });
     }
 }
 

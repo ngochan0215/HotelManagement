@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
   Employee, RoomStatusLog, Discount, RoomLog, BookingStatusLog } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
+import { confirmBookingInternal } from "../services/bookingService.js";
+import { updateCustomerPoints } from "../controllers/customerController.js"
 
 // hàm tính số giờ khách ở
 const calcNights = (expected_checkin, expected_checkout) => {
@@ -393,10 +395,14 @@ export const createBooking = async (req, res) => {
         return res.status(400).json({ message: "room_id không hợp lệ." });
       } 
 
-      const roomExists = await Room.exists({ _id: room.room_id });
+      const roomExists = await Room.findById(room.room_id);
       if (!roomExists) {
-        return res.status(404).json({ message: `Không tìm thấy phòng với ID: ${room.room_id}.`});
+        return res.status(404).json({ message: `Không tìm thấy phòng ${room.room_number}.`});
       } 
+
+      if (roomExists.room_status !== "available") {
+        return res.status(400).json({ message: `Phòng ${room.room_number} đang không trống.`});
+      }
   }
 
     const recalculated = await calculateBookingPrice({ customer_id, bookingDetails: rooms, expected_checkin, expected_checkout });
@@ -481,6 +487,63 @@ export const createBooking = async (req, res) => {
     }));
 
     await RoomLog.insertMany(roomLogs, { session });
+
+    // Tạo hóa đơn ngay sau khi tạo booking
+    const { Receipt, ServiceUsage, CompensateTicket } = await import("../models/index.js");
+    
+    let serviceFee = 0;
+    let serviceUsageId = null;
+    const serviceUsage = await ServiceUsage.findOne({
+      booking_id: booking[0]._id,
+      status: "completed",
+    }).session(session);
+    if (serviceUsage) {
+      serviceFee = serviceUsage.total_fee;
+      serviceUsageId = serviceUsage._id;
+    }
+
+    let compensateFee = 0;
+    let compensateTicketId = null;
+    const compensate = await CompensateTicket.findOne({
+      booking_id: booking[0]._id,
+      status: "completed",
+    }).session(session);
+    if (compensate) {
+      compensateFee = compensate.total_fee;
+      compensateTicketId = compensate._id;
+    }
+
+    const totalFee = booking[0].total_fee;
+    const depositAmount = booking[0].deposit || 0;
+    const finalAmount = totalFee + serviceFee + compensateFee;
+    const amountDue = Math.max(finalAmount - depositAmount, 0);
+
+    // Xác định payment method: nếu deposit = 0 thì là cash (đặt liền), nếu có deposit thì là bank (đặt trước)
+    const paymentMethod = depositAmount === 0 ? "cash" : "bank";
+
+    // Tạo receipt với status phù hợp
+    // Nếu deposit = 0: status = "half-paid" (đã thanh toán full ngay)
+    // Nếu deposit > 0: status = "pending" (chờ thanh toán cọc)
+    const receiptStatus = depositAmount === 0 ? "half-paid" : "pending";
+
+    const receipt = await Receipt.create(
+      [{
+        booking_id: booking[0]._id,
+        employee_id: employee._id,
+        service_usage_id: serviceUsageId,
+        compensate_ticket_id: compensateTicketId,
+        total_fee: totalFee,
+        service_fee: serviceFee,
+        compensate_fee: compensateFee,
+        deposit_amount: depositAmount,
+        final_amount: finalAmount,
+        amount_due: amountDue,
+        payment: paymentMethod,
+        status: receiptStatus,
+        note: depositAmount === 0 ? "Hóa đơn tạo tự động khi đặt liền" : "Hóa đơn tạo tự động, chờ thanh toán cọc",
+      }],
+      { session }
+    );
 
     await session.commitTransaction();
     session.endSession();
@@ -637,134 +700,16 @@ export const createBookingg = async (req, res) => {
 export const confirmBooking = async (req, res) => {
   const { booking_id } = req.params;
   const employee_id = req.user.userId;
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+  
   try {
-    const booking = await Booking.findById(booking_id).session(session);
-    if (!booking) {
-      return res.status(404).json({ message: "Không tìm thấy dữ liệu đặt phòng." });
-    }
-
-    if (booking.status !== "pending") {
-      return res.status(400).json({ message: "Trạng thái đặt phòng không hợp lệ." });
-    }
-
-    const bookingDetails = await BookingDetail.find({ booking_id })
-      .session(session);
-
-    if (bookingDetails.length === 0) {
-      return res.status(400).json({ message: "Booking không có phòng nào." });
-    }
-
-    for (const bd of bookingDetails) {
-      const conflictLog = await RoomStatusLog.findOne({
-        room_id: bd.room_id,
-        status: { $in: ["booked", "occupied"] },
-        start_time: { $lt: bd.expected_checkout },
-        $or: [
-          { end_time: null },
-          { end_time: { $gt: bd.expected_checkin } }
-        ]
-      }).session(session);
-
-      if (conflictLog) {
-        const room = await Room.findById(bd.room_id).session(session);
-        throw new Error(
-          `Phòng ${room.room_number} đã được giữ hoặc đang có khách trong khoảng ${bd.expected_checkin.toISOString()} - ${bd.expected_checkout.toISOString()}`
-        );
-      }
-    }
-
-    const roomIds = bookingDetails.map(bd => bd.room_id);
-
-    // update trạng thái phòng thành booked
-    await Room.updateMany(
-      { _id: { $in: roomIds } },
-      { $set: { room_status: "booked" } },
-      { session }
-    );
-
-    // cắt log cũ (trạng thái reserved)
-    await RoomStatusLog.updateMany(
-      {
-        room_id: { $in: roomIds },
-        status: "reserved",
-        end_time: booking.expected_checkout,
-      },
-      { $set: { end_time: new Date() } },
-      { session }
-    );
-
-    // tạo log mới
-    const roomStatusLogs = bookingDetails.map(bd => ({
-      room_id: bd.room_id,
-      status: "booked",
-      start_time: new Date(),
-      end_time: bd.expected_checkout,
-      note: `Phòng được giữ vì booking ${booking_id} đã được cọc.`,
-      handled_by: booking.handled_by,
-    }));
-
-    await RoomStatusLog.insertMany(roomStatusLogs, { session });
-
-    // cắt log cũ (BẢNG MỚI)
-    await RoomLog.updateMany(
-      {
-        room_id: { $in: roomIds },
-        status: "reserved",
-        end_time: booking.expected_checkout,
-      },
-      { $set: { end_time: new Date() } },
-      { session }
-    );
-
-    // tạo log mới (BẢNG MỚI)
-    const roomLogs = bookingDetails.map(bd => ({
-      booking_id: bd.booking_id,
-      room_id: bd.room_id,
-      status: "booked",
-      start_time: new Date(),
-      end_time: bd.expected_checkout,
-      note: `Phòng được giữ vì booking ${bd.booking_id} đã được cọc.`,
-      handled_by: booking.handled_by,
-    }));
-
-    await RoomLog.insertMany(roomLogs, { session });
-
-    // update trạng thái booking
-    booking.status = "confirmed";
-    await booking.save({ session });
-
-    // tạo log booking
-    await BookingStatusLog.findOneAndUpdate(
-      { booking_id, end_time: null },
-      { end_time: new Date() }
-    );
-
-    await BookingStatusLog.create({
-      booking_id,
-      status: "confirmed",
-      start_time: new Date(),
-      expected_end_time: booking.expected_checkout,
-      handled_by: employee_id,
-      note: "Khách đã đặt cọc giữ chỗ đặt phòng.",
+    const booking = await confirmBookingInternal(booking_id, employee_id);
+    return res.status(200).json({
+      message: "Xác nhận đặt phòng thành công.",
+      booking,
     });
-
-    // TODO: cập nhật hóa đơn và gửi thông báo
-    await session.commitTransaction();
-    session.endSession();
-
-    return res.json({
-      message: "Xác nhận booking thành công, phòng đã được giữ chỗ.",
-    });
-
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
     return res.status(500).json({
-      message: error.message || "Không thể xác nhận booking.",
+      message: error.message || "Không thể xác nhận đặt phòng.",
     });
   }
 };

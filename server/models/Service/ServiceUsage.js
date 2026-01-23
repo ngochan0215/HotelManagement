@@ -26,6 +26,18 @@ const serviceUsageSchema = new mongoose.Schema(
       default: 0,
     },
 
+    use_from: {
+      type: Date,
+      default: null,
+      required: false,
+    },
+
+    finish_at: {
+      type: Date,
+      required: false,
+      default: null,
+    },
+
     status : { type: String, enum: ["pending", "waiting_confirm", "completed", "cancelled"], default: "pending" },
   },
   {

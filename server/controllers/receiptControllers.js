@@ -181,11 +181,8 @@ export const createReceipt = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy booking." });
     }
 
-    if (booking.status !== "completed") {
-      return res.status(400).json({
-        message: "Chỉ được tạo hóa đơn cho booking đã hoàn thành.",
-      });
-    }
+    // Cho phép tạo hóa đơn cho booking ở bất kỳ trạng thái nào (pending, confirmed, in_progress, completed)
+    // Không cần check status === "completed" nữa
 
     const existedReceipt = await Receipt.findOne({ booking_id }).session(session);
     if (existedReceipt) {
@@ -513,7 +510,7 @@ export const markReceiptAsPaid = async (req, res) => {
     receipt.status = "paid";
     receipt.payment = payment;
     receipt.paid_at = new Date();
-    receipt.handled_by = employee._id;
+    // employee_id đã có sẵn trong receipt, không cần set lại
 
     await receipt.save({ session });
 

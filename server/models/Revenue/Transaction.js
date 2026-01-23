@@ -19,7 +19,7 @@ const transactionSchema = new mongoose.Schema(
         },
 
         // payos
-        booking_code: { type: Number, required: true, unique: true },
+        booking_code: { type: Number, required: true, unique: true, index: true }, // PayOS orderCode
         payos_payment_id: { type: String, index: true }, // payment link id
         reference_id: { type: String, index: true },    // payout reference id
 

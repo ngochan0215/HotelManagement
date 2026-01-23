@@ -64,7 +64,6 @@ const bookingDetailSchema = new mongoose.Schema(
         "early_checkout",
         "other"
       ],
-      required: true,
     },
 
     note: { type: String, default: "" },

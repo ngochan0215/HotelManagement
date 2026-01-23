@@ -15,6 +15,7 @@ import DiscountPage from '../features/discount/pages/discountPage.jsx';
 import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
+import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
 
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
@@ -100,6 +101,16 @@ export default function AppRoutes() {
         <Route
               path="/qr-scanner"
               element={user ? <QrScannerPage /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+              path="/payment/success"
+              element={user ? <PaymentResultPage /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+              path="/payment/cancel"
+              element={user ? <PaymentResultPage /> : <Navigate to="/login" replace />}
         />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

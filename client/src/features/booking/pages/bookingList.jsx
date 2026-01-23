@@ -17,6 +17,7 @@ import { roomApi } from "../../api/roomApi.js";
 import { customerApi } from "../../api/customerApi.js";
 import { receiptApi } from "../../api/receiptApi.js";
 import { qrApi } from "../../api/qrApi.js";
+import { paymentApi } from "../../api/paymentApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const STATUS_MAP = {
@@ -50,6 +51,7 @@ export default function BookingList() {
   const [activeTab, setActiveTab] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [bookingMode, setBookingMode] = useState("immediate"); // "immediate" hoặc "advance"
   const [customerMode, setCustomerMode] = useState("existing");
   const [custSearchQuery, setCustSearchQuery] = useState("");
   const [showCustDropdown, setShowCustDropdown] = useState(false);
@@ -176,10 +178,10 @@ export default function BookingList() {
   useEffect(() => {
     if (isPreviewLocked) return;
     const total = selectedRooms.reduce((sum, r) => sum + r.price, 0);
-    const deposit = isWalkIn ? 0 : (total * 0.3);
+    const deposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : (total * 0.3);
     setCalcValues({ total_price: total, deposit_required: deposit });
     setFormData(prev => ({...prev, deposit: deposit}));
-  }, [selectedRooms, isWalkIn, isPreviewLocked]);
+  }, [selectedRooms, isWalkIn, isPreviewLocked, bookingMode]);
 
 
   const fetchData = async () => {
@@ -217,15 +219,19 @@ export default function BookingList() {
             expected_checkin: formData.expected_checkin,
             expected_checkout: formData.expected_checkout,
             rooms: selectedRooms.map(r => ({
-                room_id: r._id, expected_checkin: formData.expected_checkin, expected_checkout: formData.expected_checkout, base_fee: r.price
+              room_id: r._id, 
+              room_number: r.room_number,
+              expected_checkin: formData.expected_checkin, 
+              expected_checkout: formData.expected_checkout, 
+              base_fee: r.price
             }))
         };
         const res = await bookingApi.previewBooking(payload);
         const { base_total, final_total, deposit, discounts } = res;
-        const rawDeposit = isWalkIn ? 0 : Math.round(base_total * 0.3);
+        const rawDeposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : Math.round(base_total * 0.3);
         setRawPrice({ total: base_total, deposit: rawDeposit });
-        setCalcValues({ total_price: final_total, deposit_required: isWalkIn ? 0 : deposit });
-        setFormData(prev => ({ ...prev, deposit: isWalkIn ? 0 : deposit }));
+        setCalcValues({ total_price: final_total, deposit_required: (bookingMode === 'immediate' || isWalkIn) ? 0 : deposit });
+        setFormData(prev => ({ ...prev, deposit: (bookingMode === 'immediate' || isWalkIn) ? 0 : deposit }));
         setAppliedDiscounts(discounts);
         setPromotionName(discounts && discounts.length ? discounts.map(d => d.name).join(", ") : "Không có khuyến mãi phù hợp");
         setIsPreviewLocked(true);
@@ -262,6 +268,7 @@ export default function BookingList() {
     setNewCustomer({ email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: "" });
     setCustomerMode("existing"); setCustSearchQuery(""); setSelectedCustDisplay(null); setShowCustDropdown(false);
     setShowQrScanner(false); setQrScanning(false); setQrError(null);
+    setBookingMode("immediate"); // Reset về đặt liền
     setIsModalOpen(true);
   };
 
@@ -287,19 +294,75 @@ export default function BookingList() {
       }
       if (!finalCustomerId) return alert("Vui lòng chọn khách hàng!");
 
+      const depositAmount = bookingMode === "immediate" ? 0 : Number(calcValues.deposit_required);
+      
       const payloadBooking = {
         customer_id: finalCustomerId, handled_by: employeeId, adults: Number(formData.adults), children: Number(formData.children),
-        deposit: Number(formData.deposit), total_fee: Number(calcValues.total_price),
+        deposit: depositAmount, total_fee: Number(calcValues.total_price),
         promotion_code: appliedDiscounts.length > 0 ? appliedDiscounts.map(d => d.discount_id) : null,
         expected_checkin: new Date(formData.expected_checkin).toISOString(), expected_checkout: new Date(formData.expected_checkout).toISOString(),
         rooms: selectedRooms.map(r => ({
-            room_id: r._id, expected_checkin: new Date(formData.expected_checkin).toISOString(), expected_checkout: new Date(formData.expected_checkout).toISOString(), base_fee: Number(r.price)
+            room_id: r._id, 
+            room_number: r.room_number,
+            expected_checkin: new Date(formData.expected_checkin).toISOString(), 
+            expected_checkout: new Date(formData.expected_checkout).toISOString(), 
+            base_fee: Number(r.price)
         }))
       };
 
-      await bookingApi.createBooking(payloadBooking);
-      alert("Tạo đặt phòng thành công!"); setIsModalOpen(false); fetchData();
-    } catch (error) { alert("Lỗi: " + (error.response?.data?.message || error.message)); }
+      console.log("Payload booking:", payloadBooking);
+
+      // Đặt liền: tạo booking và ghi hóa đơn ngay
+      if (bookingMode === "immediate") {
+        await bookingApi.createBooking(payloadBooking);
+        alert("Tạo đặt phòng thành công!"); 
+        setIsModalOpen(false); 
+        fetchData();
+      } 
+      // Đặt trước: tạo booking và tạo payment link
+      else {
+        // Tạo booking trước
+        const bookingRes = await bookingApi.createBooking(payloadBooking);
+        console.log("Booking created:", bookingRes);
+        const bookingId = bookingRes?.booking_id;
+        
+        if (!bookingId) {
+          throw new Error("Không thể lấy ID booking sau khi tạo.");
+        }
+
+        console.log("Deposit amount:", depositAmount);
+        // Tạo payment link cho tiền cọc
+        const paymentData = {
+          booking_id: bookingId,
+          amount: depositAmount,
+          description: `Tiền cọc đơn ID: #${bookingId.toString().slice(-6)}`,
+          items: [{
+            name: `Tiền cọc đặt phòng`,
+            quantity: 1,
+            price: depositAmount
+          }]
+        };
+        console.log("Creating payment link with data:", paymentData);
+
+        const paymentRes = await paymentApi.createPaymentLink(employeeId, paymentData);
+        console.log("Payment link response:", paymentRes);
+        
+        if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
+          // Mở link thanh toán trong tab mới
+          window.open(paymentRes.data.checkoutUrl, '_blank');
+          setToast({ 
+            message: "Đã tạo đơn đặt phòng. Vui lòng thanh toán tiền cọc để hoàn tất.", 
+            type: "info" 
+          });
+          setIsModalOpen(false);
+          fetchData();
+        } else {
+          throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
+        }
+      }
+    } catch (error) { 
+      alert("Lỗi: " + (error.response?.data?.message || error.message)); 
+    }
   };
 
   // LOGIC QUÉT QR CODE
@@ -687,6 +750,26 @@ export default function BookingList() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Chọn loại đặt phòng */}
+                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Loại đặt phòng <span className="text-red-500">*</span></label>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => { setBookingMode('immediate'); setIsWalkIn(true); }}
+                            className={`flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition ${bookingMode==='immediate' ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}>
+                            Đặt liền (Khách tại quầy)
+                        </button>
+                        <button type="button" onClick={() => { setBookingMode('advance'); setIsWalkIn(false); }}
+                            className={`flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition ${bookingMode==='advance' ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}>
+                            Đặt trước (Cần cọc)
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        {bookingMode === 'immediate' 
+                            ? 'Đặt liền: Khách thanh toán ngay, không cần cọc, tạo hóa đơn luôn.'
+                            : 'Đặt trước: Khách cần đặt cọc qua chuyển khoản để giữ chỗ.'}
+                    </p>
+                </div>
+
                 <div className="flex flex-col gap-3">
                     <div className="flex justify-between items-center">
                         <div className="flex gap-2 w-2/3">
@@ -700,10 +783,12 @@ export default function BookingList() {
                             </button>
                         </div>
 
-                        <div className={`cursor-pointer px-3 py-2 rounded-lg border transition-all flex items-center gap-2 select-none ${isWalkIn ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`} onClick={() => setIsWalkIn(!isWalkIn)}>
-                             {isWalkIn ? <FiCheckSquare size={18}/> : <FiSquare size={18}/>}
-                             <span className="text-xs font-bold">Khách tại quầy</span>
-                        </div>
+                        {bookingMode === 'immediate' && (
+                            <div className={`cursor-pointer px-3 py-2 rounded-lg border transition-all flex items-center gap-2 select-none ${isWalkIn ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`} onClick={() => setIsWalkIn(!isWalkIn)}>
+                                 {isWalkIn ? <FiCheckSquare size={18}/> : <FiSquare size={18}/>}
+                                 <span className="text-xs font-bold">Khách tại quầy</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mt-1">
@@ -858,14 +943,27 @@ export default function BookingList() {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label><input type="text" disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed" value={calcValues.total_price.toLocaleString()}/></div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Cọc (VNĐ)</label>
-                        <input type="number" disabled={isWalkIn} className={`w-full border rounded-lg p-2 text-center font-bold outline-none transition ${isWalkIn ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-white text-emerald-600 border-gray-300 focus:ring-2 focus:ring-emerald-500'}`} value={formData.deposit} onChange={(e) => setFormData({...formData, deposit: e.target.value})}/>
-                    </div>
+                    {bookingMode === 'advance' && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tiền Cọc (30%)</label>
+                            <input type="text" disabled className="w-full border rounded-lg p-2 text-center font-bold outline-none transition bg-white text-emerald-600 border-gray-300 cursor-not-allowed" value={calcValues.deposit_required.toLocaleString()}/>
+                            <p className="text-xs text-gray-500 mt-1">Số tiền cần đặt cọc để giữ chỗ</p>
+                        </div>
+                    )}
+                    {bookingMode === 'immediate' && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tiền Cọc</label>
+                            <input type="text" disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-400 cursor-not-allowed" value="0 (Không cần cọc)"/>
+                            <p className="text-xs text-gray-500 mt-1">Đặt liền không cần cọc</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="pt-4 mt-4 border-t border-gray-100">
-                     <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2"><FiCheckCircle size={18}/> Xác nhận Đặt Phòng</button>
+                     <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md flex justify-center items-center gap-2">
+                         <FiCheckCircle size={18}/> 
+                         {bookingMode === 'immediate' ? 'Xác nhận Đặt Phòng (Đặt liền)' : 'Tạo Đơn & Thanh Toán Cọc'}
+                     </button>
                 </div>
             </form>
           </div>

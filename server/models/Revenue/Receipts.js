@@ -56,6 +56,13 @@ const receiptSchema = new mongoose.Schema(
     paid_at: { type: Date, default: null },
     cancelled_at: { type: Date, default: null },
     note: { type: String, default: "" },
+    
+    // Link với Transaction (PayOS)
+    transaction_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Transaction",
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

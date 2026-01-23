@@ -10,14 +10,7 @@ import { createPaymentLink, initiatePayout, getLinkDetail, getPaymentTransaction
 
 const router = express.Router();
 
-// hóa đơn
-router.post("/add", verifyToken, isNotCustomer, createReceipt);
-router.get("/all", verifyToken, isNotCustomer, getAllReceipts);
-router.get("/:id", verifyToken, isNotCustomer, getReceiptById);
-router.patch("/update/:id", verifyToken, isNotCustomer, updateReceipt);
-router.patch("/:id/paid", verifyToken, isNotCustomer, markReceiptAsPaid);
-
-// payment - payos
+// payment - payos (đặt trước để tránh conflict với routes có params)
 router.post("/paymentLink/:userId", createPaymentLink); //API tạo link thanh toán
 router.post("/payout/:userId", initiatePayout); //API tạo payout chuyển tiền cho tasker
 router.get("/paymentLink/:paymentId", getLinkDetail); //API lấy chi tiết link thanh toán
@@ -26,8 +19,16 @@ router.get("/paymentLink/:paymentId", getLinkDetail); //API lấy chi tiết lin
 router.get("/payout", payoutStatusDetailList); //danh sách chi tiết payout chuyển tiền cho tasker
 router.get("/payout/:referenceId", payoutStatusDetail); //chi tiết payout chuyển tiền cho tasker
 
-router.get("/:bookingId", getPaymentTransactionDetail);   
-router.patch("/:bookingId/success", updateSuccessfulTransaction); 
-router.patch("/:bookingId/failed", updateFailedTransaction);
+// payment transaction routes (đặt trước routes có :id để tránh conflict)
+router.get("/transaction/:bookingId", getPaymentTransactionDetail);   
+router.patch("/transaction/:bookingId/success", updateSuccessfulTransaction); 
+router.patch("/transaction/:bookingId/failed", updateFailedTransaction);
+
+// hóa đơn
+router.post("/add", verifyToken, isNotCustomer, createReceipt);
+router.get("/all", verifyToken, isNotCustomer, getAllReceipts);
+router.patch("/update/:id", verifyToken, isNotCustomer, updateReceipt);
+router.patch("/:id/paid", verifyToken, isNotCustomer, markReceiptAsPaid);
+router.get("/:id", verifyToken, isNotCustomer, getReceiptById);
 
 export default router;
