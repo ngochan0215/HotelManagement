@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns";
 import {
   FiPlus, FiSearch, FiUser, FiPhone, FiMapPin, FiCreditCard, FiX, FiMail, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiBriefcase, FiDollarSign, FiLoader, FiCheckCircle, FiXCircle
 } from "react-icons/fi";
+import { FiUserPlus, FiUserCheck, FiEye, FiEyeOff, FiKey, FiRefreshCw } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
@@ -37,7 +38,13 @@ export default function EmployeePage() {
   const [confirmState, setConfirmState] = useState({
     open: false, title: "", message: "", onConfirm: null
   });
-
+  const [accountModal, setAccountModal] = useState({
+      open: false,
+      type: "create",
+      employee: null
+    });
+  const [accForm, setAccForm] = useState({ email: "", password: "" });
+    const [showPass, setShowPass] = useState(false); // Ẩn/hiện password
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
     email: "", password: "", full_name: "", date_birth: "",
@@ -136,7 +143,51 @@ export default function EmployeePage() {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
+  const handleAccountClick = (emp) => {
+      const hasAccount = !!emp.user_id;
+      setAccForm({
+          email: hasAccount ? emp.user_id.email : "",
+          password: ""
+      });
+      setAccountModal({
+          open: true,
+          type: hasAccount ? "view" : "create",
+          employee: emp
+      });
+      setShowPass(false);
+    };
 
+    const handleAccountSubmit = async (e) => {
+      e.preventDefault();
+      if (submitting) return;
+
+      // Validate cơ bản
+      if (!accForm.email || (!accForm.password && accountModal.type === 'create')) {
+          showToast("Vui lòng nhập đầy đủ thông tin", "error");
+          return;
+      }
+
+      setSubmitting(true);
+      try {
+          if (accountModal.type === 'create') {
+              await employeeApi.createAccountForExisting(accountModal.employee._id, accForm);
+              showToast("Đã tạo tài khoản thành công!", "success");
+          } else {
+              if (accForm.password) {
+                  await employeeApi.resetPassword(accountModal.employee._id, accForm.password);
+                  showToast("Đã cập nhật mật khẩu mới!", "success");
+              } else {
+                  showToast("Không có thay đổi nào.", "info");
+              }
+          }
+          setAccountModal({ ...accountModal, open: false });
+          fetchEmployees(); // Load lại bảng
+      } catch (error) {
+          showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
+      } finally {
+          setSubmitting(false);
+      }
+    };
   const filteredEmployees = useMemo(() => {
     let result = employees.filter(e => {
       const matchPos = filterPosition === "all" || e.position === filterPosition;
@@ -246,6 +297,7 @@ export default function EmployeePage() {
                   <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-100 bg-gray-50/50">
                     <th className="py-3 pl-4">Nhân viên</th>
                     <th className="py-3">Liên hệ</th>
+                    <th className="py-3 text-center">Tài khoản</th>
                     <th className="py-3 text-center">Chức vụ</th>
                     <th className="py-3">Lương cơ bản</th>
                     <th className="py-3 text-center">Trạng thái</th>
@@ -281,6 +333,24 @@ export default function EmployeePage() {
                                 <span className="flex items-center gap-2 font-medium text-gray-700"><FiPhone size={14}/> {e.phone_number}</span>
                                 <span className="flex items-center gap-2 text-gray-500"><FiCreditCard size={14}/> {e.CCCD}</span>
                             </div>
+                        </td>
+
+                        <td className="py-4 text-center">
+                            {e.user_id ? (
+                                <button
+                                    onClick={() => handleAccountClick(e)}
+                                    className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold hover:bg-green-100 border border-green-200"
+                                >
+                                    <FiUserCheck size={14} /> Đã cấp
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => handleAccountClick(e)}
+                                    className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-indigo-50 hover:text-indigo-600 border border-gray-200 hover:border-indigo-200 transition-colors"
+                                >
+                                    <FiUserPlus size={14} /> Tạo TK
+                                </button>
+                            )}
                         </td>
 
                         <td className="py-4 text-center">
@@ -436,6 +506,45 @@ export default function EmployeePage() {
         </div>
       )}
 
+      {accountModal.open && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-[450px] shadow-2xl">
+          <div className="flex justify-between mb-4 items-center border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                  {accountModal.type === 'create' ? "Tạo tài khoản" : "Cài đặt tài khoản"}
+              </h3>
+              <button onClick={() => setAccountModal({ ...accountModal, open: false })} className="hover:bg-gray-100 p-1 rounded-full"><FiX size={24}/></button>
+          </div>
+
+          <form onSubmit={handleAccountSubmit} className="space-y-4">
+              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" required disabled={accountModal.type === 'view'}
+                      className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500 disabled:bg-gray-100"
+                      value={accForm.email} onChange={e => setAccForm({...accForm, email: e.target.value})}
+                  />
+              </div>
+              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {accountModal.type === 'create' ? "Mật khẩu khởi tạo" : "Đặt lại mật khẩu mới"}
+                  </label>
+                  <div className="relative">
+                      <input type={showPass ? "text" : "password"} required={accountModal.type === 'create'}
+                          className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-indigo-500"
+                          value={accForm.password} onChange={e => setAccForm({...accForm, password: e.target.value})} placeholder={accountModal.type === 'view' ? "Để trống nếu không đổi" : ""}
+                      />
+                      <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                          {showPass ? <FiEyeOff/> : <FiEye/>}
+                      </button>
+                  </div>
+              </div>
+              <button type="submit" disabled={submitting} className="w-full text-white py-3 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 mt-2">
+                  {submitting ? "Đang xử lý..." : "Xác nhận"}
+              </button>
+          </form>
+          </div>
+      </div>
+      )}
       {confirmState.open && (
         <ConfirmModal
             open={confirmState.open}

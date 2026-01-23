@@ -37,4 +37,17 @@ export const employeeApi = {
 
       return res.data?.employees ?? [];
   },
+
+  createAccountForExisting: async (employeeId, data) => {
+      const url = `${BASE_URL}/${employeeId}/create-account`;
+      return axios.post(url, data, getAuthHeader());
+    },
+getProfile: async () => {
+      const res = await axios.get(`${BASE_URL}/profile/me`, getAuthHeader());
+      return res.data;
+  },
+    resetPassword: async (employeeId, newPassword) => {
+        const url = `${BASE_URL}/reset-password/${employeeId}`;
+        return axios.patch(url, { newPassword }, getAuthHeader());
+    },
 };

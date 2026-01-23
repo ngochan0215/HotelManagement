@@ -16,36 +16,15 @@ const HOUR_WIDTH = 120;
 const ROW_HEIGHT = 90;
 const ROOM_COL_WIDTH = 220;
 
+const BTN_ACTION_CLASS = "w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95";
+
 const STATUS_CONFIG = {
-  pending: {
-    label: "Chờ cọc",
-    style:
-      "bg-yellow-100 border-l-4 border-yellow-600 text-yellow-900 font-medium hover:bg-yellow-200",
-  },
-  confirmed: {
-    label: "Đã cọc",
-    style:
-      "bg-orange-100 border-l-4 border-orange-600 text-orange-900 font-medium hover:bg-orange-200",
-  },
-  occupied: {
-    label: "Đang ở",
-    style:
-      "bg-emerald-100 border-l-4 border-emerald-700 text-emerald-900 font-semibold hover:bg-emerald-200",
-  },
-  cleaning: {
-    label: "Dọn dẹp",
-    style:
-      "bg-purple-100 border-l-4 border-purple-700 text-purple-900 font-medium hover:bg-purple-200",
-  },
-  maintenance: {
-    label: "Bảo trì",
-    style:
-      "bg-red-100 border-l-4 border-red-700 text-red-900 font-semibold hover:bg-red-200",
-  },
-
+  pending: { label: "Chờ cọc", style: "bg-yellow-100 border-l-4 border-yellow-600 text-yellow-900 font-medium hover:bg-yellow-200" },
+  confirmed: { label: "Đã cọc", style: "bg-orange-100 border-l-4 border-orange-600 text-orange-900 font-medium hover:bg-orange-200" },
+  occupied: { label: "Đang ở", style: "bg-emerald-100 border-l-4 border-emerald-700 text-emerald-900 font-semibold hover:bg-emerald-200" },
+  cleaning: { label: "Dọn dẹp", style: "bg-purple-100 border-l-4 border-purple-700 text-purple-900 font-medium hover:bg-purple-200" },
+  maintenance: { label: "Bảo trì", style: "bg-red-100 border-l-4 border-red-700 text-red-900 font-semibold hover:bg-red-200" },
 };
-
-
 
 export default function RoomCalendar() {
     const navigate = useNavigate();
@@ -74,49 +53,41 @@ export default function RoomCalendar() {
             const dateStr = format(currentDate, 'yyyy-MM-dd');
             const response = await bookingApi.getRoomsCalendar(dateStr);
 
-            const roomList = response.rooms || [];
-            const eventList = response.events || [];
+            console.log("FULL API RESPONSE:", response);
+            const data = response.rooms ? response : (response.data || {});
+
+            const roomList = data.rooms || [];
+            const eventList = data.events || [];
+
+            console.log("Danh sách phòng tìm thấy:", roomList.length);
 
             setRooms(roomList);
 
-            // Map API status to component status
             const statusMap = {
-                'reserved': 'pending',
-                'booked': 'confirmed',
-                'occupied': 'occupied',
-                'cleaning': 'cleaning',
-                'maintenance': 'maintenance'
+                'reserved': 'pending', 'booked': 'confirmed', 'occupied': 'occupied',
+                'cleaning': 'cleaning', 'maintenance': 'maintenance'
             };
-
             const now = new Date();
 
-            // Map events from API response to component format
             const processedEvents = eventList.map(event => {
                 const booking = event.booking;
                 const apiStatus = event.status;
                 const componentStatus = statusMap[apiStatus] || apiStatus;
 
-                // Determine if event is completed
                 let isCompleted = false;
                 if (booking && ['cancelled', 'expired', 'completed'].includes(booking.booking_status)) {
                     isCompleted = true;
                 } else {
                     const eventEnd = new Date(event.end);
-                    if (eventEnd < now && componentStatus !== 'occupied') {
-                        isCompleted = true;
-                    }
+                    if (eventEnd < now && componentStatus !== 'occupied') isCompleted = true;
                 }
-
-                // Convert dates to ISO strings if they're not already
-                const startDate = event.start instanceof Date ? event.start.toISOString() : event.start;
-                const endDate = event.end instanceof Date ? event.end.toISOString() : event.end;
 
                 return {
                     _id: event._id,
                     room_id: event.room_id,
                     room_number: event.room_number,
-                    start: startDate,
-                    end: endDate,
+                    start: event.start instanceof Date ? event.start.toISOString() : event.start,
+                    end: event.end instanceof Date ? event.end.toISOString() : event.end,
                     status: componentStatus,
                     title: event.title,
                     note: event.note || "",
@@ -140,7 +111,8 @@ export default function RoomCalendar() {
     const fetchServices = async () => {
         try {
             const res = await serviceApi.getAllServices({ status: 'active' });
-            setServices(res.services || []);
+            const serviceData = res.services ? res : (res.data || {});
+            setServices(serviceData.services || []);
         } catch (error) { console.error(error); }
     };
 
@@ -158,28 +130,21 @@ export default function RoomCalendar() {
 
         const drawStart = eventStart < dayStart ? dayStart : eventStart;
         const drawEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
-
-        const diffMinutesStart = differenceInMinutes(drawStart, dayStart);
-        const durationMinutes = differenceInMinutes(drawEnd, drawStart);
-
-        const width = (durationMinutes / 60) * HOUR_WIDTH - 1;
-
-        return { left: (diffMinutesStart / 60) * HOUR_WIDTH, width: Math.max(width, 40) };
+        const width = (differenceInMinutes(drawEnd, drawStart) / 60) * HOUR_WIDTH - 1;
+        return { left: (differenceInMinutes(drawStart, dayStart) / 60) * HOUR_WIDTH, width: Math.max(width, 40) };
     };
 
     const handleConfirmDeposit = async () => {
         if (!window.confirm("Xác nhận khách đã đóng tiền cọc?")) return;
-        try { await bookingApi.confirmBooking(selectedEvent.booking_id); alert("Thành công!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
+        try { await bookingApi.confirmBooking(selectedEvent.booking_id); alert("Thành công!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
     };
-
     const handleCheckIn = () => navigate('/booking-management');
     const handleCheckOut = () => navigate('/booking-management');
-
     const handleCompleteCleaning = async () => {
-        try { await roomApi.completeCleaning(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
+        try { await roomApi.completeCleaning(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
     };
     const handleCompleteMaintenance = async () => {
-        try { await roomApi.completeMaintenance(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message); }
+        try { await roomApi.completeMaintenance(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
     };
 
     const openAddServiceModal = () => {
@@ -192,42 +157,41 @@ export default function RoomCalendar() {
         try {
             const valid = selectedServicesToAdd.filter(s => s.service_id && s.quantity > 0);
             if (!valid.length) { alert("Chọn dịch vụ"); return; }
-
-            if (!selectedEvent.customer_id) {
-                alert("Lỗi: Không tìm thấy thông tin khách hàng trong booking này.");
-                return;
-            }
+            if (!selectedEvent.customer_id) { alert("Lỗi: Không tìm thấy thông tin khách hàng."); return; }
 
             const payload = {
                 booking_id: selectedEvent.booking_id,
-                customer_id: selectedEvent.customer_id, // Lấy trực tiếp từ event (đã thêm ở trên)
+                customer_id: selectedEvent.customer_id,
                 services: valid.map(item => ({
                     service_id: item.service_id,
-                    quantity: Number(item.quantity), // Ép kiểu số
-                    use_from: new Date().toISOString() // Thêm trường bắt buộc này
+                    quantity: Number(item.quantity),
+                    use_from: new Date().toISOString()
                 }))
             };
-
             await serviceApi.createServiceUsage(payload);
-
             alert("Thêm dịch vụ thành công!");
-            setShowServiceModal(false);
-            setSelectedEvent(null);
-        } catch (err) {
-            console.error(err);
-            alert("Lỗi: " + (err.response?.data?.message || err.message));
-        }
+            setShowServiceModal(false); setSelectedEvent(null);
+        } catch (err) { console.error(err); alert("Lỗi: " + (err.response?.data?.message || err.message)); }
     };
 
     const handleEmptySlotClick = () => navigate('/booking-management');
     const hoursInDay = useMemo(() => eachHourOfInterval({ start: startOfDay(currentDate), end: endOfDay(currentDate) }), [currentDate]);
     const totalCalendarWidth = hoursInDay.length * HOUR_WIDTH;
 
-    const filteredRooms = useMemo(() => rooms.filter(r =>
-        (!searchTerm || r.room_number.includes(searchTerm)) &&
-        (filterType==='all' || r.category_id?.category_name === filterType)
-    ), [rooms, searchTerm, filterType]);
-    const uniqueTypes = useMemo(() => [...new Set(rooms.map(r => r.category_id?.category_name).filter(Boolean))], [rooms]);
+    const filteredRooms = useMemo(() => rooms.filter(r => {
+        const roomNameStr = String(r.room_number || "").toLowerCase();
+        const searchStr = searchTerm.toLowerCase();
+        const matchName = !searchTerm || roomNameStr.includes(searchStr);
+        const categoryName = r.category_id?.category_name || "Chưa phân loại";
+
+        if (filterType === 'all') return matchName;
+        return matchName && categoryName === filterType;
+    }), [rooms, searchTerm, filterType]);
+
+    const uniqueTypes = useMemo(() => {
+        const types = rooms.map(r => r.category_id?.category_name).filter(Boolean);
+        return [...new Set(types)];
+    }, [rooms]);
 
     return (
         <div className="flex bg-[#F1F5F9] min-h-screen font-sans text-slate-800">
@@ -268,42 +232,35 @@ export default function RoomCalendar() {
                             </div>
                             <div className="relative pb-10 bg-white">
                                 {currentTimePosition !== null && <div className="absolute top-0 bottom-0 z-30 border-l-2 border-red-500 pointer-events-none" style={{left:ROOM_COL_WIDTH+currentTimePosition}}><div className="absolute -top-1.5 -left-[6px] w-3 h-3 bg-red-500 rounded-full shadow-sm ring-2 ring-white"></div></div>}
-                                {filteredRooms.map(room => (
-                                    <div key={room._id} className="flex border-b border-slate-100 hover:bg-slate-50 transition" style={{height:ROW_HEIGHT}}>
-                                        <div className="sticky left-0 z-30 bg-white border-r border-slate-200 flex flex-col justify-center px-5 w-[220px] shrink-0 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                            <div className="flex justify-between items-center"><span className="font-bold text-slate-800 text-lg">{room.room_number}</span><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">T{room.floor||1}</span></div>
-                                            <div className="text-xs text-slate-500 mt-1 truncate">{room.category_id?.category_name}</div>
-                                        </div>
-                                        <div className="relative flex" style={{width:totalCalendarWidth}}>
-                                            {hoursInDay.map(h => (
-                                                <div
-                                                    key={h}
-                                                    style={{width:HOUR_WIDTH}}
-                                                    className="border-r border-slate-100 h-full cursor-pointer hover:bg-indigo-50/30 transition-colors"
-                                                    onClick={handleEmptySlotClick}
-                                                    title="Click để tạo đặt phòng mới"
-                                                ></div>
-                                            ))}
-
-                                            {events.filter(e=>String(e.room_id)===String(room._id)).map(evt => {
-                                                const style=getEventStyle(evt); if(!style) return null;
-                                                const conf = evt.isCompleted ? STATUS_CONFIG.completed : (STATUS_CONFIG[evt.status] || STATUS_CONFIG.pending);
-
-                                                return (
-                                                    <div key={evt._id}
-                                                        onClick={(e)=>{e.stopPropagation();setSelectedEvent(evt);setShowServiceModal(false)}}
-                                                        style={{left:style.left, width:style.width}}
-                                                        className={`absolute top-2 bottom-2 rounded-md cursor-pointer flex flex-col justify-center px-3 transition-all overflow-hidden whitespace-nowrap border border-white/60 shadow-sm hover:shadow-md hover:scale-[1.01] hover:z-20 ${conf.style} ${evt.isCompleted ? 'z-0' : 'z-10'}`}
-                                                        title={`${evt.title} - ${evt.customer_name}`}
-                                                    >
-                                                        <div className="flex items-center gap-1.5 mb-0.5 font-bold"><span className="truncate">{evt.customer_name}</span></div>
-                                                        {style.width>60 && <div className="text-[10px] font-medium opacity-90 flex justify-between"><span>{format(parseISO(evt.start),"HH:mm")} - {format(parseISO(evt.end),"HH:mm")}</span></div>}
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
+                                {filteredRooms.length === 0 ? (
+                                    <div className="p-10 text-center text-gray-400 italic">
+                                        {rooms.length === 0 ? "Chưa có dữ liệu phòng nào." : "Không tìm thấy phòng phù hợp."}
                                     </div>
-                                ))}
+                                ) : (
+                                    filteredRooms.map(room => (
+                                        <div key={room._id} className="flex border-b border-slate-100 hover:bg-slate-50 transition" style={{height:ROW_HEIGHT}}>
+                                            <div className="sticky left-0 z-30 bg-white border-r border-slate-200 flex flex-col justify-center px-5 w-[220px] shrink-0 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                                <div className="flex justify-between items-center"><span className="font-bold text-slate-800 text-lg">{room.room_number}</span><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">T{room.floor||1}</span></div>
+                                                <div className="text-xs text-slate-500 mt-1 truncate">{room.category_id?.category_name || "---"}</div>
+                                            </div>
+                                            <div className="relative flex" style={{width:totalCalendarWidth}}>
+                                                {hoursInDay.map(h => (
+                                                    <div key={h} style={{width:HOUR_WIDTH}} className="border-r border-slate-100 h-full cursor-pointer hover:bg-indigo-50/30 transition-colors" onClick={handleEmptySlotClick} title="Click để tạo đặt phòng mới"></div>
+                                                ))}
+                                                {events.filter(e=>String(e.room_id)===String(room._id)).map(evt => {
+                                                    const style=getEventStyle(evt); if(!style) return null;
+                                                    const conf = evt.isCompleted ? STATUS_CONFIG.completed : (STATUS_CONFIG[evt.status] || STATUS_CONFIG.pending);
+                                                    return (
+                                                        <div key={evt._id} onClick={(e)=>{e.stopPropagation();setSelectedEvent(evt);setShowServiceModal(false)}} style={{left:style.left, width:style.width}} className={`absolute top-2 bottom-2 rounded-md cursor-pointer flex flex-col justify-center px-3 transition-all overflow-hidden whitespace-nowrap border border-white/60 shadow-sm hover:shadow-md hover:scale-[1.01] hover:z-20 ${conf.style} ${evt.isCompleted ? 'z-0' : 'z-10'}`} title={`${evt.title} - ${evt.customer_name}`}>
+                                                            <div className="flex items-center gap-1.5 mb-0.5 font-bold"><span className="truncate">{evt.customer_name}</span></div>
+                                                            {style.width>60 && <div className="text-[10px] font-medium opacity-90 flex justify-between"><span>{format(parseISO(evt.start),"HH:mm")} - {format(parseISO(evt.end),"HH:mm")}</span></div>}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
@@ -339,17 +296,18 @@ export default function RoomCalendar() {
                                 </div>
                                 {selectedEvent.isCompleted ? <div className="bg-gray-100 p-3 rounded text-center text-sm text-gray-500 font-bold">Đã hoàn tất/Lịch sử</div> : (
                                     <div className="grid gap-3">
-                                        {selectedEvent.status==='pending' && <button onClick={handleConfirmDeposit} className="btn-action bg-yellow-500 hover:bg-yellow-600 text-white">Xác nhận cọc</button>}
-                                        {selectedEvent.status==='confirmed' && <button onClick={handleCheckIn} className="btn-action bg-blue-600 hover:bg-blue-700 text-white">Check-in</button>}
-                                        {selectedEvent.status==='occupied' && <div className="grid grid-cols-2 gap-3"><button onClick={openAddServiceModal} className="btn-action bg-white border-2 border-indigo-100 text-indigo-600">Dịch vụ</button><button onClick={handleCheckOut} className="btn-action bg-rose-500 hover:bg-rose-600 text-white">Trả phòng</button></div>}
-                                        {selectedEvent.status==='cleaning' && <button onClick={handleCompleteCleaning} className="btn-action bg-teal-600 hover:bg-teal-700 text-white">Xong dọn dẹp</button>}
-                                        {selectedEvent.status==='maintenance' && <button onClick={handleCompleteMaintenance} className="btn-action bg-slate-600 hover:bg-slate-700 text-white">Xong bảo trì</button>}
+                                        {selectedEvent.status==='pending' && <button onClick={handleConfirmDeposit} className={`${BTN_ACTION_CLASS} bg-yellow-500 hover:bg-yellow-600 text-white`}>Xác nhận cọc</button>}
+                                        {selectedEvent.status==='confirmed' && <button onClick={handleCheckIn} className={`${BTN_ACTION_CLASS} bg-blue-600 hover:bg-blue-700 text-white`}>Check-in</button>}
+                                        {selectedEvent.status==='occupied' && <div className="grid grid-cols-2 gap-3"><button onClick={openAddServiceModal} className={`${BTN_ACTION_CLASS} bg-white border-2 border-indigo-100 text-indigo-600`}>Dịch vụ</button><button onClick={handleCheckOut} className={`${BTN_ACTION_CLASS} bg-rose-500 hover:bg-rose-600 text-white`}>Trả phòng</button></div>}
+                                        {selectedEvent.status==='cleaning' && <button onClick={handleCompleteCleaning} className={`${BTN_ACTION_CLASS} bg-teal-600 hover:bg-teal-700 text-white`}>Xong dọn dẹp</button>}
+                                        {selectedEvent.status==='maintenance' && <button onClick={handleCompleteMaintenance} className={`${BTN_ACTION_CLASS} bg-slate-600 hover:bg-slate-700 text-white`}>Xong bảo trì</button>}
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
                 )}
+
                 {showServiceModal && (
                     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                         <div className="bg-white rounded-2xl shadow-2xl w-[550px] max-h-[90vh] flex flex-col overflow-hidden animate-zoom-in">
@@ -375,7 +333,6 @@ export default function RoomCalendar() {
                     </div>
                 )}
             </div>
-            <style jsx>{` .btn-action { @apply w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95; } `}</style>
         </div>
     );
 }

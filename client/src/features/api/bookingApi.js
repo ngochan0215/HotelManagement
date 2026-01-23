@@ -44,7 +44,7 @@ export const bookingApi = {
 
     getRoomsCalendar: async (date = new Date()) => {
         const response = await axios.get(
-            `${BASE_URL_}/manager/calendar/rooms`,
+            `${BASE_URL}/calendar/rooms`,
         {
             ...getAuthHeader(),
             params: { date },

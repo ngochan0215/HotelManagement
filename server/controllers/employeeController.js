@@ -579,6 +579,123 @@ export const checkInShift = async (req, res) => {
   }
 };
 
+export const createAccountForExistingEmployee = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.params;
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Vui lòng nhập Email và Mật khẩu." });
+    }
+
+    const employee = await Employee.findById(id).session(session);
+    if (!employee) {
+      return res.status(404).json({ message: "Không tìm thấy nhân viên." });
+    }
+
+    if (employee.user_id) {
+      return res.status(400).json({ message: "Nhân viên này đã có tài khoản rồi." });
+    }
+
+    // Kiểm tra email đã bị dùng bởi người khác chưa
+    const existingUser = await User.findOne({ email }).session(session);
+    if (existingUser) {
+      return res.status(400).json({ message: "Email này đã được sử dụng." });
+    }
+
+    // Tạo User mới
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const randomAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+
+    const newUser = await User.create([{
+        email,
+        password: hashedPassword,
+        system_role: "employee",
+        avatar: randomAvatar,
+        emailVerified: true
+    }], { session });
+
+    // Link User mới vào Employee cũ
+    employee.user_id = newUser[0]._id;
+    await employee.save({ session });
+
+    await session.commitTransaction();
+    res.status(200).json({ message: "Tạo tài khoản thành công!", user: newUser[0] });
+
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(500).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+// 2. Reset mật khẩu (Dành cho Admin đổi pass nhân viên)
+export const resetPasswordForEmployee = async (req, res) => {
+  try {
+    const { id } = req.params; // Employee ID
+    const { newPassword } = req.body;
+
+    const employee = await Employee.findById(id);
+    if (!employee || !employee.user_id) {
+      return res.status(404).json({ message: "Nhân viên chưa có tài khoản." });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await User.findByIdAndUpdate(employee.user_id, {
+        password: hashedPassword
+    });
+
+    res.status(200).json({ message: "Đổi mật khẩu thành công." });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 3. Khóa / Mở khóa tài khoản (Ban/Unban)
+export const toggleBanUser = async (req, res) => {
+  try {
+    const { id } = req.params; // Employee ID
+    const { isBanned } = req.body; // true hoặc false
+
+    const employee = await Employee.findById(id);
+    if (!employee || !employee.user_id) {
+      return res.status(404).json({ message: "Nhân viên chưa có tài khoản." });
+    }
+
+    await User.findByIdAndUpdate(employee.user_id, {
+        isBanned: isBanned,
+        status: isBanned ? "banned" : "active" // Cập nhật cả status nếu model User của bạn dùng field này
+    });
+
+    res.status(200).json({ message: `Đã ${isBanned ? "khóa" : "mở khóa"} tài khoản thành công.` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+// ... các code cũ
+
+// --- THÊM HÀM NÀY ĐỂ NHÂN VIÊN LẤY PROFILE CỦA CHÍNH MÌNH ---
+export const getMyProfile = async (req, res) => {
+  try {
+    // req.user.userId được lấy từ verifyToken middleware
+    const userId = req.user.userId;
+
+    const employee = await Employee.findOne({ user_id: userId })
+      .populate("user_id", "email system_role avatar");
+
+    if (!employee) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ nhân viên." });
+    }
+
+    res.status(200).json({ success: true, employee });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 // checkout tan làm
 export const checkOutShift = async (req, res) => {
   try {
