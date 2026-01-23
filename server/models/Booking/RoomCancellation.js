@@ -52,6 +52,5 @@ const roomCancellationSchema = new mongoose.Schema(
   }
 );
 
-const RoomCancellation = mongoose.models.RoomCancellation ||
-  mongoose.model("RoomCancellation", roomCancellationSchema);
+const RoomCancellation = mongoose.models.RoomCancellation || mongoose.model("RoomCancellation", roomCancellationSchema);
 export default RoomCancellation;

@@ -25,6 +25,11 @@ const roomStatusLogSchema = new mongoose.Schema(
       default: null
     },
 
+    expected_end_time: {
+      type: Date,
+      default: null
+    },
+
     note: {
       type: String,
       default: "",

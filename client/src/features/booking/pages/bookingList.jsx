@@ -393,8 +393,24 @@ export default function BookingList() {
         result = await qrApi.scanQRCode(imageFile);
       } else if (decodedText) {
         try {
-          const parsed = JSON.parse(decodedText);
-          result = { success: true, data: parsed, rawData: decodedText };
+          let parsedData = null;
+          
+          if (decodedText.includes("||") && decodedText.includes("|")) {
+            const [cccd, rest] = decodedText.split("||");
+            const parts = rest.split("|");
+
+            if (parts.length >= 5) {
+              parsedData = {
+                cccd: cccd.trim(),
+                fullName: parts[0]?.trim() || "",
+                dateOfBirth: parts[1]?.trim() || "",
+                gender: parts[2]?.trim() || "",
+                address: parts[3]?.trim() || "",
+                issueDate: parts[4]?.trim() || ""
+              };
+            }
+          }
+          result = { success: true, data: parsedData, rawData: decodedText };
         } catch (e) {
           result = { success: true, data: decodedText, rawData: decodedText };
         }
@@ -402,11 +418,8 @@ export default function BookingList() {
 
       if (result && result.success) {
         const qrData = result.data;
-        
-        // Map dữ liệu từ QR vào form
-        if (qrData && typeof qrData === 'object') {
+        if (qrData) {
           const updatedCustomer = { ...newCustomer };
-          
           if (qrData.cccd) updatedCustomer.CCCD = qrData.cccd;
           if (qrData.fullName) updatedCustomer.full_name = qrData.fullName;
           if (qrData.dateOfBirth) {
@@ -444,11 +457,10 @@ export default function BookingList() {
             updatedCustomer.date_birth = formattedDate;
           }
           // ngoài mấy đó ra còn trả về giới tính, địa chỉ với ngày cấp cccd
-          
           setNewCustomer(updatedCustomer);
           setToast({ message: "Đã đọc thông tin từ mã QR thành công!", type: "success" });
         } else {
-          setToast({ message: "Không thể đọc thông tin từ mã QR", type: "error" });
+          setToast({ message: "Không thể đọc thông tin từ mã QR  ", type: "error" });
         }
       } else {
         throw new Error(result?.message || "Không thể đọc mã QR");

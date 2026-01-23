@@ -251,7 +251,9 @@ export const updateRoom = async (req, res) => {
       room.room_number = room_number;
     }
 
+    // trạng thái phòng mới
     if (room_status) {
+      // chỉ cho phép chỉnh một số trạng thái nhất định
       const ALLOWED_MANUAL_STATUS = ["maintenance", "cleaning", "available"];
 
       if (!ALLOWED_MANUAL_STATUS.includes(room_status)) {
@@ -270,6 +272,7 @@ export const updateRoom = async (req, res) => {
 
       const currentStatus = activeLog?.status || "available";
 
+      // nếu trạng thái hiện tại là occupied thì không cho đổi
       if (["occupied"].includes(currentStatus)) {
         return res.status(400).json({
           success: false,
@@ -277,6 +280,7 @@ export const updateRoom = async (req, res) => {
         });
       }
 
+      // nếu đổi về available thì không cần start_time, end_time
       if (room_status === "available") {
         const bookingExists = await Booking.exists({
           room_id: id,
@@ -291,19 +295,19 @@ export const updateRoom = async (req, res) => {
             message: "Phòng đang có booking hiệu lực, không thể chuyển sang available!",
           });
         }
+      } else {
+        if (!start_time)
+          return res.status(400).json({
+            success: false,
+            message: "start_time là bắt buộc khi cập nhật trạng thái phòng!",
+          });
+
+        if (end_time && new Date(end_time) <= new Date(start_time))
+          return res.status(400).json({
+            success: false,
+            message: "end_time phải sau start_time!",
+          });
       }
-
-      if (!start_time)
-        return res.status(400).json({
-          success: false,
-          message: "start_time là bắt buộc khi cập nhật trạng thái phòng!",
-        });
-
-      if (end_time && new Date(end_time) <= new Date(start_time))
-        return res.status(400).json({
-          success: false,
-          message: "end_time phải sau start_time!",
-        });
 
       await RoomStatusLog.updateMany(
         { room_id: id, end_time: null },

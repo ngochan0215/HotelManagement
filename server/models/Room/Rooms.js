@@ -6,6 +6,8 @@ const roomSchema = new mongoose.Schema(
         category_id: { type: mongoose.Schema.Types.ObjectId, ref: "RoomCategory", required: true },
         room_number: { type: String, required: true, unique: true },
         room_status: { type: String, enum: ["available", "reserved", "booked", "occupied", "cleaning", "maintenance"], default: "available", required: true },
+        start_time: { type: Date, default: null },
+        end_time: { type: Date, default: null },
     },
     { 
         timestamps: { createdAt: "created_at", updatedAt: "updated_at"},

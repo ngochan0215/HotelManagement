@@ -8,6 +8,12 @@ const receiptSchema = new mongoose.Schema(
       required: true,
     },
 
+    discount_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Discount",
+      default: null,
+    },
+
     employee_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
@@ -55,7 +61,6 @@ const receiptSchema = new mongoose.Schema(
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
   }
 );
-
 
 const Receipt = mongoose.models.Receipt || mongoose.model("Receipt", receiptSchema);
 export default Receipt;

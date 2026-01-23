@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@payos/node": "^2.0.4",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "cloudinary": "^1.41.3",
@@ -34,4 +35,3 @@
     "socket.io": "^4.8.1"
   }
 }
-

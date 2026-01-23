@@ -8,7 +8,7 @@ import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
     startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob 
-} from "./config/importTicket.job.js";
+} from "./jobs/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
 import userRoute from "./routes/userRoutes.js";

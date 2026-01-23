@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, updateAllCustomerTiers,
   notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings 
-} from "../utils/notifyTickets.js";
+} from "../jobs/notifyTickets.js";
 
 const startCronJob = ({ name, schedule, handler }) => {
   cron.schedule(schedule, async () => {

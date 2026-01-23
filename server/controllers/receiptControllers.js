@@ -462,3 +462,90 @@ export const updateReceipt = async (req, res) => {
     });
   }
 };
+
+export const markReceiptAsPaid = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+    const { payment } = req.body;
+
+    const employee_user_id = req.user.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "receipt_id không hợp lệ." });
+    }
+
+    if (!["cash", "card", "bank", "e-wallet"].includes(payment)) {
+      return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ." });
+    }
+
+    const employee = await Employee.findOne(
+      { user_id: employee_user_id },
+      null,
+      { session }
+    );
+
+    if (!employee) {
+      return res.status(404).json({ message: "Không tìm thấy nhân viên." });
+    }
+
+    const receipt = await Receipt.findById(id).session(session);
+    if (!receipt) {
+      return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
+    }
+
+    if (receipt.status === "paid") {
+      return res.status(400).json({ message: "Hóa đơn đã được thanh toán." });
+    }
+
+    if (receipt.status === "cancelled") {
+      return res.status(400).json({ message: "Hóa đơn đã hủy, không thể thanh toán." });
+    }
+
+    const booking = await Booking.findById(receipt.booking_id).session(session);
+    if (!booking) {
+      return res.status(404).json({ message: "Không tìm thấy booking." });
+    }
+
+    // cập nhật hóa đơn
+    receipt.status = "paid";
+    receipt.payment = payment;
+    receipt.paid_at = new Date();
+    receipt.handled_by = employee._id;
+
+    await receipt.save({ session });
+
+    // cộng điểm khách hàng
+    const rewardPoints = Math.floor(receipt.final_amount / 10000);
+
+    await updateCustomerPoints({
+      customer_id: booking.customer_id,
+      points: rewardPoints,
+      reason: "Hoàn tất thanh toán hóa đơn"
+    });
+
+    await Customer.findByIdAndUpdate(
+      booking.customer_id,
+      { $inc: { booking_count: 1 } },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      message: "Thanh toán hóa đơn thành công.",
+      receipt
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(500).json({
+      message: error.message || "Không thể thanh toán hóa đơn."
+    });
+  }
+};

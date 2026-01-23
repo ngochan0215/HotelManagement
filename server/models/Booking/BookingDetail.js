@@ -48,6 +48,27 @@ const bookingDetailSchema = new mongoose.Schema(
       default: "reserved",
     },
 
+    // hủy phòng
+    cancelled_at: { type: Date, default: null },
+
+    cancellation_reason: {
+      type: String,
+      enum: [
+        "change_plan",
+        "price_issue",
+        "find_better_option",
+        "personal_reason",
+        "no_show",
+        "overbooking",
+        "force_majeure",
+        "early_checkout",
+        "other"
+      ],
+      required: true,
+    },
+
+    note: { type: String, default: "" },
+
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
