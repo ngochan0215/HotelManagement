@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiImage, FiList, FiChevronDown } from "react-icons/fi";
+import {
+  FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiImage, FiList, FiChevronDown,
+  FiChevronLeft, FiChevronRight
+} from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
 
@@ -12,6 +15,8 @@ export default function ServiceListTab() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 7;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
 
@@ -19,6 +24,10 @@ export default function ServiceListTab() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterCategory, sortOrder]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -85,6 +94,80 @@ export default function ServiceListTab() {
 
     return result;
   }, [services, searchTerm, filterCategory, sortOrder]);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentServices = filteredServices.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredServices.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+  // -------------------------
 
   const getCategoryName = (id) => {
       const cat = categories.find(c => c._id === id || c._id === id?._id);
@@ -166,7 +249,7 @@ export default function ServiceListTab() {
                             </div>
                         </td></tr>
                     )}
-                    {filteredServices.map((item) => (
+                    {currentServices.map((item) => (
                         <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50 transition">
                             <td className="py-3 pl-4">
                                 <div className="w-10 h-10 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -204,6 +287,15 @@ export default function ServiceListTab() {
                 </tbody>
             </table>
         </div>
+
+        {filteredServices.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredServices.length)}</b> trong tổng <b>{filteredServices.length}</b>
+                </div>
+                {renderPaginationButtons()}
+            </div>
+        )}
 
         {isManager && (
             <ServiceModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} initialData={editingService} />

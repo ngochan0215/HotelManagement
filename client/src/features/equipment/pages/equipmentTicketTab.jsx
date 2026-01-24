@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
-import { FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft } from "react-icons/fi";
+import {
+  FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft,
+  FiChevronLeft, FiChevronRight
+} from "react-icons/fi";
 import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 
@@ -10,6 +13,10 @@ export default function EquipmentTicketTab() {
   const [loading, setLoading] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
+
+  const [installPage, setInstallPage] = useState(1);
+  const [importPage, setImportPage] = useState(1);
+  const itemsPerPage = 5;
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -24,6 +31,79 @@ export default function EquipmentTicketTab() {
   };
 
   useEffect(() => { fetchTickets(); }, []);
+
+  const indexOfLastInstall = installPage * itemsPerPage;
+  const indexOfFirstInstall = indexOfLastInstall - itemsPerPage;
+  const currentInstalls = installs.slice(indexOfFirstInstall, indexOfLastInstall);
+  const totalInstallPages = Math.ceil(installs.length / itemsPerPage);
+
+  const indexOfLastImport = importPage * itemsPerPage;
+  const indexOfFirstImport = indexOfLastImport - itemsPerPage;
+  const currentImports = imports.slice(indexOfFirstImport, indexOfLastImport);
+  const totalImportPages = Math.ceil(imports.length / itemsPerPage);
+
+  const renderPagination = (currentPage, totalPages, setPage) => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+            range.push(i);
+        }
+    }
+
+    let l;
+    for (let i of range) {
+        if (l) {
+            if (i - l === 2) rangeWithDots.push(l + 1);
+            else if (i - l !== 1) rangeWithDots.push('...');
+        }
+        rangeWithDots.push(i);
+        l = i;
+    }
+
+    return (
+        <div className="flex gap-2">
+            <button
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <FiChevronLeft />
+            </button>
+            {rangeWithDots.map((page, index) => (
+                page === '...' ? (
+                    <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+                ) : (
+                    <button
+                        key={page}
+                        onClick={() => setPage(page)}
+                        className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                            currentPage === page
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                            : "border hover:bg-gray-50 text-gray-600"
+                        }`}
+                    >
+                        {page}
+                    </button>
+                )
+            ))}
+            <button
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <FiChevronRight />
+            </button>
+        </div>
+    );
+  };
 
   const handleConfirmImport = async (id) => {
     if (!window.confirm("Xác nhận nhập kho?")) return;
@@ -69,7 +149,7 @@ export default function EquipmentTicketTab() {
                   <FiPlus /> Tạo phiếu
               </button>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto min-h-[300px]">
               <table className="w-full text-sm text-left">
                   <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                       <tr>
@@ -81,7 +161,7 @@ export default function EquipmentTicketTab() {
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                      {installs.map((item) => {
+                      {currentInstalls.map((item) => {
                           const isInstall = isInstallType(item);
                           const roomDisplay = item.room_id ? `P.${item.room_id.room_number}` : "---";
 
@@ -120,6 +200,14 @@ export default function EquipmentTicketTab() {
                   </tbody>
               </table>
           </div>
+          {installs.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstInstall + 1}</b> - <b>{Math.min(indexOfLastInstall, installs.length)}</b> trong tổng <b>{installs.length}</b>
+                </div>
+                {renderPagination(installPage, totalInstallPages, setInstallPage)}
+            </div>
+          )}
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -129,7 +217,7 @@ export default function EquipmentTicketTab() {
                 <FiPlus /> Tạo phiếu nhập
             </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[300px]">
             <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                     <tr>
@@ -141,7 +229,7 @@ export default function EquipmentTicketTab() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {imports.map((item) => (
+                    {currentImports.map((item) => (
                         <tr key={item._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-mono text-xs">#{item._id.slice(-6).toUpperCase()}</td>
                             <td className="px-4 py-3">{new Date(item.import_date).toLocaleDateString('vi-VN')}</td>
@@ -158,9 +246,19 @@ export default function EquipmentTicketTab() {
                             </td>
                         </tr>
                     ))}
+                    {imports.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                 </tbody>
             </table>
         </div>
+
+        {imports.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstImport + 1}</b> - <b>{Math.min(indexOfLastImport, imports.length)}</b> trong tổng <b>{imports.length}</b>
+                </div>
+                {renderPagination(importPage, totalImportPages, setImportPage)}
+            </div>
+        )}
       </div>
     </div>
   );

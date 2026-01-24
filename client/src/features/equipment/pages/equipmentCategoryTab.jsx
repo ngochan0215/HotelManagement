@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { FiEdit, FiTrash2, FiPlus, FiX, FiSearch, FiList, FiChevronDown, FiFilter } from "react-icons/fi";
+import {
+  FiEdit, FiTrash2, FiPlus, FiX, FiSearch, FiList, FiChevronDown, FiFilter,
+  FiChevronLeft, FiChevronRight
+} from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import { RankBadge } from "../../../components/ui/label.jsx";
@@ -12,6 +15,9 @@ export default function EquipmentCategoryTab() {
   const [sortOrder, setSortOrder] = useState("a-z");
   const [filterUnit, setFilterUnit] = useState("all");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({ name: "", description: "", unit: "item", price: "" });
@@ -23,6 +29,10 @@ export default function EquipmentCategoryTab() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterUnit, sortOrder]);
 
   const loadData = async () => {
     try {
@@ -74,6 +84,80 @@ export default function EquipmentCategoryTab() {
 
     return result;
   }, [categories, searchTerm, filterUnit, sortOrder]);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentCategories = filteredCategories.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredCategories.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+  // -------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -184,8 +268,8 @@ export default function EquipmentCategoryTab() {
             </tr>
           </thead>
           <tbody className="text-gray-700 text-sm">
-            {filteredCategories.length > 0 ? (
-              filteredCategories.map((item) => (
+            {currentCategories.length > 0 ? (
+              currentCategories.map((item) => (
                 <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50 transition">
                   <td className="py-4 pl-4 font-bold text-indigo-900">{item.name}</td>
                   <td className="py-4 text-center">
@@ -219,6 +303,16 @@ export default function EquipmentCategoryTab() {
           </tbody>
         </table>
       </div>
+
+      {filteredCategories.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredCategories.length)}</b> trong tổng <b>{filteredCategories.length}</b>
+                </div>
+                {renderPaginationButtons()}
+            </div>
+      )}
+
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
