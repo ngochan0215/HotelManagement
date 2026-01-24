@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { FiX, FiPrinter } from "react-icons/fi";
+import { FiX, FiPrinter, FiTag } from "react-icons/fi";
 
 export default function ReceiptDetailModal({ receipt, onClose }) {
   const printRef = useRef();
@@ -85,9 +85,39 @@ export default function ReceiptDetailModal({ receipt, onClose }) {
                 </thead>
                 <tbody className="text-sm">
                     <tr className="border-b border-gray-100">
-                        <td className="py-3 font-medium">Tiền phòng (đã trừ KM)</td>
-                        <td className="py-3 text-right">{receipt.total_fee?.toLocaleString()}</td>
+                        <td className="py-3 font-medium">Tiền phòng</td>
+                        <td className="py-3 text-right">{(receipt.base_room_fee || receipt.total_fee)?.toLocaleString()}</td>
                     </tr>
+
+                    {receipt.discount_snapshot && receipt.discount_snapshot.discount_amount > 0 && (
+                        <tr className="border-b border-gray-100 bg-emerald-50">
+                            <td className="py-3">
+                                <div className="flex items-center gap-2">
+                                    <FiTag className="text-emerald-600" size={14}/>
+                                    <div>
+                                        <div className="font-medium text-emerald-700">
+                                            Khuyến mãi: {receipt.discount_snapshot.name || receipt.discount_snapshot.code}
+                                        </div>
+                                        {receipt.discount_snapshot.description && (
+                                            <div className="text-xs text-emerald-600 italic">
+                                                {receipt.discount_snapshot.description}
+                                            </div>
+                                        )}
+                                        {receipt.discount_snapshot.code && (
+                                            <div className="text-xs text-emerald-500 font-mono mt-0.5">
+                                                Mã: {receipt.discount_snapshot.code}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="py-3 text-right">
+                                <span className="font-bold text-emerald-700">
+                                    - {receipt.discount_snapshot.discount_amount?.toLocaleString()}
+                                </span>
+                            </td>
+                        </tr>
+                    )}
 
                     {receipt.service_fee > 0 && (
                         <tr className="border-b border-gray-100">

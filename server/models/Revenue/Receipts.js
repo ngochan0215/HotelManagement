@@ -13,6 +13,12 @@ const receiptSchema = new mongoose.Schema(
       ref: "Discount",
       default: null,
     },
+    discount_snapshot: {
+      code: String,
+      name: String,
+      description: String,
+      discount_amount: Number,
+    },
 
     employee_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -33,6 +39,7 @@ const receiptSchema = new mongoose.Schema(
     },
 
     // Snapshot tiền
+    base_room_fee: { type: Number, required: true },   // từ booking
     total_fee: { type: Number, required: true },       // từ booking (đã discount)
     service_fee: { type: Number, default: 0 },
     compensate_fee: { type: Number, default: 0 },
@@ -49,7 +56,7 @@ const receiptSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "paid", "half-paid", "refunded"],
+      enum: ["pending", "paid", "half-paid", "refunded", "cancelled"],
       default: "pending",
     },
 

@@ -31,17 +31,17 @@ export const notifyImportTickets = async () => {
         
         for (const ticket of expiredTickets) {
             try {
-                await pushNotificationToUsers(
-                    managerIds,
-                    "Phiếu nhập thiết bị quá hạn",
-                    `Phiếu nhập thiết bị ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
-                    "system",
-                    "Order",
-                    ticket._id,
-                    "unread"
-                );
+              await pushNotificationToUsers(
+                  managerIds,
+                  "Phiếu nhập thiết bị quá hạn",
+                  `Phiếu nhập thiết bị ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
+                  "system",
+                  "Order",
+                  ticket._id,
+                  "unread"
+              );
             } catch (error) {
-                console.error(`Error sending notification for expired ticket ${ticket._id}:`, error);
+              console.error(`Error sending notification for expired ticket ${ticket._id}:`, error);
             }
         }
     }
@@ -200,7 +200,7 @@ export const notifyInstallTickets = async () => {
           console.error(`Error sending notification for today install ticket ${ticket._id}:`, error);
         }
       }
-      console.log("[CRON] done updating pending install tickets.");
+      //console.log("[CRON] done updating pending install tickets.");
     }
 
     // await session.commitTransaction();
@@ -542,7 +542,7 @@ export const updateAllCustomerTiers = async () => {
 
 // Gửi thông báo 2h trước giờ check-in dự kiến
 export const notifyCheckinReminder = async () => {
-  console.log("[CRON] Running notifyCheckinReminder...");
+  //console.log("[CRON] Running notifyCheckinReminder...");
   try {
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 giờ sau từ bây giờ
@@ -556,7 +556,7 @@ export const notifyCheckinReminder = async () => {
       }
     }).populate("customer_id", "user_id full_name");
 
-    console.log(`[CRON] Found ${bookings.length} bookings needing check-in reminders.`);
+    //console.log(`[CRON] Found ${bookings.length} bookings needing check-in reminders.`);
     
     if (bookings.length === 0) {
       return;
@@ -569,8 +569,7 @@ export const notifyCheckinReminder = async () => {
     }).select("_id");
     const managerIds = managers.map(m => m._id);
 
-    
-    console.log("Manager for notifications:", managers);
+    //console.log("Manager for notifications:", managers);
     // Lấy danh sách lễ tân (receptionist)
     const receptionistEmployees = await Employee.find({
       position: "receptionist",
@@ -654,5 +653,61 @@ export const notifyCheckinReminder = async () => {
     console.log(`[CRON] Sent check-in reminders for ${bookings.length} bookings`);
   } catch (error) {
     console.error("[CRON] notifyCheckinReminder error:", error);
+  }
+};
+
+// Sync room.room_status từ log hiện tại (Option 1)
+export const syncRoomStatusFromLogs = async () => {
+  try {
+    const now = new Date();
+    
+    // Lấy tất cả các phòng
+    const rooms = await Room.find({});
+    
+    let updatedCount = 0;
+    
+    for (const room of rooms) {
+      // Tìm log hiện tại (start_time <= now và (end_time >= now hoặc end_time null))
+      const currentLog = await RoomStatusLog.findOne({
+        room_id: room._id,
+        start_time: { $lte: now },
+        $or: [
+          { end_time: { $gte: now } },
+          { end_time: null }
+        ]
+      }).sort({ start_time: -1 }); // Lấy log mới nhất
+      
+      // Nếu có log hiện tại và status khác với room.room_status, thì update
+      if (currentLog && currentLog.status !== room.room_status) {
+        await Room.findByIdAndUpdate(room._id, {
+          room_status: currentLog.status
+        });
+        updatedCount++;
+      }
+      // Nếu không có log hiện tại và room.room_status là "reserved" hoặc "booked"
+      // (không phải "cleaning", "maintenance", "available", "new")
+      else if (!currentLog && ["reserved", "booked"].includes(room.room_status)) {
+        // Kiểm tra xem có booking nào đang active không
+        const activeBooking = await BookingDetail.findOne({
+          room_id: room._id,
+          status: { $in: ["reserved", "confirmed", "checked_in"] },
+          expected_checkout: { $gt: now }
+        });
+        
+        // Nếu không có booking active, chuyển về available
+        if (!activeBooking) {
+          await Room.findByIdAndUpdate(room._id, {
+            room_status: "available"
+          });
+          updatedCount++;
+        }
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`[CRON] Synced room status for ${updatedCount} rooms`);
+    }
+  } catch (error) {
+    console.error("[CRON] syncRoomStatusFromLogs error:", error);
   }
 };

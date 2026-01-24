@@ -19,6 +19,7 @@ import { customerApi } from "../../api/customerApi.js";
 import { receiptApi } from "../../api/receiptApi.js";
 import { qrApi } from "../../api/qrApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
+import { discountApi } from "../../api/discountApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const STATUS_MAP = {
@@ -78,10 +79,11 @@ export default function BookingList() {
   const [tempRoomId, setTempRoomId] = useState("");
   const [isWalkIn, setIsWalkIn] = useState(false);
   const [rawPrice, setRawPrice] = useState({ total: 0, deposit: 0 });
-  const [appliedDiscounts, setAppliedDiscounts] = useState([]);
   const [isPreviewLocked, setIsPreviewLocked] = useState(false);
-  const [promotionName, setPromotionName] = useState("");
   const [calcValues, setCalcValues] = useState({ total_price: 0, deposit_required: 0 });
+  const [availableDiscounts, setAvailableDiscounts] = useState([]);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [loadingDiscounts, setLoadingDiscounts] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: ""
   });
@@ -190,11 +192,37 @@ export default function BookingList() {
 
   useEffect(() => {
     if (isPreviewLocked) return;
-    const total = selectedRooms.reduce((sum, r) => sum + r.price, 0);
-    const deposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : (total * 0.3);
-    setCalcValues({ total_price: total, deposit_required: deposit });
+    if (!formData.expected_checkin || !formData.expected_checkout) {
+      setCalcValues({ total_price: 0, deposit_required: 0 });
+      return;
+    }
+    // Tính số đêm giống như backend (calcNights)
+    const diffMs = new Date(formData.expected_checkout) - new Date(formData.expected_checkin);
+    if (diffMs <= 0) {
+      setCalcValues({ total_price: 0, deposit_required: 0 });
+      return;
+    }
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const days = diffHours / 24;
+    const nights = Math.ceil(days * 100) / 100; // Làm tròn lên 2 chữ số thập phân giống backend
+    
+    // Tính tổng tiền: giá phòng * số đêm (giống backend)
+    const total = selectedRooms.reduce((sum, r) => sum + (r.price * nights), 0);
+    let finalTotal = total;
+    if (selectedDiscount && selectedDiscount.discount_amount > 0) {
+      finalTotal = total - selectedDiscount.discount_amount;
+    }
+    const deposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : (finalTotal * 0.3);
+    setCalcValues({ total_price: finalTotal, deposit_required: deposit });
     setFormData(prev => ({...prev, deposit: deposit}));
-  }, [selectedRooms, isWalkIn, isPreviewLocked, bookingMode]);
+  }, [selectedRooms, isWalkIn, isPreviewLocked, bookingMode, formData.expected_checkin, formData.expected_checkout, selectedDiscount]);
+
+  // useEffect để fetch discounts khi selectedRooms thay đổi
+  useEffect(() => {
+    if (formData.customer_id && selectedRooms.length > 0) {
+      fetchAvailableDiscounts();
+    }
+  }, [selectedRooms, formData.customer_id]);
 
 
   const fetchData = async () => {
@@ -223,42 +251,52 @@ export default function BookingList() {
     } catch (err) { setRoomsList([]); }
   };
 
-  const handleAutoApplyDiscount = async () => {
-    if (!formData.customer_id) return alert("Vui lòng chọn khách hàng trước");
-    if (!selectedRooms.length) return alert("Vui lòng chọn ít nhất 1 phòng");
+  // Hàm fetch available discounts
+  const fetchAvailableDiscounts = async () => {
+    if (!formData.customer_id || !selectedRooms.length) {
+      setAvailableDiscounts([]);
+      return;
+    }
+    
+    setLoadingDiscounts(true);
     try {
-        const payload = {
-            customer_id: formData.customer_id,
-            expected_checkin: formData.expected_checkin,
-            expected_checkout: formData.expected_checkout,
-            rooms: selectedRooms.map(r => ({
-              room_id: r._id, 
-              room_number: r.room_number,
-              expected_checkin: formData.expected_checkin, 
-              expected_checkout: formData.expected_checkout, 
-              base_fee: r.price
-            }))
-        };
-        const res = await bookingApi.previewBooking(payload);
-        const { base_total, final_total, deposit, discounts } = res;
-        const rawDeposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : Math.round(base_total * 0.3);
-        setRawPrice({ total: base_total, deposit: rawDeposit });
-        setCalcValues({ total_price: final_total, deposit_required: (bookingMode === 'immediate' || isWalkIn) ? 0 : deposit });
-        setFormData(prev => ({ ...prev, deposit: (bookingMode === 'immediate' || isWalkIn) ? 0 : deposit }));
-        setAppliedDiscounts(discounts);
-        setPromotionName(discounts && discounts.length ? discounts.map(d => d.name).join(", ") : "Không có khuyến mãi phù hợp");
-        setIsPreviewLocked(true);
-    } catch (err) { alert(err.response?.data?.message || "Không thể áp dụng khuyến mãi"); }
+      // Tính tổng tiền đơn hàng
+      const totalOrderValue = selectedRooms.reduce((sum, room) => {
+        const nights = Math.ceil((new Date(formData.expected_checkout) - new Date(formData.expected_checkin)) / (1000 * 60 * 60 * 24));
+        return sum + (room.price * nights);
+      }, 0);
+      console.log("Total order value for discounts:", totalOrderValue);
+      
+      console.log("Fetching available discounts for customer:", formData.customer_id);
+      const res = await discountApi.getAvailableDiscounts(formData.customer_id, totalOrderValue);
+      console.log("Available discounts fetched:", res);
+      if (res.success) {
+        setAvailableDiscounts(res.discounts || []);
+      }
+    } catch (err) {
+      console.error("Error fetching discounts:", err);
+      setAvailableDiscounts([]);
+    } finally {
+      setLoadingDiscounts(false);
+    }
   };
 
-  const handleUndoDiscount = () => {
-    setCalcValues({ total_price: rawPrice.total, deposit_required: rawPrice.deposit });
-    setFormData(prev => ({ ...prev, deposit: rawPrice.deposit }));
-    setAppliedDiscounts([]); setPromotionName(""); setIsPreviewLocked(true);
+  // Hàm chọn discount
+  const handleSelectDiscount = (discount) => {
+    if (!discount.is_available) return;
+    
+    setSelectedDiscount(discount);
+    // useEffect sẽ tự động tính lại khi selectedDiscount thay đổi
+  };
+
+  // Hàm bỏ chọn discount
+  const handleRemoveDiscount = () => {
+    setSelectedDiscount(null);
+    // useEffect sẽ tự động tính lại khi selectedDiscount thay đổi
   };
 
   const handleAddRoom = () => {
-      setIsPreviewLocked(false); setPromotionName(""); setAppliedDiscounts([]);
+      setIsPreviewLocked(false);
       if (!tempRoomId) return;
       const roomToAdd = roomsList.find(r => r._id === tempRoomId);
       if (roomToAdd && !selectedRooms.some(r => r._id === roomToAdd._id)) {
@@ -268,7 +306,7 @@ export default function BookingList() {
   };
 
   const handleRemoveRoom = (roomId) => {
-      setIsPreviewLocked(false); setPromotionName(""); setAppliedDiscounts([]);
+      setIsPreviewLocked(false);
       setSelectedRooms(selectedRooms.filter(r => r._id !== roomId));
   };
 
@@ -338,7 +376,8 @@ export default function BookingList() {
     const checkin = setMinutes(setHours(now, 14), 0);
     const checkout = setMinutes(setHours(addDays(now, 1), 12), 0);
     setFormData({ customer_id: "", adults: 1, children: 0, expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"), expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"), deposit: 0 });
-    setSelectedRooms([]); setTempRoomId(""); setPromotionName(""); setAppliedDiscounts([]); setIsWalkIn(false); setIsPreviewLocked(false); setCalcValues({ total_price: 0, deposit_required: 0 });
+    setSelectedRooms([]); setTempRoomId(""); setIsWalkIn(false); setIsPreviewLocked(false); setCalcValues({ total_price: 0, deposit_required: 0 });
+    setSelectedDiscount(null); setAvailableDiscounts([]);
     setNewCustomer({ email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: "" });
     setCustomerMode("existing"); setCustSearchQuery(""); setSelectedCustDisplay(null); setShowCustDropdown(false);
     setShowQrScanner(false); setQrScanning(false); setQrError(null);
@@ -372,14 +411,14 @@ export default function BookingList() {
       const payloadBooking = {
         customer_id: finalCustomerId, handled_by: employeeId, adults: Number(formData.adults), children: Number(formData.children),
         deposit: depositAmount, total_fee: Number(calcValues.total_price),
-        promotion_code: appliedDiscounts.length > 0 ? appliedDiscounts.map(d => d.discount_id) : null,
+        discount_id: selectedDiscount ? selectedDiscount.id : null,
         expected_checkin: new Date(formData.expected_checkin).toISOString(), expected_checkout: new Date(formData.expected_checkout).toISOString(),
         rooms: selectedRooms.map(r => ({
-            room_id: r._id, 
-            room_number: r.room_number,
-            expected_checkin: new Date(formData.expected_checkin).toISOString(), 
-            expected_checkout: new Date(formData.expected_checkout).toISOString(), 
-            base_fee: Number(r.price)
+          room_id: r._id, 
+          room_number: r.room_number,
+          expected_checkin: new Date(formData.expected_checkin).toISOString(), 
+          expected_checkout: new Date(formData.expected_checkout).toISOString(), 
+          base_fee: Number(r.price)
         }))
       };
 
@@ -759,6 +798,7 @@ export default function BookingList() {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentBookings = filteredBookings.slice(indexOfFirstItem, indexOfLastItem);
+  console.log("Current Bookings:", currentBookings);
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
 
   const handlePageChange = (page) => setCurrentPage(page);
@@ -926,7 +966,8 @@ export default function BookingList() {
                                     </button>
                                 )}
                                 {b.rooms?.map((r, i) => {
-                                    if(b.status === 'confirmed' && r.status === 'reserved') {
+                                  console.log(`Room ${r.room_number} status:`, r.status, "for booking", b.status);
+                                    if(b.status === 'confirmed' && r.status === 'confirmed') {
                                         return (
                                             <button 
                                                 key={i} 
@@ -1176,26 +1217,112 @@ export default function BookingList() {
                     </div>
                     <div className="space-y-2">
                         {selectedRooms.length === 0 && <div className="text-xs text-gray-400 italic text-center py-2 bg-gray-50 rounded">Chưa chọn phòng nào.</div>}
-                        {selectedRooms.map((r, idx) => (
-                            <div key={r._id} className="flex justify-between items-center bg-white border border-gray-200 p-2.5 rounded-lg shadow-sm hover:border-indigo-300 transition">
-                                <div><span className="font-bold text-indigo-700 text-lg mr-2">{r.room_number}</span><span className="text-xs text-gray-500 uppercase font-semibold">{r.category_name}</span></div>
-                                <div className="flex items-center gap-3"><span className="text-sm font-bold text-gray-700">{r.price.toLocaleString()} đ</span><button type="button" onClick={() => handleRemoveRoom(r._id)} className="text-gray-400 hover:text-red-500 transition"><FiTrash2 size={18}/></button></div>
-                            </div>
-                        ))}
+                        {selectedRooms.map((r, idx) => {
+                            // Tính số đêm để hiển thị tổng tiền cho từng phòng
+                            let nights = 0;
+                            let roomTotal = 0;
+                            if (formData.expected_checkin && formData.expected_checkout) {
+                                const diffMs = new Date(formData.expected_checkout) - new Date(formData.expected_checkin);
+                                if (diffMs > 0) {
+                                    const diffHours = diffMs / (1000 * 60 * 60);
+                                    const days = diffHours / 24;
+                                    nights = Math.ceil(days * 100) / 100;
+                                    roomTotal = r.price * nights;
+                                }
+                            }
+                            return (
+                                <div key={r._id} className="flex justify-between items-center bg-white border border-gray-200 p-2.5 rounded-lg shadow-sm hover:border-indigo-300 transition">
+                                    <div><span className="font-bold text-indigo-700 text-lg mr-2">{r.room_number}</span><span className="text-xs text-gray-500 uppercase font-semibold">{r.category_name}</span></div>
+                                    <div className="flex flex-col items-end gap-1">
+                                        {nights > 0 ? (
+                                            <>
+                                                <span className="text-xs text-gray-500">{r.price.toLocaleString()} đ/đêm × {nights} đêm</span>
+                                                <span className="text-sm font-bold text-gray-700">{roomTotal.toLocaleString()} đ</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-sm font-bold text-gray-700">{r.price.toLocaleString()} đ/đêm</span>
+                                        )}
+                                        <button type="button" onClick={() => handleRemoveRoom(r._id)} className="text-gray-400 hover:text-red-500 transition"><FiTrash2 size={18}/></button>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
                 <div className="border-t border-gray-100 pt-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Khuyến mãi</label>
-                    <div className="flex gap-2 mb-2">
-                        <button type="button" onClick={handleAutoApplyDiscount} className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Tự động áp dụng khuyến mãi</button>
-                        {promotionName && (<button type="button" onClick={handleUndoDiscount} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 transition">Hoàn tác</button>)}
-                    </div>
-                    {promotionName && (<div className="text-xs text-emerald-600 font-bold mb-3 flex items-center gap-1"><FiCheckCircle /> {promotionName}</div>)}
+                    {loadingDiscounts ? (
+                      <div className="text-sm text-gray-500 py-2">Đang tải khuyến mãi...</div>
+                    ) : availableDiscounts.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {availableDiscounts.map((discount) => (
+                          <div
+                            key={discount.id}
+                            className={`border rounded-lg p-3 cursor-pointer transition ${
+                              discount.is_available
+                                ? selectedDiscount?.id === discount.id
+                                  ? "border-indigo-500 bg-indigo-50"
+                                  : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50"
+                                : "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
+                            }`}
+                            onClick={() => discount.is_available && handleSelectDiscount(discount)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-sm text-indigo-700">{discount.code}</span>
+                                  {discount.is_available && (
+                                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">Có thể áp dụng</span>
+                                  )}
+                                  {!discount.is_available && (
+                                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Không khả dụng</span>
+                                  )}
+                                </div>
+                                <div className="font-semibold text-sm text-gray-800 mb-1">{discount.name}</div>
+                                {discount.description && (
+                                  <div className="text-xs text-gray-600 mb-1">{discount.description}</div>
+                                )}
+                                <div className="text-xs font-bold text-emerald-600">{discount.discount_text}</div>
+                                {!discount.is_available && discount.availability_reason && (
+                                  <div className="text-xs text-red-600 mt-1">{discount.availability_reason}</div>
+                                )}
+                              </div>
+                              {selectedDiscount?.id === discount.id && (
+                                <FiCheckCircle className="text-indigo-600 shrink-0" size={20} />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-500 py-2">Không có khuyến mãi nào</div>
+                    )}
+                    {selectedDiscount && (
+                      <div className="mt-2 flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg p-2">
+                        <div className="flex items-center gap-2">
+                          <FiCheckCircle className="text-indigo-600" size={16} />
+                          <span className="text-sm font-semibold text-indigo-800">
+                            Đã chọn: {selectedDiscount.name} ({selectedDiscount.code})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveDiscount}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Bỏ chọn
+                        </button>
+                      </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label><input type="text" disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed" value={calcValues.total_price.toLocaleString()}/></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tổng Tiền (Dự kiến)</label>
+                      <input type="text" disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-center font-bold text-gray-700 cursor-not-allowed" 
+                        value={calcValues.total_price.toLocaleString()}/>
+                    </div>
                     {bookingMode === 'advance' && (
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tiền Cọc (30%)</label>

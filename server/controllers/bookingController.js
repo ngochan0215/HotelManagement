@@ -353,7 +353,7 @@ export const createBooking = async (req, res) => {
 
   try {
     const { customer_id, adults, children, deposit, 
-      total_fee, rooms,  expected_checkin, expected_checkout } = req.body;
+      total_fee, rooms, expected_checkin, expected_checkout, discount_id } = req.body;
 
     const employee_id = req.user.userId;
 
@@ -408,28 +408,30 @@ export const createBooking = async (req, res) => {
       }
   }
 
-    const recalculated = await calculateBookingPrice({ customer_id, bookingDetails: rooms, expected_checkin, expected_checkout });
-    if (recalculated.final_total !== total_fee) {
-      return res.status(400).json({ message: "Tổng tiền booking không hợp lệ" });
+    // Validate discount_id nếu có
+    if (discount_id) {
+      if (!mongoose.Types.ObjectId.isValid(discount_id)) {
+        return res.status(400).json({ message: "discount_id không hợp lệ" });
+      }
+      const discount = await Discount.findById(discount_id);
+      if (!discount) {
+        return res.status(404).json({ message: "Không tìm thấy khuyến mãi" });
+      }
+      if (!discount.is_active) {
+        return res.status(400).json({ message: "Khuyến mãi không còn hiệu lực" });
+      }
+      const now = new Date();
+      if (now < discount.begin_date || now > discount.end_date) {
+        return res.status(400).json({ message: "Khuyến mãi không còn trong thời gian hiệu lực" });
+      }
     }
 
     const handled_by = employee._id;
     const isScheduled = new Date(expected_checkin) > new Date();
     const isImmediate = deposit === 0; // Đặt liền không cần cọc
 
-    // Nếu đặt liền, tự động chuyển sang confirmed (hoặc in_progress nếu đã đến ngày check-in)
-    let initialStatus = "pending";
-    if (isImmediate) {
-      const now = new Date();
-      const checkinDate = new Date(expected_checkin);
-      // Nếu đã đến hoặc qua ngày check-in, chuyển sang in_progress
-      if (now >= checkinDate) {
-        initialStatus = "in_progress";
-      } else {
-        // Nếu chưa đến ngày check-in, chuyển sang confirmed (chờ check-in)
-        initialStatus = "confirmed";
-      }
-    }
+    // Nếu đặt liền, tự động chuyển sang in-progress luôn
+    let initialStatus = isImmediate ? "in_progress" : "pending";
 
     const booking = await Booking.create(
       [
@@ -449,9 +451,8 @@ export const createBooking = async (req, res) => {
       { session }
     );
 
-    // tạo các chi tiết đặt phòng
-    // Nếu đặt liền và đã đến ngày check-in, status = "checked_in", ngược lại = "confirmed"
-    const detailStatus = (isImmediate && initialStatus === "in_progress") ? "checked_in" : (isImmediate ? "confirmed" : "reserved");
+    // tạo các chi tiết đặt phòng, nếu đặt liền thì trạng thái chi tiết cũng là confirmed
+    const detailStatus = isImmediate ? "checked-in" : "reserved";
     
     const bookingDetails = rooms.map(room => ({
       booking_id: booking[0]._id,
@@ -482,34 +483,29 @@ export const createBooking = async (req, res) => {
       }], { session }
     );
 
-    // update trạng thái các phòng được đặt trong booking
+    // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
+    // Chỉ update start_time và end_time để tracking
     const roomIds = bookingDetails.map(bd => bd.room_id);
-    // Nếu đặt liền và đã đến ngày check-in, room_status = "occupied", ngược lại = "booked" hoặc "reserved"
-    let roomStatus = "reserved";
-    if (isImmediate) {
-      if (initialStatus === "in_progress") {
-        roomStatus = "occupied";
-      } else {
-        roomStatus = "booked";
-      }
-    }
     
     await Room.updateMany(
       { _id: { $in: roomIds } },
-      { $set: { room_status: roomStatus } },
+      { $set: 
+        { 
+          start_time: isImmediate && initialStatus === "in_progress" ? new Date() : expected_checkin,
+          end_time: expected_checkout, 
+        } 
+      },
       { session }
     );
 
     // tạo log tương ứng cho trạng thái phòng
     const roomStatusLogs = bookingDetails.map(bd => ({
       room_id: bd.room_id,
-      status: isImmediate && initialStatus === "in_progress" ? "occupied" : (isImmediate ? "booked" : "reserved"),
+      status: isImmediate && initialStatus === "in_progress" ? "occupied" : "reserved",
       start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      note: isImmediate 
-        ? (initialStatus === "in_progress" 
-            ? `Phòng được check-in tự động (đặt liền) bởi booking ${booking[0]._id}`
-            : `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`)
+      expected_end_time: bd.expected_checkout,
+      note: isImmediate ? 
+        `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`
         : `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking[0].handled_by || null,
     }));
@@ -520,35 +516,66 @@ export const createBooking = async (req, res) => {
     const roomLogs = bookingDetails.map(bd => ({
       booking_id: bd.booking_id,
       room_id: bd.room_id,
-      status: isImmediate && initialStatus === "in_progress" ? "occupied" : (isImmediate ? "booked" : "reserved"),
+      status: isImmediate && initialStatus === "in_progress" ? "occupied" : "reserved",
       start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      note: isImmediate 
-        ? (initialStatus === "in_progress" 
-            ? `Phòng được check-in tự động (đặt liền) bởi booking ${bd.booking_id}`
-            : `Phòng được xác nhận (đặt liền) bởi booking ${bd.booking_id}`)
-        : `Phòng được giữ chỗ bởi: ${bd.booking_id} trong vòng 1 tiếng kể từ khi đặt`,
+      expected_end_time: bd.expected_checkout,
+      note: isImmediate ? 
+        `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`
+        : `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking[0].handled_by || null,
     }));
 
     await RoomLog.insertMany(roomLogs, { session });
 
     // Tạo hóa đơn ngay sau khi tạo booking
-
     const totalFee = booking[0].total_fee;
     const depositAmount = booking[0].deposit || 0;
     const finalAmount = totalFee;
     const amountDue = Math.max(finalAmount - depositAmount, 0);
 
+    // dù có đặt liền hay đặt trước thì tình trạng hóa đơn đều là pending
     const paymentMethod = depositAmount === 0 ? "unknown" : "bank";
-    // Nếu đặt liền, receipt status = "paid" vì không cần cọc
-    // Nếu đặt trước, receipt status = "pending" vì cần đợi cọc
-    const receiptStatus = isImmediate ? "paid" : "pending";
+    const receiptStatus = "pending";
+
+    // Tính base_room_fee (tiền phòng gốc trước khi trừ discount)
+    const baseRoomFee = rooms.reduce((sum, r) => {
+      const nights = calcNights(expected_checkin, expected_checkout);
+      return sum + (r.base_fee * nights);
+    }, 0);
+
+    // Lấy discount info nếu có
+    let discountSnapshot = null;
+    if (discount_id) {
+      const discount = await Discount.findById(discount_id).session(session);
+      if (discount) {
+        // Tính discount amount
+        let discountAmount = 0;
+        
+        if (discount.discount.type === "PERCENT") {
+          discountAmount = Math.round(baseRoomFee * discount.discount.value / 100);
+          if (discount.discount.max_discount && discountAmount > discount.discount.max_discount) {
+            discountAmount = discount.discount.max_discount;
+          }
+        } else {
+          discountAmount = discount.discount.value;
+        }
+        
+        discountSnapshot = {
+          code: discount.code,
+          name: discount.name,
+          description: discount.description || "",
+          discount_amount: discountAmount
+        };
+      }
+    }
 
     const receipt = await Receipt.create(
       [{
         booking_id: booking[0]._id,
         employee_id: employee._id,
+        discount_id: discount_id || null,
+        discount_snapshot: discountSnapshot,
+        base_room_fee: baseRoomFee,
         total_fee: totalFee,
         deposit_amount: depositAmount,
         final_amount: finalAmount,
@@ -564,7 +591,7 @@ export const createBooking = async (req, res) => {
     session.endSession();
 
     try {
-      console.log("Sending create booking notifications...");
+      //console.log("Sending create booking notifications...");
       const customer = await Customer.findById(customer_id).populate("user_id", "_id");
       const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
       const adminIds = allAdmins.map(u => u._id);
@@ -796,9 +823,9 @@ export const confirmBooking = async (req, res) => {
   const employee_id = req.user.userId;
   
   try {
-    console.log("Confirming booking:", booking_id, "by employee:", employee_id);
+    //console.log("Confirming booking:", booking_id, "by employee:", employee_id);
     const booking = await confirmBookingInternal(booking_id, employee_id);
-    console.log("Booking confirmed:", booking);
+    //console.log("Booking confirmed:", booking);
     const customer_id = booking.customer_id;
     const customer = await Customer.findById(customer_id);
 
@@ -1033,23 +1060,59 @@ export const updateBookingStatus = async (req, res) => {
     switch (status) {
       case "cancelled":
       case "expired":
+        // Đóng log cũ - tìm log active
         for (const bd of bookingDetails) {
           await RoomStatusLog.updateMany(
             {
               room_id: bd.room_id._id,
-              status: "booked",
-              end_time: { $gt: now },
+              start_time: { $lte: now },
+              $or: [
+                { end_time: { $gte: now } },
+                { end_time: null }
+              ]
+            },
+            { $set: { end_time: now } },
+            { session }
+          );
+
+          await RoomLog.updateMany(
+            {
+              room_id: bd.room_id._id,
+              start_time: { $lte: now },
+              $or: [
+                { end_time: { $gte: now } },
+                { end_time: null }
+              ]
             },
             { $set: { end_time: now } },
             { session }
           );
         }
         
-        await Room.updateMany(
-          { _id: { $in: roomIds } },
-          { $set: { room_status: "available" } },
-          { session }
-        );
+        // Tạo log "available" mới (theo Option 1 - để scheduled job sync)
+        const availableLogs = bookingDetails.map(bd => ({
+          room_id: bd.room_id._id,
+          status: "available",
+          start_time: now,
+          end_time: null,
+          note: `Booking ${booking._id} bị ${status}, phòng được giải phóng`,
+          handled_by: req.user?._id || null,
+        }));
+
+        await RoomStatusLog.insertMany(availableLogs, { session });
+
+        const availableRoomLogs = bookingDetails.map(bd => ({
+          room_id: bd.room_id._id,
+          status: "available",
+          start_time: now,
+          end_time: null,
+          note: `Booking ${booking._id} bị ${status}, phòng được giải phóng`,
+          handled_by: req.user?._id || null,
+        }));
+
+        await RoomLog.insertMany(availableRoomLogs, { session });
+        
+        // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
         break;
 
       case "confirmed": {
@@ -1077,11 +1140,7 @@ export const updateBookingStatus = async (req, res) => {
           );
         }
 
-        await Room.updateMany(
-          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
-          { $set: { room_status: "booked" } },
-          { session }
-        );
+        // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
         break;
       }
 
@@ -1098,6 +1157,21 @@ export const updateBookingStatus = async (req, res) => {
             throw new Error(`Phòng ${bd.room_id.room_number} đang được sử dụng`);
           }
 
+          // Đóng log "booked" hoặc "reserved" hiện tại
+          await RoomStatusLog.updateMany(
+            {
+              room_id: bd.room_id._id,
+              start_time: { $lte: now },
+              $or: [
+                { end_time: { $gte: now } },
+                { end_time: null }
+              ],
+              status: { $in: ["booked", "reserved"] }
+            },
+            { $set: { end_time: now } },
+            { session }
+          );
+
           await RoomStatusLog.create(
             [{
               room_id: bd.room_id._id,
@@ -1110,28 +1184,42 @@ export const updateBookingStatus = async (req, res) => {
           );
         }
 
-        await Room.updateMany(
-          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
-          { $set: { room_status: "occupied" } },
-          { session }
-        );
+        // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
         break;
       }
 
       case "checked_out": {
         for (const bd of bookingDetails) {
-          // đóng log mà ghi nhận phòng occupied
-          await RoomStatusLog.findOneAndUpdate(
+          // Đóng log "occupied" hiện tại
+          await RoomStatusLog.updateMany(
             {
               room_id: bd.room_id._id,
               status: "occupied",
-              end_time: { $gt: now },
+              start_time: { $lte: now },
+              $or: [
+                { end_time: { $gte: now } },
+                { end_time: null }
+              ]
             },
             { $set: { end_time: now } },
             { session }
           );
 
-          // tạo cleaning log
+          await RoomLog.updateMany(
+            {
+              room_id: bd.room_id._id,
+              status: "occupied",
+              start_time: { $lte: now },
+              $or: [
+                { end_time: { $gte: now } },
+                { end_time: null }
+              ]
+            },
+            { $set: { end_time: now } },
+            { session }
+          );
+
+          // Tạo cleaning log
           const cleaningEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
           await RoomStatusLog.create(
@@ -1144,13 +1232,20 @@ export const updateBookingStatus = async (req, res) => {
             }],
             { session }
           );
+
+          await RoomLog.create(
+            [{
+              room_id: bd.room_id._id,
+              status: "cleaning",
+              start_time: now,
+              end_time: cleaningEnd,
+              note: `Cleaning after checkout booking ${booking._id}`,
+            }],
+            { session }
+          );
         }
 
-        await Room.updateMany(
-          { _id: { $in: bookingDetails.map(b => b.room_id._id) } },
-          { $set: { room_status: "cleaning" } },
-          { session }
-        );
+        // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
         break;
       }
     }
@@ -1442,7 +1537,11 @@ export const checkinBookingDetail = async (req, res) => {
     // update room hiện tại
     await Room.findByIdAndUpdate(
       detail.room_id,
-      { room_status: "occupied" },
+      { 
+        room_status: "occupied",
+        start_time: now,
+        end_time: detail.expected_checkout, 
+      },
       { session }
     );
 
@@ -1567,6 +1666,11 @@ export const checkoutBookingDetail = async (req, res) => {
       throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể checkout.`);
     }
 
+    const room = await Room.findById(detail.room_id).session(session);
+    if (!room) {
+      throw new Error("Không tìm thấy thông tin phòng.");
+    }
+
     // cắt log occupied hiện tại
     await RoomStatusLog.updateMany(
       {
@@ -1598,6 +1702,7 @@ export const checkoutBookingDetail = async (req, res) => {
         status: "cleaning",
         start_time: now,
         end_time: cleaningEndTime,
+        expected_end_time: cleaningEndTime,
         note: `Phòng đã được checkout theo booking ${booking._id}, chuyển sang dọn dẹp.`,
         handled_by: req.user?._id || null,
       }],
@@ -1612,6 +1717,7 @@ export const checkoutBookingDetail = async (req, res) => {
         status: "cleaning",
         start_time: now,
         end_time: cleaningEndTime,
+        expected_end_time: cleaningEndTime,
         note: `Phòng đã được checkout theo booking ${booking._id}, chuyển sang dọn dẹp.`,
         handled_by: booking.handled_by || null,
       }],
@@ -1626,7 +1732,11 @@ export const checkoutBookingDetail = async (req, res) => {
     // update room hiện tại
     await Room.findByIdAndUpdate(
       detail.room_id,
-      { room_status: "cleaning" },
+      { 
+        room_status: "cleaning",
+        start_time: now,
+        end_time: cleaningEndTime, 
+      },
       { session }
     );
 
@@ -1663,8 +1773,61 @@ export const checkoutBookingDetail = async (req, res) => {
       { session }
     );
 
+    const customer_id = booking.customer_id;
+    const customer = await Customer.findById(customer_id).session(session);
+
     await session.commitTransaction();
     session.endSession();
+
+    try {
+      // gửi thông báo cho admin
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotificationToUsers(
+          adminIds,
+          "Booking đã xác nhận check-out",
+          `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận check-out. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      // Lấy user_id từ customer
+      const customerUser = await Customer.findById(customer_id).select("user_id").lean();
+      if (customerUser && customerUser.user_id) {
+        await pushNotification(
+          customerUser.user_id,
+          "Bạn đã check-out thành công",
+          `Bạn đã checkout phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} thành công!
+            Cảm ơn bạn đã lựa chọn dịch vụ của chúng tôi.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho nhân viên thực hiện booking
+      if (booking.handled_by && booking.handled_by.user_id) {
+        await pushNotification(
+          booking.handled_by.user_id,
+          "Booking check-in thành công",
+          `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận check-out. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+    }
 
     return res.json({
       message: "Checkout thành công. Phòng đang được dọn dẹp.",
@@ -1728,49 +1891,59 @@ export const cancelBookingDetail = async (req, res) => {
     detail.cancellation_reason = reason;
     await detail.save({ session });
 
-    // cắt RoomStatusLog booked/confirmed trong tương lai
+    // Đóng log cũ - tìm log active (start_time <= now và (end_time >= now hoặc null))
     await RoomStatusLog.updateMany(
       {
         room_id: roomId,
-        status: { $in: ["booked", "confirmed"] },
-        start_time: { $gte: now },
+        start_time: { $lte: now },
+        $or: [
+          { end_time: { $gte: now } },
+          { end_time: null }
+        ]
       },
-      { $set: { start_time: now, end_time: now } },
+      { $set: { end_time: now } },
       { session }
     );
 
-    // nếu phòng đang booked/reserved thì trả về available
-    const room = await Room.findById(roomId).session(session);
-    if (room && (room.room_status === "booked" || room.room_status === "reserved")) {
-      room.room_status = "available";
-      await room.save({ session });
+    await RoomLog.updateMany(
+      {
+        room_id: roomId,
+        start_time: { $lte: now },
+        $or: [
+          { end_time: { $gte: now } },
+          { end_time: null }
+        ]
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
 
-      // log trạng thái phòng (bảng cũ)
-      await RoomStatusLog.create(
-        [{
-          room_id: roomId,
-          status: "available",
-          start_time: now,
-          end_time: null,
-          note: "Hủy phòng khỏi booking",
-          handled_by: req.user?._id || null,
-        }],
-        { session }
-      );
+    // Tạo log "available" mới (theo Option 1 - để scheduled job sync)
+    await RoomStatusLog.create(
+      [{
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Hủy phòng khỏi booking",
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
 
-      // log trạng thái phòng (bảng mới)
-      await RoomLog.create(
-        [{
-          room_id: roomId,
-          status: "available",
-          start_time: now,
-          end_time: null,
-          note: "Hủy phòng khỏi booking",
-          handled_by: req.user?._id || null,
-        }],
-        { session }
-      );
-    }
+    await RoomLog.create(
+      [{
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Hủy phòng khỏi booking",
+        handled_by: req.user?._id || null,
+      }],
+      { session }
+    );
+
+    // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
 
     // thêm bản ghi hủy phòng
     await RoomCancellation.create(
@@ -1896,14 +2069,20 @@ export const cancelBooking = async (req, res) => {
       .populate("room_id")
       .session(session);
     
-    const roomIds = details.map(bd => bd.room_id);
+    const roomIds = details.map(bd => bd.room_id._id || bd.room_id);
     
-    // đóng log cũ
+    // đóng log cũ - tìm log active (start_time <= now và (end_time >= now hoặc null))
     for (const bd of details) {
+      const roomId = bd.room_id._id || bd.room_id;
+      
       await RoomStatusLog.updateMany(
         {
-          room_id: bd.room_id._id,
-          end_time: booking.expected_checkout,
+          room_id: roomId,
+          start_time: { $lte: now },
+          $or: [
+            { end_time: { $gte: now } },
+            { end_time: null }
+          ]
         },
         { $set: { end_time: now } },
         { session }
@@ -1911,18 +2090,55 @@ export const cancelBooking = async (req, res) => {
 
       await RoomLog.updateMany(
         {
-          room_id: bd.room_id._id,
-          end_time: booking.expected_checkout,
+          room_id: roomId,
+          start_time: { $lte: now },
+          $or: [
+            { end_time: { $gte: now } },
+            { end_time: null }
+          ]
         },
         { $set: { end_time: now } },
         { session }
       );
     }
 
-    // update status mới
+    // Tạo log "available" mới cho các phòng (để scheduled job sync)
+    const availableLogs = details.map(bd => {
+      const roomId = bd.room_id._id || bd.room_id;
+      return {
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: `Phòng được giải phóng sau khi hủy booking ${booking._id}`,
+        handled_by: req.user?._id || null,
+      };
+    });
+
+    await RoomStatusLog.insertMany(availableLogs, { session });
+
+    const availableRoomLogs = details.map(bd => {
+      const roomId = bd.room_id._id || bd.room_id;
+      return {
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: `Phòng được giải phóng sau khi hủy booking ${booking._id}`,
+        handled_by: req.user?._id || null,
+      };
+    });
+
+    await RoomLog.insertMany(availableRoomLogs, { session });
+
+    // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
+    // Chỉ update start_time và end_time để tracking
     await Room.updateMany(
       { _id: { $in: roomIds } },
-      { $set: { room_status: "available" } },
+      { $set: { 
+        start_time: now,
+        end_time: now
+       } },
       { session }
     );
 
@@ -1951,6 +2167,14 @@ export const cancelBooking = async (req, res) => {
       reason: "Trừ 20 điểm vì hủy booking"
     });
 
+    // hủy luôn hóa đơn
+    await Receipt.updateMany(
+      {
+        booking_id: booking._id
+      },
+      { $set: { status: "cancelled" } },
+      { session }
+    );
    
     await session.commitTransaction();
     session.endSession();

@@ -35,5 +35,13 @@ export const discountApi = {
   getDiscountById: async (id) => {
     const res = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
+  },
+
+  getAvailableDiscounts: async (customerId, orderValue = 0) => {
+    const res = await axios.get(`${BASE_URL}/available`, {
+      ...getAuthHeader(),
+      params: { customer_id: customerId, order_value: orderValue }
+    });
+    return res.data;
   }
 };

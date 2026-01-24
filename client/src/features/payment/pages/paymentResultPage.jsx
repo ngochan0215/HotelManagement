@@ -13,7 +13,7 @@ export default function PaymentResultPage() {
   const [error, setError] = useState(null);
   
   const orderCode = searchParams.get("orderCode");
-  const type = searchParams.get("status") || "SUCCESS";
+  const type = searchParams.get("status") || "PAID";
   //const type = searchParams.get("type") || "success"; // success hoặc cancel
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function PaymentResultPage() {
       }
 
       try {
-        if (type === "success") {
+        if (type === "PAID") {
           // Cập nhật transaction thành công
           const res = await paymentApi.updateSuccessfulTransaction(orderCode);
           if (res?.success) {

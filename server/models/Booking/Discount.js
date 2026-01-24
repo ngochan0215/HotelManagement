@@ -1,42 +1,63 @@
 import mongoose from "mongoose";
 
-// bảng khuyến mãi
-const DiscountSchema = new mongoose.Schema({
+// discount: áp dụng cho toàn hệ thống, system tự apply
+const discountSchema = new mongoose.Schema(
+  {
+    code: { type: String, required: true, unique: true, uppercase: true },
     name: { type: String, required: true },
-    description: { type: String, trim: true },
+    description: { type: String },
 
-    begin_date: { type: Date, required: true },
-    end_date: { type: Date, required: true },
-
-    percentage: {
+    discount: {
+      type: {
+        type: String,
+        enum: ["PERCENT", "FIXED"],
+        required: true
+      },
+      value: {
         type: Number,
-        min: 1,
-        max: 100,
         required: true
+      },
+      max_discount: Number
     },
 
-    scope: {
-        type: String,
-        enum: ["booking", "room", "service", "customer"],
-        required: true
+    conditions: {
+        rule_type: {
+            type: String,
+            enum: ["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"],
+            default: "NONE"
+        },
+        min_order_value: Number,
+        room_category_ids: [ { type: mongoose.Schema.Types.ObjectId, ref: "RoomCategory" } ],
+        days_of_week: [Number], // 0-6
+        hours_range: {
+            from: Number, // 0-23
+            to: Number
+        },
+        customer_tiers: [String],
     },
 
-    type: {
-        type: String,
-        enum: ["seasonal", "first_booking", "loyalty", "promo_code"],
-        required: true
+    begin_date: Date,
+    end_date: Date,
+
+    priority: {
+      type: Number,
+      default: 1 // số càng cao càng ưu tiên
     },
 
-    stackable: { type: Boolean, default: false },
+    is_active: {
+      type: Boolean,
+      default: true
+    },
 
-    status: { type: String, enum: ["launching", "active", "expired"], default: "launching" }
-
-    }, 
-    {
-        timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
-    }
+    status: { type: String, enum: ["upcoming", "ongoing", "finished"], default: "upcoming" }
+  }, 
+  { 
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
+  }
 );
 
+discountSchema.index({ begin_date: 1, end_date: 1 });
+discountSchema.index({ code: 1, name: 1 });
 
-const Discount = mongoose.models.Discount || mongoose.model("Discount", DiscountSchema);
+const Discount = mongoose.models.Discount || mongoose.model("Discount", discountSchema);
 export default Discount;

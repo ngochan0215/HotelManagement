@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { serviceApi } from "../../api/serviceApi.js";
 import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser, FiEye, FiEdit, FiXCircle } from "react-icons/fi";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
 import ServiceUsageDetailModal from "../components/serviceUsageDetailModal.jsx";
 import UpdateServiceUsageModal from "../components/updateServiceUsageModal.jsx";
 
 export default function ServiceTicketTab() {
+  const { user } = useAuth();
   const [imports, setImports] = useState([]);
   const [usages, setUsages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,7 +18,7 @@ export default function ServiceTicketTab() {
   const [selectedUsageId, setSelectedUsageId] = useState(null);
   const [editingUsageId, setEditingUsageId] = useState(null);
 
-  const isManager = localStorage.getItem("role") === "manager";
+  const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
 
   const fetchTickets = async () => {
     setLoading(true);

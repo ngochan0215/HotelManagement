@@ -1,155 +1,9 @@
 import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
-  BookingDetail, Employee, Incident, Customer, User
+  BookingDetail, Employee, Incident, Customer, User, Discount
  } from "../models/index.js";
 import { updateCustomerPoints } from "./customerController.js";
 import { pushNotificationToUsers } from "../services/notificationService.js";
-
-// export const createReceipt = async (req, res) => {
-//   const session = await mongoose.startSession();
-//   session.startTransaction();
-
-//   try {
-//     const { booking_id, service_usage_id, compensate_ticket_id, payment, note = "" } = req.body;
-//     const employee_user_id = req.user.userId;
-
-//     if (!mongoose.Types.ObjectId.isValid(booking_id)) {
-//       return res.status(400).json({ message: "booking_id không hợp lệ." });
-//     }
-
-//     if (!["cash", "card", "bank", "e-wallet"].includes(payment)) {
-//       return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ." });
-//     }
-
-//     const employee = await Employee.findOne(
-//       { user_id: employee_user_id }, null, { session }
-//     );
-
-//     if (!employee) {
-//       return res.status(404).json({ message: "Không tìm thấy nhân viên." });
-//     }
-
-//     const booking = await Booking.findById(booking_id).session(session);
-//     if (!booking) {
-//       return res.status(404).json({ message: "Không tìm thấy booking." });
-//     }
-
-//     if (booking.status !== "completed") {
-//       return res.status(400).json({
-//         message: "Chỉ được tạo hóa đơn cho booking đã hoàn thành.",
-//       });
-//     }
-
-//     const existedReceipt = await Receipt.findOne({ booking_id }).session(session);
-//     if (existedReceipt) {
-//       return res.status(400).json({
-//         message: "Booking này đã được tạo hóa đơn.",
-//       });
-//     }
-
-//     let serviceFee = 0;
-//     if (service_usage_id) {
-//       if (!mongoose.Types.ObjectId.isValid(service_usage_id))
-//         return res.status(400).json({ message: "service_usage_id không hợp lệ." });
-
-//       const serviceUsage = await ServiceUsage.findById(service_usage_id).session(session);
-//       if (!serviceUsage) {
-//         return res.status(404).json({ message: "Không tìm thấy phiếu sử dụng dịch vụ." });
-//       }
-
-//       if (serviceUsage.status !== "completed") {
-//         return res.status(400).json({
-//           message: "Phiếu sử dụng dịch vụ chưa hoàn tất.",
-//         });
-//       }
-
-//       const bookingId = serviceUsage._id;
-//       if (booking_id.toString() !== bookingId.toString()) {
-//         return res.status(400).json({ message: "booking_id tương ứng của phiếu dịch vụ không hợp lệ." });
-//       }
-
-//       serviceFee = serviceUsage.total_fee;
-//     }
-
-//     let compensateFee = 0;
-//     if (compensate_ticket_id) {
-//       if (!mongoose.Types.ObjectId.isValid(compensate_ticket_id)) {
-//         return res.status(400).json({ message: "booking_id không hợp lệ." });
-//       }
-
-//       const compensate = await CompensateTicket.findById(compensate_ticket_id).session(session);
-//       if (!compensate) {
-//         return res.status(404).json({ message: "Không tìm thấy phiếu bồi thường." });
-//       }
-
-//       if (compensate.status !== "completed") {
-//         return res.status(400).json({
-//           message: "Phiếu bồi thường chưa hoàn tất.",
-//         });
-//       }
-
-//       const incident = await Incident.findById(compensate_ticket.incident_id);
-//       const bookingId = incident.booking_id;
-
-//       if (booking_id.toString() !== bookingId.toString()) {
-//         return res.status(400).json({ message: "booking_id của phiếu đền bù tương ứng không hợp lệ." });
-//       }
-
-//       compensateFee = compensate.total_fee;
-//     }
-
-//     const totalFee = booking.total_fee;
-//     const depositAmount = booking.deposit || 0;
-
-//     const finalAmount = totalFee + serviceFee + compensateFee;
-//     const amountDue = Math.max(finalAmount - depositAmount, 0);
-
-//     const receipt = await Receipt.create(
-//       [
-//         {
-//           booking_id,
-//           employee_id: employee._id,
-//           service_usage_id: service_usage_id || null,
-//           compensate_ticket_id: compensate_ticket_id || null,
-
-//           total_fee: totalFee,
-//           service_fee: serviceFee,
-//           compensate_fee: compensateFee,
-//           deposit_amount: depositAmount,
-
-//           final_amount: finalAmount,
-//           amount_due: amountDue,
-
-//           payment,
-//           status: depositAmount === 0 ? "half-paid" : "pending",
-//           note,
-//         },
-//       ],
-//       { session }
-//     );
-
-//     if (amountDue === 0) {
-//       booking.status = "completed";
-//       await booking.save({ session });
-//     }
-
-//     await session.commitTransaction();
-//     session.endSession();
-
-//     return res.status(201).json({
-//       message: "Tạo hóa đơn thành công.",
-//       receipt: receipt[0],
-//     });
-
-//   } catch (err) {
-//     await session.abortTransaction();
-//     session.endSession();
-
-//     return res.status(500).json({
-//       message: err.message || "Không thể tạo hóa đơn.",
-//     });
-//   }
-// };
 
 export const createReceipt = async (req, res) => {
   const session = await mongoose.startSession();
@@ -221,6 +75,24 @@ export const createReceipt = async (req, res) => {
     const totalFee = booking.total_fee;
     const depositAmount = booking.deposit || 0;
 
+    // Tính base_room_fee từ BookingDetail (tiền phòng gốc trước khi trừ discount)
+    const bookingDetails = await BookingDetail.find({ booking_id }).session(session);
+    const baseRoomFee = bookingDetails.reduce((sum, detail) => {
+      const nights = Math.ceil((new Date(detail.expected_checkout) - new Date(detail.expected_checkin)) / (1000 * 60 * 60 * 24));
+      return sum + (detail.base_fee * nights);
+    }, 0);
+
+    // Lấy discount_snapshot từ receipt hiện có (nếu đã tạo từ booking)
+    let discountSnapshot = null;
+    let discountId = null;
+    
+    // Kiểm tra xem đã có receipt nào cho booking này chưa (thường là receipt được tạo tự động khi tạo booking)
+    const existingReceipt = await Receipt.findOne({ booking_id }).session(session);
+    if (existingReceipt && existingReceipt.discount_snapshot) {
+      discountSnapshot = existingReceipt.discount_snapshot;
+      discountId = existingReceipt.discount_id;
+    }
+
     const finalAmount = totalFee + serviceFee + compensateFee;
     const amountDue = Math.max(finalAmount - depositAmount, 0);
 
@@ -229,9 +101,12 @@ export const createReceipt = async (req, res) => {
         {
           booking_id,
           employee_id: employee._id,
+          discount_id: discountId,
+          discount_snapshot: discountSnapshot,
           service_usage_id: serviceUsageId,
           compensate_ticket_id: compensateTicketId,
 
+          base_room_fee: baseRoomFee,
           total_fee: totalFee,
           service_fee: serviceFee,
           compensate_fee: compensateFee,

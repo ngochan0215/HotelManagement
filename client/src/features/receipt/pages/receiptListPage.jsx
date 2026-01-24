@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle } from "react-icons/fi";
+import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ReceiptDetailModal from "../components/receiptDetailModal.jsx";
@@ -12,7 +12,36 @@ import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const PAYMENT_METHOD = {
   cash: "Tiền mặt",
-  bank: "Chuyển khoản (PayOS)"
+  bank: "Chuyển khoản (PayOS)",
+  unknown: "Chưa biết"
+};
+
+const STATUS_MAP = {
+  paid: {
+    label: "Đã thanh toán",
+    color: "emerald",
+    iconType: "success",
+  },
+  pending: {
+    label: "Chờ thanh toán",
+    color: "orange",
+    iconType: "neutral",
+  },
+  "half-paid": {
+    label: "Thanh toán một phần",
+    color: "yellow",
+    iconType: "neutral",
+  },
+  cancelled: {
+    label: "Đã hủy",
+    color: "gray",
+    iconType: "neutral",
+  },
+  refunded: {
+    label: "Đã hoàn tiền",
+    color: "blue",
+    iconType: "neutral",
+  },
 };
 
 export default function ReceiptList() {
@@ -93,6 +122,8 @@ export default function ReceiptList() {
                 <option value="paid">Đã thanh toán</option>
                 <option value="pending">Chờ thanh toán</option>
                 <option value="half-paid">Thanh toán 1 phần</option>
+                <option value="refunded">Đã hoàn tiền</option>
+                <option value="cancelled">Đã hủy</option>
              </select>
              <select className="py-2 px-3 border rounded-lg text-sm outline-none" value={payment} onChange={e => setPayment(e.target.value)}>
                 <option value="">Phương thức</option>
@@ -132,7 +163,15 @@ export default function ReceiptList() {
                                     #{item._id.slice(-6).toUpperCase()}
                                 </td>
                                 <td className="py-4 px-6 font-bold text-gray-800">
-                                    {item.booking_id?.customer_id?.full_name || "Khách vãng lai"}
+                                    <div className="flex items-center gap-2">
+                                        {item.booking_id?.customer_id?.full_name || "Khách vãng lai"}
+                                        {item.discount_snapshot && item.discount_snapshot.discount_amount > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold" title={`Khuyến mãi: ${item.discount_snapshot.name || item.discount_snapshot.code}`}>
+                                                <FiTag size={10}/>
+                                                KM
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="text-xs text-gray-400 font-normal">
                                         {item.booking_id?.customer_id?.phone_number}
                                     </div>
@@ -149,14 +188,24 @@ export default function ReceiptList() {
                                         </span>
                                     )}
                                 </td>
-
                                 <td className="py-4 px-6 text-center">
-                                    <StatusPill
-                                        label={item.status === 'paid' ? 'Đã thu tiền' : item.status === 'pending' ? 'Chưa thu' : item.status}
-                                        color={item.status === 'paid' ? 'emerald' : item.status === 'pending' ? 'orange' : 'gray'}
-                                        iconType={item.status === 'paid' ? 'success' : 'neutral'}
-                                    />
+                                  {(() => {
+                                    const statusInfo = STATUS_MAP[item.status] || {
+                                      label: item.status,
+                                      color: "gray",
+                                      iconType: "neutral",
+                                    };
+
+                                    return (
+                                      <StatusPill
+                                        label={statusInfo.label}
+                                        color={statusInfo.color}
+                                        iconType={statusInfo.iconType}
+                                      />
+                                    );
+                                  })()}
                                 </td>
+
                                 <td className="py-4 px-6 text-center text-gray-500 text-xs">
                                     {new Date(item.created_at).toLocaleDateString("vi-VN")}
                                 </td>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { FiX, FiDollarSign, FiCheckCircle, FiInfo, FiExternalLink } from "react-icons/fi";
+import { FiX, FiDollarSign, FiCheckCircle, FiInfo, FiExternalLink, FiTag } from "react-icons/fi";
+import { jwtDecode } from "jwt-decode";
 import { receiptApi } from "../../api/receiptApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
@@ -76,12 +77,13 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
     { id: "bank", label: "Chuyển khoản (PayOS)", icon: <FiCheckCircle size={20}/> },
   ];
 
+  const baseRoomFee = receipt.base_room_fee || receipt.total_fee || 0;
   const roomFee = receipt.total_fee || 0;
   const serviceFee = receipt.service_fee || 0;
   const compensateFee = receipt.compensate_fee || 0;
   const deposit = receipt.deposit_amount || 0;
-
-  const discountAmount = 0;
+  const discountSnapshot = receipt.discount_snapshot;
+  const discountAmount = discountSnapshot?.discount_amount || 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-fade-in">
@@ -97,9 +99,33 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
                 <FiInfo/> Chi tiết khoản thu
              </div>
              <div className="flex justify-between">
-                <span className="text-gray-600">Tiền phòng:</span>
+                <span className="text-gray-600">Tiền phòng gốc:</span>
+                <span className="font-medium">{baseRoomFee.toLocaleString()} đ</span>
+             </div>
+             {discountSnapshot && discountAmount > 0 && (
+                <div className="bg-emerald-50 p-2 rounded border border-emerald-200 -mx-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FiTag className="text-emerald-600" size={12}/>
+                    <span className="text-xs font-bold text-emerald-700">Khuyến mãi: {discountSnapshot.name || discountSnapshot.code}</span>
+                  </div>
+                  {discountSnapshot.description && (
+                    <div className="text-xs text-emerald-600 italic mb-1">{discountSnapshot.description}</div>
+                  )}
+                  {discountSnapshot.code && (
+                    <div className="text-xs text-emerald-500 font-mono">Mã: {discountSnapshot.code}</div>
+                  )}
+                </div>
+             )}
+             <div className="flex justify-between">
+                <span className="text-gray-600">Tiền phòng (sau KM):</span>
                 <span className="font-medium">{roomFee.toLocaleString()} đ</span>
              </div>
+             {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                    <span className="text-emerald-700">Giảm giá:</span>
+                    <span className="font-bold">- {discountAmount.toLocaleString()} đ</span>
+                </div>
+             )}
              <div className="flex justify-between">
                 <span className="text-gray-600">Dịch vụ sử dụng:</span>
                 <span className={`font-medium ${serviceFee > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
@@ -110,12 +136,6 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
                 <span className="text-gray-600">Phụ phí:</span>
                 <span className={`font-medium ${compensateFee > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
                     {compensateFee > 0 ? `+ ${compensateFee.toLocaleString()}` : "0"} đ
-                </span>
-             </div>
-             <div className="flex justify-between">
-                <span className="text-gray-600">Khuyến mãi:</span>
-                <span className={`font-medium ${discountAmount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                    {discountAmount > 0 ? `- ${discountAmount.toLocaleString()}` : "0"} đ
                 </span>
              </div>
              <div className="flex justify-between border-b border-gray-300 pb-2">

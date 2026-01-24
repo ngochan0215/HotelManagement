@@ -8,7 +8,7 @@ import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
     startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob, 
-    startCheckinReminderJob
+    startCheckinReminderJob, startSyncRoomStatusJob
 } from "./jobs/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
@@ -28,6 +28,7 @@ import bookingRoute from "./routes/bookingRoutes.js";
 import statisticRoute from "./routes/statisticsRoutes.js";
 import qrRoute from "./routes/qrRoutes.js";
 import notificationRoute from "./routes/notificationRoutes.js";
+import { initSocket } from "./sockets/index.js";
 
 dotenv.config();
 connectDB();
@@ -35,12 +36,6 @@ connectDB();
 const app = express();
 const server = http.createServer(app); 
 
-// Import và set socket instance để notification service có thể sử dụng
-import { setSocketInstance } from "./sockets/instance.js";
-import { initSocket } from "./sockets/index.js";
-
-// Khởi tạo socket với authentication và handlers
-// initSocket sẽ tạo Server instance và set vào instance.js
 const io = initSocket(server);
 app.set("io", io);
 
@@ -84,6 +79,7 @@ startCancelPendingBookingJob();
 startCancelCheckinLateBookingJob();
 startCustomerTierJob();
 startCheckinReminderJob();
+startSyncRoomStatusJob();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { 
