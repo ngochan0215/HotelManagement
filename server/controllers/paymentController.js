@@ -1,6 +1,8 @@
 import { createPayment, payOut, getPaymentLinkDetail, paymentSucceeded, 
-    paymentFailed, getpaymentDetail, payoutDetail, payoutDetailList
-} from '../services/payosService.js'
+    paymentFailed, getpaymentDetail, payoutDetail, payoutDetailList,
+    cashOutForEmployee, getCashoutInfo, availableCashout,
+} from '../services/payosService.js';
+import { Employee, EmployeeEarning } from "../models/index.js";
 
 export const createPaymentLink = async (req, res) => {
     try {
@@ -192,3 +194,168 @@ export const payoutStatusDetail = async (req, res) => {
         });
     }
 }
+
+export const cashOut = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const result = await cashOutForEmployee(userId);
+        if (result === true) {
+            res.status(200).json({ success: true, message: "Yêu cầu rút tiền thành công." });
+        }
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: "Yêu cầu rút tiền thất bại.", error: error.message });
+    }
+};
+
+export const amountCashout = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const timespan = req.query.timespan;
+        const result = await getCashoutInfo(userId, timespan);
+        res.status(200).json({ success: true, data: result });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: "Lấy thông tin rút tiền thất bại.", error: error.message });
+    }
+}
+
+export const availableCashoutAmount = async (req, res) => {
+    try{
+        const userId = req.userId;
+        const result = await availableCashout(userId);
+        res.status(200).json({ success: true, data: result });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: "Lấy số tiền có thể rút thất bại.", error: error.message });
+    }
+};
+
+// Xem lịch sử thu nhập (earnings)
+export const getEarningsHistory = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { status, start_date, end_date, page = 1, limit = 20 } = req.query;
+        
+        const { Employee, EmployeeEarning } = await import('../models/index.js');
+        
+        const employee = await Employee.findOne({ user_id: userId });
+        if (!employee) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
+        
+        const query = { employee_id: employee._id };
+        
+        if (status) {
+            query.status = status;
+        }
+        
+        if (start_date || end_date) {
+            query.period_date = {};
+            if (start_date) query.period_date.$gte = new Date(start_date);
+            if (end_date) {
+                const endDate = new Date(end_date);
+                endDate.setHours(23, 59, 59, 999);
+                query.period_date.$lte = endDate;
+            }
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [earnings, total] = await Promise.all([
+            EmployeeEarning.find(query)
+                .populate('attendance_id', 'check_in check_out work_hours status')
+                .populate('payout_id', 'status total_amount created_at processed_at')
+                .sort({ period_date: -1, created_at: -1 })
+                .skip(skip)
+                .limit(parseInt(limit)),
+            EmployeeEarning.countDocuments(query)
+        ]);
+        
+        const totalAmount = earnings.reduce((sum, e) => sum + e.earning_amount, 0);
+        
+        res.status(200).json({
+            success: true,
+            data: {
+                earnings,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    totalPages: Math.ceil(total / parseInt(limit))
+                },
+                summary: {
+                    total_amount: totalAmount,
+                    count: earnings.length
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy lịch sử thu nhập:", error);
+        res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    }
+};
+
+// Xem lịch sử rút tiền (payouts)
+export const getPayoutHistory = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { status, start_date, end_date, page = 1, limit = 20 } = req.query;
+        
+        const { Employee, PayoutEmployee } = await import('../models/index.js');
+        
+        const employee = await Employee.findOne({ user_id: userId });
+        if (!employee) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
+        
+        const query = { employee_id: employee._id };
+        
+        if (status) {
+            query.status = status;
+        }
+        
+        if (start_date || end_date) {
+            query.created_at = {};
+            if (start_date) query.created_at.$gte = new Date(start_date);
+            if (end_date) {
+                const endDate = new Date(end_date);
+                endDate.setHours(23, 59, 59, 999);
+                query.created_at.$lte = endDate;
+            }
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        const [payouts, total] = await Promise.all([
+            PayoutEmployee.find(query)
+                .populate('earning_ids', 'earning_amount work_hours period_date')
+                .sort({ created_at: -1 })
+                .skip(skip)
+                .limit(parseInt(limit)),
+            PayoutEmployee.countDocuments(query)
+        ]);
+        
+        const totalAmount = payouts.reduce((sum, p) => sum + p.total_amount, 0);
+        
+        res.status(200).json({
+            success: true,
+            data: {
+                payouts,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    totalPages: Math.ceil(total / parseInt(limit))
+                },
+                summary: {
+                    total_amount: totalAmount,
+                    count: payouts.length
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi khi lấy lịch sử rút tiền:", error);
+        res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+    }
+};

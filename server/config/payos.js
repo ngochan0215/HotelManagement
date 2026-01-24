@@ -14,13 +14,13 @@ if (!process.env.DB_URI) {
 }
 
 export const payOSpayment = new PayOS({
-    clientId: process.env.PAYOS_CLIENT_ID,
-    apiKey: process.env.PAYOS_API_KEY,
-    checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+  clientId: process.env.PAYOS_CLIENT_ID,
+  apiKey: process.env.PAYOS_API_KEY,
+  checksumKey: process.env.PAYOS_CHECKSUM_KEY,
 });
 
-// export const payOSpayout = new PayOS({
-//     clientId: process.env.PAYOS_PAYOUT_CLIENT_ID,
-//     apiKey: process.env.PAYOS_PAYOUT_API_KEY,
-//     checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY,
-// });
+export const payOSpayout = new PayOS({
+  clientId: process.env.PAYOS_PAYOUT_CLIENT_ID,
+  apiKey: process.env.PAYOS_PAYOUT_API_KEY,
+  checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY,
+});

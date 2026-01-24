@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUser, FiUsers, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
 import { useAuth } from "../features/auth/hooks/authContext.jsx";
@@ -20,6 +20,13 @@ const sidebarConfig = [
     icon: FiCalendar,
     path: "/room-calendar",
     allowed: ["receptionist"]
+  },
+  {
+    type: "main",
+    title: "Thu nhập",
+    icon: FiDollarSign,
+    path: "/earnings",
+    allowed: [] // Tất cả nhân viên đều xem được
   },
   {
     type: "group",

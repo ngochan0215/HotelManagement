@@ -8,6 +8,7 @@ import RoomPage from '../features/room/pages/roomPage.jsx';
 import BookingList from '../features/booking/pages/bookingList.jsx';
 import CustomerPage from '../features/customer/pages/customerPage.jsx';
 import EmployeePage from '../features/employee/pages/employeePage.jsx';
+import EarningsPage from '../features/employee/pages/earningsPage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import ServicePage from '../features/service/pages/servicePage.jsx';
 import IncidentPage from '../features/incident/pages/incidentPage.jsx';
@@ -73,6 +74,9 @@ export default function AppRoutes() {
 
       <Route path="/employees" element={
         <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
+      } />
+      <Route path="/earnings" element={
+        <ProtectedRoute allowed={[]}> <EarningsPage /> </ProtectedRoute>
       } />
 
       {/* LỄ TÂN */}

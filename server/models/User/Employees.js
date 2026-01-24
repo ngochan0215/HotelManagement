@@ -18,6 +18,10 @@ const employeeSchema = new mongoose.Schema(
         status: { type: String, enum: ["working", "resign"], default: "working" },
         fixed_salary: { type: Number },
         working_year: { type: Number, default: 0 },
+
+        BIN: {type: String }, //6 số đầu của thẻ ngân hàng
+        account_number: {type: String }, //số tài khoản ngân hàng (không phải số thẻ nhé)
+        bank_shortName: {type: String }, //mã ngân hàng (key từ API bankcodes)  
     }, 
     { 
         timestamps: { updatedAt: "updated_at", createdAt: "created_at"}, 

@@ -2,6 +2,11 @@ import bcrypt from "bcrypt";
 import mongoose from "mongoose";
 import { User, Employee, Shift, Schedule, Attendance } from "../models/index.js";
 import { defaultAvatars } from "../config/avatars.js";
+import { 
+    createEarningFromAttendance, 
+    calculateAllPendingEarnings,
+    calculateEarningsForPeriod 
+} from "../services/employeeEarningService.js";
 
 //------ EMPLOYEE ------//
 export const registerEmployee = async (req, res) => {
@@ -513,71 +518,6 @@ export const deleteSchedule = async (req, res) => {
   }
 };
 
-// chấm công vào làm
-export const checkInShift = async (req, res) => {
-  try {
-    const { employee_id } = req.body;
-    const now = new Date();
-
-    // lấy ngày làm việc (00:00)
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-
-    const schedule = await Schedule.findOne({
-      employee_id,
-      work_date: today,
-    }).populate("shift_id");
-
-    if (!schedule)
-      return res.status(404).json({
-        success: false,
-        message: "Không có lịch làm việc hôm nay",
-      });
-
-    // kiểm tra đã check-in chưa
-    let attendance = await Attendance.findOne({
-      schedule_id: schedule._id,
-    });
-
-    if (attendance?.check_in)
-      return res.status(400).json({
-        success: false,
-        message: "Đã check-in rồi",
-      });
-
-    const shift = schedule.shift_id;
-
-    const checkInMinutes =
-      now.getHours() * 60 + now.getMinutes();
-    const beginMinutes = timeToMinutes(shift.begin_time);
-
-    let status = "present";
-    let lateMinutes = 0;
-
-    if (checkInMinutes > beginMinutes) {
-      status = "late";
-      lateMinutes = checkInMinutes - beginMinutes;
-    }
-
-    attendance = await Attendance.create({
-      employee_id,
-      schedule_id: schedule._id,
-      check_in: now,
-      status,
-      late_minutes: lateMinutes,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Check-in thành công",
-      data: attendance,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
 export const createAccountForExistingEmployee = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -675,7 +615,6 @@ export const toggleBanUser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-// ... các code cũ
 
 // --- THÊM HÀM NÀY ĐỂ NHÂN VIÊN LẤY PROFILE CỦA CHÍNH MÌNH ---
 export const getMyProfile = async (req, res) => {
@@ -695,6 +634,72 @@ export const getMyProfile = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// chấm công vào làm
+export const checkInShift = async (req, res) => {
+  try {
+    const { employee_id } = req.body;
+    const now = new Date();
+
+    // lấy ngày làm việc (00:00)
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const schedule = await Schedule.findOne({
+      employee_id,
+      work_date: today,
+    }).populate("shift_id");
+
+    if (!schedule)
+      return res.status(404).json({
+        success: false,
+        message: "Không có lịch làm việc hôm nay",
+      });
+
+    // kiểm tra đã check-in chưa
+    let attendance = await Attendance.findOne({
+      schedule_id: schedule._id,
+    });
+
+    if (attendance?.check_in)
+      return res.status(400).json({
+        success: false,
+        message: "Đã check-in rồi",
+      });
+
+    const shift = schedule.shift_id;
+
+    const checkInMinutes =
+      now.getHours() * 60 + now.getMinutes();
+    const beginMinutes = timeToMinutes(shift.begin_time);
+
+    let status = "present";
+    let lateMinutes = 0;
+
+    if (checkInMinutes > beginMinutes) {
+      status = "late";
+      lateMinutes = checkInMinutes - beginMinutes;
+    }
+
+    attendance = await Attendance.create({
+      employee_id,
+      schedule_id: schedule._id,
+      check_in: now,
+      status,
+      late_minutes: lateMinutes,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Check-in thành công",
+      data: attendance,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 // checkout tan làm
 export const checkOutShift = async (req, res) => {
   try {
@@ -749,6 +754,14 @@ export const checkOutShift = async (req, res) => {
 
     await attendance.save();
 
+    // Tự động tính lương sau khi check-out
+    try {
+        await createEarningFromAttendance(attendance._id);
+    } catch (earningError) {
+        console.error("Lỗi khi tính lương tự động:", earningError);
+        // Không throw error, chỉ log để không ảnh hưởng đến check-out
+    }
+
     return res.status(200).json({
       success: true,
       message: "Check-out thành công",
@@ -757,6 +770,80 @@ export const checkOutShift = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Tính lương cho nhân viên (dành cho Manager)
+export const calculateEmployeeSalary = async (req, res) => {
+  try {
+    const { employee_id, start_date, end_date } = req.body;
+    
+    // Nếu có employee_id, start_date, end_date -> tính cho khoảng thời gian cụ thể
+    if (employee_id && start_date && end_date) {
+      const startDate = new Date(start_date);
+      const endDate = new Date(end_date);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Ngày không hợp lệ" 
+        });
+      }
+      
+      if (startDate > endDate) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Ngày bắt đầu phải trước ngày kết thúc" 
+        });
+      }
+      
+      const earnings = await calculateEarningsForPeriod(employee_id, startDate, endDate);
+      
+      return res.status(200).json({
+        success: true,
+        message: `Đã tính lương cho ${earnings.length} ca làm việc`,
+        data: {
+          count: earnings.length,
+          total_amount: earnings.reduce((sum, e) => sum + e.earning_amount, 0),
+          earnings
+        }
+      });
+    }
+    
+    // Nếu chỉ có employee_id -> tính tất cả pending earnings cho nhân viên đó
+    if (employee_id) {
+      const earnings = await calculateAllPendingEarnings(employee_id);
+      
+      return res.status(200).json({
+        success: true,
+        message: `Đã tính lương cho ${earnings.length} ca làm việc`,
+        data: {
+          count: earnings.length,
+          total_amount: earnings.reduce((sum, e) => sum + e.earning_amount, 0),
+          earnings
+        }
+      });
+    }
+    
+    // Nếu không có tham số -> tính tất cả pending earnings cho tất cả nhân viên
+    const earnings = await calculateAllPendingEarnings();
+    
+    return res.status(200).json({
+      success: true,
+      message: `Đã tính lương cho ${earnings.length} ca làm việc`,
+      data: {
+        count: earnings.length,
+        total_amount: earnings.reduce((sum, e) => sum + e.earning_amount, 0),
+        earnings
+      }
+    });
+  } catch (error) {
+    console.error("Lỗi khi tính lương:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Lỗi server", 
+      error: error.message 
+    });
   }
 };
 

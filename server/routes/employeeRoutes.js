@@ -15,8 +15,10 @@ import {
     createAccountForExistingEmployee,
     resetPasswordForEmployee,
     toggleBanUser,
-    getMyProfile
+    getMyProfile,
+    calculateEmployeeSalary
 } from "../controllers/employeeController.js";
+import { cashOut, amountCashout, availableCashoutAmount, getEarningsHistory, getPayoutHistory } from "../controllers/paymentController.js";
 import { verifyToken, isManager, isEmployee, isNotCustomer } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -30,7 +32,6 @@ router.post("/:id/create-account", verifyToken, isManager, createAccountForExist
 router.patch("/reset-password/:id", verifyToken, isManager, resetPasswordForEmployee);
 router.patch("/toggle-ban/:id", verifyToken, isManager, toggleBanUser);
 
-
 router.post("/schedules/register", verifyToken, isEmployee, registerSchedule);
 router.get("/schedules/my", verifyToken, isEmployee, viewMySchedule);
 router.patch("/schedules/:id", verifyToken, isEmployee, updateSchedule);
@@ -41,5 +42,17 @@ router.get("/schedules/:id", verifyToken, isNotCustomer, getScheduleById);
 // ATTENDANCE
 router.post("/attendance/checkin", verifyToken, isEmployee, checkInShift);
 router.post("/attendance/checkout", verifyToken, isEmployee, checkOutShift);
+
+// CASH OUT
+router.put("/cashOut", verifyToken, isEmployee, cashOut);
+router.get("/cashOut", verifyToken, isEmployee, amountCashout);
+router.get("/cashOut/available", verifyToken, isEmployee, availableCashoutAmount);
+
+// EARNINGS & PAYOUTS
+router.get("/earnings", verifyToken, isEmployee, getEarningsHistory);
+router.get("/payouts", verifyToken, isEmployee, getPayoutHistory);
+
+// SALARY CALCULATION (Manager only)
+router.post("/salary/calculate", verifyToken, isManager, calculateEmployeeSalary);
 
 export default router;
