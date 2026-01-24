@@ -67,7 +67,7 @@ export const startCustomerTierJob = () =>
 export const startCheckinReminderJob = () =>
   startCronJob({
     name: "check-in reminder (2 hours before)",
-    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    schedule: "* * * * *", // Chạy mỗi 5 phút
     handler: notifyCheckinReminder,
   });
 

@@ -4,7 +4,7 @@ export const markAsRead = async (req, res) => {
     try {
         const now = new Date();
         await Notification.updateOne(
-            { _id: req.params.id, user_id: req.userId },
+            { _id: req.params.id, user_id: req.user.userId },
             { 
                 status: "read",
                 read_at: now  
@@ -21,7 +21,7 @@ export const markAsDeleted = async (req, res) => {
     try {
         const now = new Date();
         await Notification.updateMany(
-            { _id: req.params.id, user_id: req.userId },
+            { _id: req.params.id, user_id: req.user.userId },
             { 
                 status: "deleted",
                 deleted_at: now  
@@ -38,7 +38,7 @@ export const markAsReadAll = async (req, res) => {
     try {
         const now = new Date();
         await Notification.updateMany(
-            { user_id: req.userId },
+            { user_id: req.user.userId },
             { 
                 status: "read",
                 read_at: now  
@@ -53,8 +53,8 @@ export const markAsReadAll = async (req, res) => {
 
 export const getMyNotifications = async (req, res) => {
     try {
-        const userId = req.userId;
-
+        const userId = req.user.userId;
+        console.log("Fetching notifications for user:", userId);
         const notifications = await Notification
             .find({ user_id: userId, status: ["read", "unread"] })
             .sort({ created_at: -1 })

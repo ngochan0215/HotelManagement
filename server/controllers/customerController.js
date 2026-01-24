@@ -307,7 +307,10 @@ export const updateCustomerPoints = async ({ customer_id, points, reason }) => {
     throw new Error("Không tìm thấy customer");
   }
 
-  const before = customer.points || 0;
+  const before = customer.points;
+//   if (before <= -points && points < 0) {
+//     return { before, after: 0, change: points };
+//   }
   const after = Math.max(before + points, 0); // không cho âm
 
   customer.points = after;

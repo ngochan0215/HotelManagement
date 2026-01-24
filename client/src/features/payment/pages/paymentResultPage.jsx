@@ -13,7 +13,8 @@ export default function PaymentResultPage() {
   const [error, setError] = useState(null);
   
   const orderCode = searchParams.get("orderCode");
-  const type = searchParams.get("type") || "success"; // success hoặc cancel
+  const type = searchParams.get("status") || "SUCCESS";
+  //const type = searchParams.get("type") || "success"; // success hoặc cancel
 
   useEffect(() => {
     const handlePaymentResult = async () => {
@@ -37,14 +38,18 @@ export default function PaymentResultPage() {
           } else {
             throw new Error(res?.error || "Không thể cập nhật trạng thái thanh toán.");
           }
-        } else if (type === "cancel") {
+        } else if (type === "CANCELLED") {
           // Người dùng hủy thanh toán
-          setResult({
-            success: false,
-            message: "Thanh toán đã bị hủy",
-            description: "Bạn đã hủy quá trình thanh toán. Đơn đặt phòng vẫn được giữ nhưng chưa được xác nhận.",
-            isCancel: true
-          });
+          const res = await paymentApi.updateFailedTransaction(orderCode);
+          console.log("Cancel response:", res);
+          if (res?.success) {
+            setResult({
+              success: false,
+              message: "Thanh toán thất bại",
+              description: "Quá trình thanh toán đã không hoàn tất. Đơn đặt phòng vẫn được giữ nhưng chưa được xác nhận đã đặt cọc.",
+              data: res.data
+            });
+          }
         }
       } catch (err) {
         console.error("Error handling payment result:", err);
@@ -136,7 +141,19 @@ export default function PaymentResultPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Trạng thái:</span>
-                        <span className="font-medium text-green-600">Đã thanh toán</span>
+                        <span className={`font-medium ${
+                          result.data.transaction.status === "completed" 
+                            ? "text-green-600" 
+                            : result.data.transaction.status === "failed"
+                            ? "text-red-600"
+                            : "text-gray-600"
+                        }`}>
+                          {result.data.transaction.status === "completed" 
+                            ? "Đã thanh toán" 
+                            : result.data.transaction.status === "failed"
+                            ? "Chưa thanh toán"
+                            : "Đang xử lý"}
+                        </span>
                       </div>
                     </>
                   )}

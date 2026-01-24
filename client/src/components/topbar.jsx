@@ -1,4 +1,4 @@
-import { Bell } from "lucide-react";
+import NotificationDropdown from "./notificationDropdown.jsx";
 
 export default function Topbar() {
   return (
@@ -16,7 +16,7 @@ export default function Topbar() {
 
       {/* Avatar + Bell */}
       <div className="flex items-center gap-6">
-        <Bell className="w-6 h-6 text-gray-600 cursor-pointer" />
+        <NotificationDropdown />
 
         <div className="flex items-center gap-3">
           <span className="font-medium text-gray-800">Anh Thư</span>

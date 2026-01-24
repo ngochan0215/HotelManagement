@@ -415,6 +415,21 @@ export const createBooking = async (req, res) => {
 
     const handled_by = employee._id;
     const isScheduled = new Date(expected_checkin) > new Date();
+    const isImmediate = deposit === 0; // Đặt liền không cần cọc
+
+    // Nếu đặt liền, tự động chuyển sang confirmed (hoặc in_progress nếu đã đến ngày check-in)
+    let initialStatus = "pending";
+    if (isImmediate) {
+      const now = new Date();
+      const checkinDate = new Date(expected_checkin);
+      // Nếu đã đến hoặc qua ngày check-in, chuyển sang in_progress
+      if (now >= checkinDate) {
+        initialStatus = "in_progress";
+      } else {
+        // Nếu chưa đến ngày check-in, chuyển sang confirmed (chờ check-in)
+        initialStatus = "confirmed";
+      }
+    }
 
     const booking = await Booking.create(
       [
@@ -427,7 +442,7 @@ export const createBooking = async (req, res) => {
           total_fee,
           expected_checkin,
           expected_checkout,
-          status: "pending",
+          status: initialStatus,
           isScheduled
         },
       ],
@@ -435,44 +450,67 @@ export const createBooking = async (req, res) => {
     );
 
     // tạo các chi tiết đặt phòng
+    // Nếu đặt liền và đã đến ngày check-in, status = "checked_in", ngược lại = "confirmed"
+    const detailStatus = (isImmediate && initialStatus === "in_progress") ? "checked_in" : (isImmediate ? "confirmed" : "reserved");
+    
     const bookingDetails = rooms.map(room => ({
       booking_id: booking[0]._id,
       room_id: room.room_id,
       expected_checkin: expected_checkin,
       expected_checkout: expected_checkout,
       base_fee: room.base_fee,
-      status: "reserved",
+      status: detailStatus,
     }));
 
     await BookingDetail.insertMany(bookingDetails, { session });
 
     // log trạng thái booking
+    const statusNote = isImmediate 
+      ? (initialStatus === "in_progress" 
+          ? "Đơn đặt phòng được tạo thành công, đã check-in tự động (đặt liền)" 
+          : "Đơn đặt phòng được tạo thành công, đã xác nhận (đặt liền, chờ check-in)")
+      : "Đơn đặt phòng được tạo thành công, đang chờ đặt cọc";
+    
     await BookingStatusLog.create(
       [{
         booking_id: booking[0]._id,
-        status: "pending",
+        status: initialStatus,
         start_time: expected_checkin,
         expected_end_time: expected_checkout,
         handled_by: handled_by,
-        note: "Đơn đặt phòng được tạo thành công, đang chờ đặt cọc",
+        note: statusNote,
       }], { session }
     );
 
     // update trạng thái các phòng được đặt trong booking
     const roomIds = bookingDetails.map(bd => bd.room_id);
+    // Nếu đặt liền và đã đến ngày check-in, room_status = "occupied", ngược lại = "booked" hoặc "reserved"
+    let roomStatus = "reserved";
+    if (isImmediate) {
+      if (initialStatus === "in_progress") {
+        roomStatus = "occupied";
+      } else {
+        roomStatus = "booked";
+      }
+    }
+    
     await Room.updateMany(
       { _id: { $in: roomIds } },
-      { $set: { room_status: "reserved" } },
+      { $set: { room_status: roomStatus } },
       { session }
     );
 
     // tạo log tương ứng cho trạng thái phòng
     const roomStatusLogs = bookingDetails.map(bd => ({
       room_id: bd.room_id,
-      status: "reserved",
-      start_time: bd.expected_checkin,
+      status: isImmediate && initialStatus === "in_progress" ? "occupied" : (isImmediate ? "booked" : "reserved"),
+      start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
       end_time: bd.expected_checkout,
-      note: `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
+      note: isImmediate 
+        ? (initialStatus === "in_progress" 
+            ? `Phòng được check-in tự động (đặt liền) bởi booking ${booking[0]._id}`
+            : `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`)
+        : `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking[0].handled_by || null,
     }));
 
@@ -482,10 +520,14 @@ export const createBooking = async (req, res) => {
     const roomLogs = bookingDetails.map(bd => ({
       booking_id: bd.booking_id,
       room_id: bd.room_id,
-      status: "reserved",
-      start_time: bd.expected_checkin,
+      status: isImmediate && initialStatus === "in_progress" ? "occupied" : (isImmediate ? "booked" : "reserved"),
+      start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
       end_time: bd.expected_checkout,
-      note: `Phòng được giữ chỗ bởi: ${bd.booking_id} trong vòng 1 tiếng kể từ khi đặt`,
+      note: isImmediate 
+        ? (initialStatus === "in_progress" 
+            ? `Phòng được check-in tự động (đặt liền) bởi booking ${bd.booking_id}`
+            : `Phòng được xác nhận (đặt liền) bởi booking ${bd.booking_id}`)
+        : `Phòng được giữ chỗ bởi: ${bd.booking_id} trong vòng 1 tiếng kể từ khi đặt`,
       handled_by: booking[0].handled_by || null,
     }));
 
@@ -499,7 +541,9 @@ export const createBooking = async (req, res) => {
     const amountDue = Math.max(finalAmount - depositAmount, 0);
 
     const paymentMethod = depositAmount === 0 ? "unknown" : "bank";
-    const receiptStatus = "pending";
+    // Nếu đặt liền, receipt status = "paid" vì không cần cọc
+    // Nếu đặt trước, receipt status = "pending" vì cần đợi cọc
+    const receiptStatus = isImmediate ? "paid" : "pending";
 
     const receipt = await Receipt.create(
       [{
@@ -511,7 +555,7 @@ export const createBooking = async (req, res) => {
         amount_due: amountDue,
         payment: paymentMethod,
         status: receiptStatus,
-        note: depositAmount === 0 ? "Hóa đơn tạo tự động khi đặt liền" : "Hóa đơn tạo tự động, chờ thanh toán cọc",
+        note: isImmediate ? "Hóa đơn tạo tự động khi đặt liền (không cần cọc)" : "Hóa đơn tạo tự động, chờ thanh toán cọc",
       }],
       { session }
     );
@@ -519,15 +563,18 @@ export const createBooking = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // gửi thông báo cho admin
     try {
-      const allAdmins = await User.find({ role: "manager", isBanned: { $ne: true } });
+      console.log("Sending create booking notifications...");
+      const customer = await Customer.findById(customer_id).populate("user_id", "_id");
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
       const adminIds = allAdmins.map(u => u._id);
+      
+      // gửi thông báo cho admin
       if (allAdmins.length > 0) {
         await pushNotification(
           adminIds,
           "Booking mới",
-          `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
+          `Có booking mới có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
           "booking",
           "Booking",
           booking[0]._id,
@@ -537,9 +584,9 @@ export const createBooking = async (req, res) => {
 
       // gửi thông báo cho khách hàng
       await pushNotification(
-        customer_id,
+        customer.user_id,
         "Booking mới",
-        `Bạn đã đặt booking mới #${booking[0]._id.toString().slice(-6)} thành công! 
+        `Bạn đã đặt booking mới có ID: #${booking[0]._id.toString().slice(-6)} thành công! 
           Vui lòng thanh toán tiền cọc nếu đặt trước nhe.`,
         "booking",
         "Booking",
@@ -549,7 +596,7 @@ export const createBooking = async (req, res) => {
 
       // gửi thông báo cho tất cả lễ tân
       const receptionistEmployees = await Employee.find(
-        { role: "receptionist" },
+        { position: "receptionist" },
         { user_id: 1 }
       );
       const userIds = receptionistEmployees.map(e => e.user_id);
@@ -562,7 +609,7 @@ export const createBooking = async (req, res) => {
       await pushNotification(
         validUsers.map(u => u._id),
         "Booking mới",
-        `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.email || customer.full_name || "N/A"}`,
+        `Có booking mới có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"}`,
         "booking",
         "Booking",
         booking[0]._id,
@@ -571,6 +618,8 @@ export const createBooking = async (req, res) => {
     } catch (notifError) {
       console.error("Error sending notification:", notifError);
     }
+
+    console.log("Booking created successfully.");
 
     return res.status(201).json({
       message: "Đặt phòng thành công.",
@@ -747,7 +796,82 @@ export const confirmBooking = async (req, res) => {
   const employee_id = req.user.userId;
   
   try {
+    console.log("Confirming booking:", booking_id, "by employee:", employee_id);
     const booking = await confirmBookingInternal(booking_id, employee_id);
+    console.log("Booking confirmed:", booking);
+    const customer_id = booking.customer_id;
+    const customer = await Customer.findById(customer_id);
+
+    try {
+      // gửi thông báo cho admin
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotificationToUsers(
+          adminIds,
+          "Booking đã xác nhận thanh toán tiền cọc",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      const customerUser = await Customer.findById(customer_id).select("user_id").lean();
+      if (customerUser && customerUser.user_id) {
+        await pushNotification(
+          customerUser.user_id,
+          "Booking đặt cọc thành công",
+          `Bạn đã đặt cọc booking có ID: #${booking._id.toString().slice(-6)} thành công!
+            Hãy để ý ngày giờ checkin nhé.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho nhân viên thực hiện booking
+      const employee = await Employee.findById(booking.handled_by).select("user_id").lean();
+      if (employee && employee.user_id) {
+        await pushNotification(
+          employee.user_id,
+          "Booking đặt cọc thành công",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng 
+            ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+      console.log("Notifications sent for booking confirmation.");
+      // const receptionistEmployees = await Employee.find(
+      //   { role: "receptionist" },
+      //   { user_id: 1 }
+      // );
+      // const userIds = receptionistEmployees.map(e => e.user_id);
+
+      // const validUsers = await User.find({
+      //   _id: { $in: userIds },
+      //   isBanned: { $ne: true }
+      // }).select("_id");
+
+      // await pushNotification(
+      //   validUsers.map(u => u._id),
+      //   "Booking đặt cọc thành công",
+      //   `Booking có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"} đã xác nhận đặt cọc thành công.`,
+      //   "booking",
+      //   "Booking",
+      //   booking[0]._id,
+      //   "unread"
+      // );
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+    }
+
     return res.status(200).json({
       message: "Xác nhận đặt phòng thành công.",
       booking,
@@ -1224,7 +1348,9 @@ export const checkinBookingDetail = async (req, res) => {
   session.startTransaction();
 
   try {
-    const booking = await Booking.findById(bookingId).session(session);
+    const booking = await Booking.findById(bookingId)
+      .populate("handled_by", "user_id")
+      .session(session);
     if (!booking) {
       throw new Error("Không tìm thấy booking.");
     }
@@ -1240,6 +1366,11 @@ export const checkinBookingDetail = async (req, res) => {
 
     if (!["reserved", "confirmed"].includes(detail.status)) {
       throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể check-in.`);
+    }
+
+    const room = await Room.findById(detail.room_id).session(session);
+    if (!room) {
+      throw new Error("Không tìm thấy thông tin phòng.");
     }
 
     // check conflict phòng
@@ -1336,6 +1467,59 @@ export const checkinBookingDetail = async (req, res) => {
       ],
       { session }
     );
+
+    const customer_id = booking.customer_id;
+    const customer = await Customer.findById(customer_id);
+
+    try {
+      // gửi thông báo cho admin
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotificationToUsers(
+          adminIds,
+          "Booking đã xác nhận check-in",
+          `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận checkin.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      // Lấy user_id từ customer
+      const customerUser = await Customer.findById(customer_id).select("user_id").lean();
+      if (customerUser && customerUser.user_id) {
+        await pushNotification(
+          customerUser.user_id,
+          "Bạn đã check-in thành công",
+          `Bạn đã checkin phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} thành công!
+            Chúc bạn có những trải nghiệm tuyệt vời.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho nhân viên thực hiện booking
+      if (booking.handled_by && booking.handled_by.user_id) {
+        await pushNotification(
+          booking.handled_by.user_id,
+          "Booking check-in thành công",
+          `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận checkin.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+    }
 
     await session.commitTransaction();
     session.endSession();
@@ -1767,9 +1951,63 @@ export const cancelBooking = async (req, res) => {
       reason: "Trừ 20 điểm vì hủy booking"
     });
 
+   
     await session.commitTransaction();
     session.endSession();
 
+    const customer = await Customer.findById(booking.customer_id);
+    const employee = await Employee.findById(booking.handled_by);
+
+    console.log("Sending cancellation notifications...");
+    try {
+      // gửi thông báo cho admin
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotificationToUsers(
+          adminIds,
+          "Booking đã bị hủy",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận hủy.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      if (customer && customer.user_id) {
+        await pushNotification(
+          customer.user_id,
+          "Booking đã bị hủy",
+          `Bạn đã hủy booking có ID: #${booking._id.toString().slice(-6)}. 
+            Tiền cọc của bạn sẽ không được hoàn lại!`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho nhân viên thực hiện booking
+      if (employee && employee.user_id) {
+        await pushNotification(
+          employee.user_id,
+          "Booking đã bị hủy",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+            đã xác nhận hủy.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
+    }
+
+    console.log("Cancellation process completed successfully.");
     res.json({ message: "Đã hủy toàn bộ booking." });
 
   } catch (err) {

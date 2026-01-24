@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign } from "react-icons/fi";
+import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ReceiptDetailModal from "../components/receiptDetailModal.jsx";
 import CreateReceiptModal from "../components/createReceiptModal.jsx";
 import ConfirmPaymentModal from "../components/confirmPaymentModal.jsx";
 import { receiptApi } from "../../api/receiptApi.js";
+import { paymentApi } from "../../api/paymentApi.js";
 import { StatusPill } from "../../../components/ui/label.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const PAYMENT_METHOD = {
   cash: "Tiền mặt",
-  card: "Thẻ / POS",
-  bank: "Chuyển khoản",
-  "e-wallet": "Ví điện tử"
+  bank: "Chuyển khoản (PayOS)"
 };
 
 export default function ReceiptList() {
@@ -28,6 +28,13 @@ export default function ReceiptList() {
   const [payment, setPayment] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+
+  const { user } = useAuth();
+  let userId = user?._id;
+  if (!userId && user?.token) {
+    try { userId = jwtDecode(user.token).userId; } catch (err) {}
+  }
+  if (!userId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
 
   const fetchReceipts = async () => {
     setLoading(true);
@@ -91,7 +98,6 @@ export default function ReceiptList() {
                 <option value="">Phương thức</option>
                 <option value="cash">Tiền mặt</option>
                 <option value="bank">Chuyển khoản</option>
-                <option value="card">Thẻ</option>
                 <option value="unknown">Chưa biết</option>
              </select>
              <div className="flex items-center gap-2 border px-3 py-2 rounded-lg bg-white">
@@ -155,6 +161,41 @@ export default function ReceiptList() {
                                     {new Date(item.created_at).toLocaleDateString("vi-VN")}
                                 </td>
                                 <td className="py-4 px-6 text-right flex justify-end gap-2">
+                                    {item.status === 'pending' && item.deposit_amount > 0 && (
+                                        <button
+                                            onClick={async () => {
+                                              try {
+                                                const paymentData = {
+                                                  receipt_id: item._id,
+                                                  booking_id: item.booking_id?._id || item.booking_id,
+                                                  amount: item.deposit_amount,
+                                                  description: `Tiền cọc hóa đơn #${item._id.toString().slice(-6)}`,
+                                                  items: [{
+                                                    name: `Tiền cọc hóa đơn #${item._id.toString().slice(-6)}`,
+                                                    quantity: 1,
+                                                    price: item.deposit_amount
+                                                  }]
+                                                };
+
+                                                const paymentRes = await paymentApi.createPaymentLink(userId, paymentData);
+                                                
+                                                if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
+                                                  window.open(paymentRes.data.checkoutUrl, '_blank');
+                                                  alert("Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.");
+                                                  fetchReceipts();
+                                                } else {
+                                                  throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
+                                                }
+                                              } catch (error) {
+                                                alert("Lỗi: " + (error.response?.data?.error || error.message));
+                                              }
+                                            }}
+                                            className="flex items-center gap-1 bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200 transition"
+                                            title="Tạo link thanh toán tiền cọc"
+                                        >
+                                            <FiCheckCircle /> Xác nhận cọc
+                                        </button>
+                                    )}
                                     {(item.status === 'pending' || item.status === 'half-paid') && (
                                         <button
                                             onClick={() => setPaymentModalData(item)}

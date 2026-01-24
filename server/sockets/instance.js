@@ -5,6 +5,8 @@ export const setSocketInstance = (ioInstance) => {
 };
 
 export const getSocketInstance = () => {
-  if (!io) throw new Error("Socket.io instance not initialized");
+  if (!io) {
+    throw new Error("Socket.io instance not initialized");
+  }
   return io;
 };

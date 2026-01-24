@@ -1,12 +1,59 @@
 import React, { useState } from "react";
-import { FiX, FiDollarSign, FiCreditCard, FiSmartphone, FiCheckCircle, FiInfo } from "react-icons/fi";
+import { FiX, FiDollarSign, FiCheckCircle, FiInfo, FiExternalLink } from "react-icons/fi";
 import { receiptApi } from "../../api/receiptApi.js";
+import { paymentApi } from "../../api/paymentApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
   const [method, setMethod] = useState("cash");
   const [loading, setLoading] = useState(false);
+  const [creatingPaymentLink, setCreatingPaymentLink] = useState(false);
+
+  const { user } = useAuth();
+  let userId = user?._id;
+  if (!userId && user?.token) {
+    try { userId = jwtDecode(user.token).userId; } catch (err) {}
+  }
+  if (!userId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
 
   const handleConfirm = async () => {
+    // Nếu là chuyển khoản, tạo payment link PayOS
+    if (method === "bank") {
+      setCreatingPaymentLink(true);
+      try {
+        // Tạo payment link cho receipt
+        const paymentData = {
+          receipt_id: receipt._id,
+          booking_id: receipt.booking_id?._id || receipt.booking_id,
+          amount: receipt.amount_due,
+          description: `Thanh toán hóa đơn #${receipt._id.toString().slice(-6)}`,
+          items: [{
+            name: `Thanh toán hóa đơn #${receipt._id.toString().slice(-6)}`,
+            quantity: 1,
+            price: receipt.amount_due
+          }]
+        };
+
+        const paymentRes = await paymentApi.createPaymentLink(userId, paymentData);
+        
+        if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
+          // Mở link thanh toán trong tab mới
+          window.open(paymentRes.data.checkoutUrl, '_blank');
+          alert("Đã tạo link thanh toán PayOS. Vui lòng thanh toán trong cửa sổ mới. Hệ thống sẽ tự động cập nhật khi thanh toán thành công.");
+          onSuccess?.();
+          onClose();
+        } else {
+          throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
+        }
+      } catch (error) {
+        alert("Lỗi: " + (error.response?.data?.error || error.message));
+      } finally {
+        setCreatingPaymentLink(false);
+      }
+      return;
+    }
+
+    // Nếu là tiền mặt, xác nhận trực tiếp
     setLoading(true);
     try {
       await receiptApi.updateReceipt(receipt._id, {
@@ -26,9 +73,7 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
 
   const methods = [
     { id: "cash", label: "Tiền mặt", icon: <FiDollarSign size={20}/> },
-    { id: "bank", label: "Chuyển khoản", icon: <FiCheckCircle size={20}/> },
-    { id: "card", label: "Thẻ tín dụng", icon: <FiCreditCard size={20}/> },
-    { id: "e-wallet", label: "Ví điện tử", icon: <FiSmartphone size={20}/> },
+    { id: "bank", label: "Chuyển khoản (PayOS)", icon: <FiCheckCircle size={20}/> },
   ];
 
   const roomFee = receipt.total_fee || 0;
@@ -95,28 +140,56 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
                     <button
                         key={m.id}
                         onClick={() => setMethod(m.id)}
+                        disabled={loading || creatingPaymentLink}
                         className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition ${
                             method === m.id
                             ? "bg-emerald-100 border-emerald-500 text-emerald-800"
                             : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                        }`}
+                        } ${loading || creatingPaymentLink ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                         {m.icon}
                         <span className="text-xs font-bold">{m.label}</span>
+                        {m.id === "bank" && method === "bank" && (
+                          <span className="text-[10px] text-gray-500 mt-0.5">(Mở link PayOS)</span>
+                        )}
                     </button>
                 ))}
             </div>
+            {method === "bank" && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                <FiInfo className="inline mr-1" size={12}/>
+                Khi chọn chuyển khoản, hệ thống sẽ tạo link thanh toán PayOS và mở trong tab mới.
+              </div>
+            )}
           </div>
         </div>
 
         <div className="p-4 border-t border-gray-100 flex gap-3 bg-white">
-             <button onClick={onClose} className="flex-1 py-2 rounded-lg border font-bold text-gray-600 hover:bg-gray-50">Hủy</button>
+             <button 
+               onClick={onClose} 
+               disabled={loading || creatingPaymentLink}
+               className="flex-1 py-2 rounded-lg border font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+             >
+               Hủy
+             </button>
              <button
                 onClick={handleConfirm}
-                disabled={loading}
-                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition"
+                disabled={loading || creatingPaymentLink}
+                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition disabled:opacity-50 flex items-center justify-center gap-2"
              >
-                {loading ? "Đang xử lý..." : "Xác nhận Đã Thu"}
+                {creatingPaymentLink ? (
+                  <>
+                    <span className="animate-spin">⏳</span> Đang tạo link thanh toán...
+                  </>
+                ) : loading ? (
+                  "Đang xử lý..."
+                ) : method === "bank" ? (
+                  <>
+                    <FiExternalLink size={16}/> Tạo Link Thanh Toán
+                  </>
+                ) : (
+                  "Xác nhận Đã Thu"
+                )}
              </button>
         </div>
       </div>

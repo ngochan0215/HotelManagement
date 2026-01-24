@@ -43,6 +43,11 @@ const CANCELLATION_REASONS = [
 
 export default function BookingList() {
   const { user } = useAuth();
+  let employeeId = user?._id;
+  if (!employeeId && user?.token) {
+      try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
+  }
+  if (!employeeId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
 
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
@@ -347,11 +352,6 @@ export default function BookingList() {
     try {
       if (new Date(formData.expected_checkout) <= new Date(formData.expected_checkin)) return alert("Ngày check-out phải sau ngày check-in!");
 
-      let employeeId = user?._id;
-      if (!employeeId && user?.token) {
-          try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
-      }
-      if (!employeeId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
       if (selectedRooms.length === 0) return alert("Vui lòng chọn ít nhất một phòng!");
 
       let finalCustomerId = formData.customer_id;
@@ -613,10 +613,60 @@ export default function BookingList() {
   const selectCustomer = (c) => { setFormData({ ...formData, customer_id: c._id }); setSelectedCustDisplay(c); setCustSearchQuery(""); setShowCustDropdown(false); };
   const clearSelectedCustomer = () => { setFormData({ ...formData, customer_id: "" }); setSelectedCustDisplay(null); setCustSearchQuery(""); };
 
-  const actionConfirm = (id) => setConfirmState({
-      open: true, title: "Xác nhận Tiền Cọc", message: "Bạn có chắc chắn khách hàng đã thanh toán tiền cọc?", confirmText: "Đã thu tiền", type: "info",
-      onConfirm: async () => { try { await bookingApi.confirmBooking(id); fetchData(); setConfirmState(p => ({...p, open: false})); } catch(e) { alert(e.message) } }
-  });
+  const actionConfirm = async (bookingId) => {
+    try {
+      // Tìm booking để lấy thông tin deposit
+      const booking = bookings.find(b => b._id === bookingId);
+      if (!booking) {
+        alert("Không tìm thấy thông tin booking.");
+        return;
+      }
+
+      if (!booking.deposit || booking.deposit === 0) {
+        alert("Booking này không cần đặt cọc.");
+        return;
+      }
+
+      // Lấy receipt_id từ booking hoặc tìm receipt theo booking_id
+      let receiptId = null;
+      try {
+        const receiptRes = await receiptApi.getAllReceipts({ booking_id: bookingId });
+        if (receiptRes.receipts && receiptRes.receipts.length > 0) {
+          receiptId = receiptRes.receipts[0]._id;
+        }
+      } catch (e) {
+        console.error("Error fetching receipt:", e);
+      }
+
+      // Tạo payment link cho tiền cọc
+      const paymentData = {
+        booking_id: bookingId,
+        receipt_id: receiptId,
+        amount: booking.deposit,
+        description: `Tiền cọc đơn ID: #${bookingId.toString().slice(-6)}`,
+        items: [{
+          name: `Tiền cọc đặt phòng`,
+          quantity: 1,
+          price: booking.deposit
+        }]
+      };
+
+      const paymentRes = await paymentApi.createPaymentLink(employeeId, paymentData);
+      
+      if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
+        // Mở link thanh toán trong tab mới
+        window.open(paymentRes.data.checkoutUrl, '_blank');
+        setToast({ 
+          message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.", 
+          type: "info" 
+        });
+      } else {
+        throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
+      }
+    } catch (error) {
+      alert("Lỗi: " + (error.response?.data?.error || error.message));
+    }
+  };
 
   const actionCheckIn = (did, bid, rNum, expectedCheckin) => {
         const now = new Date();

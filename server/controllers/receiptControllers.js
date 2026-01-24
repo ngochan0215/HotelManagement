@@ -163,8 +163,8 @@ export const createReceipt = async (req, res) => {
       return res.status(400).json({ message: "booking_id không hợp lệ." });
     }
 
-    if (!["cash", "card", "bank", "e-wallet"].includes(payment)) {
-      return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ." });
+    if (!["cash", "bank"].includes(payment)) {
+      return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ. Chỉ chấp nhận tiền mặt hoặc chuyển khoản." });
     }
 
     const employee = await Employee.findOne(
@@ -381,8 +381,8 @@ export const updateReceipt = async (req, res) => {
     const { id } = req.params;
     const { status, payment } = req.body;
 
-    const allowedStatus = ["pending", "paid", "cancelled"];
-    const allowedPayment = ["cash", "card", "bank", "e-wallet"];
+    const allowedStatus = ["pending", "paid", "half-paid", "cancelled"];
+    const allowedPayment = ["cash", "bank"];
 
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({
@@ -502,8 +502,8 @@ export const markReceiptAsPaid = async (req, res) => {
       return res.status(400).json({ message: "receipt_id không hợp lệ." });
     }
 
-    if (!["cash", "card", "bank", "e-wallet"].includes(payment)) {
-      return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ." });
+    if (!["cash", "bank"].includes(payment)) {
+      return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ. Chỉ chấp nhận tiền mặt hoặc chuyển khoản." });
     }
 
     const employee = await Employee.findOne(

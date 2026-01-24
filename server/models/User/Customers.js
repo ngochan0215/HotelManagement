@@ -11,7 +11,7 @@ const customerSchema = new mongoose.Schema(
         CCCD: { type: String, unique: true, required: true },
                 
         booking_count: { type: Number, min: 0, default: 0 },
-        points: { type: Number, min: 10, default: 10 },
+        points: { type: Number, default: 10 },
         loyalty: { type: String, enum: ["bronze", "silver", "gold", "platinum"], default: "bronze" },
         status: { type: String, enum: ["active", "inactive", "banned"], default: "active" },
     },  

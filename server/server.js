@@ -27,16 +27,23 @@ import equipmentRoute from "./routes/equipmentRoutes.js";
 import bookingRoute from "./routes/bookingRoutes.js";
 import statisticRoute from "./routes/statisticsRoutes.js";
 import qrRoute from "./routes/qrRoutes.js";
+import notificationRoute from "./routes/notificationRoutes.js";
 
 dotenv.config();
 connectDB();
 
 const app = express();
 const server = http.createServer(app); 
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+
+// Import và set socket instance để notification service có thể sử dụng
+import { setSocketInstance } from "./sockets/instance.js";
+import { initSocket } from "./sockets/index.js";
+
+// Khởi tạo socket với authentication và handlers
+// initSocket sẽ tạo Server instance và set vào instance.js
+const io = initSocket(server);
 app.set("io", io);
+
 app.use(cors());
 app.use(express.json());
 
@@ -55,6 +62,7 @@ app.use("/equipment", equipmentRoute);
 app.use("/booking", bookingRoute);
 app.use("/incident", incidentRoute);
 app.use("/qr", qrRoute);
+app.use("/notification", notificationRoute);
 app.use("/avatars", express.static("avatars"));
 
 const __filename = fileURLToPath(import.meta.url);

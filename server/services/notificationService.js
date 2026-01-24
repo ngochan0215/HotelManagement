@@ -12,7 +12,14 @@ export async function pushNotification(userId, title, content, type, kind, refId
             status
         });
 
-        const io = getSocketInstance();
+        let io;
+        try {
+            io = getSocketInstance();
+        } catch (socketError) {
+            console.error("Socket not initialized, notification saved but not sent via socket:", socketError.message);
+            // Vẫn trả về notification dù không gửi được qua socket
+            return notification;
+        }
         
         io.to(`user:${userId}`).emit("notification", {
             id: notification._id,
@@ -34,7 +41,26 @@ export async function pushNotification(userId, title, content, type, kind, refId
 export async function pushNotificationToUsers(userIds, title, content, type, kind, refId, status = "unread") {
     try {
         const notifications = [];
-        const io = getSocketInstance();
+        
+        let io;
+        try {
+            io = getSocketInstance();
+        } catch (socketError) {
+            console.error("Socket not initialized, notifications saved but not sent via socket:", socketError.message);
+            // Vẫn tạo notifications dù không gửi được qua socket
+            for (const userId of userIds) {
+                const notification = await Notification.create({
+                    user_id: userId,
+                    title,
+                    content,
+                    type,
+                    reference: { kind, refId },
+                    status
+                });
+                notifications.push(notification);
+            }
+            return notifications;
+        }
 
         for (const userId of userIds) {
             const notification = await Notification.create({

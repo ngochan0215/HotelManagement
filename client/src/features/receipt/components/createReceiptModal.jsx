@@ -170,9 +170,7 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
                         onChange={(e) => setPaymentMethod(e.target.value)}
                     >
                         <option value="cash">Tiền mặt</option>
-                        <option value="card">Thẻ / POS</option>
-                        <option value="bank">Chuyển khoản</option>
-                        <option value="e-wallet">Ví điện tử</option>
+                        <option value="bank">Chuyển khoản (PayOS)</option>
                     </select>
                 </div>
                  <div>

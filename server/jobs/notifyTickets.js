@@ -542,6 +542,7 @@ export const updateAllCustomerTiers = async () => {
 
 // Gửi thông báo 2h trước giờ check-in dự kiến
 export const notifyCheckinReminder = async () => {
+  console.log("[CRON] Running notifyCheckinReminder...");
   try {
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 giờ sau từ bây giờ
@@ -555,6 +556,8 @@ export const notifyCheckinReminder = async () => {
       }
     }).populate("customer_id", "user_id full_name");
 
+    console.log(`[CRON] Found ${bookings.length} bookings needing check-in reminders.`);
+    
     if (bookings.length === 0) {
       return;
     }
@@ -566,6 +569,8 @@ export const notifyCheckinReminder = async () => {
     }).select("_id");
     const managerIds = managers.map(m => m._id);
 
+    
+    console.log("Manager for notifications:", managers);
     // Lấy danh sách lễ tân (receptionist)
     const receptionistEmployees = await Employee.find({
       position: "receptionist",

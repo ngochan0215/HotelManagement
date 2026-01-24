@@ -282,7 +282,7 @@ export const paymentSucceeded = async (orderCode) => {
     transaction.completed_at = new Date();
     await transaction.save();
 
-    // Tìm Receipt bằng booking_id từ transaction
+    // Tìm Receipt bằng receipt_id hoặc booking_id từ transaction
     let receipt = null;
     if (transaction.receipt_id) {
         receipt = await Receipt.findById(transaction.receipt_id);
@@ -294,74 +294,55 @@ export const paymentSucceeded = async (orderCode) => {
         throw new Error("Không tìm thấy hóa đơn tương ứng.");
     }
 
-    // Lấy booking để kiểm tra
-    const booking = await Booking.findById(transaction.booking_id);
-    if (!booking) {
-        throw new Error("Không tìm thấy booking tương ứng.");
+    // Lấy booking để kiểm tra (nếu có)
+    let booking = null;
+    if (transaction.booking_id) {
+        booking = await Booking.findById(transaction.booking_id);
     }
 
-    // Phân biệt full payment vs deposit
-    // Nếu transaction.amount >= receipt.final_amount thì là full payment
-    // Nếu transaction.amount < receipt.final_amount thì là deposit
-    const isFullPayment = transaction.amount >= receipt.final_amount;
-    const isDeposit = !isFullPayment && transaction.amount > 0;
-    console.log(`Payment succeeded for transaction ${transaction._id}. Full payment: ${isFullPayment}, Deposit: ${isDeposit}`);
-    // Nếu là deposit và booking chưa được confirm, gọi confirmBooking
-    if (isDeposit && booking.status === "pending") {
-        console.log("IM CALLED Confirming booking as part of deposit payment success:", booking._id);
+    // Phân biệt các trường hợp thanh toán:
+    // 1. Thanh toán tiền cọc cho booking mới (receipt.status = "pending", deposit_amount > 0, booking.status = "pending")
+    // 2. Thanh toán phần còn lại hoặc đầy đủ cho receipt đã có (receipt.status = "pending" hoặc "half-paid")
+    
+    const isDepositPayment = receipt.status === "pending" && receipt.deposit_amount > 0 && booking && booking.status === "pending";
+    const isFullPayment = transaction.amount >= receipt.amount_due;
+    const isPartialPayment = !isFullPayment && transaction.amount > 0 && transaction.amount < receipt.amount_due;
+    
+    console.log(`Payment succeeded for transaction ${transaction._id}. Receipt status: ${receipt.status}, Deposit: ${isDepositPayment}, Full: ${isFullPayment}, Partial: ${isPartialPayment}`);
+
+    // Nếu là tiền cọc cho booking mới và booking chưa được confirm, gọi confirmBooking
+    if (isDepositPayment && booking && booking.status === "pending") {
+        console.log("Confirming booking as part of deposit payment success:", booking._id);
         try {
             await confirmBookingInternal(transaction.booking_id, null, null);
+            // Refresh booking sau khi confirm
+            booking = await Booking.findById(transaction.booking_id);
         } catch (err) {
             console.error("Error confirming booking:", err);
             // Không throw error, tiếp tục xử lý receipt
         }
     }
 
+    // Tính tổng số tiền đã thanh toán
+    // deposit_amount là số tiền cọc ban đầu (đã được trừ vào amount_due khi tạo receipt)
+    // transaction.amount là số tiền vừa thanh toán qua PayOS
+    // Tổng đã trả = deposit_amount + transaction.amount
+    const totalPaid = (receipt.deposit_amount || 0) + transaction.amount;
+    const remainingDue = Math.max(receipt.final_amount - totalPaid, 0);
+
     // Update receipt dựa trên loại thanh toán
-    if (isFullPayment) {
-        // Full payment: status = "paid", cộng điểm
+    if (isFullPayment || totalPaid >= receipt.final_amount) {
+        // Thanh toán đầy đủ: status = "paid", cộng điểm
         if (receipt.status !== "paid") {
             receipt.status = "paid";
+            receipt.payment = "bank"; // Đánh dấu là thanh toán qua PayOS
             receipt.paid_at = new Date();
             receipt.transaction_id = transaction._id;
+            receipt.amount_due = 0; // Đã thanh toán đủ
             await receipt.save();
 
-            // Cộng điểm khách hàng
-            const customer = await Customer.findById(booking.customer_id);
-            if (customer) {
-                const rewardPoints = Math.floor(receipt.final_amount / 10000);
-                await updateCustomerPoints({
-                    customer_id: customer._id,
-                    points: rewardPoints,
-                    reason: "Hoàn tất thanh toán qua PayOS"
-                });
-
-                await Customer.findByIdAndUpdate(
-                    customer._id,
-                    { $inc: { booking_count: 1 } }
-                );
-            }
-        }
-    } else if (isDeposit) {
-        // Deposit: status = "half-paid", cập nhật amount_due
-        // deposit_amount giữ nguyên (là snapshot từ booking), chỉ cập nhật amount_due
-        if (receipt.status !== "paid") {
-            // Tính số tiền đã thanh toán (deposit ban đầu + transaction hiện tại)
-            // deposit_amount là số tiền cọc ban đầu từ booking
-            // transaction.amount là số tiền vừa thanh toán
-            const totalPaid = (receipt.deposit_amount || 0) + transaction.amount;
-            const remainingDue = Math.max(receipt.final_amount - totalPaid, 0);
-            
-            receipt.status = "half-paid";
-            receipt.amount_due = remainingDue;
-            receipt.transaction_id = transaction._id;
-            
-            // Nếu đã thanh toán đủ (tổng đã trả >= final_amount), chuyển sang paid
-            if (totalPaid >= receipt.final_amount) {
-                receipt.status = "paid";
-                receipt.paid_at = new Date();
-                
-                // Cộng điểm khách hàng
+            // Cộng điểm khách hàng (nếu có booking)
+            if (booking) {
                 const customer = await Customer.findById(booking.customer_id);
                 if (customer) {
                     const rewardPoints = Math.floor(receipt.final_amount / 10000);
@@ -377,9 +358,15 @@ export const paymentSucceeded = async (orderCode) => {
                     );
                 }
             }
-            
-            await receipt.save();
         }
+    } else if (isPartialPayment || (isDepositPayment && totalPaid < receipt.final_amount)) {
+        // Thanh toán một phần hoặc tiền cọc: status = "half-paid", cập nhật amount_due
+        receipt.status = "half-paid";
+        receipt.payment = "bank"; // Đánh dấu là thanh toán qua PayOS
+        receipt.amount_due = remainingDue;
+        receipt.transaction_id = transaction._id;
+        
+        await receipt.save();
     }
 
     return { transaction, receipt };
