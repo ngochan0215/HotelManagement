@@ -12,7 +12,7 @@ const router = express.Router();
 
 // manage incidents
 router.post("/add", verifyToken, isNotCustomer, createIncident);
-router.get("/all", verifyToken, isManager, getAllIncidents);
+router.get("/all", verifyToken, isEmployee, getAllIncidents);
 // phân công người xử lý
 router.patch("/:id/assign", verifyToken, isManager, assignIncident);
 // đánh dấu xử lý xong

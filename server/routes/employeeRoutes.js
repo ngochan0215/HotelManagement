@@ -22,7 +22,7 @@ import { verifyToken, isManager, isEmployee, isNotCustomer } from "../middleware
 const router = express.Router();
 router.get("/profile/me", verifyToken, getMyProfile);
 router.post("/add", verifyToken, isManager, registerEmployee);
-router.get("/all", verifyToken, isManager, getAllEmployees);
+router.get("/all", verifyToken, isEmployee, getAllEmployees);
 router.get("/:id", verifyToken, isManager, getEmployeeById);
 router.patch("/:id", verifyToken, isManager, updateEmployee);
 

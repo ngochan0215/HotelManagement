@@ -25,14 +25,14 @@ const sidebarConfig = [
     type: "group",
     title: "QUẢN LÝ",
     children: [
-      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed, allowed: ["receptionist", "housekeeper"] },
+      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed, allowed: [ "housekeeper"] },
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
-      { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: ["receptionist", "customer_service"] },
+      { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
       { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },
-      { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: ["receptionist", "customer_service"] },
+      { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: [ "customer_service"] },
       { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle, allowed: ["technician", "receptionist", "housekeeper"] },
       { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText, allowed: ["accountant"] }, // Chỉ kế toán + Manager
       { name: "Quét QR căn cước", path: "/qr-scanner", icon: FiCamera, allowed: ["receptionist"] },
