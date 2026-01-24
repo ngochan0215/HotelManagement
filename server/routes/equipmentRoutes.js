@@ -4,10 +4,10 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         getAllEquipments, getEquipmentById, updateEquipment, deleteEquipment,
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket, 
         createInstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
-        confirmEquipmentInstall,
+        confirmEquipmentInstall, startInstallTicket, completeInstallTicket, getAvailableTechnicians, getMyInstallTickets,
         confirmEquipmentImportTicket
 } from "../controllers/equipmentController.js";
-import { isManager, isNotCustomer, verifyToken } from "../middleware/authMiddleware.js";
+import { isManager, isNotCustomer, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -33,19 +33,15 @@ router.delete("/ticket/:id", verifyToken, isManager, deleteEquipmentTicket);
 router.post("/ticket/:id/confirm-import", verifyToken, isManager, confirmEquipmentImportTicket)
 
 //----PHIẾU LẮP ĐẶT THIẾT BỊ----//
+router.get("/install/available-technicians", verifyToken, isManager, getAvailableTechnicians);
+router.get("/install/my-tickets", verifyToken, isEmployee, getMyInstallTickets);
 router.post("/install/add", verifyToken, isManager, createInstallTicket);
 router.get("/install/all", verifyToken, isNotCustomer, getAllEquipmentInstalls);
 router.get("/install/:id", verifyToken, isNotCustomer, getEquipmentInstallById);
 router.patch("/install/:id", verifyToken, isManager, updateEquipmentInstall);
 router.delete("/install/:id", verifyToken, isManager, deleteEquipmentInstall);
+router.post("/install/:id/start", verifyToken, isEmployee, startInstallTicket);
+router.post("/install/:id/complete", verifyToken, isEmployee, completeInstallTicket);
 router.post("/install/:id/confirm-install", verifyToken, isManager, confirmEquipmentInstall);
 
 export default router;
-
-//----CHI TIẾT NHẬP THIẾT BỊ - EQUIPMENT IMPORT (each record = 1 type of equipment)----//
-// router.post("/import/add", verifyToken, isManager, createEquipmentImport);
-// router.get("/import/all", verifyToken, getAllEquipmentImports);
-// router.get("/import/:id", verifyToken, getEquipmentImportById);
-// router.put("/import/:id", verifyToken, isManager, updateEquipmentImport);
-// router.delete("/import/:id", verifyToken, isManager, deleteEquipmentImport);
-// router.post("/ticket/confirm/:id", verifyToken, isManager, confirmEquipmentTicket);

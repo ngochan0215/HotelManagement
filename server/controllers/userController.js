@@ -35,7 +35,7 @@ export const viewProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { name, phone, dob, nationality, cccd } = req.body;
+        const { name, phone, dob, nationality, cccd, BIN, account_number, bank_shortName } = req.body;
 
         const user = await User.findById(userId).select("email system_role avatar");
         if (!user) {
@@ -97,6 +97,56 @@ export const updateProfile = async (req, res) => {
                 return res.status(400).json({ message: "Quốc tịch không hợp lệ." });
             }
             profile.nationality = nationality.trim();
+        }
+
+        // Chỉ cho phép employee cập nhật thông tin ngân hàng
+        if (user.system_role === "employee") {
+            // Validate và cập nhật BIN (6 số đầu của thẻ ngân hàng)
+            if (BIN !== undefined) {
+                if (BIN === null || BIN === "") {
+                    // Cho phép xóa BIN (set null)
+                    profile.BIN = null;
+                } else {
+                    const binStr = String(BIN).trim();
+                    if (!/^\d{6}$/.test(binStr)) {
+                        return res.status(400).json({ message: "BIN phải là 6 chữ số." });
+                    }
+                    profile.BIN = binStr;
+                }
+            }
+
+            // Validate và cập nhật account_number (số tài khoản ngân hàng)
+            if (account_number !== undefined) {
+                if (account_number === null || account_number === "") {
+                    // Cho phép xóa account_number (set null)
+                    profile.account_number = null;
+                } else {
+                    const accountStr = String(account_number).trim();
+                    // Số tài khoản thường từ 8-16 ký tự, có thể là số hoặc chữ số
+                    if (!/^[0-9]{8,16}$/.test(accountStr)) {
+                        return res.status(400).json({ message: "Số tài khoản phải là 8-16 chữ số." });
+                    }
+                    profile.account_number = accountStr;
+                }
+            }
+
+            // Validate và cập nhật bank_shortName (mã ngân hàng)
+            if (bank_shortName !== undefined) {
+                if (bank_shortName === null || bank_shortName === "") {
+                    // Cho phép xóa bank_shortName (set null)
+                    profile.bank_shortName = null;
+                } else {
+                    if (typeof bank_shortName !== "string" || !bank_shortName.trim()) {
+                        return res.status(400).json({ message: "Mã ngân hàng không hợp lệ." });
+                    }
+                    profile.bank_shortName = bank_shortName.trim();
+                }
+            }
+        } else {
+            // Nếu là customer và cố gắng cập nhật thông tin ngân hàng
+            if (BIN !== undefined || account_number !== undefined || bank_shortName !== undefined) {
+                return res.status(403).json({ message: "Chỉ nhân viên mới có thể cập nhật thông tin ngân hàng." });
+            }
         }
 
         await profile.save();

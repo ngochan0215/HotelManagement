@@ -26,7 +26,7 @@ export const startImportTicketJob = () =>
 export const startInstallTicketJob = () =>
   startCronJob({
     name: "install equipment tickets",
-    schedule: "*/5 * * * *",
+    schedule: "* * * * *",
     handler: notifyInstallTickets,
   });
 

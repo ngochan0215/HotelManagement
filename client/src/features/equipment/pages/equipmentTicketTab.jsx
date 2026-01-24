@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
-import { FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft } from "react-icons/fi";
+import { FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft, FiEdit, FiEye } from "react-icons/fi";
 import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
+import UpdateInstallTicketModal from "../components/updateInstallTicketModal.jsx";
+import InstallTicketDetailModal from "../components/installTicketDetailModal.jsx";
 
 export default function EquipmentTicketTab() {
   const [imports, setImports] = useState([]);
@@ -10,6 +12,9 @@ export default function EquipmentTicketTab() {
   const [loading, setLoading] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -47,10 +52,15 @@ export default function EquipmentTicketTab() {
       return !!ticket.room_id;
   };
 
-  const renderStatus = (status) => {
+  const renderStatus = (status, completed_at) => {
     const config = {
       pending: { label: "Chờ xử lý", class: "bg-gray-100 text-gray-500" },
-      waiting_confirm: { label: "Cần duyệt", class: "bg-yellow-100 text-yellow-800 animate-pulse border border-yellow-300" },
+      waiting_confirm: { 
+        label: completed_at ? "Chờ admin xác nhận" : "Đang xử lý", 
+        class: completed_at 
+          ? "bg-yellow-100 text-yellow-800 animate-pulse border border-yellow-300" 
+          : "bg-blue-100 text-blue-800" 
+      },
       completed: { label: "Hoàn tất", class: "bg-green-100 text-green-700" },
     };
     const s = config[status] || config.pending;
@@ -61,6 +71,25 @@ export default function EquipmentTicketTab() {
     <div className="space-y-8 pb-10 animate-fade-in relative">
       {showInstallModal && <AddInstallTicketModal onClose={() => setShowInstallModal(false)} onSuccess={fetchTickets} />}
       {showImportModal && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
+      {showUpdateModal && selectedTicket && (
+        <UpdateInstallTicketModal 
+          ticket={selectedTicket}
+          onClose={() => {
+            setShowUpdateModal(false);
+            setSelectedTicket(null);
+          }} 
+          onSuccess={fetchTickets} 
+        />
+      )}
+      {showDetailModal && selectedTicket && (
+        <InstallTicketDetailModal 
+          ticket={selectedTicket}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedTicket(null);
+          }} 
+        />
+      )}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="flex justify-between items-center mb-4">
@@ -76,6 +105,7 @@ export default function EquipmentTicketTab() {
                           <th className="px-4 py-3">Loại phiếu</th>
                           <th className="px-4 py-3">Phòng</th>
                           <th className="px-4 py-3">Ngày dự kiến</th>
+                          <th className="px-4 py-3">Nhân viên được gán</th>
                           <th className="px-4 py-3 text-center">Trạng thái</th>
                           <th className="px-4 py-3 text-right">Hành động</th>
                       </tr>
@@ -106,17 +136,55 @@ export default function EquipmentTicketTab() {
                               </td>
 
                               <td className="px-4 py-3">{new Date(item.install_date).toLocaleDateString('vi-VN')}</td>
-                              <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
+                              <td className="px-4 py-3">
+                                {item.handled_by ? (
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {item.handled_by.full_name || 'N/A'}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-gray-400 italic">Chưa phân công</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center">{renderStatus(item.status, item.completed_at)}</td>
                               <td className="px-4 py-3 text-right">
-                                  {item.status === 'waiting_confirm' && (
-                                      <button onClick={() => handleConfirmInstall(item._id)} className="text-green-600 hover:text-green-800 font-bold text-xs border border-green-200 px-2 py-1 rounded hover:bg-green-50 transition">
-                                          Xác nhận
+                                  <div className="flex items-center justify-end gap-2">
+                                      <button 
+                                          onClick={() => {
+                                              setSelectedTicket(item);
+                                              setShowDetailModal(true);
+                                          }}
+                                          className="text-blue-600 hover:text-blue-800 font-bold text-xs border border-blue-200 px-2 py-1 rounded hover:bg-blue-50 transition flex items-center gap-1"
+                                      >
+                                          <FiEye className="w-3 h-3" />
+                                          Chi tiết
                                       </button>
-                                  )}
+                                      
+                                      {(item.status === 'pending' || (item.status === 'waiting_confirm' && !item.started_at)) && (
+                                          <button 
+                                              onClick={() => {
+                                                  setSelectedTicket(item);
+                                                  setShowUpdateModal(true);
+                                              }}
+                                              className="text-indigo-600 hover:text-indigo-800 font-bold text-xs border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 transition flex items-center gap-1"
+                                          >
+                                              <FiEdit className="w-3 h-3" />
+                                              Cập nhật
+                                          </button>
+                                      )}
+                                      
+                                      {item.status === 'waiting_confirm' && item.completed_at && (
+                                          <button 
+                                              onClick={() => handleConfirmInstall(item._id)} 
+                                              className="text-green-600 hover:text-green-800 font-bold text-xs border border-green-200 px-2 py-1 rounded hover:bg-green-50 transition"
+                                          >
+                                              Xác nhận
+                                          </button>
+                                      )}
+                                  </div>
                               </td>
                           </tr>
                       )})}
-                      {installs.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
+                      {installs.length === 0 && <tr><td colSpan="6" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                   </tbody>
               </table>
           </div>

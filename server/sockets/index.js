@@ -6,7 +6,7 @@ import { setSocketInstance } from "./instance.js";
 const userSocketsMap = new Map();
 
 export function initSocket(httpServer) {
-  console.log("IM CALLED");
+  //console.log("IM CALLED");
   const io = new Server(httpServer, {
     cors: {
       origin: "*", 

@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUser, FiUsers, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign, FiBriefcase
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
 import { useAuth } from "../features/auth/hooks/authContext.jsx";
@@ -26,7 +26,15 @@ const sidebarConfig = [
     title: "Thu nhập",
     icon: FiDollarSign,
     path: "/earnings",
-    allowed: [] // Tất cả nhân viên đều xem được
+    allowed: [], // Tất cả nhân viên đều xem được
+    excludeManager: true // Manager không được xem
+  },
+  {
+    type: "main",
+    title: "Công việc của tôi",
+    icon: FiBriefcase,
+    path: "/my-work",
+    allowed: ["technician"] // Chỉ nhân viên kỹ thuật
   },
   {
     type: "group",
@@ -88,6 +96,9 @@ export default function Sidebar() {
   };
 
   const checkPermission = (item) => {
+    // Nếu item có excludeManager, manager không được xem
+    if (item.excludeManager && userRole === "manager") return false;
+    
     if (userRole === "manager") return true;
     if (!item.allowed) return true;
     return item.allowed.includes(userPosition);

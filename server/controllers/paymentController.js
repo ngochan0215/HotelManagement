@@ -197,7 +197,7 @@ export const payoutStatusDetail = async (req, res) => {
 
 export const cashOut = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.user.userId;
         const result = await cashOutForEmployee(userId);
         if (result === true) {
             res.status(200).json({ success: true, message: "Yêu cầu rút tiền thành công." });
@@ -210,7 +210,7 @@ export const cashOut = async (req, res) => {
 
 export const amountCashout = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.user.userId;
         const timespan = req.query.timespan;
         const result = await getCashoutInfo(userId, timespan);
         res.status(200).json({ success: true, data: result });
@@ -222,7 +222,7 @@ export const amountCashout = async (req, res) => {
 
 export const availableCashoutAmount = async (req, res) => {
     try{
-        const userId = req.userId;
+        const userId = req.user.userId;
         const result = await availableCashout(userId);
         res.status(200).json({ success: true, data: result });
     }
@@ -234,7 +234,7 @@ export const availableCashoutAmount = async (req, res) => {
 // Xem lịch sử thu nhập (earnings)
 export const getEarningsHistory = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.user.userId;
         const { status, start_date, end_date, page = 1, limit = 20 } = req.query;
         
         const { Employee, EmployeeEarning } = await import('../models/index.js');
@@ -299,7 +299,7 @@ export const getEarningsHistory = async (req, res) => {
 // Xem lịch sử rút tiền (payouts)
 export const getPayoutHistory = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.user.userId;
         const { status, start_date, end_date, page = 1, limit = 20 } = req.query;
         
         const { Employee, PayoutEmployee } = await import('../models/index.js');

@@ -703,8 +703,8 @@ export const availableCashout = async (userId) => {
         const employeeId = employee._id;
 
         // Get available earnings that haven't been included in any payout yet
-        const availableEarnings = await TaskerEarning.find({
-            tasker_id: taskerId,
+        const availableEarnings = await EmployeeEarning.find({
+            employee_id: employeeId,
             status: 'available',
             payout_id: { $exists: false }
         });

@@ -10,39 +10,61 @@ const CONDITION_MAP = {
   broken: "Hỏng"
 };
 
-export default function AddInstallTicketModal({ onClose, onSuccess }) {
-  const [mode, setMode] = useState("install");
+export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess }) {
+  const [mode, setMode] = useState(ticket.type || "install");
   const [rooms, setRooms] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [dropdownOptions, setDropdownOptions] = useState([]);
   const [stockMap, setStockMap] = useState({});
-  const [installDate, setInstallDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedRoomId, setSelectedRoomId] = useState("");
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
+  const [installDate, setInstallDate] = useState(
+    ticket.install_date ? new Date(ticket.install_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+  );
+  const [selectedRoomId, setSelectedRoomId] = useState(ticket.room_id?._id || ticket.room_id || "");
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState(ticket.handled_by?._id || ticket.handled_by || "");
   const [items, setItems] = useState([{ id: "", quantity: 1 }]);
   const [loading, setLoading] = useState(false);
+  const [ticketDetails, setTicketDetails] = useState([]);
 
   useEffect(() => {
-    const fetchRooms = async () => {
-        try {
-            const res = await roomApi.getAllRooms();
-            setRooms(res.rooms || []);
-        } catch (error) { console.error(error); }
-    };
-    fetchRooms();
-  }, []);
-
-  useEffect(() => {
-    const fetchTechnicians = async () => {
-        try {
-            const res = await equipmentApi.getAvailableTechnicians();
-            setTechnicians(res.technicians || []);
-        } catch (error) { 
-            console.error("Lỗi tải danh sách nhân viên kỹ thuật:", error);
+    const fetchData = async () => {
+      try {
+        const [resRooms, resTech, resTicket] = await Promise.all([
+          roomApi.getAllRooms(),
+          equipmentApi.getAvailableTechnicians(),
+          equipmentApi.getEquipmentInstallById(ticket._id)
+        ]);
+        setRooms(resRooms.rooms || []);
+        setTechnicians(resTech.technicians || []);
+        
+        // Load chi tiết thiết bị hiện tại
+        if (resTicket.success && resTicket.install?.install_details) {
+          const details = resTicket.install.install_details;
+          const equipmentMap = {};
+          
+          details.forEach(detail => {
+            const catId = detail.equipment_id?.category_id?._id || detail.equipment_id?.category_id;
+            const catName = detail.equipment_id?.category_id?.name || "Unknown";
+            
+            if (catId) {
+              if (!equipmentMap[catId]) {
+                equipmentMap[catId] = { name: catName, quantity: 0 };
+              }
+              equipmentMap[catId].quantity += 1;
+            }
+          });
+          
+          setTicketDetails(details);
+          setItems(Object.keys(equipmentMap).map(catId => ({
+            id: catId,
+            quantity: equipmentMap[catId].quantity
+          })));
         }
+      } catch (error) { 
+        console.error(error); 
+      }
     };
-    fetchTechnicians();
-  }, []);
+    fetchData();
+  }, [ticket._id]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -100,8 +122,6 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                 setDropdownOptions(specificOptions);
             }
 
-            setItems([{ id: "", quantity: 1 }]);
-
         } catch (error) {
             console.error("Lỗi tải dữ liệu thiết bị:", error);
         }
@@ -117,7 +137,31 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         return;
     }
 
-    for (const item of items) {
+    // Validate items nếu có
+    const validItems = items.filter(item => item.id);
+    if (validItems.length === 0) {
+        // Cho phép cập nhật mà không thay đổi thiết bị
+        const payload = {
+          install_date: installDate,
+          room_id: selectedRoomId,
+          handled_by: selectedTechnicianId || null,
+        };
+
+        setLoading(true);
+        try {
+          await equipmentApi.updateInstallTicket(ticket._id, payload);
+          alert("Cập nhật phiếu thành công!");
+          onSuccess();
+          onClose();
+        } catch (error) {
+          alert("Lỗi: " + (error.response?.data?.message || error.message));
+        } finally {
+          setLoading(false);
+        }
+        return;
+    }
+
+    for (const item of validItems) {
         if (!item.id) {
             alert("Vui lòng chọn thiết bị ở tất cả các dòng.");
             return;
@@ -126,7 +170,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
     setLoading(true);
     try {
-      const payloadItems = items.map(item => {
+      const payloadItems = validItems.map(item => {
           if (mode === 'install') {
               return { category_id: item.id, quantity: item.quantity };
           } else {
@@ -138,13 +182,11 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         install_date: installDate,
         items: payloadItems,
         room_id: selectedRoomId,
-        type: mode,
-        from_room_id: mode === 'uninstall' ? selectedRoomId : null,
         handled_by: selectedTechnicianId || null,
       };
 
-      await equipmentApi.createInstallTicket(payload);
-      alert("Tạo phiếu thành công!");
+      await equipmentApi.updateInstallTicket(ticket._id, payload);
+      alert("Cập nhật phiếu thành công!");
       onSuccess();
       onClose();
     } catch (error) {
@@ -169,20 +211,22 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="bg-gray-50 border-b border-gray-100">
             <div className="flex justify-between items-center px-6 py-4">
-                <h3 className="font-bold text-lg text-gray-800">Tạo phiếu kỹ thuật</h3>
+                <h3 className="font-bold text-lg text-gray-800">Cập nhật phiếu kỹ thuật</h3>
                 <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><FiX size={20}/></button>
             </div>
 
             <div className="flex px-6 pb-4 gap-4">
                 <button
-                    onClick={() => { setMode('install'); setSelectedRoomId(""); }}
+                    onClick={() => { setMode('install'); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm transition-all ${mode === 'install' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}
+                    disabled
                 >
                      Lắp đặt (Kho ➝ Phòng)
                 </button>
                 <button
-                    onClick={() => { setMode('uninstall'); setSelectedRoomId(""); }}
+                    onClick={() => { setMode('uninstall'); }}
                     className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm transition-all ${mode === 'uninstall' ? 'bg-orange-600 text-white shadow-md' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}
+                    disabled
                 >
                      Tháo dỡ (Phòng ➝ Kho)
                 </button>
@@ -190,7 +234,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         </div>
 
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          <form id="install-form" onSubmit={handleSubmit} className="space-y-6">
+          <form id="update-form" onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Ngày thực hiện</label>
               <input type="date" required className="w-full border border-gray-300 rounded-lg p-2.5 outline-none"
@@ -302,9 +346,9 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-gray-600 font-medium hover:bg-gray-200 transition">Hủy</button>
-          <button type="submit" form="install-form" disabled={loading || (mode === 'uninstall' && !selectedRoomId)}
+          <button type="submit" form="update-form" disabled={loading || (mode === 'uninstall' && !selectedRoomId)}
             className={`px-6 py-2.5 rounded-lg text-white font-bold shadow-lg transition disabled:opacity-50 ${mode === 'install' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
-            {loading ? "Đang xử lý..." : (mode === 'install' ? "Tạo phiếu Lắp" : "Tạo phiếu Tháo")}
+            {loading ? "Đang xử lý..." : "Cập nhật phiếu"}
           </button>
         </div>
 

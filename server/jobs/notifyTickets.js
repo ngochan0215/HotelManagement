@@ -96,9 +96,11 @@ export const notifyInstallTickets = async () => {
 
     // phiếu quá hạn
     const expiredTickets = await EquipmentInstall.find({
-      status: "waiting_confirm",
+      status: ["waiting_confirm", "pending"],
       install_date: { $lt: start },
     });
+
+    console.log("EXPIRED TICKETS: ", expiredTickets);
 
     for (const ticket of expiredTickets) {
       ticket.status = "expired";
@@ -157,10 +159,10 @@ export const notifyInstallTickets = async () => {
         try {
           await pushNotificationToUsers(
             managerIds,
-            "Phiếu lắp đặt quá hạn",
-            `Phiếu lắp đặt ${ticket._id} đã quá hạn và bị hủy.`,
-            "system",
-            "Order",
+            "Phiếu lắp đặt thiết bị quá hạn",
+            `Phiếu lắp đặt thiết bị ${ticket._id} đã quá hạn và bị hủy.`,
+            "equipment",
+            "EquipmentInstall",
             ticket._id,
             "unread"
           );
@@ -168,7 +170,7 @@ export const notifyInstallTickets = async () => {
           console.error(`Error sending notification for expired install ticket ${ticket._id}:`, error);
         }
       }
-      console.log("[CRON] done updating expired install tickets.")
+      console.log(`[CRON] done updating ${expiredTickets.length} expired install tickets.`)
     }
 
     // phiếu đến ngày
@@ -189,10 +191,10 @@ export const notifyInstallTickets = async () => {
         try {
           await pushNotificationToUsers(
             managerIds,
-            "Phiếu lắp đặt đến ngày",
-            `Phiếu lắp đặt ${ticket._id} đã đến ngày lắp đặt.`,
-            "system",
-            "Order",
+            "Phiếu lắp đặt thiết bị đến ngày",
+            `Phiếu lắp đặt thiết bị ${ticket._id} đã đến ngày lắp đặt.`,
+            "equipment",
+            "EquipmentInstall",
             ticket._id,
             "unread"
           );
@@ -200,7 +202,8 @@ export const notifyInstallTickets = async () => {
           console.error(`Error sending notification for today install ticket ${ticket._id}:`, error);
         }
       }
-      //console.log("[CRON] done updating pending install tickets.");
+
+      console.log(`[CRON] done updating ${todayTickets.length} pending install tickets.`);
     }
 
     // await session.commitTransaction();
