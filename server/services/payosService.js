@@ -1,5 +1,8 @@
-import { payOSpayment } from '../config/payos.js';
-import  { Transaction, Receipt, Booking, Customer }  from '../models/index.js';
+import { payOSpayment, payOSpayout } from '../config/payos.js';
+import  { Transaction, Receipt, Booking, Customer, Employee, User, 
+    PayoutEmployee, EmployeeEarning,
+}  from '../models/index.js';
+import mongoose from 'mongoose';
 import { updateCustomerPoints } from '../controllers/customerController.js';
 import { confirmBookingInternal } from '../services/bookingService.js';
 import crypto from "crypto";
@@ -129,26 +132,26 @@ export const payOut = async (payoutData, userId) => {
     });
     
     // TODO: Uncomment when payOSpayout is configured
-    // try{
-    //     const payoutBatch = await payOSpayout.payouts.batch.create({
-    //     referenceId,
-    //     category: ['salary'],
-    //     validateDestination: true,
-    //     payouts: [
-    //         {
-    //             referenceId: `${referenceId}_1`,
-    //             amount: payoutData.amount,
-    //             description: payoutData.description,
-    //             toBin: payoutData.toBin,
-    //             toAccountNumber: payoutData.toAccountNumber,
-    //         }
-    //     ],
-    // });
-    // }
-    // catch (error){
-    //     console.error('Error creating payout batch:', error);
-    //     throw error;
-    // }
+    try{
+        const payoutBatch = await payOSpayout.payouts.batch.create({
+        referenceId,
+        category: ['salary'],
+        validateDestination: true,
+        payouts: [
+            {
+                referenceId: `${referenceId}_1`,
+                amount: payoutData.amount,
+                description: payoutData.description,
+                toBin: payoutData.toBin,
+                toAccountNumber: payoutData.toAccountNumber,
+            }
+        ],
+    });
+    }
+    catch (error){
+        console.error('Error creating payout batch:', error);
+        throw error;
+    }
     
     return referenceId;
 }
@@ -158,8 +161,8 @@ export const payoutDetailList = async () => {
     // Currently returns empty array as payOSpayout is not configured
     try {
         // TODO: Uncomment when payOSpayout is configured
-        // const payoutList = await payOSpayout.payouts.list();
-        const payoutList = null;
+        const payoutList = await payOSpayout.payouts.list();
+        //const payoutList = null;
         if (payoutList && typeof payoutList === 'object') {
             if (payoutList.data && Array.isArray(payoutList.data.payouts)) {
                 return payoutList.data.payouts.map(payout => {
@@ -209,9 +212,9 @@ export const payoutDetail = async (referenceId) => {
     // Currently returns empty array as payOSpayout is not configured
     try {
         // TODO: Uncomment when payOSpayout is configured
-        // const payoutInfo = await payOSpayout.payouts.list({ 
-        //     referenceId : referenceId });
-        const payoutInfo = null;
+        const payoutInfo = await payOSpayout.payouts.list({ 
+            referenceId : referenceId });
+        //const payoutInfo = null;
         try {
             if (typeof payoutInfo === 'object') {
                 if (payoutInfo.data && Array.isArray(payoutInfo.data.payouts)) {
@@ -262,7 +265,6 @@ export const payoutDetail = async (referenceId) => {
 }
 
 export const paymentSucceeded = async (orderCode) => {
-    
     // Tìm transaction bằng booking_code
     const transaction = await Transaction.findOne({ 
         booking_code: Number(orderCode)
@@ -408,3 +410,332 @@ export const paymentFailed = async(orderCode) => {
 
     return { transaction, receipt };
 }
+
+export async function cashOutForEmployee(userId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
+    let payoutIds = []; // Declare outside try block for error handling
+
+    try {
+        const employee = await Employee.findOne({ user_id: userId }).session(session);
+        if (!employee) {
+            throw new Error("Employee not found");
+        }
+        const user = await User.findById(userId).session(session);
+        if (!user) {
+            throw new Error("User not found");
+        }
+        const employeeId = employee._id;
+
+        // Tự động tạo payout batch từ available earnings nếu chưa có pending payout
+        let payoutBill = await PayoutEmployee.find({
+            status: "pending",
+            employee_id: employeeId
+        }).session(session);
+
+        console.log("Pending payout bills for employee:", payoutBill);
+
+        // Nếu không có pending payout, tạo batch mới từ available earnings
+        if (!payoutBill.length) {
+            const availableEarnings = await EmployeeEarning.find({
+                employee_id: employeeId,
+                status: 'available',
+                payout_id: { $exists: false }
+            }).session(session).sort({ completed_at: 1 });
+
+            if (!availableEarnings.length) {
+                await session.abortTransaction();
+                throw new Error("Không có tiền lương để rút");
+            }
+
+            const totalAmount = availableEarnings.reduce((sum, earning) => sum + earning.earning_amount, 0);
+            console.log("Total available earnings amount:", totalAmount);
+
+            const completedDates = availableEarnings.map(e => new Date(e.completed_at));
+            const periodStart = new Date(Math.min(...completedDates));
+            const periodEnd = new Date(Math.max(...completedDates));
+
+            const newPayoutBatch = await PayoutEmployee.create([{
+                employee_id: employeeId,
+                earning_ids: availableEarnings.map(e => e._id),
+                total_amount: totalAmount,
+                period_start: periodStart,
+                period_end: periodEnd,
+                status: 'pending'
+            }], { session });
+
+            await EmployeeEarning.updateMany(
+                { _id: { $in: availableEarnings.map(e => e._id) } },
+                { payout_id: newPayoutBatch[0]._id }
+            ).session(session);
+
+            payoutBill = newPayoutBatch;
+        }
+
+        console.log("Calculating total payout amount for employee...", payoutBill);
+        const amount = payoutBill.reduce((sum, bill) => {
+            // console.log("Processing payout bill:", bill);
+            // console.log("Bill amount:", bill.total_amount);
+            const amount = Number(bill.total_amount) || 0; 
+            return sum + Math.round(amount); // Math.round chỉ nhận 1 tham số
+        }, 0);
+
+        console.log("Total payout amount for employee:", amount);
+        if (amount <= 0) {
+            await session.abortTransaction();
+            throw new Error("Số tiền payout không hợp lệ");
+        }
+
+        console.log("Thực hiện thanh toán cho employee:", user.full_name, "số tiền:", amount);
+        const payoutPayload = {
+            amount: amount,
+            description: `HotelManagement thanh toán lương`,
+            toBin: employee.BIN,
+            toAccountNumber: employee.account_number
+        };
+
+        // Update payout status to processing before making payment
+        payoutIds = payoutBill.map(bill => bill._id);
+        await PayoutEmployee.updateMany(
+            { _id: { $in: payoutIds } },
+            { status: 'processing' }
+        ).session(session);
+
+        await session.commitTransaction();
+        session.endSession();
+
+        let orderCode;
+        let orderCodeFromResult;
+        try {
+            orderCode = await payOut(payoutPayload, userId);
+            orderCodeFromResult = orderCode.split('_')[1];
+        } catch (payOutError) {
+            // Revert payout status back to pending if payOut fails
+            console.log(payOutError);
+            await PayoutEmployee.updateMany(
+                { _id: { $in: payoutIds } },
+                { status: 'pending' }
+            );
+            console.error("PayOut error details:", {
+                message: payOutError.message,
+                status: payOutError.status,
+                code: payOutError.code,
+                response: payOutError.response?.data,
+                stack: payOutError.stack
+            });
+            throw new Error(`Lỗi khi tạo yêu cầu thanh toán trong tasker.service: ${payOutError.message}`);
+        }
+
+        const start = Date.now();
+        let state = 'PROCESSING';
+
+        let lastError = null;
+        while (Date.now() - start < 30000 && state === 'PROCESSING') {
+            let result;
+
+            try {
+                result = await payoutDetail(orderCode);
+                console.log('Payout detail:', result);
+            } catch (err) {
+                lastError = err;
+                await sleep(5000);
+                continue;
+            }
+
+            const payoutState = result?._data?.[0]?.transactions?.[0]?.state;
+            console.log('Payout state:', payoutState);
+            if (!payoutState) {
+                lastError = new Error('Không lấy được trạng thái payout');
+                await sleep(5000);
+                continue;
+            }
+
+            if (payoutState === 'SUCCEEDED' || payoutState === 'COMPLETED') {
+                await Transaction.updateOne(
+                    { order_code: orderCodeFromResult, user_id: userId },
+                    { status: 'completed' }
+                );
+
+                // Update PayoutTasker status to completed
+                await PayoutEmployee.updateMany(
+                    { _id: { $in: payoutIds } },
+                    { status: 'completed', processed_at: new Date() }
+                );
+
+                // Update all related EmployeeEarning records to 'paid' status
+                const completedPayouts = await PayoutEmployee.find({
+                    _id: { $in: payoutIds },
+                    status: 'completed'
+                }).select('earning_ids');
+
+                const allEarningIds = completedPayouts.flatMap(payout => payout.earning_ids);
+                if (allEarningIds.length > 0) {
+                    await EmployeeEarning.updateMany(
+                        { _id: { $in: allEarningIds } },
+                        { status: 'paid' }
+                    );
+                }
+
+                state = 'SUCCEEDED';
+                return true; 
+            }
+
+            if (payoutState === 'FAILED') {
+                await Transaction.updateOne(
+                    { order_code: orderCodeFromResult, user_id: userId },
+                    { status: 'failed' }
+                );
+
+                // Revert payout status back to pending on failure
+                await PayoutEmployee.updateMany(
+                    { _id: { $in: payoutIds } },
+                    { status: 'pending' }
+                );
+
+                state = 'FAILED';
+                throw new Error('Payout failed');
+            }
+
+            await sleep(5000);
+        }
+
+        if (state === 'PROCESSING') {
+            await Transaction.updateOne({
+                order_code: orderCodeFromResult,
+                user_id: userId
+            }, {
+                status: 'failed'
+            });
+
+            // Revert payout status back to pending on timeout
+            await PayoutEmployee.updateMany(
+                { _id: { $in: payoutIds } },
+                { status: 'pending' }
+            );
+
+            throw new Error('Payout processing timeout');
+        }
+        if (lastError) {
+            // Revert payout status back to pending if there's an error
+            if (payoutIds && payoutIds.length > 0) {
+                await PayoutEmployee.updateMany(
+                    { _id: { $in: payoutIds } },
+                    { status: 'pending' }
+                );
+            }
+            throw lastError;
+        }
+    } catch (error) {
+        // Revert payout status back to pending if error occurs after transaction commit
+        if (payoutIds && payoutIds.length > 0) {
+            try {
+                const currentPayouts = await PayoutEmployee.find({
+                    _id: { $in: payoutIds },
+                    status: 'processing'
+                });
+                if (currentPayouts.length > 0) {
+                    await PayoutEmployee.updateMany(
+                        { _id: { $in: payoutIds }, status: 'processing' },
+                        { status: 'pending' }
+                    );
+                }
+            } catch (revertError) {
+                console.error('Error reverting payout status:', revertError);
+            }
+        }
+
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        session.endSession();
+        throw new Error(error.message);
+    }
+}
+
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+export const getCashoutInfo = async (userId, timespan = 'day') => {
+    try {
+        const employee = await Employee.findOne({ user_id: userId });
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+        const employeeId = employee._id;
+
+        let startDate;
+        const now = new Date();
+        if (timespan === 'day') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        }
+        else if (timespan === 'week') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        }
+        else if (timespan === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        }
+        else if (timespan === 'all') {
+            const bills = await PayoutEmployee.find({
+                employee_id: employeeId
+            });
+            return bills.reduce((sum, bill) => sum + bill.total_amount, 0);
+        }
+        else {
+            throw new Error('Invalid timespan');
+        }
+        const bills = await PayoutEmployee.find({
+            employee_id: employeeId,
+            created_at: { $gte: startDate }
+        });
+        return bills.reduce((sum, bill) => sum + bill.total_amount, 0);
+    }
+    catch (error) {
+        throw new Error(error.message);
+    }
+};
+
+export const availableCashout = async (userId) => {
+  try {
+        const employee = await Employee.findOne({ user_id: userId });
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+        const employeeId = employee._id;
+
+        // Get available earnings that haven't been included in any payout yet
+        const availableEarnings = await TaskerEarning.find({
+            tasker_id: taskerId,
+            status: 'available',
+            payout_id: { $exists: false }
+        });
+
+        console.log("AVAILABLE EARNINGS:", availableEarnings);
+
+        // Only include pending payouts (exclude processing ones as they are in progress)
+        const pendingPayouts = await PayoutEmployee.find({
+            employee_id: employeeId,
+            status: 'pending'
+        });
+
+        console.log("PENDING PAYOUTS:", pendingPayouts);
+
+        const availableAmount = availableEarnings.reduce((sum, earning) => {
+            const amount = Number(earning.earning_amount) || 0;
+            return sum + amount;
+        }, 0);
+
+        // 2. Tính Pending Amount: Sửa Math.round và ép kiểu Number
+        const pendingAmount = pendingPayouts.reduce((sum, bill) => {
+            const amount = Number(bill.total_amount) || 0; 
+            return sum + Math.round(amount); // Math.round chỉ nhận 1 tham số
+        }, 0);
+
+        console.log("AVAILABLE AMOUNT:", availableAmount);
+        console.log("PENDING AMOUNT:", pendingAmount);
+        console.log("TOTAL CASHOUT AMOUNT:", availableAmount + pendingAmount);
+        return availableAmount + pendingAmount;
+    }
+    catch (error) {
+        throw new Error(error.message);
+    }
+};

@@ -30,7 +30,12 @@ const payoutEmployeeSchema = new mongoose.Schema({
 
     processed_at: {
         type: Date
-    }
+    },
+    
+    earning_ids: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "EmployeeEarning"
+    }]
 }, {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
 });

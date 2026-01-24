@@ -50,4 +50,40 @@ getProfile: async () => {
         const url = `${BASE_URL}/reset-password/${employeeId}`;
         return axios.patch(url, { newPassword }, getAuthHeader());
     },
+    
+    // Cash Out APIs
+    cashOut: async () => {
+        const res = await axios.put(`${BASE_URL}/cashOut`, {}, getAuthHeader());
+        return res.data;
+    },
+    
+    getCashoutAmount: async (timespan = 'day') => {
+        const res = await axios.get(`${BASE_URL}/cashOut`, {
+            ...getAuthHeader(),
+            params: { timespan }
+        });
+        return res.data;
+    },
+    
+    getAvailableCashout: async () => {
+        const res = await axios.get(`${BASE_URL}/cashOut/available`, getAuthHeader());
+        return res.data;
+    },
+    
+    // Earnings & Payouts APIs
+    getEarningsHistory: async (params = {}) => {
+        const res = await axios.get(`${BASE_URL}/earnings`, {
+            ...getAuthHeader(),
+            params
+        });
+        return res.data;
+    },
+    
+    getPayoutHistory: async (params = {}) => {
+        const res = await axios.get(`${BASE_URL}/payouts`, {
+            ...getAuthHeader(),
+            params
+        });
+        return res.data;
+    },
 };
