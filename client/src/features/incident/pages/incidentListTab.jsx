@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { FiClock, FiPlus, FiUser, FiMapPin, FiArrowRight, FiBriefcase } from "react-icons/fi";
+// Thêm FiTool vào import để có icon cái cờ lê
+import { FiClock, FiPlus, FiUser, FiMapPin, FiArrowRight, FiFilter, FiCheckCircle, FiAlertCircle, FiLoader, FiCheckSquare, FiArchive, FiTool } from "react-icons/fi";
 import { incidentApi } from "../../api/incidentApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
 import CreateIncidentForm from "../components/createIncidentForm.jsx";
@@ -13,33 +14,53 @@ const severityStyle = {
   low: "bg-blue-100 text-blue-700 border-blue-200",
 };
 
-const statusStyle = {
-  new: "bg-gray-100 text-gray-600",
-  in_progress: "bg-blue-100 text-blue-600",
-  resolved: "bg-green-100 text-green-600",
-  closed: "bg-gray-800 text-white",
-};
-
 const statusLabel = {
   new: "Mới tạo",
   in_progress: "Đang xử lý",
-  resolved: "Đã khắc phục",
-  closed: "Đã đóng",
+  resolved: "Chờ duyệt",
+  closed: "Hoàn thành",
 };
 
 export default function IncidentListTab() {
+  const { user } = useAuth();
+
+  // --- 1. XÁC ĐỊNH ROLE CHÍNH XÁC ---
+  // Kiểm tra kỹ các trường hợp role có thể trả về (viết hoa/thường, nằm trong data...)
+  const roleRaw = user?.system_role || user?.role || user?.data?.system_role || "";
+  const userRole = String(roleRaw).toLowerCase();
+  const isManager = userRole === "manager" || userRole === "admin";
+
+  // --- 2. KHỞI TẠO STATE ---
+  // Nếu là Manager -> Tab mặc định là 'new'
+  // Nếu là Employee -> Tab mặc định là 'my_assign' (Việc cần làm)
+  const [activeTab, setActiveTab] = useState(isManager ? "new" : "my_assign");
+
   const [incidents, setIncidents] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState(null);
 
+  // Reset tab khi đổi user (ví dụ logout rồi login user khác)
+  useEffect(() => {
+    setActiveTab(isManager ? "new" : "my_assign");
+  }, [isManager]);
+
+  // --- 3. GỌI API ---
   const fetchData = async () => {
     setLoading(true);
     try {
+      let params = {};
+
+      if (isManager) {
+        // Manager: Gửi status lên Server để lọc luôn
+        params.status = activeTab;
+      } else {
+        // Employee: Không gửi status, lấy hết sự cố liên quan về rồi Client tự lọc
+      }
+
       const [incidentRes, empRes] = await Promise.all([
-        incidentApi.getAllIncidents(),
+        incidentApi.getAllIncidents(params),
         employeeApi.getAllEmployees()
       ]);
 
@@ -53,129 +74,177 @@ export default function IncidentListTab() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [activeTab, isManager]); // Chạy lại khi đổi tab hoặc đổi quyền
+
+  // --- 4. LOGIC LỌC DỮ LIỆU TẠI CLIENT (CHO EMPLOYEE) ---
+  const currentEmployee = employees.find(e => {
+      const uid = typeof e.user_id === 'object' ? e.user_id._id : e.user_id;
+      return String(uid) === String(user?.userId || user?._id);
+  });
+  const currentEmployeeId = currentEmployee?._id;
+  const currentUserId = user?.userId || user?._id;
+
+  const getDisplayedIncidents = () => {
+    // Nếu là Manager: API đã trả về đúng list theo status rồi -> Dùng luôn
+    if (isManager) return incidents;
+
+    // Nếu là Employee: Lọc list tổng ra theo Tab hiện tại
+    return incidents.filter(item => {
+        if (activeTab === 'my_assign') {
+            const assignId = item.assignee_info?.assignee_id;
+            return String(assignId) === String(currentEmployeeId);
+        }
+        if (activeTab === 'my_report') {
+            const repId = item.reporter_id?._id || item.reporter_id;
+            return String(repId) === String(currentUserId);
+        }
+        if (activeTab === 'my_cause') {
+            const causeId = item.causer_id?._id || item.causer_id;
+            return String(causeId) === String(currentUserId);
+        }
+        return true;
+    });
+  };
+
+  const displayedList = getDisplayedIncidents();
+
+  // Helper hiển thị tên
   const getReporterDisplay = (item) => {
-    let name = item.reporter_name || "Admin";
+    let name = item.reporter_name || "N/A";
     const reporterObj = item.reporter_id;
     let reporterIdStr = "";
+    if (reporterObj) reporterIdStr = typeof reporterObj === 'object' ? reporterObj._id.toString() : String(reporterObj);
 
-    if (reporterObj) {
-        reporterIdStr = typeof reporterObj === 'object' ? reporterObj._id.toString() : String(reporterObj);
-    }
-
-    // 2. Tìm trong danh sách nhân viên (Chuẩn hóa ID về String để so sánh)
     const foundEmployee = employees.find(e => {
-        // e.user_id có thể là string hoặc object
         const empUserIdStr = typeof e.user_id === 'object' ? e.user_id._id?.toString() : String(e.user_id);
         return empUserIdStr === reporterIdStr;
     });
 
     let roleCode = "employee";
-
-    if (foundEmployee && foundEmployee.position) {
-        roleCode = foundEmployee.position;
-    } else {
-        if (typeof reporterObj === 'object' && reporterObj.system_role) {
-            roleCode = reporterObj.system_role;
-        } else if (item.reporter_role) {
-            roleCode = item.reporter_role;
-        }
-    }
+    if (foundEmployee && foundEmployee.position) roleCode = foundEmployee.position;
+    else if (typeof reporterObj === 'object' && reporterObj.system_role) roleCode = reporterObj.system_role;
 
     const roleMap = {
-        manager: "Quản lý",
-        admin: "Quản trị viên",
-        receptionist: "Lễ tân",
-        housekeeper: "Buồng phòng",
-        technician: "Kỹ thuật",
-        security: "An ninh",
-        it: "IT",
-        accountant: "Kế toán",
-        customer_service: "CSKH",
-        employee: "Nhân viên",
-        customer: "Khách hàng"
+        manager: "Quản lý", admin: "Admin", receptionist: "Lễ tân", housekeeper: "Buồng phòng",
+        technician: "Kỹ thuật", security: "An ninh", it: "IT", employee: "Nhân viên", customer: "Khách"
     };
-
-    return {
-        name,
-        role: roleMap[roleCode] || roleCode
-    };
+    return { name, role: roleMap[roleCode] || roleCode };
   };
+
+  // Component Tab Button nhỏ gọn
+  const TabButton = ({ id, label, icon: Icon, colorClass }) => (
+    <button
+        onClick={() => setActiveTab(id)}
+        className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition whitespace-nowrap
+        ${activeTab === id ? `bg-white shadow-sm ${colorClass}` : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+    >
+        <Icon size={14} /> {label}
+    </button>
+  );
 
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100 space-y-4">
 
-      <div className="flex justify-end">
+      {/* --- HEADER CHỨA TABS --- */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto max-w-full no-scrollbar">
+
+            {/* LOGIC HIỂN THỊ TAB DỰA TRÊN ROLE */}
+            {isManager ? (
+                // VIEW CỦA MANAGER: Lọc theo quy trình
+                <>
+                    <TabButton id="new" label="Mới" icon={FiAlertCircle} colorClass="text-red-600" />
+                    <TabButton id="in_progress" label="Đang xử lý" icon={FiLoader} colorClass="text-blue-600" />
+                    <TabButton id="resolved" label="Chờ duyệt" icon={FiCheckSquare} colorClass="text-green-600" />
+                    <TabButton id="closed" label="Hoàn thành" icon={FiArchive} colorClass="text-gray-800" />
+                </>
+            ) : (
+                // VIEW CỦA EMPLOYEE: Lọc theo trách nhiệm
+                <>
+                    <TabButton id="my_assign" label="Tôi xử lý" icon={FiTool} colorClass="text-green-600" />
+                    <TabButton id="my_report" label="Tôi báo cáo" icon={FiAlertCircle} colorClass="text-blue-600" />
+                    <TabButton id="my_cause" label="Tôi gây ra" icon={FiUser} colorClass="text-red-600" />
+                </>
+            )}
+
+        </div>
+
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition shadow-red-200 shadow-lg"
+          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition shadow-red-200 shadow-lg whitespace-nowrap"
         >
           <FiPlus /> Báo cáo sự cố
         </button>
       </div>
 
+      {/* --- GRID HIỂN THỊ DANH SÁCH --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {incidents.map(item => {
-            const reporter = getReporterDisplay(item);
-
-            return (
-              <div
-                key={item._id}
-                className="p-5 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition flex flex-col justify-between"
-              >
-                <div>
-                    <div className="flex justify-between mb-2">
-                        <span className={`text-[10px] uppercase font-black px-2 py-1 rounded border ${severityStyle[item.severity]}`}>
-                            {item.severity}
-                        </span>
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <FiClock /> {new Date(item.occured_at).toLocaleDateString("vi-VN")}
-                        </span>
-                    </div>
-
-                    <h3 className="font-bold text-gray-900 flex items-center gap-1 mb-2">
-                        <FiMapPin className="text-gray-400" size={14}/>
-                        {item.room_id ? `Phòng ${item.room_id.room_number}` : "Khu vực chung"}
-                    </h3>
-
-                    <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                        <div className="bg-white p-1.5 rounded-full border border-gray-200 text-indigo-500">
-                            <FiUser size={14}/>
+        {loading ? (
+            <div className="col-span-2 py-10 text-center text-gray-400">Đang tải dữ liệu...</div>
+        ) : (
+            displayedList.map(item => {
+                const reporter = getReporterDisplay(item);
+                return (
+                <div
+                    key={item._id}
+                    className="p-5 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="flex justify-between mb-2">
+                            <span className={`text-[10px] uppercase font-black px-2 py-1 rounded border ${severityStyle[item.severity]}`}>
+                                {item.severity}
+                            </span>
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                                <FiClock /> {new Date(item.occured_at).toLocaleDateString("vi-VN")}
+                            </span>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Người báo cáo</span>
-                            <div className="text-xs font-bold text-gray-800 flex items-center gap-1">
-                                {reporter.name}
-                                <span className="text-gray-300 mx-1">|</span>
-                                <span className="text-indigo-600 font-extrabold">{reporter.role}</span>
+
+                        <h3 className="font-bold text-gray-900 flex items-center gap-1 mb-2">
+                            <FiMapPin className="text-gray-400" size={14}/>
+                            {item.room_id ? `Phòng ${item.room_id.room_number}` : "Khu vực chung"}
+                        </h3>
+
+                        <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                             <div className="bg-white p-1.5 rounded-full border border-gray-200 text-indigo-500">
+                                <FiUser size={14}/>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Người báo cáo</span>
+                                <div className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                                    {reporter.name}
+                                    <span className="text-gray-300 mx-1">|</span>
+                                    <span className="text-indigo-600 font-extrabold">{reporter.role}</span>
+                                </div>
                             </div>
                         </div>
+
+                        <p className="text-sm text-gray-500 line-clamp-2 mb-4 italic pl-1 border-l-2 border-gray-100">
+                            "{item.description}"
+                        </p>
                     </div>
 
-                    <p className="text-sm text-gray-500 line-clamp-2 mb-4 italic pl-1 border-l-2 border-gray-100">
-                        "{item.description}"
-                    </p>
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-50 mt-auto">
+                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded uppercase">
+                            {/* Hiển thị label tương ứng với Status */}
+                            {statusLabel[item.status] || item.status}
+                        </span>
+
+                        <button
+                            onClick={() => setSelected(item)}
+                            className="text-xs bg-white border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-gray-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition"
+                        >
+                            Chi tiết <FiArrowRight/>
+                        </button>
+                    </div>
                 </div>
+                );
+            })
+        )}
 
-                <div className="flex justify-between items-center pt-3 border-t border-gray-50 mt-auto">
-                  <span className={`text-[11px] font-bold px-2 py-1 rounded capitalize ${statusStyle[item.status] || "bg-gray-100"}`}>
-                      {statusLabel[item.status] || item.status}
-                  </span>
-
-                  <button
-                    onClick={() => setSelected(item)}
-                    className="text-xs bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition"
-                  >
-                    Chi tiết <FiArrowRight/>
-                  </button>
-                </div>
-              </div>
-            );
-        })}
-
-        {!loading && incidents.length === 0 && (
-          <div className="col-span-2 text-center py-10 text-gray-400 italic">
-            Chưa có sự cố nào được ghi nhận.
+        {!loading && displayedList.length === 0 && (
+          <div className="col-span-2 text-center py-10 text-gray-400 italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
+            <FiAlertCircle className="mx-auto text-gray-300 mb-2" size={24}/>
+            Không tìm thấy sự cố nào.
           </div>
         )}
       </div>
