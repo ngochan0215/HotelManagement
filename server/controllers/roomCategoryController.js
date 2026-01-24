@@ -196,7 +196,7 @@ export const getRoomCategoryById = async (req, res) => {
 
         const defaultEquipments = await DefaultEquipment.find({
             category_id: id
-        }).populate("equipment_category_id", "category_name");
+        }).populate("equipment_category_id", "name unit price");
 
         res.json({
             ...category.toObject(),
@@ -205,6 +205,30 @@ export const getRoomCategoryById = async (req, res) => {
 
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+// Lấy danh sách thiết bị mặc định theo room category_id
+export const getDefaultEquipmentsByCategory = async (req, res) => {
+    try {
+        const { category_id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(category_id)) {
+            return res.status(400).json({ success: false, message: "ID loại phòng không hợp lệ!" });
+        }
+
+        const defaultEquipments = await DefaultEquipment.find({
+            category_id: category_id
+        }).populate("equipment_category_id", "name unit price");
+
+        return res.status(200).json({
+            success: true,
+            count: defaultEquipments.length,
+            default_equipments: defaultEquipments
+        });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 

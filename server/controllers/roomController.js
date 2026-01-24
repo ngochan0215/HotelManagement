@@ -25,11 +25,11 @@ export const createRoom = async (req, res) => {
             return res.status(400).json({ success: false, message: "Số phòng đã tồn tại!" });
 
         // Validate room_status if provided
-        const validStatuses = ["available", "maintenance"];
+        const validStatuses = ["available", "maintenance", "new"];
         if (room_status && !validStatuses.includes(room_status))
-            return res.status(400).json({ success: false, message: "Chỉ được chọn trạng thái trống hoặc bảo trì khi mới tạo phòng!" });
+            return res.status(400).json({ success: false, message: "Chỉ được chọn trạng thái trống hoặc bảo trì khi mới tạo phòng hoặc mới (mặc định)!" });
 
-        const room = new Room({ category_id, room_number, room_status: room_status || "available" });
+        const room = new Room({ category_id, room_number, room_status: room_status || "new" });
 
         await room.save();
         const populatedRoom = await Room.findById(room._id).populate("category_id", "category_name description max_adults max_children price").select("-__v");
@@ -54,7 +54,7 @@ export const getAllRooms = async (req, res) => {
         }
 
         if (room_status) {
-            const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance"];
+            const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance", "new"];
             if (!validStatuses.includes(room_status))
                 return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
             filter.room_status = room_status;
@@ -254,7 +254,7 @@ export const updateRoom = async (req, res) => {
     // trạng thái phòng mới
     if (room_status) {
       // chỉ cho phép chỉnh một số trạng thái nhất định
-      const ALLOWED_MANUAL_STATUS = ["maintenance", "cleaning", "available"];
+      const ALLOWED_MANUAL_STATUS = ["maintenance", "cleaning", "available", "new"];
 
       if (!ALLOWED_MANUAL_STATUS.includes(room_status)) {
         return res.status(403).json({
@@ -270,13 +270,21 @@ export const updateRoom = async (req, res) => {
         $or: [{ end_time: null }, { end_time: { $gte: now } }],
       }).sort({ start_time: -1 });
 
-      const currentStatus = activeLog?.status || "available";
+      const currentStatus = activeLog?.status || room.room_status || "new";
 
       // nếu trạng thái hiện tại là occupied thì không cho đổi
       if (["occupied"].includes(currentStatus)) {
         return res.status(400).json({
           success: false,
           message: "Phòng đang có khách, không thể đổi trạng thái!",
+        });
+      }
+
+      // Nếu phòng đang ở trạng thái "new", cho phép chuyển sang available, maintenance, cleaning
+      if (currentStatus === "new" && !["available", "maintenance", "cleaning"].includes(room_status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phòng mới chỉ có thể chuyển sang trạng thái: Trống, Bảo trì hoặc Dọn dẹp!",
         });
       }
 
@@ -555,7 +563,7 @@ export const getRoomsByCategory = async (req, res) => {
     try {
         const { room_status } = req.query;
 
-        const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance"];
+        const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance", "new"];
         if (room_status && !validStatuses.includes(room_status)) {
             return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
         }
@@ -678,6 +686,7 @@ export const getRoomStatusSummary = async (req, res) => {
     ]);
 
     const summary = {
+      new: 0,
       available: 0,
       booked: 0,
       occupied: 0,

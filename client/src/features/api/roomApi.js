@@ -59,6 +59,11 @@ export const roomApi = {
     return response.data;
   },
 
+  getDefaultEquipmentsByCategory: async (categoryId) => {
+    const response = await axios.get(`${BASE_URL_}/${categoryId}/default-equipments`, getAuthHeader());
+    return response.data;
+  },
+
   // room
   getAllRooms: async () => {
     const response = await axios.get(`${BASE_URL}/all`);
