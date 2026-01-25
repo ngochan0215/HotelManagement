@@ -40,62 +40,61 @@ export default function AppRoutes() {
 
   const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
     const location = useLocation();
+    if (!user) return <Navigate to="/login" replace />;
 
-      if (!user) return <Navigate to="/login" replace />;
+    const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
+    const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
 
-      const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
-      const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
-    // Nếu excludeManager = true, manager không được truy cập
-    if (excludeManager && role === 'manager') {
-      return <Navigate to="/dashboard" replace />;
-    }
-
-    // Manager có quyền truy cập tất cả (trừ khi excludeManager = true)
+    if (excludeManager && role === 'manager') return <Navigate to="/dashboard" replace />;
     if (role === 'manager' && !excludeManager) return children;
 
-      if (!allowed || allowed.length === 0) return children;
+    if (allowed && allowed.length > 0) {
       const allowedLower = allowed.map(p => p.toLowerCase());
-      if (allowedLower.includes(position)) {
-          return children;
+      if (!allowedLower.includes(position)) {
+        let redirectPath = "/login";
+        if (position === 'receptionist') redirectPath = "/room-calendar";
+        else if (position === 'technician' || position === 'housekeeper') redirectPath = "/my-work";
+        else if (position === 'accountant') redirectPath = "/invoices";
+        else redirectPath = "/profile";
+
+        return <Navigate to={redirectPath} replace />;
       }
-
-    let redirectPath = "/login";
-
-    if (position === 'receptionist') redirectPath = "/room-calendar";
-    else if (position === 'technician') redirectPath = "/incidents";
-    else if (position === 'housekeeper') redirectPath = "/service";
-    else if (position === 'accountant') redirectPath = "/invoices";
-    else if (position === 'manager') redirectPath = "/dashboard";
-    else redirectPath = "/dashboard";
-    if (location.pathname === redirectPath) {
-        return <div className="p-10 text-center text-red-500">Bạn không có quyền truy cập trang này.</div>;
     }
 
-      return <Navigate to={redirectPath} replace />;
-    };
-
+    return children;
+  };
   if (isLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          <p className="mt-2 text-gray-600">Đang tải...</p>
+      return (
+        <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p className="mt-2 text-gray-600">Đang tải...</p>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
+    const getHomePath = () => {
+      if (!user) return "/login";
+      const position = (user.position || "").toLowerCase();
+      if (user.role === 'manager') return "/dashboard";
+      if (position === 'receptionist') return "/room-calendar";
+      if (position === 'technician' || position === 'housekeeper') return "/my-work";
+      if (position === 'accountant') return "/invoices";
+      return "/profile";
+    };
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/profile" element={
-                <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
-            } />
-      <Route path="/dashboard" element={
-          <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>
-      } />
+     <Route path="/" element={<Navigate to={getHomePath()} replace />} />
+           <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
 
+           <Route path="/profile" element={
+             <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
+           } />
+
+           <Route path="/dashboard" element={
+             <ProtectedRoute allowed={['manager']}> <Dashboard /> </ProtectedRoute>
+           } />
       <Route path="/employees" element={
         <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
       } />
