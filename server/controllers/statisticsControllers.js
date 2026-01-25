@@ -208,7 +208,7 @@ export const roomOperationReport = async (from, to) => {
     const { start, end } = parseRange(from, to);
 
     const rooms = await Room.find().populate("category_id", "category_name").lean();
-    const logs = await RoomStatusLog.find({
+    const logs = await RoomLog.find({
         start_time: { $lt: end },
         $or: [{ end_time: { $gte: start } }, { end_time: null }]
     }).sort({ room_id: 1, start_time: 1 }).lean();

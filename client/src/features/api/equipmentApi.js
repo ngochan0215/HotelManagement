@@ -62,6 +62,13 @@ export const equipmentApi = {
     const res = await axios.get(`${BASE_URL}/install/available-technicians`, getAuthHeader());
     return res.data;
   },
+  getSmartInstallSuggestions: async (room_id) => {
+    const res = await axios.get(`${BASE_URL}/install/smart-suggestions`, {
+      ...getAuthHeader(),
+      params: { room_id }
+    });
+    return res.data;
+  },
   createInstallTicket: async (data) => {
     const res = await axios.post(`${BASE_URL}/install/add`, data, getAuthHeader());
     return res.data;

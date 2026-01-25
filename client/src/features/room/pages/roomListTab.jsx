@@ -227,7 +227,10 @@ export default function RoomListTab() {
           room_number: "", category_id: "", room_status: "new", start_time: "", end_time: "",
         });
         setSuggestedRoomNumber("");
-        fetchData();
+        // Đợi một chút để đảm bảo backend đã commit transaction
+        setTimeout(() => {
+          fetchData();
+        }, 100);
         alert("Thành công!");
       } else {
         // Tạo phòng mới
@@ -552,10 +555,14 @@ export default function RoomListTab() {
                 const displayStatus = room.roomStatusLog?.status || room.room_status || "new";
                 const statusInfo = STATUS_MAP[displayStatus] || STATUS_MAP.available;
 
-                const start_time = room.roomStatusLog?.start_time
-                  ? new Date(room.roomStatusLog.start_time).toLocaleString("vi-VN") : "—";
-                const end_time = room.roomStatusLog?.end_time
-                  ? new Date(room.roomStatusLog.end_time).toLocaleString("vi-VN") : "—";
+                // Lấy start_time và end_time từ roomStatusLog hoặc fallback về room.start_time/end_time
+                const logStartTime = room.roomStatusLog?.start_time || room.start_time;
+                const logEndTime = room.roomStatusLog?.end_time || room.end_time;
+                
+                const start_time = logStartTime
+                  ? new Date(logStartTime).toLocaleString("vi-VN") : "—";
+                const end_time = logEndTime
+                  ? new Date(logEndTime).toLocaleString("vi-VN") : "—";
 
                 let catName = "---";
                 if (room.category_id && room.category_id.category_name) {

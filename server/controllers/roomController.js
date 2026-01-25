@@ -79,6 +79,18 @@ export const getAllRooms = async (req, res) => {
           .select("-__v")
           .sort({ room_number: 1 });
 
+        // Nếu roomStatusLog không có (không có log active), lấy log mới nhất từ RoomLog
+        for (const room of rooms) {
+          if (!room.roomStatusLog) {
+            const latestLog = await RoomLog.findOne({ room_id: room._id })
+              .sort({ start_time: -1 })
+              .select("status start_time end_time note");
+            if (latestLog) {
+              room.roomStatusLog = latestLog;
+            }
+          }
+        }
+
         return res.status(200).json({ success: true, count: rooms.length, rooms });
 
     } catch (err) {
@@ -102,7 +114,10 @@ export const getRoomById = async (req, res) => {
                 path: "roomStatusLog",
                 match: {
                     start_time: { $lte: now },
-                    end_time: { $gte: now },
+                    $or: [
+                      { end_time: { $gte: now } },
+                      { end_time: null }
+                    ],
                 },
                 select: "status start_time end_time note",
             })
@@ -263,8 +278,8 @@ export const updateRoom = async (req, res) => {
         });
       }
 
-      // Lấy trạng thái hiện tại của phòng
-      const activeLog = await RoomStatusLog.findOne({
+      // Lấy trạng thái hiện tại của phòng từ RoomLog (bảng chính)
+      const activeLog = await RoomLog.findOne({
         room_id: id,
         start_time: { $lte: now },
         $or: [{ end_time: null }, { end_time: { $gte: now } }],
@@ -317,33 +332,21 @@ export const updateRoom = async (req, res) => {
           });
       }
 
-      await RoomStatusLog.updateMany(
-        { room_id: id, end_time: null },
-        { $set: { end_time: now } },
-        { session }
-      );
-
-      // bảng mới
+      // Đóng log cũ - RoomLog (bảng chính)
       await RoomLog.updateMany(
         { room_id: id, end_time: null },
         { $set: { end_time: now } },
         { session }
       );
 
-      await RoomStatusLog.create(
-        [
-          {
-            room_id: id,
-            status: room_status,
-            start_time: new Date(start_time),
-            end_time: end_time ? new Date(end_time) : null,
-            note: note || "",
-            handled_by: employee._id || null,
-          },
-        ],
+      // Đóng log cũ - RoomStatusLog (bảng dự phòng)
+      await RoomStatusLog.updateMany(
+        { room_id: id, end_time: null },
+        { $set: { end_time: now } },
         { session }
       );
 
+      // Tạo log mới - RoomLog (bảng chính)
       await RoomLog.create(
         [
           {
@@ -351,6 +354,23 @@ export const updateRoom = async (req, res) => {
             status: room_status,
             start_time: new Date(start_time),
             end_time: end_time ? new Date(end_time) : null,
+            expected_end_time: end_time ? new Date(end_time) : null,
+            note: note || "",
+            handled_by: employee._id || null,
+          },
+        ],
+        { session }
+      );
+
+      // Tạo log mới - RoomStatusLog (bảng dự phòng)
+      await RoomStatusLog.create(
+        [
+          {
+            room_id: id,
+            status: room_status,
+            start_time: new Date(start_time),
+            end_time: end_time ? new Date(end_time) : null,
+            expected_end_time: end_time ? new Date(end_time) : null,
             note: note || "",
             handled_by: employee._id || null,
           },
@@ -364,9 +384,32 @@ export const updateRoom = async (req, res) => {
     await room.save({ session });
     await session.commitTransaction();
 
+    // Populate roomStatusLog (virtual field tham chiếu RoomLog) để frontend có thể hiển thị
+    const nowForPopulate = new Date();
     const updatedRoom = await Room.findById(id)
       .populate("category_id", "category_name description max_adults max_children price")
+      .populate({
+        path: "roomStatusLog",
+        match: {
+          start_time: { $lte: nowForPopulate },
+          $or: [
+            { end_time: { $gte: nowForPopulate } },
+            { end_time: null }
+          ],
+        },
+        select: "status start_time end_time note",
+      })
       .select("-__v");
+
+    // Nếu roomStatusLog không có (không có log active), lấy log mới nhất từ RoomLog
+    if (!updatedRoom.roomStatusLog) {
+      const latestLog = await RoomLog.findOne({ room_id: id })
+        .sort({ start_time: -1 })
+        .select("status start_time end_time note");
+      if (latestLog) {
+        updatedRoom.roomStatusLog = latestLog;
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -431,28 +474,30 @@ export const completeCleaning = async (req, res) => {
       throw new Error("Phòng không ở trạng thái đang dọn.");
     }
 
-    // cắt log cleaning hiện tại
-    await RoomStatusLog.updateMany(
-      {
-        room_id: roomId,
-        status: "cleaning"
-      },
-      { $set: { end_time: now } },
-      { session }
-    );
-
-    // cắt log cleaning hiện tại (bảng mới)
+    // cắt log cleaning hiện tại - RoomLog (bảng chính)
     await RoomLog.updateMany(
       {
         room_id: roomId,
-        status: "cleaning"
+        status: "cleaning",
+        end_time: null,
       },
       { $set: { end_time: now } },
       { session }
     );
 
-    // tạo log available
-    await RoomStatusLog.create(
+    // cắt log cleaning hiện tại - RoomStatusLog (bảng dự phòng)
+    await RoomStatusLog.updateMany(
+      {
+        room_id: roomId,
+        status: "cleaning",
+        end_time: null,
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // tạo log available - RoomLog (bảng chính)
+    await RoomLog.create(
       [{
         room_id: roomId,
         status: "available",
@@ -464,8 +509,8 @@ export const completeCleaning = async (req, res) => {
       { session }
     );
 
-    // tạo log available (bảng mới)
-    await RoomLog.create(
+    // tạo log available - RoomStatusLog (bảng dự phòng)
+    await RoomStatusLog.create(
       [{
         room_id: roomId,
         status: "available",
@@ -516,7 +561,18 @@ export const completeMaintenance = async (req, res) => {
       throw new Error("Phòng không ở trạng thái bảo trì.");
     }
 
-    // cắt log maintenance
+    // cắt log maintenance - RoomLog (bảng chính)
+    await RoomLog.updateMany(
+      {
+        room_id: roomId,
+        status: "maintenance",
+        end_time: null,
+      },
+      { $set: { end_time: now } },
+      { session }
+    );
+
+    // cắt log maintenance - RoomStatusLog (bảng dự phòng)
     await RoomStatusLog.updateMany(
       {
         room_id: roomId,
@@ -527,17 +583,20 @@ export const completeMaintenance = async (req, res) => {
       { session }
     );
 
-    // cắt log maintenance
-    await RoomLog.updateMany(
-      {
+    // tạo log available - RoomLog (bảng chính)
+    await RoomLog.create(
+      [{
         room_id: roomId,
-        status: "maintenance"
-      },
-      { $set: { end_time: now } },
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Kỹ thuật xác nhận bảo trì xong",
+        handled_by: req.user?._id || null,
+      }],
       { session }
     );
 
-    // tạo log available
+    // tạo log available - RoomStatusLog (bảng dự phòng)
     await RoomStatusLog.create(
       [{
         room_id: roomId,
@@ -789,7 +848,7 @@ export const getTopBookedRoomCategories = async (req, res) => {
 
 // trả về các log trạng thái mới nhất của các phòng
 export const getLatestStatusOfAllRooms = async () => {
-  return await RoomStatusLog.aggregate([
+  return await RoomLog.aggregate([
     {
       $sort: {
         room_id: 1,
@@ -874,18 +933,18 @@ export const reevaluateRoomStatus = async (room_id) => {
   const status = hasCriticalProblem ? "maintenance" : "available";
   await Room.findByIdAndUpdate(room_id, { status });
 
-  // Ghi log trạng thái phòng
-  await RoomStatusLog.create({
+  // Ghi log trạng thái phòng - RoomLog (bảng chính)
+  await RoomLog.create({
     room_id: room_id,
     status,
     start_time: new Date(),
     end_time: null,
     note: "Update status phòng theo sự cố + phiếu đền bù",
-    handled_by: req.user.userId || null,
+    handled_by: null,
   });
 
-  // Ghi log trạng thái phòng (bảng mới)
-  await RoomLog.create({
+  // Ghi log trạng thái phòng - RoomStatusLog (bảng dự phòng)
+  await RoomStatusLog.create({
     room_id: room_id,
     status,
     start_time: new Date(),

@@ -2,6 +2,7 @@ import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
     GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
     BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail, Employee
 } from "../models/index.js";
+import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
 import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../controllers/customerController.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
@@ -96,7 +97,7 @@ export const notifyInstallTickets = async () => {
 
     // phiếu quá hạn
     const expiredTickets = await EquipmentInstall.find({
-      status: ["waiting_confirm", "pending"],
+      status: { $in: ["waiting_confirm", "pending", "assigned"] },
       install_date: { $lt: start },
     });
 
@@ -173,7 +174,8 @@ export const notifyInstallTickets = async () => {
       console.log(`[CRON] done updating ${expiredTickets.length} expired install tickets.`)
     }
 
-    // phiếu đến ngày
+    // phiếu đến ngày: chuyển từ "pending" → "waiting_confirm" nếu chưa gán nhân viên
+    // hoặc từ "pending" → "assigned" nếu đã gán nhân viên (nhưng logic này đã được xử lý ở createInstallTicket)
     const todayTickets = await EquipmentInstall.find({
       status: "pending",
       install_date: { $gte: start, $lte: end },
@@ -419,7 +421,8 @@ export const cancelExpiredDepositBookings = async () => {
       { $set: { room_status: "available" } }
     );
 
-    await RoomStatusLog.updateMany(
+    // Cập nhật RoomLog (bảng chính)
+    await RoomLog.updateMany(
       {
         room_id: { $in: roomIds },
         status: "reserved",
@@ -428,8 +431,8 @@ export const cancelExpiredDepositBookings = async () => {
       { $set: { end_time: new Date() } }
     );
 
-    //(BẢNG MỚI)
-    await RoomLog.updateMany(
+    // Cập nhật RoomStatusLog (bảng dự phòng)
+    await RoomStatusLog.updateMany(
       {
         room_id: { $in: roomIds },
         status: "reserved",
@@ -450,7 +453,7 @@ export const cancelExpiredDepositBookings = async () => {
       }))
     );
 
-    await RoomStatusLog.insertMany(
+    await RoomLog.insertMany(
       roomIds.map(roomId => ({
         room_id: roomId,
         status: "available",
@@ -603,7 +606,8 @@ export const cancelCheckinLateBookings = async () => {
       { $set: { room_status: "available" } }
     );
 
-    await RoomStatusLog.updateMany(
+    // Cập nhật RoomLog (bảng chính)
+    await RoomLog.updateMany(
       {
         room_id: { $in: roomIds },
         status: "booked",
@@ -612,8 +616,8 @@ export const cancelCheckinLateBookings = async () => {
       { $set: { end_time: new Date() } }
     );
 
-    // BẢNG MỚI
-    await RoomLog.updateMany(
+    // Cập nhật RoomStatusLog (bảng dự phòng)
+    await RoomStatusLog.updateMany(
       {
         room_id: { $in: roomIds },
         status: "booked",
@@ -634,7 +638,7 @@ export const cancelCheckinLateBookings = async () => {
       }))
     );
 
-    await RoomStatusLog.insertMany(
+    await RoomLog.insertMany(
       roomIds.map(roomId => ({
         room_id: roomId,
         status: "available",
@@ -1326,5 +1330,165 @@ export const syncRoomStatusFromLogs = async () => {
     }
   } catch (error) {
     console.error("[CRON] syncRoomStatusFromLogs error:", error);
+  }
+};
+
+/**
+ * Sửa lại room_log dựa trên booking đã hủy/hoàn tất
+ * Tìm các booking đã hủy, kiểm tra xem các phòng của booking đó có booking nào khác đang active không
+ * Nếu không có và log mới nhất của phòng vẫn thuộc booking cũ, thì tạo log available mới
+ */
+export const fixRoomLogsFromCancelledBookings = async () => {
+  try {
+    const now = new Date();
+    
+    // Tìm tất cả booking đã bị hủy hoặc đã hoàn tất
+    const cancelledBookings = await Booking.find({
+      status: { $in: ["cancelled", "expired", "completed"] }
+    }).select("_id status");
+
+    if (cancelledBookings.length === 0) {
+      console.log("[CRON] fixRoomLogsFromCancelledBookings: Không có booking nào đã hủy/hoàn tất");
+      return;
+    }
+
+    const cancelledBookingIds = cancelledBookings.map(b => b._id.toString());
+    let fixedCount = 0;
+
+    // Với mỗi booking đã hủy, kiểm tra các phòng của nó
+    for (const booking of cancelledBookings) {
+      // Lấy danh sách phòng thuộc booking này
+      const bookingDetails = await BookingDetail.find({
+        booking_id: booking._id
+      }).select("room_id");
+
+      if (bookingDetails.length === 0) continue;
+
+      const roomIds = bookingDetails.map(bd => {
+        const roomId = bd.room_id instanceof mongoose.Types.ObjectId 
+          ? bd.room_id 
+          : (bd.room_id._id || bd.room_id);
+        return roomId instanceof mongoose.Types.ObjectId ? roomId : mongoose.Types.ObjectId.createFromHexString(roomId);
+      });
+
+      // Với mỗi phòng, kiểm tra:
+      for (const roomId of roomIds) {
+        // 1. Kiểm tra xem có booking nào khác đang active (pending, confirmed, in_progress) chứa phòng này không
+        const activeBookingDetails = await BookingDetail.find({
+          room_id: roomId,
+          booking_id: { $ne: booking._id },
+          status: { $in: ["reserved", "confirmed", "checked_in"] }
+        }).populate("booking_id", "status").select("booking_id");
+
+        // Kiểm tra xem các booking này có đang active không
+        let hasActiveBooking = false;
+        for (const detail of activeBookingDetails) {
+          const detailBooking = detail.booking_id;
+          if (detailBooking && ["pending", "confirmed", "in_progress"].includes(detailBooking.status)) {
+            hasActiveBooking = true;
+            break;
+          }
+        }
+
+        // Nếu có booking active chứa phòng này, bỏ qua
+        if (hasActiveBooking) {
+          continue;
+        }
+
+        // 2. Lấy log mới nhất của phòng (từ RoomLog - bảng chính) mà chưa có end_time hoặc end_time > now
+        const latestLog = await RoomLog.findOne({
+          room_id: roomId,
+          $or: [
+            { end_time: null },
+            { end_time: { $gte: now } }
+          ]
+        }).sort({ start_time: -1 });
+
+        // Nếu không có log active hoặc log đã là "available", bỏ qua
+        if (!latestLog || latestLog.status === "available") {
+          continue;
+        }
+
+        // 3. Kiểm tra xem log mới nhất có thuộc về booking đã hủy/hoàn tất này không
+        let logBelongsToCancelledBooking = false;
+        
+        if (latestLog.booking_id) {
+          const logBookingId = latestLog.booking_id.toString();
+          // Kiểm tra xem booking_id của log có trong danh sách booking đã hủy không
+          if (cancelledBookingIds.includes(logBookingId)) {
+            logBelongsToCancelledBooking = true;
+          } else {
+            // Nếu không, kiểm tra xem booking đó có đang active không
+            const logBooking = await Booking.findById(latestLog.booking_id).select("status");
+            if (!logBooking || !["pending", "confirmed", "in_progress"].includes(logBooking.status)) {
+              // Booking không tồn tại hoặc không active, coi như thuộc booking cũ
+              logBelongsToCancelledBooking = true;
+            }
+          }
+        } else {
+          // Log không có booking_id, kiểm tra xem có phải log từ booking cũ không
+          // Nếu status không phải available và không có booking_id, có thể là log cũ cần sửa
+          if (latestLog.status !== "available") {
+            // Kiểm tra xem có booking nào đang active cho phòng này không (đã check ở trên)
+            // Nếu không có, coi như log này thuộc booking cũ
+            logBelongsToCancelledBooking = true;
+          }
+        }
+
+        // 4. Nếu log mới nhất thuộc booking đã hủy/hoàn tất và chưa có end_time, thì sửa log
+        if (logBelongsToCancelledBooking && !latestLog.end_time) {
+          // Cắt log cũ - RoomLog (bảng chính)
+          await RoomLog.updateMany(
+            {
+              room_id: roomId,
+              _id: latestLog._id
+            },
+            { $set: { end_time: now } }
+          );
+
+          // Cắt log cũ - RoomStatusLog (bảng dự phòng) - tìm log tương ứng
+          await RoomStatusLog.updateMany(
+            {
+              room_id: roomId,
+              status: latestLog.status,
+              start_time: latestLog.start_time,
+              end_time: null
+            },
+            { $set: { end_time: now } }
+          );
+
+          // Tạo log available mới - RoomLog (bảng chính)
+          await RoomLog.create({
+            room_id: roomId,
+            status: "available",
+            start_time: now,
+            end_time: null,
+            note: `Tự động sửa log: Phòng được giải phóng sau khi booking ${booking._id} bị ${booking.status}`,
+            handled_by: null
+          });
+
+          // Tạo log available mới - RoomStatusLog (bảng dự phòng)
+          await RoomStatusLog.create({
+            room_id: roomId,
+            status: "available",
+            start_time: now,
+            end_time: null,
+            note: `Tự động sửa log: Phòng được giải phóng sau khi booking ${booking._id} bị ${booking.status}`,
+            handled_by: null
+          });
+
+          fixedCount++;
+          console.log(`[CRON] Đã sửa log cho phòng ${roomId} từ booking ${booking._id} (${booking.status})`);
+        }
+      }
+    }
+
+    if (fixedCount > 0) {
+      console.log(`[CRON] fixRoomLogsFromCancelledBookings: Đã sửa ${fixedCount} phòng`);
+    } else {
+      console.log(`[CRON] fixRoomLogsFromCancelledBookings: Không có phòng nào cần sửa`);
+    }
+  } catch (error) {
+    console.error("[CRON] fixRoomLogsFromCancelledBookings error:", error);
   }
 };

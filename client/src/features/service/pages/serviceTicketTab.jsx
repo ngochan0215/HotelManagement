@@ -20,6 +20,9 @@ export default function ServiceTicketTab() {
   const [importPage, setImportPage] = useState(1);
   const itemsPerPage = 5;
 
+  const [usageFilterStatus, setUsageFilterStatus] = useState("all");
+  const [importFilterStatus, setImportFilterStatus] = useState("all");
+
   const [showImportModal, setShowImportModal] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [selectedUsageId, setSelectedUsageId] = useState(null);
@@ -56,15 +59,33 @@ export default function ServiceTicketTab() {
     fetchTickets();
   }, []);
 
+  useEffect(() => {
+    setUsagePage(1);
+  }, [usageFilterStatus]);
+
+  useEffect(() => {
+    setImportPage(1);
+  }, [importFilterStatus]);
+
+  // Filter usages by status
+  const filteredUsages = usageFilterStatus === "all" 
+    ? usages 
+    : usages.filter(item => item.status === usageFilterStatus);
+
   const indexOfLastUsage = usagePage * itemsPerPage;
   const indexOfFirstUsage = indexOfLastUsage - itemsPerPage;
-  const currentUsages = usages.slice(indexOfFirstUsage, indexOfLastUsage);
-  const totalUsagePages = Math.ceil(usages.length / itemsPerPage);
+  const currentUsages = filteredUsages.slice(indexOfFirstUsage, indexOfLastUsage);
+  const totalUsagePages = Math.ceil(filteredUsages.length / itemsPerPage);
+
+  // Filter imports by status
+  const filteredImports = importFilterStatus === "all" 
+    ? imports 
+    : imports.filter(item => item.status === importFilterStatus);
 
   const indexOfLastImport = importPage * itemsPerPage;
   const indexOfFirstImport = indexOfLastImport - itemsPerPage;
-  const currentImports = imports.slice(indexOfFirstImport, indexOfLastImport);
-  const totalImportPages = Math.ceil(imports.length / itemsPerPage);
+  const currentImports = filteredImports.slice(indexOfFirstImport, indexOfLastImport);
+  const totalImportPages = Math.ceil(filteredImports.length / itemsPerPage);
 
   const renderPagination = (currentPage, totalPages, setPage) => {
     if (totalPages <= 1) return null;
@@ -208,6 +229,70 @@ export default function ServiceTicketTab() {
             </button>
         </div>
 
+        {/* Filter buttons for usage tickets */}
+        <div className="flex flex-wrap gap-2 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+            <button 
+                onClick={() => setUsageFilterStatus("all")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "all" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Tất cả
+            </button>
+            <button 
+                onClick={() => setUsageFilterStatus("pending")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "pending" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Chờ ngày sử dụng
+            </button>
+            <button 
+                onClick={() => setUsageFilterStatus("waiting_confirm")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "waiting_confirm" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Xác nhận hoàn thành
+            </button>
+            <button 
+                onClick={() => setUsageFilterStatus("completed")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "completed" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Hoàn thành
+            </button>
+            <button 
+                onClick={() => setUsageFilterStatus("expired")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "expired" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã hết hạn
+            </button>
+            <button 
+                onClick={() => setUsageFilterStatus("cancelled")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    usageFilterStatus === "cancelled" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã hủy
+            </button>
+        </div>
+
         <div className="overflow-x-auto min-h-[300px]">
             <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
@@ -299,15 +384,15 @@ export default function ServiceTicketTab() {
                             </td>
                         </tr>
                     ))}
-                    {usages.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
+                    {filteredUsages.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có dữ liệu sử dụng dịch vụ</td></tr>}
                 </tbody>
             </table>
         </div>
 
-        {usages.length > 0 && (
+        {filteredUsages.length > 0 && (
             <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
                 <div className="text-sm text-gray-500">
-                    Hiển thị <b>{indexOfFirstUsage + 1}</b> - <b>{Math.min(indexOfLastUsage, usages.length)}</b> trong tổng <b>{usages.length}</b>
+                    Hiển thị <b>{indexOfFirstUsage + 1}</b> - <b>{Math.min(indexOfLastUsage, filteredUsages.length)}</b> trong tổng <b>{filteredUsages.length}</b>
                 </div>
                 {renderPagination(usagePage, totalUsagePages, setUsagePage)}
             </div>
@@ -325,6 +410,70 @@ export default function ServiceTicketTab() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 shadow-sm"
             >
                 <FiPlus /> Tạo phiếu nhập
+            </button>
+        </div>
+
+        {/* Filter buttons for import tickets */}
+        <div className="flex flex-wrap gap-2 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+            <button 
+                onClick={() => setImportFilterStatus("all")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "all" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Tất cả
+            </button>
+            <button 
+                onClick={() => setImportFilterStatus("pending")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "pending" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đang chờ đến ngày nhập
+            </button>
+            <button 
+                onClick={() => setImportFilterStatus("waiting_confirm")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "waiting_confirm" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã đến ngày - Chờ xác nhận nhập
+            </button>
+            <button 
+                onClick={() => setImportFilterStatus("completed")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "completed" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Hoàn thành
+            </button>
+            <button 
+                onClick={() => setImportFilterStatus("expired")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "expired" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã hết hạn
+            </button>
+            <button 
+                onClick={() => setImportFilterStatus("cancelled")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importFilterStatus === "cancelled" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã hủy
             </button>
         </div>
 
@@ -384,10 +533,10 @@ export default function ServiceTicketTab() {
             </table>
         </div>
 
-        {imports.length > 0 && (
+        {filteredImports.length > 0 && (
             <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
                 <div className="text-sm text-gray-500">
-                    Hiển thị <b>{indexOfFirstImport + 1}</b> - <b>{Math.min(indexOfLastImport, imports.length)}</b> trong tổng <b>{imports.length}</b>
+                    Hiển thị <b>{indexOfFirstImport + 1}</b> - <b>{Math.min(indexOfLastImport, filteredImports.length)}</b> trong tổng <b>{filteredImports.length}</b>
                 </div>
                 {renderPagination(importPage, totalImportPages, setImportPage)}
             </div>
