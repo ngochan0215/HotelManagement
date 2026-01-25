@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiRefreshCw, FiEye, FiFilter } from 'react-icons/fi';
+import { FiRefreshCw, FiEye, FiFilter, FiCheckCircle } from 'react-icons/fi';
 import { bookingApi } from '../../api/bookingApi.js';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -79,7 +79,8 @@ export default function AllTasksPage() {
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'pending', 'new':
+      case 'pending':
+      case 'new':
         return 'Chờ xử lý';
       case 'in_progress':
         return 'Đang thực hiện';
@@ -89,8 +90,10 @@ export default function AllTasksPage() {
         return 'Đã xác nhận';
       case 'waiting_confirm':
         return 'Chờ xác nhận';
-      case 'cancelled', 'expired':
+      case 'cancelled':
         return 'Đã hủy';
+      case 'expired':
+        return 'Đã hết hạn';
       case 'resolved':
         return 'Đã xử lý';
       case 'closed':
@@ -102,22 +105,33 @@ export default function AllTasksPage() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending', 'new':
+      case 'pending':
+      case 'new':
         return 'bg-yellow-100 text-yellow-800';
+
       case 'in_progress':
         return 'bg-blue-100 text-blue-800';
-      case 'completed', 'resolved':
+
+      case 'completed':
+      case 'resolved':
         return 'bg-green-100 text-green-800';
+
       case 'confirmed':
         return 'bg-emerald-100 text-emerald-800';
+
       case 'waiting_confirm':
         return 'bg-orange-100 text-orange-800';
-      case 'cancelled', 'expired', 'closed':
+
+      case 'cancelled':
+      case 'expired':
+      case 'closed':
         return 'bg-red-100 text-red-800';
+
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
+
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
@@ -307,12 +321,32 @@ export default function AllTasksPage() {
 
 // Task Detail Modal Component
 function TaskDetailModal({ task, onClose, onRefresh }) {
+  const [confirming, setConfirming] = useState(false);
+
   const formatDate = (date) => {
     if (!date) return 'N/A';
     try {
       return format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: vi });
     } catch {
       return 'N/A';
+    }
+  };
+
+  const handleConfirmCleaning = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn xác nhận hoàn thành dọn dẹp phòng này?')) {
+      return;
+    }
+
+    setConfirming(true);
+    try {
+      await bookingApi.confirmCleaning(task._id);
+      alert('Xác nhận hoàn thành dọn dẹp thành công!');
+      onRefresh();
+      onClose();
+    } catch (error) {
+      alert('Lỗi: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -682,7 +716,18 @@ function TaskDetailModal({ task, onClose, onRefresh }) {
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+          {/* Button xác nhận cho cleaning tasks có status completed */}
+          {task.task_type === 'cleaning' && task.status === 'completed' && (
+            <button
+              onClick={handleConfirmCleaning}
+              disabled={confirming}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <FiCheckCircle />
+              {confirming ? 'Đang xác nhận...' : 'Xác nhận hoàn thành'}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"

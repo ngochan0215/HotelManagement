@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Room, RoomCategory, DefaultEquipment, Booking, BookingDetail, CheckInOut 
+import { Room, RoomCategory, DefaultEquipment, Booking, BookingDetail, RoomLog 
 } from "../models/index.js";
 
 export const createRoomCategory = async (req, res) => {
@@ -250,23 +250,52 @@ export const getAvailableRoomCategories = async (req, res) => {
       return res.status(400).json({ message: "Ngày trả phòng phải sau ngày nhận phòng." });
     }
 
-    // query các đơn đặt phòng
-    const bookings = await Booking.find({
-      status: { $in: ["confirmed", "checked_in"] },
+    // Validate số lượng người
+    if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
+      return res.status(400).json({ message: "Số lượng người lớn không hợp lệ." });
+    }
+    if (children && (isNaN(Number(children)) || Number(children) < 0)) {
+      return res.status(400).json({ message: "Số lượng trẻ em không hợp lệ." });
+    }
+
+    // Lấy tất cả booking có status active (pending, confirmed, in_progress)
+    // pending: đã đặt nhưng chưa cọc (có thể đã giữ phòng)
+    // confirmed: đã cọc, chắc chắn giữ phòng
+    // in_progress: đang ở
+    const activeBookings = await Booking.find({
+      status: { $in: ["pending", "confirmed", "in_progress"] },
     }).select("_id");
 
-    const bookingIds = bookings.map(b => b._id);
+    const activeBookingIds = activeBookings.map(b => b._id);
 
-    // query các phòng bị chiếm trong khoảng thời gian ở trên
-    const busyRooms = await BookingDetail.find({
-      booking_id: { $in: bookingIds },
-      checkin_expected: { $lt: end },
-      checkout_expected: { $gt: start },
+    // Query các phòng bị chiếm bởi booking active trong khoảng thời gian
+    // Chỉ lấy các booking detail chưa bị hủy
+    const busyBookingDetails = await BookingDetail.find({
+      booking_id: { $in: activeBookingIds },
+      status: { $ne: "cancelled" }, // Loại trừ các booking đã hủy
+      expected_checkin: { $lt: end }, // Check-in trước thời điểm checkout yêu cầu
+      expected_checkout: { $gt: start }, // Check-out sau thời điểm checkin yêu cầu
     }).select("room_id");
 
-    const busyRoomIds = busyRooms.map(b => b.room_id);
+    const busyRoomIdsFromBookings = [...new Set(busyBookingDetails.map(b => b.room_id.toString()))];
 
-    // tập hợp các điều kiện lọc loại phòng
+    // Kiểm tra RoomLog để tìm các phòng bị chiếm trong khoảng thời gian
+    // Phòng có log với status "booked", "occupied", "reserved" trong khoảng thời gian này
+    const busyRoomLogs = await RoomLog.find({
+      status: { $in: ["booked", "occupied", "reserved"] },
+      start_time: { $lt: end },
+      $or: [
+        { end_time: { $gt: start } },
+        { end_time: null } // Log chưa kết thúc
+      ]
+    }).select("room_id");
+
+    const busyRoomIdsFromLogs = [...new Set(busyRoomLogs.map(log => log.room_id.toString()))];
+
+    // Hợp nhất danh sách phòng bận từ cả BookingDetail và RoomLog
+    const allBusyRoomIds = [...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs])];
+
+    // Tập hợp các điều kiện lọc loại phòng
     const categoryFilter = {};
 
     if (adults) {
@@ -282,54 +311,96 @@ export const getAvailableRoomCategories = async (req, res) => {
       if (maxPrice) categoryFilter["category.price"].$lte = Number(maxPrice);
     }
 
-    const data = await Room.aggregate([
-        {
-            $match: {
-            _id: { $nin: busyRoomIds },
-            room_status: { $in: ["available", "cleaning"] },
-            },
-        },
-        {
-            $group: {
-            _id: "$category_id",
-            availableRooms: { $sum: 1 },
-            rooms: {
-                $push: {
-                room_id: "$_id",
-                room_number: "$room_number",
-                },
-            },
-            },
-        },
-        {
-            $lookup: {
-            from: "roomcategories",
-            localField: "_id",
-            foreignField: "_id",
-            as: "category",
-            },
-        },
-        { $unwind: "$category" },
-        { $match: categoryFilter },
-        {
-            $project: {
-            _id: 0,
-            category_id: "$category._id",
-            name: "$category.category_name",
-            price: "$category.price",
-            adults: "$category.max_adults",
-            children: "$category.max_children",
-            description: "$category.description",
-            availableRooms: 1,
-            rooms: 1,
-            },
-        },
-        { $sort: { price: 1 } },
-    ]);
+    // Lấy tất cả phòng và kiểm tra từng phòng xem có available trong khoảng thời gian không
+    const allRooms = await Room.find({
+      _id: { $nin: allBusyRoomIds },
+    }).select("_id category_id room_number room_status");
 
+    // Kiểm tra từng phòng xem có RoomLog conflict không
+    const availableRooms = [];
+    for (const room of allRooms) {
+      // Kiểm tra xem phòng có log conflict trong khoảng thời gian không
+      const conflictingLog = await RoomLog.findOne({
+        room_id: room._id,
+        status: { $in: ["booked", "occupied", "reserved", "maintenance"] }, // maintenance cũng không thể sử dụng
+        start_time: { $lt: end },
+        $or: [
+          { end_time: { $gt: start } },
+          { end_time: null }
+        ]
+      });
 
-    res.json(data);
+      // Nếu không có conflict và phòng không ở trạng thái không thể sử dụng
+      if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
+        // Kiểm tra xem phòng có đang cleaning nhưng sẽ sẵn sàng trước check-in không
+        if (room.room_status === "cleaning") {
+          const cleaningLog = await RoomLog.findOne({
+            room_id: room._id,
+            status: "cleaning",
+            start_time: { $lte: start },
+            $or: [
+              { end_time: { $lte: start } }, // Cleaning sẽ kết thúc trước check-in
+              { end_time: null }
+            ]
+          }).sort({ start_time: -1 });
+
+          // Nếu có log cleaning và sẽ kết thúc trước check-in, phòng có thể sử dụng
+          if (cleaningLog && cleaningLog.end_time && cleaningLog.end_time <= start) {
+            availableRooms.push(room);
+          } else if (!cleaningLog || (cleaningLog.end_time && cleaningLog.end_time <= start)) {
+            availableRooms.push(room);
+          }
+        } else {
+          // Phòng available hoặc các trạng thái khác có thể sử dụng
+          availableRooms.push(room);
+        }
+      }
+    }
+
+    // Group theo category
+    const roomsByCategory = {};
+    for (const room of availableRooms) {
+      const categoryId = room.category_id.toString();
+      if (!roomsByCategory[categoryId]) {
+        roomsByCategory[categoryId] = [];
+      }
+      roomsByCategory[categoryId].push({
+        room_id: room._id,
+        room_number: room.room_number,
+      });
+    }
+
+    // Lấy thông tin category và filter
+    const categoryIds = Object.keys(roomsByCategory);
+    const categories = await RoomCategory.find({
+      _id: { $in: categoryIds }
+    });
+
+    // Áp dụng filter và format kết quả
+    let result = categories
+      .filter(cat => {
+        if (adults && cat.max_adults < Number(adults)) return false;
+        if (children && cat.max_children < Number(children)) return false;
+        if (minPrice && cat.price < Number(minPrice)) return false;
+        if (maxPrice && cat.price > Number(maxPrice)) return false;
+        return true;
+      })
+      .map(cat => ({
+        category_id: cat._id,
+        name: cat.category_name,
+        price: cat.price,
+        adults: cat.max_adults,
+        children: cat.max_children,
+        description: cat.description,
+        availableRooms: roomsByCategory[cat._id.toString()]?.length || 0,
+        rooms: roomsByCategory[cat._id.toString()] || [],
+      }))
+      .filter(item => item.availableRooms > 0) // Chỉ trả về category có phòng available
+      .sort((a, b) => a.price - b.price);
+
+    res.json(result);
   } catch (error) {
+    console.error("Error in getAvailableRoomCategories:", error);
     res.status(500).json({
       message: error.message,
     });

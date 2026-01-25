@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { format, addDays, setHours, setMinutes } from "date-fns";
+import { format, addDays, setHours, setMinutes, addMinutes } from "date-fns";
 import {
   FiPlus, FiX, FiTrash2, FiSearch, FiCheckCircle, FiLogOut, FiUser,
   FiUserPlus, FiUsers, FiTag, FiLogIn, FiMinusCircle, FiCheckSquare, FiSquare,
   FiCalendar, FiMapPin, FiAlertTriangle, FiCamera, FiUpload,
-  FiChevronLeft, FiChevronRight, FiSave
+  FiChevronLeft, FiChevronRight, FiSave, FiCheck
 } from "react-icons/fi";
 import { jwtDecode } from "jwt-decode";
 import { Html5Qrcode } from "html5-qrcode";
@@ -114,9 +114,9 @@ export default function BookingList() {
   useEffect(() => {
     fetchData();
     const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-            setShowCustDropdown(false);
-        }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowCustDropdown(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
@@ -190,6 +190,22 @@ export default function BookingList() {
       fetchAvailableRooms(formData.expected_checkin, formData.expected_checkout);
     }
   }, [formData.expected_checkin, formData.expected_checkout, formData.adults, formData.children, isModalOpen]);
+
+  // Tự động set thời gian check-in khi chọn "đặt liền"
+  useEffect(() => {
+    if (isModalOpen && bookingMode === 'immediate') {
+      const now = new Date();
+      const checkinTime = addMinutes(now, 10); // Thời điểm hiện tại + 10 phút
+      const formattedTime = format(checkinTime, "yyyy-MM-dd'T'HH:mm");
+      // Chỉ cập nhật nếu giá trị hiện tại khác với giá trị mới (tránh loop vô hạn)
+      if (formData.expected_checkin !== formattedTime) {
+        setFormData(prev => ({
+          ...prev,
+          expected_checkin: formattedTime
+        }));
+      }
+    }
+  }, [isModalOpen, bookingMode]);
 
   useEffect(() => {
     if (isPreviewLocked) return;
@@ -274,7 +290,7 @@ export default function BookingList() {
               room_id: roomInfo.room_id,
               booking_id: roomInfo.booking_id
             });
-            console.log("CLEANING TASKS: ", res);
+            //console.log("CLEANING TASKS: ", res);
             // Kiểm tra xem room_id đã có trong map chưa và đã có needsAssignment chưa
             const existingTask = tasksMap[roomInfo.room_id];
             const alreadyNeedsAssignment = existingTask && existingTask.needsAssignment === true;
@@ -283,10 +299,10 @@ export default function BookingList() {
               // Kiểm tra xem task đã có handled_by chưa
               // handled_by có thể là null, undefined, hoặc object (khi populate)
               const hasHandledBy = res.task.handled_by && 
-                                   (typeof res.task.handled_by === 'object' ? res.task.handled_by._id : res.task.handled_by);
-              console.log("has handledby: ", hasHandledBy);
+                (typeof res.task.handled_by === 'object' ? res.task.handled_by._id : res.task.handled_by);
+              //console.log("has handledby: ", hasHandledBy);
               if (!hasHandledBy) {
-                console.log("IM CALLED");
+                //console.log("IM CALLED");
                 // Có task nhưng chưa gán nhân viên - cần gán
                 // Chỉ set nếu chưa có trong map hoặc chưa có needsAssignment
                 if (!existingTask || !alreadyNeedsAssignment) {
@@ -475,7 +491,13 @@ export default function BookingList() {
 
   const handleOpenModal = () => {
     const now = new Date();
-    const checkin = setMinutes(setHours(now, 14), 0);
+    // Nếu là đặt liền, set check-in = hiện tại + 10 phút
+    let checkin;
+    if (bookingMode === "immediate") {
+      checkin = addMinutes(now, 10);
+    } else {
+      checkin = setMinutes(setHours(now, 14), 0);
+    }
     const checkout = setMinutes(setHours(addDays(now, 1), 12), 0);
     setFormData({ customer_id: "", adults: 1, children: 0, expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"), expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"), deposit: 0 });
     setSelectedRooms([]); setTempRoomId(""); setIsWalkIn(false); setIsPreviewLocked(false); setCalcValues({ total_price: 0, deposit_required: 0 });
@@ -810,38 +832,38 @@ export default function BookingList() {
   };
 
   const actionCheckIn = (did, bid, rNum, expectedCheckin) => {
-        const now = new Date();
-        const checkinTime = new Date(expectedCheckin);
-        const twoHoursBefore = new Date(checkinTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-in
-        
-        // Kiểm tra nếu chưa đến 2h trước giờ check-in
-        if (now < twoHoursBefore) {
-            const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60)); // phút
-            const hours = Math.floor(remainingTime / 60);
-            const minutes = remainingTime % 60;
-            alert(`Chưa đến thời gian check-in! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-in (phải cách giờ check-in dự kiến ít nhất 2 giờ).`);
-            return;
-        }
-        
-        setConfirmState({
-            open: true, 
-            title: `Check-in Phòng ${rNum}`, 
-            message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`, 
-            confirmText: "Giao phòng", 
-            type: "success",
-            onConfirm: async () => {
-                try { 
-                    await bookingApi.checkinBookingDetail(bid, did); 
-                    fetchData(); 
-                    setConfirmState(p => ({...p, open: false})); 
-                    alert(`Check-in phòng ${rNum} thành công!`); 
-                }
-                catch(err) { 
-                    alert(`Lỗi: ${err.response?.data?.message || err.message}`); 
-                }
-            }
-        });
-    };
+      const now = new Date();
+      const checkinTime = new Date(expectedCheckin);
+      const twoHoursBefore = new Date(checkinTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-in
+      
+      // Kiểm tra nếu chưa đến 2h trước giờ check-in
+      if (now < twoHoursBefore) {
+          const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60)); // phút
+          const hours = Math.floor(remainingTime / 60);
+          const minutes = remainingTime % 60;
+          alert(`Chưa đến thời gian check-in! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-in (phải cách giờ check-in dự kiến ít nhất 2 giờ).`);
+          return;
+      }
+      
+      setConfirmState({
+          open: true, 
+          title: `Check-in Phòng ${rNum}`, 
+          message: `Xác nhận giao phòng ${rNum} cho khách ngay bây giờ?`, 
+          confirmText: "Giao phòng", 
+          type: "success",
+          onConfirm: async () => {
+              try { 
+                  await bookingApi.checkinBookingDetail(bid, did); 
+                  fetchData(); 
+                  setConfirmState(p => ({...p, open: false})); 
+                  alert(`Check-in phòng ${rNum} thành công!`); 
+              }
+              catch(err) { 
+                  alert(`Lỗi: ${err.response?.data?.message || err.message}`); 
+              }
+          }
+      });
+  };
 
   const [showAssignHousekeeperModal, setShowAssignHousekeeperModal] = useState(false);
   const [cleaningData, setCleaningData] = useState(null);
@@ -854,25 +876,36 @@ export default function BookingList() {
     return role === "manager";
   }, [user]);
 
-  const actionCheckOut = (did, bid, rNum) => setConfirmState({
-        open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
-        onConfirm: async () => {
-            try {
-                const res = await bookingApi.checkoutBookingDetail(bid, did);
-                if (res.success && res.data && res.data.room_log_id) {
-                    // Hiển thị modal gán nhân viên
-                    setCleaningData(res.data);
-                    setShowAssignHousekeeperModal(true);
-                } else {
-                    // Checkout thành công nhưng không cần gán nhân viên (trường hợp cũ)
-                //     try { await receiptApi.createReceipt({ booking_id: bid, payment: "cash", note: "Hóa đơn tạo tự động khi checkout" }); alert("Check-out và tạo hóa đơn THÀNH CÔNG!"); }
-                //     catch (err) { alert(`Check-out xong nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`); }
-                }
-                fetchData(); 
-                setConfirmState(p => ({...p, open: false}));
-            } catch(e) { alert("Lỗi: " + e.message); }
-        }
+  const actionCheckOut = (did, bid, rNum, expectedCheckout) => {
+    const now = new Date();
+    const checkoutTime = new Date(expectedCheckout);
+    const twoHoursBefore = new Date(checkoutTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-out
+    
+    // Kiểm tra nếu chưa đến 2h trước giờ check-out
+    if (now < twoHoursBefore) {
+        const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60)); // phút
+        const hours = Math.floor(remainingTime / 60);
+        const minutes = remainingTime % 60;
+        alert(`Chưa đến thời gian check-out! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-out (phải cách giờ check-out dự kiến ít nhất 2 giờ).`);
+        return;
+    }
+
+    setConfirmState({
+      open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
+      onConfirm: async () => {
+        try {
+          const res = await bookingApi.checkoutBookingDetail(bid, did);
+          if (res.success && res.data && res.data.room_log_id) {
+            // Hiển thị modal gán nhân viên dọn dẹp
+            setCleaningData(res.data);
+            setShowAssignHousekeeperModal(true);
+          }
+          fetchData(); 
+          setConfirmState(p => ({...p, open: false}));
+        } catch(e) { alert("Lỗi: " + e.message); }
+      }
     });
+  }
 
   const openCancelModal = (id) => {
     setCancelModal({
@@ -1101,7 +1134,7 @@ export default function BookingList() {
                                     }
                                     if(r.status === 'checked_in')
                                         return (
-                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_id?.room_number)}
+                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_id?.room_number, b.expected_checkout)}
                                                 className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded hover:bg-orange-100 transition">
                                                 <FiLogOut/> Check-out
                                             </button>
@@ -1110,6 +1143,37 @@ export default function BookingList() {
                                     if(r.status === 'checked_out' && r.room_id?._id) {
                                         const roomId = r.room_id._id;
                                         const taskInfo = cleaningTasksMap[roomId];
+                                        
+                                        // Kiểm tra nếu có cleaning task với status "completed" - hiển thị button xác nhận
+                                        if (taskInfo && taskInfo.status === 'completed') {
+                                            return (
+                                                <button 
+                                                    key={i} 
+                                                    onClick={async () => {
+                                                        if (!window.confirm(`Xác nhận hoàn thành dọn dẹp phòng ${r.room_id?.room_number}?`)) {
+                                                            return;
+                                                        }
+                                                        try {
+                                                            await bookingApi.confirmCleaning(taskInfo._id);
+                                                            alert('Xác nhận hoàn thành dọn dẹp thành công!');
+                                                            await checkCleaningTasks(bookings);
+                                                            fetchData();
+                                                        } catch (error) {
+                                                            alert('Lỗi: ' + (error.response?.data?.message || error.message));
+                                                        }
+                                                    }}
+                                                    disabled={!isManager}
+                                                    className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded transition ${
+                                                        isManager
+                                                            ? "text-green-600 bg-green-50 hover:bg-green-100"
+                                                            : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                                                    }`}
+                                                    title={!isManager ? "Chỉ quản lý mới có thể xác nhận" : "Xác nhận hoàn thành dọn dẹp"}
+                                                >
+                                                    <FiCheck className="w-3 h-3"/> Xác nhận dọn dẹp
+                                                </button>
+                                            );
+                                        }
                                         
                                         // undefined = chưa kiểm tra hoặc không có RoomLog
                                         // object với needsAssignment = true = có task nhưng chưa gán nhân viên hoặc chưa có task
@@ -1210,7 +1274,17 @@ export default function BookingList() {
                 <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
                     <label className="block text-sm font-bold text-gray-700 mb-2">Loại đặt phòng <span className="text-red-500">*</span></label>
                     <div className="flex gap-2">
-                        <button type="button" onClick={() => { setBookingMode('immediate'); setIsWalkIn(true); }}
+                        <button type="button" onClick={() => { 
+                            setBookingMode('immediate'); 
+                            setIsWalkIn(true);
+                            // Tự động set thời gian check-in = hiện tại + 10 phút
+                            const now = new Date();
+                            const checkinTime = addMinutes(now, 10);
+                            setFormData(prev => ({
+                              ...prev,
+                              expected_checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm")
+                            }));
+                          }}
                             className={`flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition ${bookingMode==='immediate' ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}>
                             Đặt liền (Khách tại quầy)
                         </button>

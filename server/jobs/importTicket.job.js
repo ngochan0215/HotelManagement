@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, updateAllCustomerTiers,
   notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings, notifyCheckinReminder,
-  syncRoomStatusFromLogs
+  notifyCheckoutReminder, notifyDepositDeadlineReminder, notifyCheckinTimeReminder, syncRoomStatusFromLogs
 } from "../jobs/notifyTickets.js";
 
 const startCronJob = ({ name, schedule, handler }) => {
@@ -70,6 +70,27 @@ export const startCheckinReminderJob = () =>
     name: "check-in reminder (2 hours before)",
     schedule: "*/5 * * * *", // Chạy mỗi 5 phút
     handler: notifyCheckinReminder,
+  });
+
+export const startCheckoutReminderJob = () =>
+  startCronJob({
+    name: "check-out reminder (1h, 30m, 5m before)",
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    handler: notifyCheckoutReminder,
+  });
+
+export const startDepositDeadlineReminderJob = () =>
+  startCronJob({
+    name: "deposit deadline reminder (30m, 20m, 10m, 5m before)",
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    handler: notifyDepositDeadlineReminder,
+  });
+
+export const startCheckinTimeReminderJob = () =>
+  startCronJob({
+    name: "check-in time reminder (30m, 20m, 10m, 5m before)",
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    handler: notifyCheckinTimeReminder,
   });
 
 export const startSyncRoomStatusJob = () =>

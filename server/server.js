@@ -4,11 +4,11 @@ import cors from "cors";
 import http from "http"; 
 import path from "path";
 import { fileURLToPath } from "url";
-import { Server } from "socket.io";
 import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
     startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob, 
-    startCheckinReminderJob, startSyncRoomStatusJob
+    startCheckinReminderJob, startCheckoutReminderJob, startDepositDeadlineReminderJob,
+    startCheckinTimeReminderJob, startSyncRoomStatusJob
 } from "./jobs/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
@@ -79,6 +79,9 @@ startCancelPendingBookingJob();
 startCancelCheckinLateBookingJob();
 startCustomerTierJob();
 startCheckinReminderJob();
+startCheckoutReminderJob();
+startDepositDeadlineReminderJob();
+startCheckinTimeReminderJob();
 startSyncRoomStatusJob();
 
 const PORT = process.env.PORT || 3000;
