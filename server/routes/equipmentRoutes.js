@@ -5,7 +5,7 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket, 
         createInstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
         confirmEquipmentInstall, startInstallTicket, completeInstallTicket, getAvailableTechnicians, getMyInstallTickets,
-        confirmEquipmentImportTicket
+        confirmEquipmentImportTicket, getSmartInstallSuggestions
 } from "../controllers/equipmentController.js";
 import { isManager, isNotCustomer, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
@@ -34,6 +34,7 @@ router.post("/ticket/:id/confirm-import", verifyToken, isManager, confirmEquipme
 
 //----PHIẾU LẮP ĐẶT THIẾT BỊ----//
 router.get("/install/available-technicians", verifyToken, isManager, getAvailableTechnicians);
+router.get("/install/smart-suggestions", verifyToken, isManager, getSmartInstallSuggestions);
 router.get("/install/my-tickets", verifyToken, isEmployee, getMyInstallTickets);
 router.post("/install/add", verifyToken, isManager, createInstallTicket);
 router.get("/install/all", verifyToken, isNotCustomer, getAllEquipmentInstalls);

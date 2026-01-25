@@ -1,5 +1,5 @@
 import { Equipment, EquipmentCategory, EquipmentTicket, EquipmentImport, 
-    Room, EquipmentInstall, InstallDetail, Employee, EquipmentLog, User } from "../models/index.js";
+    Room, EquipmentInstall, InstallDetail, Employee, EquipmentLog, User, DefaultEquipment } from "../models/index.js";
 import mongoose from "mongoose";
 import { pushNotificationToUsers } from "../services/notificationService.js";
 
@@ -810,32 +810,69 @@ export const createInstallTicket = async (req, res) => {
             sourceQuery.status = "in-stock";
         }
 
+        // Lấy danh sách thiết bị đang trong phiếu lắp đặt khác (pending/assigned/waiting_confirm) để loại trừ
+        const activeInstallTickets = await EquipmentInstall.find({
+            status: { $in: ["pending", "assigned", "waiting_confirm"] }
+        }).select("_id").session(session);
+        
+        const activeInstallTicketIds = activeInstallTickets.map(t => t._id);
+        const busyEquipmentIds = [];
+        
+        if (activeInstallTicketIds.length > 0) {
+            const busyDetails = await InstallDetail.find({
+                install_id: { $in: activeInstallTicketIds }
+            }).select("equipment_id").session(session);
+            
+            busyEquipmentIds.push(...busyDetails.map(d => d.equipment_id));
+        }
+
         for (const item of items) {
             if (item.specific_equipment_id) {
+                // Kiểm tra thiết bị cụ thể
                 const eq = await Equipment.findOne({
                     _id: item.specific_equipment_id,
-                    ...sourceQuery
+                    ...sourceQuery,
+                    status: { $ne: "installing" }, // Loại trừ thiết bị đang installing
+                    _id: { $nin: busyEquipmentIds } // Loại trừ thiết bị đang trong phiếu khác
                 }).session(session);
 
                 if (!eq) {
                     await session.abortTransaction();
-                    return res.status(400).json({ success: false, message: `Thiết bị có ID ${item.specific_equipment_id} không khả dụng tại nguồn.` });
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Thiết bị có ID ${item.specific_equipment_id} không khả dụng tại nguồn hoặc đang được sử dụng trong phiếu khác.` 
+                    });
                 }
                 selectedEquipmentIds.push(eq._id);
             }
             else if (item.category_id) {
                 const quantity = Number(item.quantity) || 1;
-                const availableEqs = await Equipment.find({
+                
+                // Query thiết bị với điều kiện chặt chẽ hơn
+                const query = {
                     category_id: item.category_id,
-                    ...sourceQuery
-                }).limit(quantity).session(session);
+                    ...sourceQuery,
+                    status: { $ne: "installing" }, // Loại trừ thiết bị đang installing
+                    _id: { $nin: busyEquipmentIds } // Loại trừ thiết bị đang trong phiếu khác
+                };
+                
+                const availableEqs = await Equipment.find(query)
+                    .limit(quantity)
+                    .session(session);
 
                 if (availableEqs.length < quantity) {
                     await session.abortTransaction();
-                    return res.status(400).json({ success: false, message: `Không đủ số lượng cho danh mục ${item.category_id}.` });
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Không đủ số lượng cho danh mục ${item.category_id}. Có thể một số thiết bị đang được sử dụng trong phiếu khác.` 
+                    });
                 }
 
-                availableEqs.forEach(e => selectedEquipmentIds.push(e._id));
+                availableEqs.forEach(e => {
+                    selectedEquipmentIds.push(e._id);
+                    // Thêm vào danh sách busy để tránh trùng trong cùng request
+                    busyEquipmentIds.push(e._id);
+                });
             }
         }
 
@@ -844,16 +881,20 @@ export const createInstallTicket = async (req, res) => {
             return res.status(400).json({ success: false, message: "Danh sách thiết bị trống." });
         }
 
+        // Kiểm tra lại một lần nữa để đảm bảo không có conflict (double-check)
         const existedDetail = await InstallDetail.findOne({
             equipment_id: { $in: selectedEquipmentIds },
+            install_id: { $in: activeInstallTicketIds }
         }).session(session);
 
-       if (existedDetail) {
+        if (existedDetail) {
             await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Có thiết bị đang thuộc phiếu xử lý khác." });
+            const install_ticket = await EquipmentInstall.findById(existedDetail.install_id).session(session);
+            return res.status(400).json({ 
+                success: false, 
+                message: `Có thiết bị đang thuộc phiếu xử lý khác (Phiếu #${install_ticket?._id.toString().slice(-6) || 'N/A'}).` 
+            });
         }
-
-        const status = new Date(install_date).getTime() === new Date().setHours(0,0,0,0) ? "waiting_confirm" : "pending";
 
         // Validate handled_by nếu có
         let handledByEmployee = null;
@@ -875,7 +916,7 @@ export const createInstallTicket = async (req, res) => {
             // Kiểm tra nhân viên có đang bận không
             const activeTicket = await EquipmentInstall.findOne({
                 handled_by: handled_by,
-                status: { $in: ["pending", "waiting_confirm"] }
+                status: { $in: ["pending", "assigned", "waiting_confirm"] }
             }).session(session);
 
             if (activeTicket) {
@@ -887,17 +928,36 @@ export const createInstallTicket = async (req, res) => {
             }
         }
 
+        // Xác định status dựa trên install_date và handled_by
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const installDate = new Date(install_date);
+        installDate.setHours(0, 0, 0, 0);
+        const isToday = installDate.getTime() === today.getTime();
+        
+        let status;
+        if (handled_by) {
+            // Đã gán nhân viên → "assigned" (bất kể đã đến ngày hay chưa)
+            status = "assigned";
+        } else if (isToday) {
+            // Đến ngày nhưng chưa gán nhân viên → "waiting_confirm" (cần gán ngay)
+            status = "waiting_confirm";
+        } else {
+            // Chưa đến ngày và chưa gán nhân viên → "pending"
+            status = "pending";
+        }
+
         const [install] = await EquipmentInstall.create(
-                    [{
-                        employee_id: employee._id,
-                        handled_by: handled_by ? handledByEmployee._id : null,
-                        room_id: room_id || null,
-                        type: type || 'install',
-                        install_date,
-                        status
-                    }],
-                    { session }
-                );
+            [{
+                employee_id: employee._id,
+                handled_by: handled_by ? handledByEmployee._id : null,
+                room_id: room_id || null,
+                type: type || 'install',
+                install_date,
+                status,
+            }],
+            { session }
+        );
 
         const details = selectedEquipmentIds.map((eid) => ({
             install_id: install._id,
@@ -1031,6 +1091,131 @@ export const getAllEquipmentInstalls = async (req, res) => {
 };
 
 // Nhân viên xem các phiếu được gán cho mình
+// Gợi ý thông minh thiết bị cần lắp đặt cho phòng
+export const getSmartInstallSuggestions = async (req, res) => {
+  try {
+    const { room_id } = req.query;
+
+    if (!room_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp room_id"
+      });
+    }
+
+    // Lấy thông tin phòng
+    const room = await Room.findById(room_id).populate("category_id", "_id category_name");
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy phòng"
+      });
+    }
+
+    if (!room.category_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Phòng này chưa có loại phòng"
+      });
+    }
+
+    // Lấy danh sách thiết bị mặc định của loại phòng này
+    const defaultEquipments = await DefaultEquipment.find({
+      category_id: room.category_id._id
+    }).populate("equipment_category_id", "name description unit");
+
+    if (defaultEquipments.length === 0) {
+      return res.status(200).json({
+        success: true,
+        suggestions: [],
+        message: "Loại phòng này không có thiết bị mặc định"
+      });
+    }
+
+    // Lấy danh sách thiết bị hiện có trong phòng (status = "in-use")
+    const currentEquipments = await Equipment.find({
+      room_id: room_id,
+      status: "in-use"
+    }).populate("category_id", "_id name");
+
+    // Đếm số lượng từng loại thiết bị hiện có trong phòng
+    const currentEquipmentCount = {};
+    currentEquipments.forEach(eq => {
+      const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
+      if (catId) {
+        currentEquipmentCount[catId] = (currentEquipmentCount[catId] || 0) + 1;
+      }
+    });
+
+    // Kiểm tra số lượng thiết bị có sẵn trong kho (status = "in-stock")
+    const stockEquipmentCount = {};
+    const stockEquipments = await Equipment.find({
+      status: "in-stock"
+    }).populate("category_id", "_id name");
+    
+    stockEquipments.forEach(eq => {
+      const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
+      if (catId) {
+        stockEquipmentCount[catId] = (stockEquipmentCount[catId] || 0) + 1;
+      }
+    });
+
+    // So sánh với thiết bị mặc định và tạo danh sách gợi ý
+    const suggestions = [];
+    for (const defaultEq of defaultEquipments) {
+      const equipmentCategoryId = defaultEq.equipment_category_id?._id?.toString() || defaultEq.equipment_category_id?.toString();
+      const requiredQuantity = defaultEq.quantity || 0;
+      const currentQuantity = currentEquipmentCount[equipmentCategoryId] || 0;
+      const neededQuantity = requiredQuantity - currentQuantity;
+      const availableInStock = stockEquipmentCount[equipmentCategoryId] || 0;
+
+      // Chỉ gợi ý nếu thiếu thiết bị (neededQuantity > 0) và có sẵn trong kho
+      if (neededQuantity > 0 && availableInStock > 0) {
+        // Số lượng gợi ý = min(neededQuantity, availableInStock)
+        const suggestedQuantity = Math.min(neededQuantity, availableInStock);
+        
+        suggestions.push({
+          category_id: equipmentCategoryId,
+          category_name: defaultEq.equipment_category_id?.name || "Unknown",
+          category_description: defaultEq.equipment_category_id?.description || "",
+          category_unit: defaultEq.equipment_category_id?.unit || "item",
+          required_quantity: requiredQuantity,
+          current_quantity: currentQuantity,
+          needed_quantity: neededQuantity,
+          available_in_stock: availableInStock,
+          suggested_quantity: suggestedQuantity,
+          reason: currentQuantity === 0 
+            ? `Thiết bị chưa có trong phòng (cần ${requiredQuantity}, có ${availableInStock} trong kho)` 
+            : `Thiếu ${neededQuantity} ${defaultEq.equipment_category_id?.unit || "cái"} (hiện có ${currentQuantity}/${requiredQuantity}, có ${availableInStock} trong kho)`
+        });
+      }
+    }
+
+    // Sắp xếp theo thứ tự ưu tiên: thiết bị chưa có trước, sau đó là thiết bị thiếu
+    suggestions.sort((a, b) => {
+      if (a.current_quantity === 0 && b.current_quantity > 0) return -1;
+      if (a.current_quantity > 0 && b.current_quantity === 0) return 1;
+      return b.needed_quantity - a.needed_quantity;
+    });
+
+    return res.status(200).json({
+      success: true,
+      room_id: room_id,
+      room_number: room.room_number,
+      room_category: room.category_id.category_name,
+      suggestions: suggestions,
+      total_suggestions: suggestions.length
+    });
+
+  } catch (error) {
+    console.error("Error in getSmartInstallSuggestions:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server: " + error.message
+    });
+  }
+};
+
 export const getMyInstallTickets = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -1123,10 +1308,10 @@ export const updateEquipmentInstall = async (req, res) => {
             return res.status(404).json({ success: false, message: "Không tìm thấy phiếu lắp đặt thiết bị." });
         }
 
-        // Chỉ cho phép cập nhật khi status = pending hoặc waiting_confirm (chưa bắt đầu)
-        if (install_ticket.status === "completed") {
+        // Chỉ cho phép cập nhật khi status = pending, assigned hoặc waiting_confirm (chưa bắt đầu)
+        if (install_ticket.status === "completed" || install_ticket.status === "expired") {
             await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Không thể chỉnh sửa phiếu đã hoàn tất." });
+            return res.status(400).json({ success: false, message: "Không thể chỉnh sửa phiếu đã hoàn tất hoặc quá hạn." });
         }
 
         // Nếu đã có nhân viên bắt đầu làm (started_at), không cho phép thay đổi
@@ -1207,7 +1392,7 @@ export const updateEquipmentInstall = async (req, res) => {
                 if (!install_ticket.handled_by || install_ticket.handled_by.toString() !== handled_by) {
                     const activeTicket = await EquipmentInstall.findOne({
                         handled_by: handled_by,
-                        status: { $in: ["pending", "waiting_confirm"] },
+                        status: { $in: ["pending", "assigned", "waiting_confirm"] },
                         _id: { $ne: install_ticket._id }
                     }).session(session);
 
@@ -1229,10 +1414,37 @@ export const updateEquipmentInstall = async (req, res) => {
              
              const installDate = new Date(install_date);
              installDate.setHours(0, 0, 0, 0);
+             const isToday = installDate.getTime() === today.getTime();
              
-             if (installDate.getTime() === today.getTime() && install_ticket.status === "pending") {
-                 install_ticket.status = "waiting_confirm";
+             // Cập nhật status khi thay đổi install_date (chỉ nếu chưa bắt đầu)
+             if (installDate.getTime() >= today.getTime()) {
+                 if (install_ticket.handled_by) {
+                     install_ticket.status = "assigned"; // Đã gán nhân viên
+                 } else if (isToday) {
+                     install_ticket.status = "waiting_confirm"; // Đến ngày nhưng chưa gán
+                 } else {
+                     install_ticket.status = "pending"; // Chưa đến ngày và chưa gán
+                 }
              }
+             // Nếu install_date < today, giữ nguyên status (có thể là expired hoặc completed)
+        }
+        
+        // Cập nhật status khi thay đổi handled_by (nếu chưa được xử lý ở trên)
+        if (handled_by !== undefined && !install_date) {
+            const installDate = new Date(install_ticket.install_date);
+            installDate.setHours(0, 0, 0, 0);
+            const isToday = installDate.getTime() === today.getTime();
+            
+            if (install_ticket.handled_by) {
+                // Đã gán nhân viên → "assigned"
+                install_ticket.status = "assigned";
+            } else if (isToday) {
+                // Chưa gán nhân viên nhưng đến ngày → "waiting_confirm"
+                install_ticket.status = "waiting_confirm";
+            } else {
+                // Chưa gán nhân viên và chưa đến ngày → "pending"
+                install_ticket.status = "pending";
+            }
         }
 
         await install_ticket.save({ session });
@@ -1292,9 +1504,27 @@ export const updateEquipmentInstall = async (req, res) => {
             return res.status(400).json({ success: false, message: "Danh sách loại thiết bị bị trùng." });
         }
 
+        // Lấy danh sách thiết bị đang trong phiếu lắp đặt khác để loại trừ
+        const activeInstallTickets = await EquipmentInstall.find({
+            status: { $in: ["pending", "assigned", "waiting_confirm"] },
+            _id: { $ne: install_ticket._id } // Loại trừ phiếu hiện tại
+        }).select("_id").session(session);
+        
+        const activeInstallTicketIds = activeInstallTickets.map(t => t._id);
+        const busyEquipmentIds = [];
+        
+        if (activeInstallTicketIds.length > 0) {
+            const busyDetails = await InstallDetail.find({
+                install_id: { $in: activeInstallTicketIds }
+            }).select("equipment_id").session(session);
+            
+            busyEquipmentIds.push(...busyDetails.map(d => d.equipment_id));
+        }
+
         const equipments = await Equipment.find({
             category_id: { $in: categoryIds },
-            status: "in-stock",
+            status: "in-stock", // Chỉ lấy thiết bị trong kho (đã loại trừ "installing")
+            _id: { $nin: busyEquipmentIds } // Loại trừ thiết bị đang trong phiếu khác
         }).sort({ createdAt: 1 }).session(session);
 
         const equipmentMap = new Map();
@@ -1477,7 +1707,7 @@ export const deleteEquipmentInstall = async (req, res) => {
       });
     }
 
-    if (installTicket.status !== "pending") {
+    if (!["pending", "assigned", "waiting_confirm"].includes(installTicket.status)) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -1650,10 +1880,10 @@ export const startInstallTicket = async (req, res) => {
     }
 
     // Kiểm tra trạng thái
-    if (ticket.status !== "pending" && ticket.status !== "waiting_confirm") {
+    if (ticket.status !== "assigned" && ticket.status !== "waiting_confirm") {
       return res.status(400).json({
         success: false,
-        message: "Chỉ có thể bắt đầu phiếu ở trạng thái pending hoặc waiting_confirm.",
+        message: "Chỉ có thể bắt đầu phiếu ở trạng thái assigned hoặc waiting_confirm.",
       });
     }
 
@@ -1741,6 +1971,7 @@ export const completeInstallTicket = async (req, res) => {
       });
     }
 
+    //ticket.status = "completed";
     ticket.completed_at = new Date();
     await ticket.save();
 

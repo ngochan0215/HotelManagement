@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FiX, FiPlus, FiTrash2, FiAlertCircle } from "react-icons/fi";
+import { FiX, FiPlus, FiTrash2, FiAlertCircle, FiZap } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { roomApi } from "../../api/roomApi.js";
 
@@ -21,6 +21,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
   const [items, setItems] = useState([{ id: "", quantity: 1 }]);
   const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -164,6 +165,60 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
     setItems(items.filter((_, i) => i !== index));
   };
 
+  const handleSmartSuggestions = async () => {
+    if (!selectedRoomId) {
+      alert("Vui lòng chọn phòng trước!");
+      return;
+    }
+
+    if (mode !== 'install') {
+      alert("Gợi ý thông minh chỉ áp dụng cho chế độ lắp đặt!");
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const res = await equipmentApi.getSmartInstallSuggestions(selectedRoomId);
+      
+      if (res.success && res.suggestions && res.suggestions.length > 0) {
+        // Chuyển đổi suggestions thành items format
+        const suggestedItems = res.suggestions.map(suggestion => {
+          // Tìm category_id trong dropdownOptions
+          const option = dropdownOptions.find(opt => opt.value === suggestion.category_id);
+          if (option) {
+            // Sử dụng suggested_quantity (đã tính toán min(needed, available))
+            // Nhưng vẫn giới hạn theo stockMap nếu có
+            const maxQuantity = stockMap[suggestion.category_id] || suggestion.suggested_quantity || suggestion.needed_quantity;
+            const finalQuantity = Math.min(suggestion.suggested_quantity || suggestion.needed_quantity, maxQuantity);
+            
+            return {
+              id: suggestion.category_id,
+              quantity: finalQuantity
+            };
+          }
+          return null;
+        }).filter(item => item !== null);
+
+        if (suggestedItems.length > 0) {
+          setItems(suggestedItems);
+          const summary = res.suggestions.map(s => 
+            `• ${s.category_name}: ${s.suggested_quantity || s.needed_quantity} ${s.category_unit || 'cái'} (${s.reason})`
+          ).join('\n');
+          alert(`Đã gợi ý ${suggestedItems.length} loại thiết bị cần lắp đặt cho phòng ${res.room_number || ''}:\n\n${summary}`);
+        } else {
+          alert("Không tìm thấy thiết bị gợi ý trong kho. Vui lòng kiểm tra lại.");
+        }
+      } else {
+        alert(res.message || "Phòng này đã có đủ thiết bị mặc định hoặc không có thiết bị mặc định nào.");
+      }
+    } catch (error) {
+      console.error("Error fetching smart suggestions:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -219,15 +274,34 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
             </div>
 
             <div className={`p-4 rounded-xl border ${mode === 'install' ? 'bg-indigo-50 border-indigo-100' : 'bg-orange-50 border-orange-100'}`}>
-                <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${mode === 'install' ? 'text-indigo-800' : 'text-orange-800'}`}>
-                    {mode === 'install' ? "Chọn Phòng cần lắp thiết bị" : "Chọn Phòng cần tháo thiết bị"}
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                    <label className={`block text-sm font-bold flex items-center gap-2 ${mode === 'install' ? 'text-indigo-800' : 'text-orange-800'}`}>
+                        {mode === 'install' ? "Chọn Phòng cần lắp thiết bị" : "Chọn Phòng cần tháo thiết bị"}
+                    </label>
+                    {mode === 'install' && selectedRoomId && (
+                        <button
+                            type="button"
+                            onClick={handleSmartSuggestions}
+                            disabled={loadingSuggestions}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            title="Gợi ý thiết bị cần lắp đặt dựa trên thiết bị mặc định của loại phòng"
+                        >
+                            <FiZap size={14} className={loadingSuggestions ? 'animate-pulse' : ''} />
+                            {loadingSuggestions ? 'Đang phân tích...' : 'GỢI Ý THÔNG MINH'}
+                        </button>
+                    )}
+                </div>
                 <select className="w-full border border-gray-300 rounded-lg p-2.5 bg-white outline-none"
                     value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value)} required>
                     <option value="">-- Chọn phòng --</option>
                     {rooms.map(r => <option key={r._id} value={r._id}>Phòng {r.room_number}</option>)}
                 </select>
                 {mode === 'uninstall' && !selectedRoomId && <p className="text-xs text-orange-600 mt-1 italic flex items-center gap-1"><FiAlertCircle/> Vui lòng chọn phòng để tải danh sách thiết bị.</p>}
+                {mode === 'install' && selectedRoomId && (
+                    <p className="text-xs text-indigo-600 mt-1 italic flex items-center gap-1">
+                        <FiZap size={12}/> Chọn phòng xong, nhấn "Gợi ý thông minh" để tự động điền thiết bị cần lắp đặt
+                    </p>
+                )}
             </div>
 
             {(mode === 'install' || (mode === 'uninstall' && selectedRoomId)) && (

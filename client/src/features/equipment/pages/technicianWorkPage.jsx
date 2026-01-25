@@ -94,13 +94,13 @@ export default function TechnicianWorkPage() {
 
   const getStatusBadge = (status, started_at, completed_at) => {
     const statusMap = {
-      pending: { 
+      assigned: { 
         label: "Chờ bắt đầu", 
         color: "bg-gray-100 text-gray-800",
         icon: <FiClock className="w-4 h-4" />
       },
       waiting_confirm: { 
-        label: started_at && !completed_at ? "Đang làm" : "Chờ xác nhận", 
+        label: started_at && !completed_at ? "Đang làm" : "Chờ Quản lý xác nhận", 
         color: started_at && !completed_at ? "bg-blue-100 text-blue-800" : "bg-yellow-100 text-yellow-800",
         icon: started_at && !completed_at ? <FiPlay className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />
       },
@@ -226,7 +226,7 @@ export default function TechnicianWorkPage() {
                 <div className="divide-y divide-gray-200">
                   {filteredTickets.map((ticket) => {
                     const roomDisplay = ticket.room_id ? `P.${ticket.room_id.room_number}` : "---";
-                    const canStart = ticket.status === "pending" || (ticket.status === "waiting_confirm" && !ticket.started_at);
+                    const canStart = ticket.status === "assigned" || (ticket.status === "waiting_confirm" && !ticket.started_at);
                     const canComplete = ticket.status === "waiting_confirm" && ticket.started_at && !ticket.completed_at;
 
                     return (

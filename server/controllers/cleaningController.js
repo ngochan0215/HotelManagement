@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
-import { CleaningTask, Employee, Room, RoomLog, Booking, User, EquipmentInstall, InstallDetail, EquipmentTicket, EquipmentImport, GoodTicket, GoodImport, Incident } from "../models/index.js";
+import { CleaningTask, Employee, Room, RoomLog, User, 
+    EquipmentInstall, InstallDetail, EquipmentTicket, EquipmentImport, 
+    GoodTicket, GoodImport, Incident, 
+} from "../models/index.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 // Lấy danh sách housekeeper rảnh
@@ -212,6 +215,18 @@ export const startCleaningTask = async (req, res) => {
             });
         }
 
+        const room = await Room.findById(task.room_id);
+        if (!room) {
+            await session.abortTransaction();
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy phòng"
+            });
+        }
+
+        console.log("TASK IN START CLEANING: ", task);
+        console.log("ROOM NUMBER: ", room.room_number);
+
         if (task.handled_by?.toString() !== employee._id.toString()) {
             await session.abortTransaction();
             return res.status(403).json({
@@ -243,7 +258,7 @@ export const startCleaningTask = async (req, res) => {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp đã được bắt đầu",
-                    `Phòng ${task.room_id.room_number} đã được nhân viên xác nhận bắt đầu làm.`,
+                    `Phòng ${room.room_number} đã được nhân viên xác nhận bắt đầu làm.`,
                     "booking",
                     "CleaningTask",
                     task._id,

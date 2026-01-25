@@ -1,9 +1,130 @@
 import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
   BookingDetail, Employee, Incident, Customer, User, Discount
- } from "../models/index.js";
+} from "../models/index.js";
 import { updateCustomerPoints } from "./customerController.js";
 import { pushNotificationToUsers } from "../services/notificationService.js";
+
+/**
+ * Cập nhật hóa đơn sau khi checkout để thêm các phí dịch vụ và đền bù
+ * @param {ObjectId} booking_id - ID của booking
+ * @param {Object} session - MongoDB session
+ * @returns {Object} - Receipt đã được cập nhật
+ */
+export const updateReceiptAfterCheckout = async (booking_id, session = null) => {
+  try {
+    // Tìm hóa đơn đã tồn tại cho booking này
+    const receipt = session 
+      ? await Receipt.findOne({ booking_id }).session(session)
+      : await Receipt.findOne({ booking_id });
+
+    if (!receipt) {
+      console.warn(`Không tìm thấy hóa đơn cho booking ${booking_id}. Có thể booking chưa có hóa đơn.`);
+      return null;
+    }
+
+    // Nếu hóa đơn đã thanh toán hoặc đã hủy, không cập nhật
+    if (receipt.status === "paid" || receipt.status === "cancelled") {
+      console.warn(`Hóa đơn ${receipt._id} đã ở trạng thái ${receipt.status}, không thể cập nhật.`);
+      return receipt;
+    }
+
+    // Tìm ServiceUsage đã hoàn thành cho booking này
+    let serviceFee = 0;
+    let serviceUsageId = null;
+    const serviceUsage = session
+      ? await ServiceUsage.findOne({
+          booking_id,
+          status: "completed",
+        }).session(session)
+      : await ServiceUsage.findOne({
+          booking_id,
+          status: "completed",
+        });
+
+    if (serviceUsage) {
+      serviceFee = serviceUsage.total_fee || 0;
+      serviceUsageId = serviceUsage._id;
+    }
+
+    // Tìm CompensateTicket đã hoàn thành cho booking này
+    let compensateFee = 0;
+    let compensateTicketId = null;
+    const compensate = session
+      ? await CompensateTicket.findOne({
+          booking_id,
+          status: "completed",
+        }).session(session)
+      : await CompensateTicket.findOne({
+          booking_id,
+          status: "completed",
+        });
+
+    if (compensate) {
+      compensateFee = compensate.total_fee || 0;
+      compensateTicketId = compensate._id;
+    }
+
+    // Tính lại final_amount và amount_due
+    const totalFee = receipt.total_fee; // Giữ nguyên total_fee từ booking
+    const depositAmount = receipt.deposit_amount; // Giữ nguyên deposit_amount
+    const finalAmount = totalFee + serviceFee + compensateFee;
+    
+    // Tính lại amount_due dựa trên số tiền đã trả
+    // Nếu status là "half-paid", có nghĩa là đã trả deposit (hoặc một phần)
+    // Nếu status là "pending", chưa trả gì
+    // Nếu status là "paid", đã trả đủ (không nên vào đây vì đã check ở trên)
+    let amountPaid = 0;
+    if (receipt.status === "half-paid") {
+      // Đã trả deposit, nhưng có thể đã trả thêm qua PayOS
+      // Kiểm tra xem có transaction_id không (đã thanh toán qua PayOS)
+      if (receipt.transaction_id) {
+        // Nếu có transaction, có thể đã trả thêm, nhưng để đơn giản, chỉ tính deposit
+        // Logic phức tạp hơn sẽ được xử lý trong payosService
+        amountPaid = depositAmount;
+      } else {
+        amountPaid = depositAmount;
+      }
+    } else if (receipt.status === "paid") {
+      // Đã trả đủ, không cần tính lại
+      amountPaid = finalAmount;
+    }
+    
+    const amountDue = Math.max(finalAmount - amountPaid, 0);
+
+    // Cập nhật hóa đơn
+    receipt.service_usage_id = serviceUsageId;
+    receipt.compensate_ticket_id = compensateTicketId;
+    receipt.service_fee = serviceFee;
+    receipt.compensate_fee = compensateFee;
+    receipt.final_amount = finalAmount;
+    receipt.amount_due = amountDue;
+
+    // Cập nhật note nếu có thay đổi
+    if (serviceFee > 0 || compensateFee > 0) {
+      const additionalFees = [];
+      if (serviceFee > 0) additionalFees.push(`Phí dịch vụ: ${serviceFee.toLocaleString()}đ`);
+      if (compensateFee > 0) additionalFees.push(`Phí đền bù: ${compensateFee.toLocaleString()}đ`);
+      
+      const existingNote = receipt.note || "";
+      const newNote = existingNote 
+        ? `${existingNote}. Đã cập nhật sau checkout: ${additionalFees.join(", ")}`
+        : `Đã cập nhật sau checkout: ${additionalFees.join(", ")}`;
+      receipt.note = newNote;
+    }
+
+    if (session) {
+      await receipt.save({ session });
+    } else {
+      await receipt.save();
+    }
+
+    return receipt;
+  } catch (error) {
+    console.error("Lỗi khi cập nhật hóa đơn sau checkout:", error);
+    throw error;
+  }
+};
 
 export const createReceipt = async (req, res) => {
   const session = await mongoose.startSession();
@@ -39,11 +160,39 @@ export const createReceipt = async (req, res) => {
     // Cho phép tạo hóa đơn cho booking ở bất kỳ trạng thái nào (pending, confirmed, in_progress, completed)
     // Không cần check status === "completed" nữa
 
+    // Kiểm tra xem đã có hóa đơn chưa
+    // Nếu có, có thể là hóa đơn đã được tạo tự động khi tạo booking
+    // Trong trường hợp này, nên cập nhật hóa đơn thay vì tạo mới
     const existedReceipt = await Receipt.findOne({ booking_id }).session(session);
     if (existedReceipt) {
-      return res.status(400).json({
-        message: "Booking này đã được tạo hóa đơn.",
-      });
+      // Nếu hóa đơn đã tồn tại, cập nhật thay vì tạo mới
+      // Điều này đảm bảo tính nhất quán với logic mới (hóa đơn được tạo khi booking)
+      try {
+        const updatedReceipt = await updateReceiptAfterCheckout(booking_id, session);
+        
+        // Cập nhật payment và note nếu có
+        if (payment) {
+          existedReceipt.payment = payment;
+        }
+        if (note) {
+          existedReceipt.note = note;
+        }
+        await existedReceipt.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({
+          message: "Cập nhật hóa đơn thành công.",
+          receipt: updatedReceipt || existedReceipt,
+        });
+      } catch (updateError) {
+        console.error("Lỗi khi cập nhật hóa đơn:", updateError);
+        // Nếu lỗi, vẫn trả về lỗi như cũ
+        return res.status(400).json({
+          message: "Booking này đã được tạo hóa đơn và không thể cập nhật.",
+        });
+      }
     }
 
     let serviceFee = 0;

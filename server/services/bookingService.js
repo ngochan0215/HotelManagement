@@ -65,31 +65,7 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
       { session: useSession }
     );
 
-    // cắt log cũ (trạng thái reserved)
-    await RoomStatusLog.updateMany(
-      {
-        room_id: { $in: roomIds },
-        status: "reserved",
-        end_time: booking.expected_checkout,
-      },
-      { $set: { end_time: new Date() } },
-      { session: useSession }
-    );
-
-    // tạo log mới
-    const roomStatusLogs = bookingDetails.map(bd => ({
-      room_id: bd.room_id,
-      status: "booked",
-      start_time: bd.expected_checkin,
-      end_time: bd.expected_checkout,
-      expected_end_time: bd.expected_checkout,
-      note: `Phòng được giữ vì booking ${booking_id} đã được cọc.`,
-      handled_by: booking.handled_by,
-    }));
-
-    await RoomStatusLog.insertMany(roomStatusLogs, { session: useSession });
-
-    // cắt log cũ (BẢNG MỚI)
+    // cắt log cũ (trạng thái reserved) - RoomLog (bảng chính)
     await RoomLog.updateMany(
       {
         room_id: { $in: roomIds },
@@ -100,7 +76,18 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
       { session: useSession }
     );
 
-    // tạo log mới (BẢNG MỚI)
+    // cắt log cũ (trạng thái reserved) - RoomStatusLog (bảng dự phòng)
+    await RoomStatusLog.updateMany(
+      {
+        room_id: { $in: roomIds },
+        status: "reserved",
+        end_time: booking.expected_checkout,
+      },
+      { $set: { end_time: new Date() } },
+      { session: useSession }
+    );
+
+    // tạo log mới - RoomLog (bảng chính)
     const roomLogs = bookingDetails.map(bd => ({
       booking_id: bd.booking_id,
       room_id: bd.room_id,
@@ -113,6 +100,20 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
     }));
 
     await RoomLog.insertMany(roomLogs, { session: useSession });
+
+    // tạo log mới - RoomStatusLog (bảng dự phòng)
+    const roomStatusLogs = bookingDetails.map(bd => ({
+      room_id: bd.room_id,
+      status: "booked",
+      start_time: bd.expected_checkin,
+      end_time: bd.expected_checkout,
+      expected_end_time: bd.expected_checkout,
+      note: `Phòng được giữ vì booking ${booking_id} đã được cọc.`,
+      handled_by: booking.handled_by,
+    }));
+
+    await RoomStatusLog.insertMany(roomStatusLogs, { session: useSession });
+
 
     // update trạng thái booking
     booking.status = "confirmed";

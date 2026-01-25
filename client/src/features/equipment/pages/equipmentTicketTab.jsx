@@ -141,6 +141,7 @@ export default function EquipmentTicketTab() {
   const renderStatus = (status, completed_at) => {
     const config = {
       pending: { label: "Chờ xử lý", class: "bg-gray-100 text-gray-500" },
+      assigned: { label: "Đã phân việc", class: "bg-orange-50 text-orage-700" },
       waiting_confirm: { 
         label: completed_at ? "Chờ admin xác nhận" : "Đang thực hiện", 
         class: completed_at 
