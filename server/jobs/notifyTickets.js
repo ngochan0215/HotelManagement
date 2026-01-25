@@ -289,6 +289,8 @@ export const notifyGoodTickets = async () => {
                 console.error(`Error sending notification for today good ticket ${ticket._id}:`, error);
             }
         }
+
+        console.log(`Updating ${todayTickets.length} pending good tickets successfully.`);
     }
 };
 

@@ -45,8 +45,20 @@ export const equipmentApi = {
     const res = await axios.get(`${BASE_URL}/ticket/all`, getAuthHeader());
     return res.data;
   },
+  getImportTicketById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/ticket/${id}`, getAuthHeader());
+    return res.data;
+  },
+  getOutOfStockCategories: async () => {
+    const res = await axios.get(`${BASE_URL}/ticket/out-of-stock`, getAuthHeader());
+    return res.data;
+  },
   createImportTicket: async (data) => {
     const res = await axios.post(`${BASE_URL}/ticket/add`, data, getAuthHeader());
+    return res.data;
+  },
+  autoCreateImportTicket: async (data = {}) => {
+    const res = await axios.post(`${BASE_URL}/ticket/auto-create`, data, getAuthHeader());
     return res.data;
   },
   confirmImportTicket: async (id) => {

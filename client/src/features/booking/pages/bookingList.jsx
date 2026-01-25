@@ -530,7 +530,9 @@ export default function BookingList() {
       }
       if (!finalCustomerId) return alert("Vui lòng chọn khách hàng!");
 
-      const depositAmount = bookingMode === "immediate" ? 0 : Number(calcValues.deposit_required);
+      let depositAmount = bookingMode === "immediate" ? 0 : Number(calcValues.deposit_required);
+      // Làm tròn số tiền về số nguyên (PayOS yêu cầu số nguyên)
+      depositAmount = Math.round(depositAmount);
       
       const payloadBooking = {
         customer_id: finalCustomerId, handled_by: employeeId, adults: Number(formData.adults), children: Number(formData.children),
@@ -567,17 +569,19 @@ export default function BookingList() {
         }
 
         //console.log("Deposit amount:", depositAmount);
-        // Tạo payment link cho tiền cọc
-        const paymentData = {
-          booking_id: bookingId,
-          amount: depositAmount,
-          description: `Tiền cọc đơn ID: #${bookingId.toString().slice(-6)}`,
-          items: [{
-            name: `Tiền cọc đặt phòng`,
-            quantity: 1,
-            price: depositAmount
-          }]
-        };
+      // Tạo payment link cho tiền cọc
+      // Đảm bảo số tiền là số nguyên (PayOS yêu cầu)
+      const roundedDepositAmount = Math.round(depositAmount);
+      const paymentData = {
+        booking_id: bookingId,
+        amount: roundedDepositAmount,
+        description: `Tiền cọc đơn ID: #${bookingId.toString().slice(-6)}`,
+        items: [{
+          name: `Tiền cọc đặt phòng`,
+          quantity: 1,
+          price: roundedDepositAmount
+        }]
+      };
         console.log("Creating payment link with data:", paymentData);
 
         const paymentRes = await paymentApi.createPaymentLink(employeeId, paymentData);
@@ -802,15 +806,17 @@ export default function BookingList() {
       }
 
       // Tạo payment link cho tiền cọc
+      // Đảm bảo số tiền là số nguyên (PayOS yêu cầu)
+      const roundedDeposit = Math.round(booking.deposit);
       const paymentData = {
         booking_id: bookingId,
         receipt_id: receiptId,
-        amount: booking.deposit,
+        amount: roundedDeposit,
         description: `Tiền cọc đơn ID: #${bookingId.toString().slice(-6)}`,
         items: [{
           name: `Tiền cọc đặt phòng`,
           quantity: 1,
-          price: booking.deposit
+          price: roundedDeposit
         }]
       };
 

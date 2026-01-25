@@ -26,7 +26,7 @@
 //     // Tìm tất cả phòng trừ 6 phòng được chỉ định và trừ phòng mới tạo (status = "new")
 //     const rooms = await Room.find({
 //       room_number: { $nin: excludedRoomNumbers },
-//       room_status: { $ne: "new" }
+//       room_status: "available"
 //     });
 
 //     console.log(`Tìm thấy ${rooms.length} phòng cần cập nhật`);
@@ -47,54 +47,55 @@
 
 //         try {
 //           // 1. Cập nhật room.room_status thành "available"
-//           room.room_status = "available";
+//           room.start_time = null;
+//           room.end_time = null;
 //           await room.save({ session });
 
 //           // 2. Đóng tất cả log cũ (nếu có) - RoomLog (bảng chính)
-//           await RoomLog.updateMany(
-//             {
-//               room_id: room._id,
-//               end_time: null
-//             },
-//             { $set: { end_time: now } },
-//             { session }
-//           );
+//         //   await RoomLog.updateMany(
+//         //     {
+//         //       room_id: room._id,
+//         //       end_time: null
+//         //     },
+//         //     { $set: { end_time: now } },
+//         //     { session }
+//         //   );
 
-//           // 3. Đóng tất cả log cũ (nếu có) - RoomStatusLog (bảng dự phòng)
-//           await RoomStatusLog.updateMany(
-//             {
-//               room_id: room._id,
-//               end_time: null
-//             },
-//             { $set: { end_time: now } },
-//             { session }
-//           );
+//         //   // 3. Đóng tất cả log cũ (nếu có) - RoomStatusLog (bảng dự phòng)
+//         //   await RoomStatusLog.updateMany(
+//         //     {
+//         //       room_id: room._id,
+//         //       end_time: null
+//         //     },
+//         //     { $set: { end_time: now } },
+//         //     { session }
+//         //   );
 
-//           // 4. Tạo log available mới - RoomLog (bảng chính)
-//           await RoomLog.create(
-//             [{
-//               room_id: room._id,
-//               status: "available",
-//               start_time: now,
-//               end_time: null,
-//               note: "Migration: Cập nhật phòng về trạng thái available",
-//               handled_by: null
-//             }],
-//             { session }
-//           );
+//         //   // 4. Tạo log available mới - RoomLog (bảng chính)
+//         //   await RoomLog.create(
+//         //     [{
+//         //       room_id: room._id,
+//         //       status: "available",
+//         //       start_time: now,
+//         //       end_time: null,
+//         //       note: "Migration: Cập nhật phòng về trạng thái available",
+//         //       handled_by: null
+//         //     }],
+//         //     { session }
+//         //   );
 
-//           // 5. Tạo log available mới - RoomStatusLog (bảng dự phòng)
-//           await RoomStatusLog.create(
-//             [{
-//               room_id: room._id,
-//               status: "available",
-//               start_time: now,
-//               end_time: null,
-//               note: "Migration: Cập nhật phòng về trạng thái available",
-//               handled_by: null
-//             }],
-//             { session }
-//           );
+//         //   // 5. Tạo log available mới - RoomStatusLog (bảng dự phòng)
+//         //   await RoomStatusLog.create(
+//         //     [{
+//         //       room_id: room._id,
+//         //       status: "available",
+//         //       start_time: now,
+//         //       end_time: null,
+//         //       note: "Migration: Cập nhật phòng về trạng thái available",
+//         //       handled_by: null
+//         //     }],
+//         //     { session }
+//         //   );
 
 //           await session.commitTransaction();
 //           session.endSession();

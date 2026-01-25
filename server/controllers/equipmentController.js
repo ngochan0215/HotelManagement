@@ -1841,6 +1841,169 @@ export const confirmEquipmentImportTicket = async (req, res) => {
     });
 };
 
+// Lấy danh sách thiết bị hết tồn kho để preview
+export const getOutOfStockCategories = async (req, res) => {
+    try {
+        // Tìm tất cả thiết bị có storage_quantity = 0
+        const outOfStockCategories = await EquipmentCategory.find({
+            storage_quantity: 0
+        }).select("_id name description unit price storage_quantity");
+
+        return res.status(200).json({
+            success: true,
+            categories: outOfStockCategories,
+            count: outOfStockCategories.length
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: "ERROR: " + err.message });
+    }
+};
+
+// Tự động tạo phiếu nhập cho thiết bị có số lượng tồn = 0
+export const autoCreateImportTicket = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const employee_id = req.user.userId;
+        const { import_date, default_quantity = 10, default_price_percent = 0.8 } = req.body;
+
+        if (!employee_id) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
+        }
+
+        const employee = await Employee.findOne({ user_id: employee_id }).session(session);
+        if (!employee) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
+
+        // Nếu có items từ frontend, sử dụng items đó (đã được chỉnh sửa)
+        // Nếu không, tự động tìm thiết bị hết tồn kho
+        let items = req.body.items;
+        let outOfStockCategories = [];
+
+        if (items && Array.isArray(items) && items.length > 0) {
+            // Validate items từ frontend
+            await validateImportItems(items);
+            // Lấy thông tin category để tính tổng tiền
+            const categoryIds = items.map(item => item.category_id);
+            outOfStockCategories = await EquipmentCategory.find({
+                _id: { $in: categoryIds }
+            }).session(session);
+        } else {
+            // Tự động tìm thiết bị hết tồn kho
+            outOfStockCategories = await EquipmentCategory.find({
+                storage_quantity: 0
+            }).session(session);
+
+            if (outOfStockCategories.length === 0) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(200).json({
+                    success: true,
+                    message: "Không có thiết bị nào hết tồn kho.",
+                    ticket_id: null,
+                    items_count: 0
+                });
+            }
+
+            // Tạo items mặc định
+            items = outOfStockCategories.map(category => ({
+                category_id: category._id,
+                import_quantity: default_quantity,
+                import_price: Math.round(category.price * default_price_percent)
+            }));
+        }
+
+        if (!items || items.length === 0) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                success: false,
+                message: "Không có thiết bị nào để tạo phiếu nhập."
+            });
+        }
+
+        // Kiểm tra ngày nhập
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let importDate;
+        
+        if (import_date) {
+            importDate = new Date(import_date);
+            importDate.setHours(0, 0, 0, 0);
+            if (importDate < today) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại."
+                });
+            }
+        } else {
+            // Mặc định là ngày mai
+            importDate = new Date(today);
+            importDate.setDate(importDate.getDate() + 1);
+        }
+
+        // Kiểm tra xem đã có phiếu nhập cho ngày này chưa
+        const existing = await EquipmentTicket.findOne({ import_date: importDate }).session(session);
+        if (existing) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                success: false,
+                message: `Đã có phiếu nhập cho ngày ${importDate.toISOString().split('T')[0]}. Vui lòng cập nhật phiếu đó hoặc chọn ngày khác.`
+            });
+        }
+
+        const status = importDate.getTime() === today.getTime()
+            ? "waiting_confirm" : "pending";
+
+        // Tính tổng tiền
+        const total_fee = items.reduce((sum, item) => sum + (item.import_price * item.import_quantity), 0);
+
+        // Tạo phiếu nhập thiết bị
+        const employeeId = employee._id;
+        const ticket = await EquipmentTicket.create(
+            [{ employee_id: employeeId, import_date: importDate, status, total_fee }],
+            { session }
+        );
+
+        const ticketId = ticket[0]._id;
+
+        // Tạo từng chi tiết phiếu nhập
+        const importDetails = items.map((item) => ({
+            ticket_id: ticketId,
+            category_id: item.category_id,
+            import_price: item.import_price,
+            import_quantity: item.import_quantity,
+        }));
+
+        await EquipmentImport.insertMany(importDetails, { session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(201).json({
+            success: true,
+            message: `Tự động tạo phiếu nhập thành công cho ${items.length} loại thiết bị hết tồn kho!`,
+            ticket_id: ticketId,
+            items_count: items.length,
+            import_date: importDate
+        });
+
+    } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(500).json({ success: false, message: "ERROR: " + err.message });
+    }
+};
+
 // Nhân viên bắt đầu công việc
 export const startInstallTicket = async (req, res) => {
   try {
