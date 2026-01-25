@@ -17,40 +17,34 @@ import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
-
+import ProfilePage from '../features/auth/pages/profilePage.jsx';
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
 
   const ProtectedRoute = ({ children, allowed }) => {
-    const location = useLocation();
+      const location = useLocation();
 
-    if (!user) return <Navigate to="/login" replace />;
+      if (!user) return <Navigate to="/login" replace />;
 
-    const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
-    const position = (localStorage.getItem("position") || "").toLowerCase();
+      const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
 
-    if (role === 'manager') return children;
+      const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
+      if (role === 'manager') return children;
 
-    if (!allowed) return children;
-    const allowedLower = allowed.map(p => p.toLowerCase());
-    if (allowedLower.includes(position)) {
-        return children;
-    }
+      if (!allowed || allowed.length === 0) return children;
+      const allowedLower = allowed.map(p => p.toLowerCase());
+      if (allowedLower.includes(position)) {
+          return children;
+      }
 
-    let redirectPath = "/login";
+      let redirectPath = "/dashboard";
+      if (position === 'receptionist') redirectPath = "/room-calendar";
+      else if (position === 'technician') redirectPath = "/incidents";
+      else if (position === 'housekeeper') redirectPath = "/service";
+      else if (position === 'accountant') redirectPath = "/invoices";
 
-    if (position === 'receptionist') redirectPath = "/room-calendar";
-    else if (position === 'technician') redirectPath = "/incidents";
-    else if (position === 'housekeeper') redirectPath = "/service";
-    else if (position === 'accountant') redirectPath = "/invoices";
-    else if (position === 'manager') redirectPath = "/dashboard";
-    else redirectPath = "/dashboard";
-    if (location.pathname === redirectPath) {
-        return <div className="p-10 text-center text-red-500">Bạn không có quyền truy cập trang này.</div>;
-    }
-
-    return <Navigate to={redirectPath} replace />;
-  };
+      return <Navigate to={redirectPath} replace />;
+    };
 
   if (isLoading) {
     return (
@@ -67,7 +61,9 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-
+      <Route path="/profile" element={
+                <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
+            } />
       <Route path="/dashboard" element={
           <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>
       } />
