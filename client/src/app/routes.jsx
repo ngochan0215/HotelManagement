@@ -110,7 +110,7 @@ export default function AppRoutes() {
         <ProtectedRoute allowed={['receptionist']}> <BookingList /> </ProtectedRoute>
       } />
       <Route path="/room-types" element={
-        <ProtectedRoute allowed={['receptionist', 'housekeeper']}> <RoomPage /> </ProtectedRoute>
+        <ProtectedRoute allowed={['receptionist']}> <RoomPage /> </ProtectedRoute>
       } />
       <Route path="/customers" element={
         <ProtectedRoute allowed={['receptionist', 'customer_service']}> <CustomerPage /> </ProtectedRoute>
@@ -134,7 +134,7 @@ export default function AppRoutes() {
 
       {/* DỊCH VỤ & HÓA ĐƠN */}
       <Route path="/service" element={
-        <ProtectedRoute allowed={['receptionist', 'housekeeper']}> <ServicePage /> </ProtectedRoute>
+        <ProtectedRoute allowed={['receptionist']}> <ServicePage /> </ProtectedRoute>
       } />
       <Route path="/invoices" element={
         <ProtectedRoute allowed={['receptionist', 'accountant']}> <ReceiptPage /> </ProtectedRoute>
