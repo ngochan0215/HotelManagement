@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag } from "react-icons/fi";
+import {
+  FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag,
+  FiChevronLeft, FiChevronRight
+} from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ReceiptDetailModal from "../components/receiptDetailModal.jsx";
@@ -48,6 +51,9 @@ export default function ReceiptList() {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [paymentModalData, setPaymentModalData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -82,6 +88,84 @@ export default function ReceiptList() {
     const timer = setTimeout(() => { fetchReceipts(); }, 500);
     return () => clearTimeout(timer);
   }, [keyword, status, payment, fromDate, toDate]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [keyword, status, payment, fromDate, toDate]);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentReceipts = receipts.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(receipts.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+  // -------------------------
 
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
@@ -154,10 +238,10 @@ export default function ReceiptList() {
                 <tbody className="text-sm divide-y divide-gray-50">
                     {loading ? (
                         <tr><td colSpan="7" className="text-center py-10 text-gray-400">Đang tải dữ liệu...</td></tr>
-                    ) : receipts.length === 0 ? (
+                    ) : currentReceipts.length === 0 ? (
                         <tr><td colSpan="7" className="text-center py-10 text-gray-400 italic">Không tìm thấy hóa đơn nào.</td></tr>
                     ) : (
-                        receipts.map(item => (
+                        currentReceipts.map(item => (
                             <tr key={item._id} className="hover:bg-gray-50 transition">
                                 <td className="py-4 px-6 font-mono text-xs text-gray-500 font-bold">
                                     #{item._id.slice(-6).toUpperCase()}
@@ -227,7 +311,7 @@ export default function ReceiptList() {
                                                 };
 
                                                 const paymentRes = await paymentApi.createPaymentLink(userId, paymentData);
-                                                
+
                                                 if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
                                                   window.open(paymentRes.data.checkoutUrl, '_blank');
                                                   alert("Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.");
@@ -268,6 +352,16 @@ export default function ReceiptList() {
                 </tbody>
             </table>
           </div>
+
+          {receipts.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, receipts.length)}</b> trong tổng <b>{receipts.length}</b>
+                </div>
+                {renderPaginationButtons()}
+            </div>
+          )}
+
         </div>
       </div>
 

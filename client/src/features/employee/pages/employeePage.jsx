@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  FiPlus, FiSearch, FiUser, FiPhone, FiMapPin, FiCreditCard, FiX, FiMail, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiBriefcase, FiDollarSign, FiLoader, FiCheckCircle, FiXCircle
+  FiPlus, FiSearch, FiPhone, FiCreditCard, FiX, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiDollarSign, FiLoader,
+  FiUserPlus, FiUserCheck, FiEye, FiEyeOff,
+  FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
-import { FiUserPlus, FiUserCheck, FiEye, FiEyeOff, FiKey, FiRefreshCw } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
@@ -34,6 +35,9 @@ export default function EmployeePage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("a-z");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
   const [toast, setToast] = useState(null);
   const [confirmState, setConfirmState] = useState({
     open: false, title: "", message: "", onConfirm: null
@@ -44,7 +48,7 @@ export default function EmployeePage() {
       employee: null
     });
   const [accForm, setAccForm] = useState({ email: "", password: "" });
-    const [showPass, setShowPass] = useState(false); // Ẩn/hiện password
+  const [showPass, setShowPass] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
     email: "", password: "", full_name: "", date_birth: "",
@@ -55,6 +59,10 @@ export default function EmployeePage() {
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterPosition, filterStatus, sortOrder]);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -161,7 +169,6 @@ export default function EmployeePage() {
       e.preventDefault();
       if (submitting) return;
 
-      // Validate cơ bản
       if (!accForm.email || (!accForm.password && accountModal.type === 'create')) {
           showToast("Vui lòng nhập đầy đủ thông tin", "error");
           return;
@@ -181,13 +188,14 @@ export default function EmployeePage() {
               }
           }
           setAccountModal({ ...accountModal, open: false });
-          fetchEmployees(); // Load lại bảng
+          fetchEmployees();
       } catch (error) {
           showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
       } finally {
           setSubmitting(false);
       }
     };
+
   const filteredEmployees = useMemo(() => {
     let result = employees.filter(e => {
       const matchPos = filterPosition === "all" || e.position === filterPosition;
@@ -212,6 +220,80 @@ export default function EmployeePage() {
     return result;
   }, [employees, filterPosition, filterStatus, searchTerm, sortOrder]);
 
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentEmployees = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+  // -------------------------
+
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
       <Sidebar />
@@ -230,7 +312,7 @@ export default function EmployeePage() {
             </button>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-[500px]">
             <div className="flex flex-col gap-4 mb-6">
                 <div className="flex bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto">
                     <button onClick={() => setFilterPosition('all')} className={`px-4 py-1.5 rounded-md text-sm font-bold capitalize transition-all whitespace-nowrap ${filterPosition === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Tất cả</button>
@@ -291,7 +373,7 @@ export default function EmployeePage() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto min-h-[400px]">
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-100 bg-gray-50/50">
@@ -306,8 +388,8 @@ export default function EmployeePage() {
                 </thead>
                 <tbody className="text-gray-700 text-sm">
                   {loading ? <tr><td colSpan="6" className="text-center py-8 text-gray-500">Đang tải dữ liệu...</td></tr> :
-                   filteredEmployees.length === 0 ? <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có nhân viên nào.</td></tr> :
-                   filteredEmployees.map((e, index) => {
+                   currentEmployees.length === 0 ? <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có nhân viên nào phù hợp.</td></tr> :
+                   currentEmployees.map((e, index) => {
                     const key = e._id || index;
                     const position = POSITION_MAP[e.position] || POSITION_MAP.receptionist;
                     const status = STATUS_MAP[e.status] || STATUS_MAP.working;
@@ -391,6 +473,16 @@ export default function EmployeePage() {
                 </tbody>
               </table>
             </div>
+
+            {filteredEmployees.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                    <div className="text-sm text-gray-500">
+                        Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredEmployees.length)}</b> trong tổng <b>{filteredEmployees.length}</b>
+                    </div>
+                    {renderPaginationButtons()}
+                </div>
+            )}
+
           </div>
         </div>
       </div>

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { serviceApi } from "../../api/serviceApi.js";
-import { FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser, FiEye, FiEdit, FiXCircle } from "react-icons/fi";
+import {
+  FiCheckCircle, FiPlus, FiClock, FiTruck, FiUser, FiEye, FiEdit, FiXCircle,
+  FiChevronLeft, FiChevronRight
+} from "react-icons/fi";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
@@ -12,6 +15,10 @@ export default function ServiceTicketTab() {
   const [imports, setImports] = useState([]);
   const [usages, setUsages] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const [usagePage, setUsagePage] = useState(1);
+  const [importPage, setImportPage] = useState(1);
+  const itemsPerPage = 5;
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
@@ -49,6 +56,80 @@ export default function ServiceTicketTab() {
     fetchTickets();
   }, []);
 
+  const indexOfLastUsage = usagePage * itemsPerPage;
+  const indexOfFirstUsage = indexOfLastUsage - itemsPerPage;
+  const currentUsages = usages.slice(indexOfFirstUsage, indexOfLastUsage);
+  const totalUsagePages = Math.ceil(usages.length / itemsPerPage);
+
+  const indexOfLastImport = importPage * itemsPerPage;
+  const indexOfFirstImport = indexOfLastImport - itemsPerPage;
+  const currentImports = imports.slice(indexOfFirstImport, indexOfLastImport);
+  const totalImportPages = Math.ceil(imports.length / itemsPerPage);
+
+  const renderPagination = (currentPage, totalPages, setPage) => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+            range.push(i);
+        }
+    }
+
+    let l;
+    for (let i of range) {
+        if (l) {
+            if (i - l === 2) rangeWithDots.push(l + 1);
+            else if (i - l !== 1) rangeWithDots.push('...');
+        }
+        rangeWithDots.push(i);
+        l = i;
+    }
+
+    return (
+        <div className="flex gap-2">
+            <button
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <FiChevronLeft />
+            </button>
+            {rangeWithDots.map((page, index) => (
+                page === '...' ? (
+                    <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+                ) : (
+                    <button
+                        key={page}
+                        onClick={() => setPage(page)}
+                        className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                            currentPage === page
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                            : "border hover:bg-gray-50 text-gray-600"
+                        }`}
+                    >
+                        {page}
+                    </button>
+                )
+            ))}
+            <button
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <FiChevronRight />
+            </button>
+        </div>
+    );
+  };
+
+  // --- ACTIONS ---
   const handleConfirmImport = async (id) => {
     if (!window.confirm("Xác nhận nhập kho? Số lượng tồn kho sẽ được cập nhật.")) return;
     try {
@@ -60,28 +141,27 @@ export default function ServiceTicketTab() {
     }
   };
 
-    const handleConfirmUsage = async (id) => {
-        if (!window.confirm("Xác nhận toàn bộ phiếu sử dụng dịch vụ?")) return;
-        try {
-            await serviceApi.confirmServiceUsage(id);
-            alert("Đã xác nhận phiếu sử dụng dịch vụ!");
-            fetchTickets();
-        } catch (err) {
-            alert("Lỗi: " + (err.response?.data?.message || err.message));
-        }
-    };
+  const handleConfirmUsage = async (id) => {
+      if (!window.confirm("Xác nhận toàn bộ phiếu sử dụng dịch vụ?")) return;
+      try {
+          await serviceApi.confirmServiceUsage(id);
+          alert("Đã xác nhận phiếu sử dụng dịch vụ!");
+          fetchTickets();
+      } catch (err) {
+          alert("Lỗi: " + (err.response?.data?.message || err.message));
+      }
+  };
 
-    const handleCancelUsage = async (id) => {
-        if (!window.confirm("Hủy toàn bộ phiếu sử dụng dịch vụ?")) return;
-        try {
-            await serviceApi.cancelServiceUsage(id);
-            alert("Đã hủy phiếu sử dụng dịch vụ!");
-            fetchTickets();
-        } catch (err) {
-            alert("Lỗi: " + (err.response?.data?.message || err.message));
-        }
-    };
-
+  const handleCancelUsage = async (id) => {
+      if (!window.confirm("Hủy toàn bộ phiếu sử dụng dịch vụ?")) return;
+      try {
+          await serviceApi.cancelServiceUsage(id);
+          alert("Đã hủy phiếu sử dụng dịch vụ!");
+          fetchTickets();
+      } catch (err) {
+          alert("Lỗi: " + (err.response?.data?.message || err.message));
+      }
+  };
 
   const renderStatus = (status) => {
     const config = {
@@ -128,7 +208,7 @@ export default function ServiceTicketTab() {
             </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[300px]">
             <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                     <tr>
@@ -141,7 +221,7 @@ export default function ServiceTicketTab() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {usages.map((item) => (
+                    {currentUsages.map((item) => (
                         <tr key={item._id} className="hover:bg-gray-50 transition">
                             <td className="px-4 py-3 font-bold text-gray-800">
                                 <div className="flex items-center gap-2">
@@ -223,6 +303,15 @@ export default function ServiceTicketTab() {
                 </tbody>
             </table>
         </div>
+
+        {usages.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstUsage + 1}</b> - <b>{Math.min(indexOfLastUsage, usages.length)}</b> trong tổng <b>{usages.length}</b>
+                </div>
+                {renderPagination(usagePage, totalUsagePages, setUsagePage)}
+            </div>
+        )}
       </div>
 
       {isManager && (
@@ -239,7 +328,7 @@ export default function ServiceTicketTab() {
             </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[300px]">
             <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
                     <tr>
@@ -251,7 +340,7 @@ export default function ServiceTicketTab() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {imports.map((item) => (
+                    {currentImports.map((item) => (
                         <tr key={item._id} className="hover:bg-gray-50 transition">
                             <td className="px-4 py-3 font-mono text-xs font-bold text-gray-500">
                                 #{item._id.slice(-6).toUpperCase()}
@@ -294,6 +383,15 @@ export default function ServiceTicketTab() {
                 </tbody>
             </table>
         </div>
+
+        {imports.length > 0 && (
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
+                <div className="text-sm text-gray-500">
+                    Hiển thị <b>{indexOfFirstImport + 1}</b> - <b>{Math.min(indexOfLastImport, imports.length)}</b> trong tổng <b>{imports.length}</b>
+                </div>
+                {renderPagination(importPage, totalImportPages, setImportPage)}
+            </div>
+        )}
       </div>
       )}
     </div>

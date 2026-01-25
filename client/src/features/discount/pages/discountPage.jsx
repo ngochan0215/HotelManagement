@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  FiPlus, FiSearch, FiTag, FiCalendar, FiPercent, FiEdit, FiTrash2, FiChevronDown, FiLoader, FiX, FiDollarSign, FiHash, FiEye, FiInfo
+  FiPlus, FiSearch, FiTag, FiCalendar, FiPercent, FiEdit, FiTrash2, FiChevronDown, FiLoader, FiX, FiDollarSign, FiHash, FiEye, FiInfo,
+  FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
 
 import Sidebar from "../../../components/sidebar.jsx";
@@ -39,6 +40,8 @@ export default function DiscountPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingDiscount, setViewingDiscount] = useState(null);
@@ -85,6 +88,10 @@ export default function DiscountPage() {
     fetchDiscounts();
     fetchRoomCategories();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterStatus]);
 
   const fetchRoomCategories = async () => {
     try {
@@ -201,8 +208,8 @@ export default function DiscountPage() {
         discount: {
           type: formData.discount.type,
           value: Number(formData.discount.value),
-          max_discount: formData.discount.type === "PERCENT" && formData.discount.max_discount 
-            ? Number(formData.discount.max_discount) 
+          max_discount: formData.discount.type === "PERCENT" && formData.discount.max_discount
+            ? Number(formData.discount.max_discount)
             : undefined
         },
         begin_date: formData.begin_date,
@@ -210,39 +217,26 @@ export default function DiscountPage() {
         priority: Number(formData.priority) || 1
       };
 
-      // Xử lý conditions - logic: không chọn = áp dụng cho tất cả (không gửi field)
       const conditions = { rule_type: formData.conditions.rule_type };
-      
-      // Chỉ thêm min_order_value nếu rule_type là MIN_BOOKING_VALUE và có giá trị
       if (formData.conditions.rule_type === "MIN_BOOKING_VALUE" && formData.conditions.min_order_value) {
         conditions.min_order_value = Number(formData.conditions.min_order_value);
       }
-      
-      // Chỉ thêm days_of_week nếu có chọn (mảng không rỗng)
       if (formData.conditions.days_of_week && formData.conditions.days_of_week.length > 0) {
         conditions.days_of_week = formData.conditions.days_of_week;
       }
-      
-      // Chỉ thêm hours_range nếu có điền cả from và to
       if (formData.conditions.hours_range?.from != null && formData.conditions.hours_range?.to != null) {
         conditions.hours_range = {
           from: Number(formData.conditions.hours_range.from),
           to: Number(formData.conditions.hours_range.to)
         };
       }
-      
-      // Chỉ thêm customer_tiers nếu có chọn (mảng không rỗng)
       if (formData.conditions.customer_tiers && formData.conditions.customer_tiers.length > 0) {
         conditions.customer_tiers = formData.conditions.customer_tiers;
       }
-      
-      // Chỉ thêm room_category_ids nếu có chọn (mảng không rỗng)
       if (formData.conditions.room_category_ids && formData.conditions.room_category_ids.length > 0) {
         conditions.room_category_ids = formData.conditions.room_category_ids;
       }
 
-      // Chỉ thêm conditions nếu có ít nhất một điều kiện (ngoài rule_type)
-      // Nếu rule_type là NONE và không có điều kiện nào khác, không gửi conditions
       if (Object.keys(conditions).length > 1 || conditions.rule_type !== "NONE") {
         submitData.conditions = conditions;
       }
@@ -264,7 +258,6 @@ export default function DiscountPage() {
   };
 
   const getStatusInfo = (discount) => {
-    // Sử dụng status từ server nếu có
     if (discount.status) {
       const statusMap = {
         upcoming: { label: "Sắp diễn ra", color: "blue", status: "upcoming" },
@@ -274,13 +267,12 @@ export default function DiscountPage() {
       return statusMap[discount.status] || statusMap.upcoming;
     }
 
-    // Fallback: tính toán từ ngày
     const now = new Date();
     const begin = discount.begin_date ? parseISO(discount.begin_date) : null;
     const end = discount.end_date ? parseISO(discount.end_date) : null;
 
     if (!begin || !end) return { label: "Không xác định", color: "gray", status: "unknown" };
-    
+
     if (now > end) return { label: "Đã kết thúc", color: "gray", status: "expired" };
     if (now < begin) return { label: "Sắp diễn ra", color: "blue", status: "upcoming" };
     return { label: "Đang chạy", color: "emerald", status: "active" };
@@ -343,8 +335,8 @@ export default function DiscountPage() {
   const filteredDiscounts = useMemo(() => {
     return discounts.filter(d => {
       const searchLower = searchTerm.toLowerCase();
-      const matchSearch = !searchTerm || 
-        d.name?.toLowerCase().includes(searchLower) || 
+      const matchSearch = !searchTerm ||
+        d.name?.toLowerCase().includes(searchLower) ||
         d.code?.toLowerCase().includes(searchLower) ||
         (d.description && d.description.toLowerCase().includes(searchLower));
 
@@ -356,6 +348,80 @@ export default function DiscountPage() {
       return matchSearch && matchType && matchStatus;
     });
   }, [discounts, searchTerm, filterType, filterStatus]);
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentDiscounts = filteredDiscounts.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredDiscounts.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+
 
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
@@ -429,16 +495,14 @@ export default function DiscountPage() {
                     <th className="py-3 pl-4">Mã & Tên</th>
                     <th className="py-3 text-center">Mức giảm</th>
                     <th className="py-3">Thời gian</th>
-                    {/* <th className="py-3">Điều kiện</th> */}
-                    {/* <th className="py-3 text-center">Ưu tiên</th> */}
                     <th className="py-3 text-center">Trạng thái</th>
                     <th className="py-3 text-right pr-4">Hành động</th>
                   </tr>
                 </thead>
                 <tbody className="text-gray-700 text-sm">
                   {loading ? <tr><td colSpan="7" className="text-center py-8 text-gray-500">Đang tải dữ liệu...</td></tr> :
-                   filteredDiscounts.length === 0 ? <tr><td colSpan="7" className="text-center py-8 text-gray-400 italic">Chưa có khuyến mãi nào phù hợp.</td></tr> :
-                   filteredDiscounts.map((d, index) => {
+                   currentDiscounts.length === 0 ? <tr><td colSpan="7" className="text-center py-8 text-gray-400 italic">Chưa có khuyến mãi nào phù hợp.</td></tr> :
+                   currentDiscounts.map((d, index) => {
                     const statusInfo = getStatusInfo(d);
                     const isEditable = statusInfo.status !== 'active';
 
@@ -469,38 +533,14 @@ export default function DiscountPage() {
 
                         <td className="py-4 text-xs text-gray-600">
                             <div className="flex items-center gap-2 mb-1">
-                              <FiCalendar className="text-gray-400" size={14}/> 
+                              <FiCalendar className="text-gray-400" size={14}/>
                               {d.begin_date ? format(parseISO(d.begin_date), "dd/MM/yyyy") : "N/A"}
                             </div>
                             <div className="flex items-center gap-2">
-                              <FiCalendar className="text-gray-400" size={14}/> 
+                              <FiCalendar className="text-gray-400" size={14}/>
                               {d.end_date ? format(parseISO(d.end_date), "dd/MM/yyyy") : "N/A"}
                             </div>
                         </td>
-
-                        {/* <td className="py-4 text-xs max-w-xs">
-                            <div className="flex items-center gap-2">
-                              {/* <div className="text-gray-700 line-clamp-2 flex-1" title={formatConditions(d.conditions)}>
-                                {formatConditions(d.conditions)}
-                              </div>}
-                              <button
-                                onClick={() => {
-                                  setViewingDiscount(d);
-                                  setIsDetailModalOpen(true);
-                                }}
-                                className="p-1.5 rounded text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition flex-shrink-0"
-                                title="Xem chi tiết điều kiện"
-                              >
-                                <FiEye size={14}/>
-                              </button>
-                            </div>
-                        </td> */}
-
-                        {/* <td className="py-4 text-center">
-                            <div className="inline-flex items-center gap-1 font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md text-xs">
-                              <FiHash size={10}/> {d.priority || 1}
-                            </div>
-                        </td> */}
 
                         <td className="py-4 text-center">
                             <StatusPill
@@ -544,6 +584,16 @@ export default function DiscountPage() {
                 </tbody>
               </table>
             </div>
+
+            {filteredDiscounts.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                    <div className="text-sm text-gray-500">
+                        Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredDiscounts.length)}</b> trong tổng <b>{filteredDiscounts.length}</b>
+                    </div>
+                    {renderPaginationButtons()}
+                </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -576,24 +626,24 @@ export default function DiscountPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white rounded-lg p-3 border border-blue-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Mã khuyến mãi <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     required
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-mono uppercase bg-white"
                                     placeholder="VD: SUMMER2025"
-                                    value={formData.code} 
-                                    onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})} 
+                                    value={formData.code}
+                                    onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})}
                                 />
                             </div>
                             <div className="bg-white rounded-lg p-3 border border-blue-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Tên chương trình <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     required
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
                                     placeholder="VD: Khuyến mãi mùa hè 2025"
-                                    value={formData.name} 
-                                    onChange={e => setFormData({...formData, name: e.target.value})} 
+                                    value={formData.name}
+                                    onChange={e => setFormData({...formData, name: e.target.value})}
                                 />
                             </div>
                         </div>
@@ -603,7 +653,7 @@ export default function DiscountPage() {
                                 rows={3}
                                 className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white resize-none"
                                 placeholder="Nhập mô tả chi tiết về chương trình khuyến mãi..."
-                                value={formData.description} 
+                                value={formData.description}
                                 onChange={e => setFormData({...formData, description: e.target.value})}
                             />
                         </div>
@@ -622,11 +672,11 @@ export default function DiscountPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white rounded-lg p-3 border border-red-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Loại giảm giá <span className="text-red-500">*</span></label>
-                                <select 
+                                <select
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white font-medium"
-                                    value={formData.discount.type} 
+                                    value={formData.discount.type}
                                     onChange={e => setFormData({
-                                        ...formData, 
+                                        ...formData,
                                         discount: { ...formData.discount, type: e.target.value, max_discount: e.target.value === "FIXED" ? null : formData.discount.max_discount }
                                     })}
                                 >
@@ -640,17 +690,17 @@ export default function DiscountPage() {
                                     {formData.discount.type === "PERCENT" ? "Phần trăm (%)" : "Số tiền (đ)"} <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
-                                    <input 
-                                        type="number" 
-                                        min="1" 
+                                    <input
+                                        type="number"
+                                        min="1"
                                         max={formData.discount.type === "PERCENT" ? "100" : undefined}
                                         required
                                         className="w-full border-2 border-gray-200 rounded-lg p-2.5 pl-10 outline-none focus:border-indigo-500 font-bold text-red-600 bg-white"
-                                        value={formData.discount.value} 
+                                        value={formData.discount.value}
                                         onChange={e => setFormData({
-                                            ...formData, 
+                                            ...formData,
                                             discount: { ...formData.discount, value: e.target.value }
-                                        })} 
+                                        })}
                                     />
                                     {formData.discount.type === "PERCENT" ? (
                                         <FiPercent className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -664,17 +714,17 @@ export default function DiscountPage() {
                             <div className="bg-white rounded-lg p-3 border border-red-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Số tiền giảm tối đa (đ) <span className="text-red-500">*</span></label>
                                 <div className="relative">
-                                    <input 
-                                        type="number" 
-                                        min="1" 
+                                    <input
+                                        type="number"
+                                        min="1"
                                         required
                                         className="w-full border-2 border-gray-200 rounded-lg p-2.5 pl-10 outline-none focus:border-indigo-500 bg-white"
                                         placeholder="VD: 100000"
-                                        value={formData.discount.max_discount || ""} 
+                                        value={formData.discount.max_discount || ""}
                                         onChange={e => setFormData({
-                                            ...formData, 
+                                            ...formData,
                                             discount: { ...formData.discount, max_discount: e.target.value || null }
-                                        })} 
+                                        })}
                                     />
                                     <FiDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                                 </div>
@@ -694,11 +744,11 @@ export default function DiscountPage() {
                     <div className="space-y-4">
                         <div className="bg-white rounded-lg p-3 border border-green-200">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Loại điều kiện</label>
-                            <select 
+                            <select
                                 className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white font-medium"
-                                value={formData.conditions.rule_type} 
+                                value={formData.conditions.rule_type}
                                 onChange={e => setFormData({
-                                    ...formData, 
+                                    ...formData,
                                     conditions: { ...formData.conditions, rule_type: e.target.value }
                                 })}
                             >
@@ -711,16 +761,16 @@ export default function DiscountPage() {
                         {formData.conditions.rule_type === "MIN_BOOKING_VALUE" && (
                             <div className="bg-white rounded-lg p-3 border border-green-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Giá trị đơn hàng tối thiểu (đ)</label>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     min="0"
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
                                     placeholder="VD: 500000"
-                                    value={formData.conditions.min_order_value || ""} 
+                                    value={formData.conditions.min_order_value || ""}
                                     onChange={e => setFormData({
-                                        ...formData, 
+                                        ...formData,
                                         conditions: { ...formData.conditions, min_order_value: e.target.value || null }
-                                    })} 
+                                    })}
                                 />
                             </div>
                         )}
@@ -761,44 +811,44 @@ export default function DiscountPage() {
                             <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Giờ bắt đầu (0-23)</label>
-                                <input 
-                                    type="number" 
-                                    min="0" 
+                                <input
+                                    type="number"
+                                    min="0"
                                     max="23"
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
                                     placeholder="VD: 9"
-                                    value={formData.conditions.hours_range?.from || ""} 
+                                    value={formData.conditions.hours_range?.from || ""}
                                     onChange={e => setFormData({
-                                        ...formData, 
-                                        conditions: { 
-                                            ...formData.conditions, 
-                                            hours_range: { 
-                                                ...formData.conditions.hours_range, 
-                                                from: e.target.value ? Number(e.target.value) : null 
+                                        ...formData,
+                                        conditions: {
+                                            ...formData.conditions,
+                                            hours_range: {
+                                                ...formData.conditions.hours_range,
+                                                from: e.target.value ? Number(e.target.value) : null
                                             }
                                         }
-                                    })} 
+                                    })}
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Giờ kết thúc (0-23)</label>
-                                <input 
-                                    type="number" 
-                                    min="0" 
+                                <input
+                                    type="number"
+                                    min="0"
                                     max="23"
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
                                     placeholder="VD: 18"
-                                    value={formData.conditions.hours_range?.to || ""} 
+                                    value={formData.conditions.hours_range?.to || ""}
                                     onChange={e => setFormData({
-                                        ...formData, 
-                                        conditions: { 
-                                            ...formData.conditions, 
-                                            hours_range: { 
-                                                ...formData.conditions.hours_range, 
-                                                to: e.target.value ? Number(e.target.value) : null 
+                                        ...formData,
+                                        conditions: {
+                                            ...formData.conditions,
+                                            hours_range: {
+                                                ...formData.conditions.hours_range,
+                                                to: e.target.value ? Number(e.target.value) : null
                                             }
                                         }
-                                    })} 
+                                    })}
                                 />
                             </div>
                             </div>
@@ -886,33 +936,33 @@ export default function DiscountPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white rounded-lg p-3 border border-purple-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Ngày bắt đầu <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="date" 
-                                    required 
+                                <input
+                                    type="date"
+                                    required
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
-                                    value={formData.begin_date} 
-                                    onChange={e => setFormData({...formData, begin_date: e.target.value})} 
+                                    value={formData.begin_date}
+                                    onChange={e => setFormData({...formData, begin_date: e.target.value})}
                                 />
                             </div>
                             <div className="bg-white rounded-lg p-3 border border-purple-200">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Ngày kết thúc <span className="text-red-500">*</span></label>
-                                <input 
-                                    type="date" 
-                                    required 
+                                <input
+                                    type="date"
+                                    required
                                     className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
-                                    value={formData.end_date} 
-                                    onChange={e => setFormData({...formData, end_date: e.target.value})} 
+                                    value={formData.end_date}
+                                    onChange={e => setFormData({...formData, end_date: e.target.value})}
                                 />
                             </div>
                         </div>
                         <div className="bg-white rounded-lg p-3 border border-purple-200">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Độ ưu tiên (số càng cao càng ưu tiên)</label>
-                            <input 
-                                type="number" 
+                            <input
+                                type="number"
                                 min="1"
                                 className="w-full border-2 border-gray-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 bg-white"
-                                value={formData.priority} 
-                                onChange={e => setFormData({...formData, priority: e.target.value})} 
+                                value={formData.priority}
+                                onChange={e => setFormData({...formData, priority: e.target.value})}
                             />
                         </div>
                     </div>
@@ -1001,7 +1051,7 @@ export default function DiscountPage() {
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">Giá trị:</span>
                             <span className="font-bold text-red-600 text-lg">
-                                {viewingDiscount.discount?.type === "PERCENT" 
+                                {viewingDiscount.discount?.type === "PERCENT"
                                     ? `${viewingDiscount.discount?.value}%`
                                     : `${viewingDiscount.discount?.value?.toLocaleString("vi-VN")}đ`
                                 }
@@ -1031,7 +1081,7 @@ export default function DiscountPage() {
                                 {RULE_TYPE_MAP[viewingDiscount.conditions?.rule_type] || "Không có"}
                             </span>
                         </div>
-                        
+
                         {viewingDiscount.conditions?.min_order_value && (
                             <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                                 <span className="text-sm text-gray-600">Giá trị đơn hàng tối thiểu:</span>
@@ -1092,8 +1142,8 @@ export default function DiscountPage() {
                             </div>
                         )}
 
-                        {(!viewingDiscount.conditions || 
-                          (!viewingDiscount.conditions.min_order_value && 
+                        {(!viewingDiscount.conditions ||
+                          (!viewingDiscount.conditions.min_order_value &&
                            (!viewingDiscount.conditions.days_of_week || viewingDiscount.conditions.days_of_week.length === 0) &&
                            (!viewingDiscount.conditions.hours_range || !viewingDiscount.conditions.hours_range.from) &&
                            (!viewingDiscount.conditions.customer_tiers || viewingDiscount.conditions.customer_tiers.length === 0) &&

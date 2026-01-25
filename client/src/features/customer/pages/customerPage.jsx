@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  FiPlus, FiSearch, FiUser, FiPhone, FiMapPin, FiCreditCard, FiX, FiMail, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader
+  FiPlus, FiSearch, FiPhone, FiMapPin, FiCreditCard, FiX, FiEdit, FiLock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader,
+  FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
 
 import Sidebar from "../../../components/sidebar.jsx";
@@ -55,6 +56,9 @@ export default function CustomerPage() {
   const [filterNationality, setFilterNationality] = useState("all");
   const [sortOrder, setSortOrder] = useState("a-z");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const [toast, setToast] = useState(null);
 
   const [confirmState, setConfirmState] = useState({
@@ -71,6 +75,10 @@ export default function CustomerPage() {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterLoyalty, filterNationality]);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -175,6 +183,80 @@ export default function CustomerPage() {
     return result;
   }, [customers, filterLoyalty, filterNationality, searchTerm, sortOrder]);
 
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+
+  const handlePageChange = (page) => setCurrentPage(page);
+
+  const renderPaginationButtons = () => {
+    const pages = [];
+    if (totalPages <= 1) return null;
+
+    const delta = 2;
+    const left = currentPage - delta;
+    const right = currentPage + delta;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+        range.push(i);
+      }
+    }
+
+    let l;
+    for (let i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+
+    return (
+      <div className="flex gap-2">
+        <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronLeft />
+        </button>
+        {rangeWithDots.map((page, index) => (
+           page === '...' ? (
+             <span key={`dots-${index}`} className="px-2 py-1 text-gray-400 self-center">...</span>
+           ) : (
+             <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg text-sm font-bold transition ${
+                    currentPage === page
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : "border hover:bg-gray-50 text-gray-600"
+                }`}
+            >
+                {page}
+            </button>
+           )
+        ))}
+        <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            <FiChevronRight />
+        </button>
+      </div>
+    );
+  };
+  // ----------------------------------------------
+
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
       <Sidebar />
@@ -194,7 +276,7 @@ export default function CustomerPage() {
             </button>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-[500px]">
             <div className="flex flex-col gap-4 mb-6">
                 <div className="flex bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto">
                     {['all', 'bronze', 'silver', 'gold', 'platinum'].map(l => (
@@ -256,7 +338,7 @@ export default function CustomerPage() {
             </div>
 
 
-            <div className="overflow-x-auto min-h-[400px]">
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-100 bg-gray-50/50">
@@ -270,8 +352,8 @@ export default function CustomerPage() {
                 </thead>
                 <tbody className="text-gray-700 text-sm">
                   {loading ? <tr><td colSpan="6" className="text-center py-8 text-gray-500">Đang tải dữ liệu...</td></tr> :
-                   filteredCustomers.length === 0 ? <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có khách hàng phù hợp.</td></tr> :
-                   filteredCustomers.map((c, index) => {
+                   currentCustomers.length === 0 ? <tr><td colSpan="6" className="text-center py-8 text-gray-400 italic">Chưa có khách hàng phù hợp.</td></tr> :
+                   currentCustomers.map((c, index) => {
                     const key = c._id || index;
                     const loyalty = LOYALTY_MAP[c.loyalty] || LOYALTY_MAP.bronze;
                     const isActive = c.status === 'active';
@@ -341,6 +423,15 @@ export default function CustomerPage() {
                 </tbody>
               </table>
             </div>
+
+            {filteredCustomers.length > 0 && (
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+                    <div className="text-sm text-gray-500">
+                        Hiển thị <b>{indexOfFirstItem + 1}</b> - <b>{Math.min(indexOfLastItem, filteredCustomers.length)}</b> trong tổng <b>{filteredCustomers.length}</b>
+                    </div>
+                    {renderPaginationButtons()}
+                </div>
+            )}
           </div>
         </div>
       </div>
