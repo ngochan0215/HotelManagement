@@ -6,46 +6,40 @@ import { defaultAvatars } from "../config/avatars.js";
 
 export const viewProfile = async (req, res) => {
     try {
-        const { userId, role } = req.user;
-        console.log("User ID:", userId, "Role:", role);
-        let profile;
-
-        if (role === "customer") {
-            profile = await Customer.findOne({ user_id: userId })
-                .select("-__v -createdAt -updatedAt -updated_at -created_at")
-                .populate("user_id", "email system_role avatar");
-        } else if (role === "employee") {
-            profile = await Employee.findOne({ user_id: userId })
-                .select("-__v -createdAt -updatedAt -updated_at -created_at")
-                .populate("user_id", "email system_role avatar");
-        } else if (role === "manager") {
-            profile = await User.findById(userId).select("email system_role avatar");
+        const currentUserId = req.user.userId || req.user._id;
+        let profile = await Employee.findOne({ user_id: currentUserId })
+            .populate("user_id", "email system_role avatar");
+        if (!profile) {
+            profile = await User.findById(currentUserId).select("email system_role avatar");
         }
 
         if (!profile) {
             return res.status(404).json({ message: "Không tìm thấy hồ sơ người dùng." });
         }
 
-        res.json({ message: "Lấy thông tin hồ sơ thành công.", data: profile });
+        res.json({ message: "Lấy thông tin thành công.", data: profile });
+
     } catch (err) {
+        console.error("Lỗi viewProfile:", err);
         res.status(500).json({ message: "Lỗi server", error: err.message });
     }
 };
 
 export const updateProfile = async (req, res) => {
     try {
-        const userId = req.user.userId;
-        const { name, phone, dob, nationality, cccd, BIN, account_number, bank_shortName } = req.body;
+        const userId = req.user.userId || req.user._id;
+        const { phone, dob } = req.body;
 
-        const user = await User.findById(userId).select("email system_role avatar");
+        const user = await User.findById(userId).select("system_role");
         if (!user) {
             return res.status(404).json({ message: "Không tìm thấy người dùng." });
         }
 
         let profileModel = null;
-        if (user.system_role === "customer") {
+        const role = user.system_role;
+        if (role === "customer") {
             profileModel = Customer;
-        } else if (user.system_role === "employee") {
+        } else if (role === "employee" || role === "manager") {
             profileModel = Employee;
         }
 
@@ -53,111 +47,23 @@ export const updateProfile = async (req, res) => {
             return res.status(400).json({ message: "Loại người dùng không hợp lệ." });
         }
 
-        const profile = await profileModel.findOne({ user_id: user._id }).select("-__v -createdAt -updatedAt -updated_at -created_at");
+        const profile = await profileModel.findOne({ user_id: user._id });
         if (!profile) {
-            return res.status(404).json({ message: "Không tìm thấy hồ sơ cá nhân." });
+            return res.status(404).json({ message: "Không tìm thấy hồ sơ cá nhân để cập nhật." });
         }
 
-        if (name) {
-            if (typeof name !== "string" || !name.trim()) {
-                return res.status(404).json({ message: "Tên không hợp lệ." });
-            }
-            profile.full_name = name;
-        }
-
-        if (phone) {
-            if (!/^\d{9,11}$/.test(phone)) {
-                return res.status(400).json({ message: "Số điện thoại không hợp lệ." });
-            }
-            const phoneExists = await profileModel.findOne({ phone_number: phone, _id: { $ne: profile._id }});
-            if (phoneExists) {
-                return res.status(400).json({ message: "Số điện thoại đã được sử dụng." });
-            }
-            profile.phone_number = phone;
-        }
-
-        if (cccd) {
-            const cccdExists = await profileModel.findOne({ CCCD: cccd, _id: { $ne: profile._id }});
-            if (cccdExists) {
-                return res.status(400).json({ message: "Căn cước công dân đã được sử dụng." });
-            }
-            profile.CCCD = cccd;
-        }
-
-        if (dob) {
-            const date = new Date(dob);
-            if (isNaN(date.getTime())) {
-                return res.status(400).json({ message: "Ngày sinh không hợp lệ." });
-            }
-            profile.date_birth = date;
-        }
-
-        if (nationality) {
-            if (typeof nationality !== "string" || !nationality.trim()) {
-                return res.status(400).json({ message: "Quốc tịch không hợp lệ." });
-            }
-            profile.nationality = nationality.trim();
-        }
-
-        // Chỉ cho phép employee cập nhật thông tin ngân hàng
-        if (user.system_role === "employee") {
-            // Validate và cập nhật BIN (6 số đầu của thẻ ngân hàng)
-            if (BIN !== undefined) {
-                if (BIN === null || BIN === "") {
-                    // Cho phép xóa BIN (set null)
-                    profile.BIN = null;
-                } else {
-                    const binStr = String(BIN).trim();
-                    if (!/^\d{6}$/.test(binStr)) {
-                        return res.status(400).json({ message: "BIN phải là 6 chữ số." });
-                    }
-                    profile.BIN = binStr;
-                }
-            }
-
-            // Validate và cập nhật account_number (số tài khoản ngân hàng)
-            if (account_number !== undefined) {
-                if (account_number === null || account_number === "") {
-                    // Cho phép xóa account_number (set null)
-                    profile.account_number = null;
-                } else {
-                    const accountStr = String(account_number).trim();
-                    // Số tài khoản thường từ 8-16 ký tự, có thể là số hoặc chữ số
-                    if (!/^[0-9]{8,16}$/.test(accountStr)) {
-                        return res.status(400).json({ message: "Số tài khoản phải là 8-16 chữ số." });
-                    }
-                    profile.account_number = accountStr;
-                }
-            }
-
-            // Validate và cập nhật bank_shortName (mã ngân hàng)
-            if (bank_shortName !== undefined) {
-                if (bank_shortName === null || bank_shortName === "") {
-                    // Cho phép xóa bank_shortName (set null)
-                    profile.bank_shortName = null;
-                } else {
-                    if (typeof bank_shortName !== "string" || !bank_shortName.trim()) {
-                        return res.status(400).json({ message: "Mã ngân hàng không hợp lệ." });
-                    }
-                    profile.bank_shortName = bank_shortName.trim();
-                }
-            }
-        } else {
-            // Nếu là customer và cố gắng cập nhật thông tin ngân hàng
-            if (BIN !== undefined || account_number !== undefined || bank_shortName !== undefined) {
-                return res.status(403).json({ message: "Chỉ nhân viên mới có thể cập nhật thông tin ngân hàng." });
-            }
-        }
+        if (phone) profile.phone_number = phone;
+        if (dob) profile.date_birth = new Date(dob);
 
         await profile.save();
 
         res.json({
             message: "Cập nhật thông tin thành công.",
-            user: user,
-            profile: profile
+            data: profile
         });
     } catch (error) {
-    res.status(500).json({ message: "Lỗi server", error: error.message });
+        console.error("Lỗi updateProfile:", error);
+        res.status(500).json({ message: "Lỗi server", error: error.message });
     }
 };
 
@@ -191,6 +97,7 @@ export const changePassword = async (req, res) => {
 
 export const sendEmail = async (req, res) => {
     try {
+        const userId = req.user.userId || req.user._id;
         const { newEmail } = req.body;
         const user = await User.findById(req.user.userId).select("+password");
         if(!user){
@@ -217,8 +124,9 @@ export const sendEmail = async (req, res) => {
 };
 
 export const verifyEmail = async (req, res) => {
-  try {
-    const { otp } = req.body;
+    try {
+        const userId = req.user.userId || req.user._id;
+        const { otp } = req.body;
     const user = await User.findById(req.user.userId).select("+password");
     if(!user){
         return res.status(404).json({ message: "Không tìm thấy người dùng." });
@@ -227,12 +135,12 @@ export const verifyEmail = async (req, res) => {
       return res.status(400).json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn." });
     }
 
-    user.email = user.emailChangeNew;
-    user.emailChangeOtp = undefined;
+        user.email = user.emailChangeNew;
+        user.emailChangeOtp = undefined;
     user.emailChangeNew = undefined;
     user.emailChangeExpires = undefined;
 
-    await user.save();
+        await user.save();
 
     res.json({ message: "Đổi email thành công.", newEmail: user.email });
   } catch (error) {

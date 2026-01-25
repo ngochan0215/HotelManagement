@@ -20,17 +20,18 @@ import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
+import ProfilePage from '../features/auth/pages/profilePage.jsx';
 
 // Component để route đến đúng trang công việc
 function WorkPageRouter() {
   const position = (localStorage.getItem("position") || "").toLowerCase();
-  
+
   if (position === "technician") {
     return <TechnicianWorkPage />;
   } else if (position === "housekeeper") {
     return <HousekeeperWorkPage />;
   }
-  
+
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -40,11 +41,10 @@ export default function AppRoutes() {
   const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
     const location = useLocation();
 
-    if (!user) return <Navigate to="/login" replace />;
+      if (!user) return <Navigate to="/login" replace />;
 
-    const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
-    const position = (localStorage.getItem("position") || "").toLowerCase();
-
+      const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
+      const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
     // Nếu excludeManager = true, manager không được truy cập
     if (excludeManager && role === 'manager') {
       return <Navigate to="/dashboard" replace />;
@@ -53,11 +53,11 @@ export default function AppRoutes() {
     // Manager có quyền truy cập tất cả (trừ khi excludeManager = true)
     if (role === 'manager' && !excludeManager) return children;
 
-    if (!allowed) return children;
-    const allowedLower = allowed.map(p => p.toLowerCase());
-    if (allowedLower.includes(position)) {
-        return children;
-    }
+      if (!allowed || allowed.length === 0) return children;
+      const allowedLower = allowed.map(p => p.toLowerCase());
+      if (allowedLower.includes(position)) {
+          return children;
+      }
 
     let redirectPath = "/login";
 
@@ -71,8 +71,8 @@ export default function AppRoutes() {
         return <div className="p-10 text-center text-red-500">Bạn không có quyền truy cập trang này.</div>;
     }
 
-    return <Navigate to={redirectPath} replace />;
-  };
+      return <Navigate to={redirectPath} replace />;
+    };
 
   if (isLoading) {
     return (
@@ -89,7 +89,9 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-
+      <Route path="/profile" element={
+                <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
+            } />
       <Route path="/dashboard" element={
           <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>
       } />
@@ -123,7 +125,7 @@ export default function AppRoutes() {
         <ProtectedRoute allowed={['technician']}> <EquipmentPage /> </ProtectedRoute>
       } />
       <Route path="/my-work" element={
-        <ProtectedRoute allowed={['technician', 'housekeeper']}> 
+        <ProtectedRoute allowed={['technician', 'housekeeper']}>
           <WorkPageRouter />
         </ProtectedRoute>
       } />

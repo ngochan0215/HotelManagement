@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User, Customer } from "../models/index.js";
+import { User, Customer,Employee } from "../models/index.js";
 import { sendResetPasswordEmail } from "../utils/sendEmails.js";
 
 // khách hàng đăng ký
@@ -103,7 +103,7 @@ export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email: email });
-        
+
         if (!user) 
             return res.status(400).json({ message: "Tài khoản không tồn tại" });
 
@@ -117,8 +117,20 @@ export const login = async (req, res) => {
             return res.status(401).json({ message: "Tài khoản này đã bị ban." });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) 
-            return res.status(401).json({ message: "Sai mật khẩu" });
+        if (!isMatch) return res.status(401).json({ message: "Sai mật khẩu" });
+
+        let fullName = "Người dùng";
+        let position = "";
+        if (user.system_role === "customer") {
+            const customer = await Customer.findOne({ user_id: user._id });
+            if (customer) fullName = customer.full_name;
+        } else {
+            const employee = await Employee.findOne({ user_id: user._id });
+            if (employee) {
+                fullName = employee.full_name;
+                position = employee.position;
+            }
+        }
 
         const token = jwt.sign({ userId: user._id, role: user.system_role }, process.env.JWT_SECRET, {
             expiresIn: "1d",
@@ -126,9 +138,11 @@ export const login = async (req, res) => {
 
         const theUser = {
             _id: user._id,
-            name: user.name,
+            name: fullName,
+            position: position,
             email: user.email,
-            role: user.system_role
+            role: user.system_role,
+            avatar: user.avatar
         };
 
         res.json({ message: "Đăng nhập thành công", token, theUser });
