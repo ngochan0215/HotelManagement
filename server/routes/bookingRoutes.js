@@ -7,6 +7,12 @@ import {
 
 import { getCalendarRooms } from "../controllers/managerController.js";
 
+import {
+    getAvailableHousekeepers, assignCleaningTask, startCleaningTask,
+    completeCleaningTask, confirmCleaning, getAllTasks, getMyCleaningTasks,
+    getCleaningTaskByRoom
+} from "../controllers/cleaningController.js";
+
 import { isManager, verifyToken, isCustomer, isEmployee, canAccessBooking } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -40,5 +46,15 @@ router.patch("/:bookingId/cancel", verifyToken, cancelBooking);
 
 // thống kê lý do hủy phòng
 router.get("/statistics/cancellation-reasons", verifyToken, isManager, getCancellationReasonStats);
+
+// Cleaning Tasks Routes
+router.get("/cleaning/available-housekeepers", verifyToken, isManager, getAvailableHousekeepers);
+router.post("/cleaning/assign", verifyToken, isManager, assignCleaningTask);
+router.get("/cleaning/my-tasks", verifyToken, isEmployee, getMyCleaningTasks);
+router.post("/cleaning/:id/start", verifyToken, isEmployee, startCleaningTask);
+router.post("/cleaning/:id/complete", verifyToken, isEmployee, completeCleaningTask);
+router.post("/cleaning/:id/confirm", verifyToken, isManager, confirmCleaning);
+router.get("/tasks/all", verifyToken, isManager, getAllTasks);
+router.get("/cleaning/task-by-room", verifyToken, isEmployee, getCleaningTaskByRoom);
 
 export default router;

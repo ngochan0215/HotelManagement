@@ -459,7 +459,20 @@ export const completeCleaning = async (req, res) => {
         start_time: now,
         end_time: null,
         note: "Housekeeping xác nhận dọn xong",
-        handled_by: req.user?._id || null,
+        handled_by: req.user?.userId || null,
+      }],
+      { session }
+    );
+
+    // tạo log available (bảng mới)
+    await RoomLog.create(
+      [{
+        room_id: roomId,
+        status: "available",
+        start_time: now,
+        end_time: null,
+        note: "Housekeeping xác nhận dọn xong",
+        handled_by: req.user?.userId || null,
       }],
       { session }
     );
@@ -472,7 +485,7 @@ export const completeCleaning = async (req, res) => {
     session.endSession();
 
     return res.json({
-      message: "Phòng đã sẵn sàng để bán.",
+      message: "Phòng đã sẵn sàng để được thuê.",
     });
 
   } catch (error) {

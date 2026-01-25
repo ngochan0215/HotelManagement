@@ -11,6 +11,8 @@ import EmployeePage from '../features/employee/pages/employeePage.jsx';
 import EarningsPage from '../features/employee/pages/earningsPage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import TechnicianWorkPage from '../features/equipment/pages/technicianWorkPage.jsx';
+import HousekeeperWorkPage from '../features/booking/pages/housekeeperWorkPage.jsx';
+import AllTasksPage from '../features/booking/pages/allTasksPage.jsx';
 import ServicePage from '../features/service/pages/servicePage.jsx';
 import IncidentPage from '../features/incident/pages/incidentPage.jsx';
 import DiscountPage from '../features/discount/pages/discountPage.jsx';
@@ -18,6 +20,19 @@ import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
+
+// Component để route đến đúng trang công việc
+function WorkPageRouter() {
+  const position = (localStorage.getItem("position") || "").toLowerCase();
+  
+  if (position === "technician") {
+    return <TechnicianWorkPage />;
+  } else if (position === "housekeeper") {
+    return <HousekeeperWorkPage />;
+  }
+  
+  return <Navigate to="/dashboard" replace />;
+}
 
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
@@ -108,7 +123,9 @@ export default function AppRoutes() {
         <ProtectedRoute allowed={['technician']}> <EquipmentPage /> </ProtectedRoute>
       } />
       <Route path="/my-work" element={
-        <ProtectedRoute allowed={['technician']}> <TechnicianWorkPage /> </ProtectedRoute>
+        <ProtectedRoute allowed={['technician', 'housekeeper']}> 
+          <WorkPageRouter />
+        </ProtectedRoute>
       } />
       <Route path="/incidents" element={
         <ProtectedRoute allowed={['technician', 'receptionist', 'housekeeper']}> <IncidentPage /> </ProtectedRoute>
@@ -125,6 +142,11 @@ export default function AppRoutes() {
       {/* THỐNG KÊ */}
        <Route path="/reports" element={
         <ProtectedRoute allowed={['accountant']}> <StatisticsPage /> </ProtectedRoute>
+      } />
+
+      {/* QUẢN LÝ CÔNG VIỆC (ADMIN) */}
+      <Route path="/all-tasks" element={
+        <ProtectedRoute allowed={[]}> <AllTasksPage /> </ProtectedRoute>
       } />
 
        {/* CÁC TRANG CHUNG */}

@@ -91,4 +91,44 @@ export const bookingApi = {
         const res = await axios.patch(`${BASE_URL}/${bookingId}/cancel`, { reason }, getAuthHeader());
         return res.data;
     },
+    
+    // Cleaning Tasks APIs
+    getAvailableHousekeepers: async () => {
+        const res = await axios.get(`${BASE_URL}/cleaning/available-housekeepers`, getAuthHeader());
+        return res.data;
+    },
+    assignCleaningTask: async (data) => {
+        const res = await axios.post(`${BASE_URL}/cleaning/assign`, data, getAuthHeader());
+        return res.data;
+    },
+    getMyCleaningTasks: async () => {
+        const res = await axios.get(`${BASE_URL}/cleaning/my-tasks`, getAuthHeader());
+        return res.data;
+    },
+    startCleaningTask: async (id) => {
+        const res = await axios.post(`${BASE_URL}/cleaning/${id}/start`, {}, getAuthHeader());
+        return res.data;
+    },
+    completeCleaningTask: async (id) => {
+        const res = await axios.post(`${BASE_URL}/cleaning/${id}/complete`, {}, getAuthHeader());
+        return res.data;
+    },
+    confirmCleaning: async (id) => {
+        const res = await axios.post(`${BASE_URL}/cleaning/${id}/confirm`, {}, getAuthHeader());
+        return res.data;
+    },
+    getAllTasks: async (params = {}) => {
+        const res = await axios.get(`${BASE_URL}/tasks/all`, {
+            ...getAuthHeader(),
+            params
+        });
+        return res.data;
+    },
+    getCleaningTaskByRoom: async (params = {}) => {
+        const res = await axios.get(`${BASE_URL}/cleaning/task-by-room`, {
+            ...getAuthHeader(),
+            params
+        });
+        return res.data;
+    },
 };

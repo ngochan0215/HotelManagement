@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
   Employee, RoomStatusLog, Discount, RoomLog, BookingStatusLog, User,
-  Receipt,
+  Receipt, CleaningTask, EquipmentInstall, 
 } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
@@ -452,7 +452,7 @@ export const createBooking = async (req, res) => {
     );
 
     // tạo các chi tiết đặt phòng, nếu đặt liền thì trạng thái chi tiết cũng là confirmed
-    const detailStatus = isImmediate ? "checked-in" : "reserved";
+    const detailStatus = isImmediate ? "checked_in" : "reserved";
     
     const bookingDetails = rooms.map(room => ({
       booking_id: booking[0]._id,
@@ -1709,8 +1709,8 @@ export const checkoutBookingDetail = async (req, res) => {
       { session }
     );
 
-    // BẢNG MỚI
-    await RoomLog.create(
+    // BẢNG MỚI - Tạo RoomLog cho cleaning (chưa gán nhân viên)
+    const [roomLog] = await RoomLog.create(
       [{
         booking_id: detail.booking_id,
         room_id: detail.room_id,
@@ -1719,7 +1719,19 @@ export const checkoutBookingDetail = async (req, res) => {
         end_time: cleaningEndTime,
         expected_end_time: cleaningEndTime,
         note: `Phòng đã được checkout theo booking ${booking._id}, chuyển sang dọn dẹp.`,
-        handled_by: booking.handled_by || null,
+        handled_by: null, // Sẽ được gán sau khi admin chọn nhân viên
+      }],
+      { session }
+    );
+
+    // Tạo CleaningTask với status pending
+    await CleaningTask.create(
+      [{
+        room_id: detail.room_id,
+        room_log_id: roomLog._id,
+        booking_id: bookingId,
+        status: "pending",
+        note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
       }],
       { session }
     );
@@ -1830,7 +1842,14 @@ export const checkoutBookingDetail = async (req, res) => {
     }
 
     return res.json({
-      message: "Checkout thành công. Phòng đang được dọn dẹp.",
+      success: true,
+      message: "Checkout thành công. Vui lòng gán nhân viên dọn dẹp.",
+      data: {
+        room_log_id: roomLog._id,
+        room_id: detail.room_id,
+        room_number: room.room_number,
+        booking_id: bookingId,
+      },
     });
 
   } catch (error) {

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft, FiEdit, FiEye } from "react-icons/fi";
 import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import UpdateInstallTicketModal from "../components/updateInstallTicketModal.jsx";
 import InstallTicketDetailModal from "../components/installTicketDetailModal.jsx";
+import Pagination from "../../../components/pagination.jsx";
 
 export default function EquipmentTicketTab() {
   const [imports, setImports] = useState([]);
@@ -15,6 +16,15 @@ export default function EquipmentTicketTab() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  
+  // Pagination states
+  const [installsPage, setInstallsPage] = useState(1);
+  const [importsPage, setImportsPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Filter states
+  const [installsFilterStatus, setInstallsFilterStatus] = useState("all");
+  const [importsFilterStatus, setImportsFilterStatus] = useState("all");
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -56,16 +66,70 @@ export default function EquipmentTicketTab() {
     const config = {
       pending: { label: "Chờ xử lý", class: "bg-gray-100 text-gray-500" },
       waiting_confirm: { 
-        label: completed_at ? "Chờ admin xác nhận" : "Đang xử lý", 
+        label: completed_at ? "Chờ admin xác nhận" : "Đang thực hiện", 
         class: completed_at 
           ? "bg-yellow-100 text-yellow-800 animate-pulse border border-yellow-300" 
           : "bg-blue-100 text-blue-800" 
       },
       completed: { label: "Hoàn tất", class: "bg-green-100 text-green-700" },
+      expired: { label: "Đã hủy", class: "bg-red-100 text-red-700" },
     };
     const s = config[status] || config.pending;
     return <span className={`px-2 py-1 rounded text-xs font-medium ${s.class}`}>{s.label}</span>;
   };
+
+  // Filter and pagination calculations
+  const filteredInstalls = useMemo(() => {
+    if (installsFilterStatus === "all") return installs;
+    return installs.filter(item => {
+      if (installsFilterStatus === "waiting_confirm") {
+        return item.status === "waiting_confirm";
+      }
+      return item.status === installsFilterStatus;
+    });
+  }, [installs, installsFilterStatus]);
+
+  const filteredImports = useMemo(() => {
+    if (importsFilterStatus === "all") return imports;
+    return imports.filter(item => item.status === importsFilterStatus);
+  }, [imports, importsFilterStatus]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setInstallsPage(1);
+  }, [installsFilterStatus]);
+
+  useEffect(() => {
+    setImportsPage(1);
+  }, [importsFilterStatus]);
+
+  const installsPagination = useMemo(() => {
+    const totalPages = Math.ceil(filteredInstalls.length / itemsPerPage);
+    const startIndex = (installsPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedInstalls = filteredInstalls.slice(startIndex, endIndex);
+    
+    return {
+      data: paginatedInstalls,
+      currentPage: installsPage,
+      totalPages: totalPages || 1,
+      totalItems: filteredInstalls.length
+    };
+  }, [filteredInstalls, installsPage, itemsPerPage]);
+
+  const importsPagination = useMemo(() => {
+    const totalPages = Math.ceil(filteredImports.length / itemsPerPage);
+    const startIndex = (importsPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedImports = filteredImports.slice(startIndex, endIndex);
+    
+    return {
+      data: paginatedImports,
+      currentPage: importsPage,
+      totalPages: totalPages || 1,
+      totalItems: filteredImports.length
+    };
+  }, [filteredImports, importsPage, itemsPerPage]);
 
   return (
     <div className="space-y-8 pb-10 animate-fade-in relative">
@@ -98,6 +162,61 @@ export default function EquipmentTicketTab() {
                   <FiPlus /> Tạo phiếu
               </button>
           </div>
+          
+          {/* Filter buttons */}
+          <div className="flex flex-wrap gap-2 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+              <button 
+                  onClick={() => setInstallsFilterStatus("all")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "all" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Tất cả
+              </button>
+              <button 
+                  onClick={() => setInstallsFilterStatus("pending")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "pending" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Chờ xử lý
+              </button>
+              <button 
+                  onClick={() => setInstallsFilterStatus("waiting_confirm")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "waiting_confirm" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Đang thực hiện / Chờ xác nhận
+              </button>
+              <button 
+                  onClick={() => setInstallsFilterStatus("completed")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "completed" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Hoàn tất
+              </button>
+              <button 
+                  onClick={() => setInstallsFilterStatus("expired")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "expired" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Đã hủy
+              </button>
+          </div>
+
           <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                   <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
@@ -111,7 +230,7 @@ export default function EquipmentTicketTab() {
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                      {installs.map((item) => {
+                      {installsPagination.data.map((item) => {
                           const isInstall = isInstallType(item);
                           const roomDisplay = item.room_id ? `P.${item.room_id.room_number}` : "---";
 
@@ -184,10 +303,19 @@ export default function EquipmentTicketTab() {
                               </td>
                           </tr>
                       )})}
-                      {installs.length === 0 && <tr><td colSpan="6" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
+                      {filteredInstalls.length === 0 && <tr><td colSpan="6" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                   </tbody>
               </table>
           </div>
+          {filteredInstalls.length > itemsPerPage && (
+            <Pagination
+              currentPage={installsPagination.currentPage}
+              totalPages={installsPagination.totalPages}
+              totalItems={installsPagination.totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setInstallsPage}
+            />
+          )}
       </div>
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -197,6 +325,61 @@ export default function EquipmentTicketTab() {
                 <FiPlus /> Tạo phiếu nhập
             </button>
         </div>
+        
+        {/* Filter buttons */}
+        <div className="flex flex-wrap gap-2 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+            <button 
+                onClick={() => setImportsFilterStatus("all")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importsFilterStatus === "all" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Tất cả
+            </button>
+            <button 
+                onClick={() => setImportsFilterStatus("pending")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importsFilterStatus === "pending" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Chờ xử lý
+            </button>
+            <button 
+                onClick={() => setImportsFilterStatus("waiting_confirm")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importsFilterStatus === "waiting_confirm" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Chờ xác nhận
+            </button>
+            <button 
+                onClick={() => setImportsFilterStatus("completed")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importsFilterStatus === "completed" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Hoàn tất
+            </button>
+            <button 
+                onClick={() => setImportsFilterStatus("expired")} 
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                    importsFilterStatus === "expired" 
+                        ? "bg-white text-indigo-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                }`}
+            >
+                Đã hủy
+            </button>
+        </div>
+
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 uppercase text-xs text-gray-600 border-b">
@@ -209,7 +392,7 @@ export default function EquipmentTicketTab() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {imports.map((item) => (
+                    {importsPagination.data.map((item) => (
                         <tr key={item._id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-mono text-xs">#{item._id.slice(-6).toUpperCase()}</td>
                             <td className="px-4 py-3">{new Date(item.import_date).toLocaleDateString('vi-VN')}</td>
@@ -226,9 +409,19 @@ export default function EquipmentTicketTab() {
                             </td>
                         </tr>
                     ))}
+                    {filteredImports.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-gray-400">Chưa có dữ liệu</td></tr>}
                 </tbody>
             </table>
         </div>
+        {filteredImports.length > itemsPerPage && (
+          <Pagination
+            currentPage={importsPagination.currentPage}
+            totalPages={importsPagination.totalPages}
+            totalItems={importsPagination.totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setImportsPage}
+          />
+        )}
       </div>
     </div>
   );

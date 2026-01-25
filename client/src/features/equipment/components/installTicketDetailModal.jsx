@@ -141,40 +141,40 @@ export default function InstallTicketDetailModal({ ticket, onClose }) {
                 </h4>
                 {details.length > 0 ? (
                   <div className="space-y-2">
-                    {details.map((detail, index) => {
-                      const equipment = detail.equipment_id;
-                      const category = equipment?.category_id;
-                      const conditionMap = {
-                        new: { label: "Mới", color: "bg-green-100 text-green-800" },
-                        good: { label: "Tốt", color: "bg-blue-100 text-blue-800" },
-                        maintenance: { label: "Bảo trì", color: "bg-yellow-100 text-yellow-800" },
-                        broken: { label: "Hỏng", color: "bg-red-100 text-red-800" }
-                      };
-                      const conditionInfo = conditionMap[equipment?.condition] || { label: equipment?.condition || 'N/A', color: "bg-gray-100 text-gray-800" };
+                    {(() => {
+                      // Nhóm thiết bị theo category
+                      const groupedByCategory = {};
+                      details.forEach((detail) => {
+                        const category = detail.equipment_id?.category_id;
+                        const categoryId = category?._id || category || 'unknown';
+                        const categoryName = category?.name || "Thiết bị";
+                        
+                        if (!groupedByCategory[categoryId]) {
+                          groupedByCategory[categoryId] = {
+                            name: categoryName,
+                            description: category?.description,
+                            count: 0
+                          };
+                        }
+                        groupedByCategory[categoryId].count += 1;
+                      });
 
-                      return (
-                        <div key={detail._id || index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      // Hiển thị danh sách đã nhóm
+                      return Object.values(groupedByCategory).map((group, index) => (
+                        <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900">
-                                {category?.name || "Thiết bị"}
+                                {group.name} {group.count > 1 && <span className="text-indigo-600">(x{group.count})</span>}
                               </p>
-                              {category?.description && (
-                                <p className="text-xs text-gray-500 mt-1">{category.description}</p>
-                              )}
-                              {equipment?.code && (
-                                <p className="text-xs text-gray-500 font-mono mt-1">
-                                  Mã: #{equipment.code}
-                                </p>
+                              {group.description && (
+                                <p className="text-xs text-gray-500 mt-1">{group.description}</p>
                               )}
                             </div>
-                            <span className={`px-3 py-1 rounded text-xs font-medium ${conditionInfo.color}`}>
-                              {conditionInfo.label}
-                            </span>
                           </div>
                         </div>
-                      );
-                    })}
+                      ));
+                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">

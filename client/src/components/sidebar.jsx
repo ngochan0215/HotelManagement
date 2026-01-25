@@ -13,7 +13,7 @@ const NORMAL_TEXT = "text-gray-400";
 const HOVER_BG = "hover:bg-gray-800 hover:text-white";
 
 const sidebarConfig = [
-  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard",allowed: [] }, // Ai cũng xem được
+  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard", allowed: [] }, // Ai cũng xem được
   {
     type: "main",
     title: "Lịch phòng",
@@ -34,7 +34,15 @@ const sidebarConfig = [
     title: "Công việc của tôi",
     icon: FiBriefcase,
     path: "/my-work",
-    allowed: ["technician"] // Chỉ nhân viên kỹ thuật
+    allowed: ["technician", "housekeeper"], // Nhân viên kỹ thuật và buồng phòng
+    excludeManager: true
+  },
+  {
+    type: "main",
+    title: "Quản lý Công việc",
+    icon: FiBriefcase,
+    path: "/all-tasks",
+    allowed: [],
   },
   {
     type: "group",
@@ -44,6 +52,7 @@ const sidebarConfig = [
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
       { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
+      //{ name: "Quản lý công việc", path: "/all-tasks", icon: FiBriefcase, allowed: [] }, // Chỉ Manager
       { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },

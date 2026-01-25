@@ -26,7 +26,7 @@ export const startImportTicketJob = () =>
 export const startInstallTicketJob = () =>
   startCronJob({
     name: "install equipment tickets",
-    schedule: "* * * * *",
+    schedule: "*/5 * * * *",
     handler: notifyInstallTickets,
   });
 
@@ -75,7 +75,7 @@ export const startCheckinReminderJob = () =>
 export const startSyncRoomStatusJob = () =>
   startCronJob({
     name: "sync room status from logs",
-    schedule: "* * * * *", // Chạy mỗi 5 phút để sync room.room_status từ log
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút để sync room.room_status từ log
     handler: syncRoomStatusFromLogs,
   });
 

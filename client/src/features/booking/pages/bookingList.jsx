@@ -21,6 +21,7 @@ import { qrApi } from "../../api/qrApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
 import { discountApi } from "../../api/discountApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
+import AssignHousekeeperModal from "../components/assignHousekeeperModal.jsx";
 
 const STATUS_MAP = {
   pending:     { label: "Chờ cọc", color: "yellow" },
@@ -232,9 +233,110 @@ export default function BookingList() {
         roomApi.getAllRooms(),
         customerApi.getAllCustomers()
       ]);
-      setBookings(Array.isArray(bookRes.result) ? bookRes.result : []);
+      const bookingsData = Array.isArray(bookRes.result) ? bookRes.result : [];
+      setBookings(bookingsData);
       setCustomersList(custRes.customers || []);
+      
+      // Kiểm tra cleaningTask cho các phòng đã checkout
+      await checkCleaningTasks(bookingsData);
     } catch (error) { console.error(error); }
+  };
+  
+  const checkCleaningTasks = async (bookings) => {
+    setLoadingCleaningTasks(true);
+    try {
+      // Lấy tất cả các phòng đã checkout (loại bỏ trùng lặp room_id)
+      const checkedOutRoomsMap = new Map(); // Map<room_id, {room_id, booking_id, detail_id}>
+      bookings.forEach(booking => {
+        booking.rooms?.forEach(room => {
+          if (room.status === 'checked_out' && room.room_id?._id) {
+            const roomId = room.room_id._id;
+            // Chỉ lưu lần đầu tiên gặp mỗi room_id (ưu tiên booking mới hơn nếu cần)
+            if (!checkedOutRoomsMap.has(roomId)) {
+              checkedOutRoomsMap.set(roomId, {
+                room_id: roomId,
+                booking_id: booking._id,
+                detail_id: room._id
+              });
+            }
+          }
+        });
+      });
+      
+      const checkedOutRooms = Array.from(checkedOutRoomsMap.values());
+      
+      // Fetch cleaningTask cho từng phòng
+      const tasksMap = {};
+      await Promise.all(
+        checkedOutRooms.map(async (roomInfo) => {
+          try {
+            const res = await bookingApi.getCleaningTaskByRoom({
+              room_id: roomInfo.room_id,
+              booking_id: roomInfo.booking_id
+            });
+            console.log("CLEANING TASKS: ", res);
+            // Kiểm tra xem room_id đã có trong map chưa và đã có needsAssignment chưa
+            const existingTask = tasksMap[roomInfo.room_id];
+            const alreadyNeedsAssignment = existingTask && existingTask.needsAssignment === true;
+            
+            if (res.success && res.task) {
+              // Kiểm tra xem task đã có handled_by chưa
+              // handled_by có thể là null, undefined, hoặc object (khi populate)
+              const hasHandledBy = res.task.handled_by && 
+                                   (typeof res.task.handled_by === 'object' ? res.task.handled_by._id : res.task.handled_by);
+              console.log("has handledby: ", hasHandledBy);
+              if (!hasHandledBy) {
+                console.log("IM CALLED");
+                // Có task nhưng chưa gán nhân viên - cần gán
+                // Chỉ set nếu chưa có trong map hoặc chưa có needsAssignment
+                if (!existingTask || !alreadyNeedsAssignment) {
+                  const taskData = { 
+                    ...res.task, 
+                    needsAssignment: true,
+                    room_log_id: res.task.room_log_id?._id || res.task.room_log_id || res.room_log_id
+                  };
+                  tasksMap[roomInfo.room_id] = taskData;
+                }
+              } else {
+                // Đã có task và đã gán nhân viên
+                // Chỉ ghi đè nếu chưa có needsAssignment (tránh ghi đè khi đã có needsAssignment)
+                if (!alreadyNeedsAssignment) {
+                  tasksMap[roomInfo.room_id] = res.task;
+                }
+              }
+            } else {
+              // Không có task - cần gán nhân viên (chỉ đánh dấu nếu có room_log_id)
+              // Nếu có room_log_id nghĩa là đã có RoomLog cleaning nhưng chưa có CleaningTask
+              if (res.room_log_id) {
+                // Chỉ set nếu chưa có trong map hoặc chưa có needsAssignment
+                if (!existingTask || !alreadyNeedsAssignment) {
+                  tasksMap[roomInfo.room_id] = { 
+                    needsAssignment: true, 
+                    room_log_id: res.room_log_id 
+                  };
+                }
+              } else {
+                // Chưa có cả RoomLog và CleaningTask - có thể là trường hợp cũ
+                // Chỉ set undefined nếu chưa có trong map
+                if (!existingTask) {
+                  tasksMap[roomInfo.room_id] = undefined; // undefined = chưa kiểm tra hoặc không cần
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Error checking cleaning task for room ${roomInfo.room_id}:`, error);
+            // Nếu lỗi, vẫn đánh dấu là cần gán để có thể thử
+            tasksMap[roomInfo.room_id] = { needsAssignment: true };
+          }
+        })
+      );
+      
+      setCleaningTasksMap(tasksMap);
+    } catch (error) {
+      console.error("Error checking cleaning tasks:", error);
+    } finally {
+      setLoadingCleaningTasks(false);
+    }
   };
 
   const fetchAvailableRooms = async (checkin, checkout) => {
@@ -265,11 +367,11 @@ export default function BookingList() {
         const nights = Math.ceil((new Date(formData.expected_checkout) - new Date(formData.expected_checkin)) / (1000 * 60 * 60 * 24));
         return sum + (room.price * nights);
       }, 0);
-      console.log("Total order value for discounts:", totalOrderValue);
+      //console.log("Total order value for discounts:", totalOrderValue);
       
-      console.log("Fetching available discounts for customer:", formData.customer_id);
+      //console.log("Fetching available discounts for customer:", formData.customer_id);
       const res = await discountApi.getAvailableDiscounts(formData.customer_id, totalOrderValue);
-      console.log("Available discounts fetched:", res);
+      //console.log("Available discounts fetched:", res);
       if (res.success) {
         setAvailableDiscounts(res.discounts || []);
       }
@@ -328,7 +430,7 @@ export default function BookingList() {
         password: randomPassword 
       });
 
-      console.log("New customer created:", resCust);
+      //console.log("New customer created:", resCust);
       
       if (resCust && resCust.customerId) {
         // Refresh danh sách khách hàng
@@ -399,7 +501,7 @@ export default function BookingList() {
           let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
 
           const resCust = await customerApi.createCustomer({ ...newCustomer, email: emailToUse, password: randomPassword });
-          console.log("New customer created:", resCust);
+          //console.log("New customer created:", resCust);
           if (resCust && resCust.customerId) 
             finalCustomerId = resCust.customerId;
           else throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
@@ -442,7 +544,7 @@ export default function BookingList() {
           throw new Error("Không thể lấy ID booking sau khi tạo.");
         }
 
-        console.log("Deposit amount:", depositAmount);
+        //console.log("Deposit amount:", depositAmount);
         // Tạo payment link cho tiền cọc
         const paymentData = {
           booking_id: bookingId,
@@ -741,14 +843,33 @@ export default function BookingList() {
         });
     };
 
+  const [showAssignHousekeeperModal, setShowAssignHousekeeperModal] = useState(false);
+  const [cleaningData, setCleaningData] = useState(null);
+  const [cleaningTasksMap, setCleaningTasksMap] = useState({}); // Map room_id -> cleaningTask
+  const [loadingCleaningTasks, setLoadingCleaningTasks] = useState(false);
+  
+  // Kiểm tra role của user
+  const isManager = useMemo(() => {
+    const role = (user?.role || localStorage.getItem("role") || "").toLowerCase();
+    return role === "manager";
+  }, [user]);
+
   const actionCheckOut = (did, bid, rNum) => setConfirmState({
         open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
         onConfirm: async () => {
             try {
-                await bookingApi.checkoutBookingDetail(bid, did);
-                try { await receiptApi.createReceipt({ booking_id: bid, payment: "cash", note: "Hóa đơn tạo tự động khi checkout" }); alert("Check-out và tạo hóa đơn THÀNH CÔNG!"); }
-                catch (err) { alert(`Check-out xong nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`); }
-                fetchData(); setConfirmState(p => ({...p, open: false}));
+                const res = await bookingApi.checkoutBookingDetail(bid, did);
+                if (res.success && res.data && res.data.room_log_id) {
+                    // Hiển thị modal gán nhân viên
+                    setCleaningData(res.data);
+                    setShowAssignHousekeeperModal(true);
+                } else {
+                    // Checkout thành công nhưng không cần gán nhân viên (trường hợp cũ)
+                //     try { await receiptApi.createReceipt({ booking_id: bid, payment: "cash", note: "Hóa đơn tạo tự động khi checkout" }); alert("Check-out và tạo hóa đơn THÀNH CÔNG!"); }
+                //     catch (err) { alert(`Check-out xong nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`); }
+                }
+                fetchData(); 
+                setConfirmState(p => ({...p, open: false}));
             } catch(e) { alert("Lỗi: " + e.message); }
         }
     });
@@ -798,7 +919,7 @@ export default function BookingList() {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentBookings = filteredBookings.slice(indexOfFirstItem, indexOfLastItem);
-  console.log("Current Bookings:", currentBookings);
+  //console.log("Current Bookings:", currentBookings);
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
 
   const handlePageChange = (page) => setCurrentPage(page);
@@ -966,7 +1087,7 @@ export default function BookingList() {
                                     </button>
                                 )}
                                 {b.rooms?.map((r, i) => {
-                                  console.log(`Room ${r.room_number} status:`, r.status, "for booking", b.status);
+                                  //console.log(`Room ${r.room_number} status:`, r.status, "for booking", b.status);
                                     if(b.status === 'confirmed' && r.status === 'confirmed') {
                                         return (
                                             <button 
@@ -985,6 +1106,69 @@ export default function BookingList() {
                                                 <FiLogOut/> Check-out
                                             </button>
                                         );
+                                    // Kiểm tra nếu đã checkout nhưng chưa có cleaningTask hoặc chưa gán nhân viên
+                                    if(r.status === 'checked_out' && r.room_id?._id) {
+                                        const roomId = r.room_id._id;
+                                        const taskInfo = cleaningTasksMap[roomId];
+                                        
+                                        // undefined = chưa kiểm tra hoặc không có RoomLog
+                                        // object với needsAssignment = true = có task nhưng chưa gán nhân viên hoặc chưa có task
+                                        // object với handled_by = đã có task và đã gán nhân viên
+                                        // Kiểm tra: có task nhưng chưa gán nhân viên (handled_by = null hoặc undefined)
+                                        const needsAssignment = taskInfo && (
+                                          taskInfo.needsAssignment || 
+                                          !taskInfo.handled_by || 
+                                          (taskInfo.handled_by === null)
+                                        );
+                                        
+                                        if (needsAssignment) {
+                                            return (
+                                                <button 
+                                                    key={i} 
+                                                    onClick={async () => {
+                                                        try {
+                                                            // Lấy thông tin từ taskInfo hoặc API
+                                                            let room_log_id = null;
+                                                            if (taskInfo && taskInfo.room_log_id) {
+                                                                room_log_id = taskInfo.room_log_id;
+                                                            } else if (taskInfo && taskInfo._id) {
+                                                                // Đã có task, lấy room_log_id từ task
+                                                                room_log_id = taskInfo.room_log_id?._id || taskInfo.room_log_id;
+                                                            } else {
+                                                                // Chưa có task, tìm room_log_id từ API
+                                                            const res = await bookingApi.getCleaningTaskByRoom({
+                                                                room_id: roomId,
+                                                                booking_id: b._id
+                                                            });
+                                                                room_log_id = res.room_log_id || null;
+                                                            }
+                                                            
+                                                            setCleaningData({
+                                                                room_id: roomId,
+                                                                room_number: r.room_id?.room_number,
+                                                                booking_id: b._id,
+                                                                room_log_id: room_log_id,
+                                                                task_id: taskInfo?._id || null // Nếu đã có task thì truyền task_id
+                                                            });
+                                                            setShowAssignHousekeeperModal(true);
+                                                        } catch (error) {
+                                                            console.error("Error:", error);
+                                                            alert("Lỗi khi tải thông tin: " + (error.response?.data?.message || error.message));
+                                                        }
+                                                    }}
+                                                    disabled={!isManager || loadingCleaningTasks}
+                                                    className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded transition ${
+                                                        isManager && !loadingCleaningTasks
+                                                            ? "text-yellow-600 bg-yellow-50 hover:bg-yellow-100"
+                                                            : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                                                    }`}
+                                                    title={!isManager ? "Chỉ quản lý mới có thể gán nhân viên" : "Gán nhân viên dọn dẹp"}
+                                                >
+                                                    <FiUserPlus className="w-3 h-3"/> Gán dọn dẹp
+                                                </button>
+                                            );
+                                        }
+                                    }
                                     return null;
                                 })}
                                 {['pending', 'confirmed'].includes(b.status) && (
@@ -1444,6 +1628,45 @@ export default function BookingList() {
             </div>
           </div>
         </div>
+      )}
+
+      {showAssignHousekeeperModal && cleaningData && (
+        <AssignHousekeeperModal
+          cleaningData={cleaningData}
+          onClose={() => {
+            setShowAssignHousekeeperModal(false);
+            setCleaningData(null);
+            // Tạo hóa đơn sau khi đóng modal (nếu user bỏ qua)
+            // if (cleaningData.booking_id) {
+            //   receiptApi.createReceipt({ 
+            //     booking_id: cleaningData.booking_id, 
+            //     payment: "cash", 
+            //     note: "Hóa đơn tạo tự động khi checkout" 
+            //   }).then(() => {
+            //     alert("Check-out và tạo hóa đơn THÀNH CÔNG!");
+            //   }).catch(err => {
+            //     alert(`Check-out xong nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`);
+            //   });
+            // }
+          }}
+          onSuccess={async () => {
+            // Refresh lại danh sách để cập nhật cleaningTasksMap
+            await checkCleaningTasks(bookings);
+            
+            // Tạo hóa đơn sau khi gán nhân viên thành công
+            // if (cleaningData.booking_id) {
+            //   receiptApi.createReceipt({ 
+            //     booking_id: cleaningData.booking_id, 
+            //     payment: "cash", 
+            //     note: "Hóa đơn tạo tự động khi checkout" 
+            //   }).then(() => {
+            //     alert("Check-out, gán nhân viên và tạo hóa đơn THÀNH CÔNG!");
+            //   }).catch(err => {
+            //     alert(`Đã gán nhân viên nhưng KHÔNG TẠO HÓA ĐƠN. Lỗi: ${err.response?.data?.message}`);
+            //   });
+            // }
+          }}
+        />
       )}
 
       {toast && (

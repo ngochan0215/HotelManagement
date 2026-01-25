@@ -3,6 +3,7 @@ import { FiEdit, FiTrash2, FiX, FiSearch, FiFilter, FiList, FiChevronDown } from
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import { StatusPill } from "../../../components/ui/label.jsx";
+import Pagination from "../../../components/pagination.jsx";
 
 const STATUS_MAP = {
   "in-stock": { label: "Trong kho", color: "gray", icon: "info" },
@@ -21,6 +22,8 @@ export default function EquipmentListTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
 
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,6 +68,25 @@ export default function EquipmentListTab() {
 
     return result;
   }, [equipments, searchTerm, filterStatus, sortOrder]);
+
+  // Pagination
+  const paginatedEquipments = useMemo(() => {
+    const totalPages = Math.ceil(filteredEquipments.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    return {
+      data: filteredEquipments.slice(startIndex, endIndex),
+      currentPage,
+      totalPages: totalPages || 1,
+      totalItems: filteredEquipments.length
+    };
+  }, [filteredEquipments, currentPage, itemsPerPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, sortOrder]);
 
 
   const handleUpdate = async (e) => {
@@ -152,10 +174,10 @@ export default function EquipmentListTab() {
             </tr>
           </thead>
           <tbody className="text-gray-700 text-sm">
-            {filteredEquipments.length === 0 ?
+            {paginatedEquipments.data.length === 0 ?
                 <tr><td colSpan="6" className="text-center py-12 text-gray-400"><div className="flex flex-col items-center gap-2"><FiSearch size={24} className="opacity-50"/><span>Không tìm thấy thiết bị nào.</span></div></td></tr>
                 :
-                filteredEquipments.map((item) => {
+                paginatedEquipments.data.map((item) => {
                     const st = STATUS_MAP[item.status] || STATUS_MAP["in-stock"];
                     const displayId = item.code ? item.code : item._id.slice(-6).toUpperCase();
 
@@ -179,6 +201,16 @@ export default function EquipmentListTab() {
           </tbody>
         </table>
       </div>
+
+      {filteredEquipments.length > itemsPerPage && (
+        <Pagination
+          currentPage={paginatedEquipments.currentPage}
+          totalPages={paginatedEquipments.totalPages}
+          totalItems={paginatedEquipments.totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

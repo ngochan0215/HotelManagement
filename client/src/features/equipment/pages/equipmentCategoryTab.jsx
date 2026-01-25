@@ -3,6 +3,7 @@ import { FiEdit, FiTrash2, FiPlus, FiX, FiSearch, FiList, FiChevronDown, FiFilte
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import { RankBadge } from "../../../components/ui/label.jsx";
+import Pagination from "../../../components/pagination.jsx";
 
 export default function EquipmentCategoryTab() {
   const [categories, setCategories] = useState([]);
@@ -11,6 +12,8 @@ export default function EquipmentCategoryTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("a-z");
   const [filterUnit, setFilterUnit] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -74,6 +77,25 @@ export default function EquipmentCategoryTab() {
 
     return result;
   }, [categories, searchTerm, filterUnit, sortOrder]);
+
+  // Pagination
+  const paginatedCategories = useMemo(() => {
+    const totalPages = Math.ceil(filteredCategories.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    return {
+      data: filteredCategories.slice(startIndex, endIndex),
+      currentPage,
+      totalPages: totalPages || 1,
+      totalItems: filteredCategories.length
+    };
+  }, [filteredCategories, currentPage, itemsPerPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterUnit, sortOrder]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -184,8 +206,8 @@ export default function EquipmentCategoryTab() {
             </tr>
           </thead>
           <tbody className="text-gray-700 text-sm">
-            {filteredCategories.length > 0 ? (
-              filteredCategories.map((item) => (
+            {paginatedCategories.data.length > 0 ? (
+              paginatedCategories.data.map((item) => (
                 <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50 transition">
                   <td className="py-4 pl-4 font-bold text-indigo-900">{item.name}</td>
                   <td className="py-4 text-center">
@@ -219,6 +241,16 @@ export default function EquipmentCategoryTab() {
           </tbody>
         </table>
       </div>
+
+      {filteredCategories.length > itemsPerPage && (
+        <Pagination
+          currentPage={paginatedCategories.currentPage}
+          totalPages={paginatedCategories.totalPages}
+          totalItems={paginatedCategories.totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

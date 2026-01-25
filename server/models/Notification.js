@@ -16,7 +16,10 @@ const notificationSchema = new mongoose.Schema(
     reference: {
       kind: {
         type: String,
-        enum: ["Order", "Discount", "Booking", "User", "EquipmentInstall", "EquipmentImport"],
+        enum: [
+          "Order", "Discount", "Booking", "User", "EquipmentInstall", "EquipmentImport", 
+          "CleaningTask",
+        ],
       },
       refId: {
         type: mongoose.Schema.Types.ObjectId,
