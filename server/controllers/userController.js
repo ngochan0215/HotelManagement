@@ -28,17 +28,18 @@ export const viewProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
     try {
         const userId = req.user.userId || req.user._id;
-        const { name, phone, dob, nationality, cccd, BIN, account_number, bank_shortName } = req.body;
+        const { phone, dob } = req.body;
 
-        const user = await User.findById(userId).select("email system_role avatar");
+        const user = await User.findById(userId).select("system_role");
         if (!user) {
             return res.status(404).json({ message: "Không tìm thấy người dùng." });
         }
 
         let profileModel = null;
-        if (user.system_role === "customer") {
+        const role = user.system_role;
+        if (role === "customer") {
             profileModel = Customer;
-        } else if (user.system_role === "employee") {
+        } else if (role === "employee" || role === "manager") {
             profileModel = Employee;
         }
 
