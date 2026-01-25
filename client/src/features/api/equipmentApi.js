@@ -58,12 +58,39 @@ export const equipmentApi = {
     const res = await axios.get(`${BASE_URL}/install/all`, getAuthHeader());
     return res.data;
   },
+  getAvailableTechnicians: async () => {
+    const res = await axios.get(`${BASE_URL}/install/available-technicians`, getAuthHeader());
+    return res.data;
+  },
   createInstallTicket: async (data) => {
     const res = await axios.post(`${BASE_URL}/install/add`, data, getAuthHeader());
     return res.data;
   },
+  startInstallTicket: async (id) => {
+    const res = await axios.post(`${BASE_URL}/install/${id}/start`, {}, getAuthHeader());
+    return res.data;
+  },
+  completeInstallTicket: async (id) => {
+    const res = await axios.post(`${BASE_URL}/install/${id}/complete`, {}, getAuthHeader());
+    return res.data;
+  },
   confirmInstallTicket: async (id) => {
     const res = await axios.post(`${BASE_URL}/install/${id}/confirm-install`, {}, getAuthHeader());
+    return res.data;
+  },
+  updateInstallTicket: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/install/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+  getMyInstallTickets: async (params = {}) => {
+    const res = await axios.get(`${BASE_URL}/install/my-tickets`, {
+      ...getAuthHeader(),
+      params
+    });
+    return res.data;
+  },
+  getEquipmentInstallById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/install/${id}`, getAuthHeader());
     return res.data;
   }
 };

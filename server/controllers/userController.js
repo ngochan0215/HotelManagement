@@ -28,7 +28,7 @@ export const viewProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
     try {
         const userId = req.user.userId || req.user._id;
-        const { name, phone, dob, nationality, cccd } = req.body;
+        const { name, phone, dob, nationality, cccd, BIN, account_number, bank_shortName } = req.body;
 
         const user = await User.findById(userId).select("email system_role avatar");
         if (!user) {
@@ -38,8 +38,7 @@ export const updateProfile = async (req, res) => {
         let profileModel = null;
         if (user.system_role === "customer") {
             profileModel = Customer;
-        }
-        else if (user.system_role === "employee" || user.system_role === "manager" || user.system_role === "admin") {
+        } else if (user.system_role === "employee") {
             profileModel = Employee;
         }
 
@@ -69,17 +68,30 @@ export const updateProfile = async (req, res) => {
 
 export const changePassword = async (req, res) => {
     try {
-        const userId = req.user.userId || req.user._id;
         const { oldPassword, newPassword } = req.body;
-        const user = await User.findById(userId).select("+password");
+        const user = await User.findById(req.user.userId).select("+password");
+        if(!user){
+            return res.status(404).json({ message: "Không tìm thấy người dùng." });
+        }
+
         const isMatch = await bcrypt.compare(oldPassword, user.password);
-        if(!isMatch) return res.status(400).json({ message: "Mật khẩu cũ không đúng." });
+        if(!isMatch) {
+            return res.status(400).json({ message: "Mật khẩu cũ không đúng." });
+        }
+
+        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        if(!regex.test(newPassword)) {
+            return res.status(400).json({ message: "Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm một chữ hoa, chữ thường, số và ký tự đặc biệt." });
+        }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         user.password = hashedPassword;
         await user.save();
+
         res.json({ message: "Đổi mật khẩu thành công." });
-    } catch (error) { res.status(500).json({ message: "Error", error: error.message }); }
+    } catch (error) {
+        res.status(500).json({ message: "LỖI SERVER: ", error: error.message });
+    }
 };
 
 export const sendEmail = async (req, res) => {
@@ -165,3 +177,4 @@ export const updateAvatar = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+

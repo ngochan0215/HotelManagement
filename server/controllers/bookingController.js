@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Booking, BookingDetail, Customer, Room, RoomCancellation, 
   Employee, RoomStatusLog, Discount, RoomLog, BookingStatusLog, User,
-  Receipt,
+  Receipt, CleaningTask, EquipmentInstall, 
 } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
@@ -23,196 +23,6 @@ const calcNights = (expected_checkin, expected_checkout) => {
   return Math.ceil(days * 100) / 100;
 };
 
-// hàm tính tổng tiền booking đối với booking chỉ cho phép checkin, checkout chung một lượt
-export const calculateBookingPrice = async ({ customer_id, bookingDetails, expected_checkin, expected_checkout }) => {
-  const nights = calcNights(expected_checkin, expected_checkout);
-
-  const baseTotal = bookingDetails.reduce(
-    (sum, d) => sum + (d.base_fee + (d.extra_fee || 0)) * nights, 0 );
-
-  const now = new Date();
-
-  // Lấy discount BOOKING đang active
-  let discounts = await Discount.find({
-    scope: "booking",
-    begin_date: { $lte: now },
-    end_date: { $gte: now },
-  });
-
-  // Filter theo rule nghiệp vụ
-  const applicable = [];
-
-  for (const d of discounts) {
-    if (d.type === "FIRST_BOOKING") {
-      const existed = await Booking.exists({
-        customer_id,
-        status: { $in: ["confirmed", "in_progress", "completed"] },
-      });
-      if (existed) continue;
-    }
-    applicable.push(d);
-  }
-
-
-  let price = baseTotal;
-  const appliedDiscounts = [];
-
-  const nonStackable = applicable.filter(d => !d.stackable);
-  const stackable = applicable.filter(d => d.stackable);
-
-  // Non-stackable: lấy cái % cao nhất
-  if (nonStackable.length) {
-    const best = nonStackable.sort((a, b) => b.percentage - a.percentage)[0];
-    const amount = Math.round(price * best.percentage / 100);
-    price -= amount;
-
-    appliedDiscounts.push({
-      discount_id: best._id,
-      name: best.description,
-      //description: best.description,
-      percentage: best.percentage,
-      applied_amount: amount,
-    });
-  }
-
-  // Stackable: áp tuần tự
-  for (const d of stackable) {
-    const amount = Math.round(price * d.percentage / 100);
-    price -= amount;
-
-    appliedDiscounts.push({
-      discount_id: d._id,
-      name: d.description,
-      //description: d.description,
-      percentage: d.percentage,
-      applied_amount: amount,
-    });
-  }
-
-  const deposit = Math.round(price * 30 / 100);
-
-  return {
-    base_total: baseTotal,
-    discounts: appliedDiscounts,
-    final_total: price,
-    deposit: deposit
-  };
-};
-
-// hàm tính tổng tiền booking đối với booking cho phép checkin, checkout từng phòng khác nhau
-export const calculateBookingPricee = async ({
-  customer_id,
-  bookingDetails,
-}) => {
-  let baseTotal = 0;
-  const roomBreakdown = [];
-
-  for (const d of bookingDetails) {
-    const {
-      base_fee,
-      extra_fee = 0,
-      expected_checkin,
-      expected_checkout,
-    } = d;
-
-    if (
-      typeof base_fee !== "number" ||
-      base_fee < 0 ||
-      !expected_checkin ||
-      !expected_checkout
-    ) {
-      throw new Error("Dữ liệu phòng không hợp lệ");
-    }
-
-    const baseTotal = bookingDetails.reduce(
-      (sum, d) => sum + (d.base_fee + (d.extra_fee || 0)) * nights, 0 );
-
-    if (nights <= 0) {
-      throw new Error("Thời gian check-in/check-out không hợp lệ");
-    }
-
-    const roomTotal = (base_fee + extra_fee) * nights;
-    baseTotal += roomTotal;
-
-    roomBreakdown.push({
-      nights,
-      base_fee,
-      extra_fee,
-      room_total: roomTotal,
-    });
-  }
-
-  const now = new Date();
-
-  // Lấy discount BOOKING đang active
-  let discounts = await Discount.find({
-    scope: "booking",
-    begin_date: { $lte: now },
-    end_date: { $gte: now },
-    status: "active",
-  });
-
-  // Filter nghiệp vụ
-  const applicable = [];
-
-  for (const d of discounts) {
-    if (d.type === "FIRST_BOOKING") {
-      const existed = await Booking.exists({
-        customer_id,
-        status: { $in: ["confirmed", "checked_in", "completed"] },
-      });
-      if (existed) continue;
-    }
-    applicable.push(d);
-  }
-
-  let price = baseTotal;
-  const appliedDiscounts = [];
-
-  const nonStackable = applicable.filter(d => !d.stackable);
-  const stackable = applicable.filter(d => d.stackable);
-
-  // Non-stackable → lấy % cao nhất
-  if (nonStackable.length) {
-    const best = nonStackable.sort(
-      (a, b) => b.percentage - a.percentage
-    )[0];
-
-    const amount = Math.round(price * best.percentage / 100);
-    price -= amount;
-
-    appliedDiscounts.push({
-      discount_id: best._id,
-      name: best.name,
-      percentage: best.percentage,
-      applied_amount: amount,
-    });
-  }
-
-  // Stackable → áp tuần tự
-  for (const d of stackable) {
-    const amount = Math.round(price * d.percentage / 100);
-    price -= amount;
-
-    appliedDiscounts.push({
-      discount_id: d._id,
-      name: d.name,
-      percentage: d.percentage,
-      applied_amount: amount,
-    });
-  }
-
-  const deposit = Math.round(price * 30 / 100);
-
-  return {
-    base_total: baseTotal,
-    room_breakdown: roomBreakdown,
-    discounts: appliedDiscounts,
-    final_total: price,
-    deposit: deposit
-  };
-};
-
 // hàm check trạng thái chung của booking (có nhiều chi tiết đặt phòng)
 const calculateBookingStatus = (details) => {
   if (details.every(d => d.status === "cancelled")) {
@@ -231,120 +41,6 @@ const calculateBookingStatus = (details) => {
 
   return "confirmed";
 };
-
-// hàm hiển thị thông tin khuyến mãi áp dụng và tổng tiền đặt phòng (checkin-out chung)
-export const previewBookingPrice = async (req, res) => {
-  try {
-    const { customer_id, rooms, expected_checkin, expected_checkout } = req.body;
-
-    if (!customer_id || !Array.isArray(rooms) || rooms.length === 0) {
-      return res.status(400).json({ message: "Dữ liệu không hợp lệ." });
-    }
-
-    for (const r of rooms) {
-      if ( !r.room_id || r.base_fee < 0) {
-        return res.status(400).json({ message: "Thông tin phòng không hợp lệ." });
-      }
-    }
-
-    if ( !expected_checkin || !expected_checkout) {
-      return res.status(400).json({ message: "Phải điền đầy đủ thông tin check-in, check-out dự kiến." });
-    }
-
-    if ( new Date(expected_checkout) < new Date(expected_checkin) ) {
-      return res.status(400).json({ message: "Ngày check-out dự kiến phải sau ngày check-in dự kiến." });
-    }
-
-    if ( new Date(expected_checkout) < new Date() ) {
-      return res.status(400).json({ message: "Ngày check-out dự kiến không được trong quá khứ." });
-    }
-
-    if ( new Date(expected_checkin) < new Date() ) {
-      return res.status(400).json({ message: "Ngày check-in dự kiến không được trong quá khứ." });
-    }
-
-    const result = await calculateBookingPrice({ customer_id, bookingDetails: rooms, expected_checkin, expected_checkout });
-
-    return res.json(result);
-    
-  } catch (err) {
-    return res.status(500).json({
-      message: err.message || "Lỗi preview giá booking.",
-    });
-  }
-};
-
-// hàm hiển thị thông tin khuyến mãi áp dụng và tổng tiền đặt phòng (checkin-out riêng)
-export const previewBookingPricee = async (req, res) => {
-  try {
-    const { customer_id, rooms } = req.body;
-
-    if (!customer_id || !mongoose.Types.ObjectId.isValid(customer_id)) {
-      return res.status(400).json({ message: "customer_id không hợp lệ." });
-    }
-
-    if (!Array.isArray(rooms) || rooms.length === 0) {
-      return res.status(400).json({ message: "Phải chọn ít nhất một phòng." });
-    }
-
-    for (const [index, r] of rooms.entries()) {
-      if (!r.room_id || !mongoose.Types.ObjectId.isValid(r.room_id)) {
-        return res.status(400).json({
-          message: `room_id không hợp lệ (phòng #${index + 1})`,
-        });
-      }
-
-      if (typeof r.base_fee !== "number" || r.base_fee < 0) {
-        return res.status(400).json({
-          message: `base_fee không hợp lệ (phòng #${index + 1})`,
-        });
-      }
-
-      if (!r.expected_checkin || !r.expected_checkout) {
-        return res.status(400).json({
-          message: `Thiếu check-in/check-out (phòng #${index + 1})`,
-        });
-      }
-
-      const checkIn = new Date(r.expected_checkin);
-      const checkOut = new Date(r.expected_checkout);
-
-      if (isNaN(checkIn) || isNaN(checkOut)) {
-        return res.status(400).json({
-          message: `Thời gian không hợp lệ (phòng #${index + 1})`,
-        });
-      }
-
-      if (checkOut <= checkIn) {
-        return res.status(400).json({
-          message: `Check-out phải sau check-in (phòng #${index + 1})`,
-        });
-      }
-    }
-
-    const result = await calculateBookingPricee({
-      customer_id,
-      bookingDetails: rooms,
-    });
-
-    return res.json({
-      customer_id,
-      rooms: result.room_breakdown,
-      base_total: result.base_total,
-      discounts: result.discounts,
-      total_fee: result.final_total,
-      deposit: result.deposit
-    });
-
-  } catch (err) {
-    console.error("previewBookingPrice error:", err);
-    return res.status(500).json({
-      message: err.message || "Lỗi preview giá booking.",
-    });
-  }
-};
-
-//---- BOOKING ----//
 
 // hàm thêm booking mới (đối với booking checkin, checkout một lượt tất cả)
 export const createBooking = async (req, res) => {
@@ -452,7 +148,7 @@ export const createBooking = async (req, res) => {
     );
 
     // tạo các chi tiết đặt phòng, nếu đặt liền thì trạng thái chi tiết cũng là confirmed
-    const detailStatus = isImmediate ? "checked-in" : "reserved";
+    const detailStatus = isImmediate ? "checked_in" : "reserved";
     
     const bookingDetails = rooms.map(room => ({
       booking_id: booking[0]._id,
@@ -504,6 +200,7 @@ export const createBooking = async (req, res) => {
       status: isImmediate && initialStatus === "in_progress" ? "occupied" : "reserved",
       start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
       expected_end_time: bd.expected_checkout,
+      end_time: bd.expected_checkout,
       note: isImmediate ? 
         `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`
         : `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
@@ -519,6 +216,7 @@ export const createBooking = async (req, res) => {
       status: isImmediate && initialStatus === "in_progress" ? "occupied" : "reserved",
       start_time: isImmediate && initialStatus === "in_progress" ? new Date() : bd.expected_checkin,
       expected_end_time: bd.expected_checkout,
+      end_time: bd.expected_checkout,
       note: isImmediate ? 
         `Phòng được xác nhận (đặt liền) bởi booking ${booking[0]._id}`
         : `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
@@ -663,241 +361,15 @@ export const createBooking = async (req, res) => {
   }
 };
 
-// hàm thêm booking mới (đối với booking checkin, checkout riêng)
-export const createBookingg = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const { customer_id, handled_by, adults, children, deposit, total_fee, rooms } = req.body;
-    if (!customer_id || !handled_by || !adults ) {
-      return res.status(400).json({ message: "Phải điền đầy đủ các thông tin bắt buộc!"});
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(customer_id) || !mongoose.Types.ObjectId.isValid(handled_by)){
-      return res.status(400).json({ message: "customer_id hoặc employee_id (handled_by) không hợp lệ!"});
-    }
-
-    const customer = await Customer.findById(customer_id).session(session);
-    if (!customer) {
-      return res.status(404).json({ message: "Không tìm thấy khách hàng." });
-    }
-
-    const employee = await Employee.findOne({ user_id: handled_by }).session(session);
-    if (!employee) {
-      return res.status(404).json({ message: `Không tìm thấy hồ sơ Nhân viên (User/Emp ID: ${handled_by}).` });
-    }
-
-    if (!Array.isArray(rooms) || rooms.length === 0) {
-      return res.status(400).json({ message: "Phải đặt ít nhất một phòng!" });
-    }
-
-    for (const room of rooms) {
-      if ( !room.room_id || !room.expected_checkin || !room.expected_checkout) {
-        return res.status(400).json({ message: "Phải điền đầy đủ thông tin check-in, check-out dự kiến của mỗi phòng đặt." });
-      }
-      if ( new Date(room.expected_checkout) <= new Date(room.expected_checkin) ) {
-        return res.status(400).json({ message: "Ngày check-out dự kiến phải sau ngày check-in dự kiến." });
-      }
-      if ( new Date(room.expected_checkout) <= new Date() ) {
-        return res.status(400).json({ message: "Ngày check-out dự kiến không được trong quá khứ." });
-      }
-      if ( new Date(room.expected_checkin) <= new Date() ) {
-        return res.status(400).json({ message: "Ngày check-in dự kiến không được trong quá khứ." });
-      }
-      const roomExists = await Room.exists({ _id: room.room_id });
-      if (!roomExists) {
-        return res.status(404).json({ message: `Không tìm thấy phòng với ID: ${room.room_id}.`});
-      }
-    }
-
-    const expected_checkin = new Date(Math.min(...rooms.map(r => new Date(r.expected_checkin))));
-    const expected_checkout = new Date(Math.max(...rooms.map(r => new Date(r.expected_checkout))));
-
-    const recalculated = await calculateBookingPricee({ customer_id, bookingDetails: rooms });
-    if (recalculated.final_total !== total_fee) {
-      return res.status(400).json({ message: "Tổng tiền booking không hợp lệ" });
-    }
-
-    // tạo booking
-    const booking = await Booking.create(
-      [
-        {
-          customer_id,
-          handled_by: employee._id,
-          adults,
-          children,
-          deposit,
-          total_fee,
-          expected_checkin,
-          expected_checkout,
-          status: "pending",
-        },
-      ],
-      { session }
-    );
-
-    // tạo bookingDetail
-    const bookingDetails = rooms.map(room => ({
-      booking_id: booking[0]._id,
-      room_id: room.room_id,
-      expected_checkin: room.expected_checkin,
-      expected_checkout: room.expected_checkout,
-      base_fee: room.base_fee,
-      status: "reserved",
-    }));
-
-    await BookingDetail.insertMany(bookingDetails, { session });
-
-    // log trạng thái booking
-    await BookingStatusLog.create(
-      [{
-        booking_id: booking[0]._id,
-        status: "pending",
-        start_time: new Date(),
-        handled_by: handled_by,
-        note: "Đơn đặt phòng được tạo thành công, đang chờ đặt cọc",
-      }], { session });
-
-    // update trạng thái các phòng được giữ chỗ
-    const roomIds = bookingDetails.map(bd => bd.room_id);
-    await Room.updateMany(
-      { _id: { $in: roomIds } },
-      { $set: { room_status: "reserved" } },
-      { session }
-    );
-
-    // tạo log booked cho trạng thái phòng
-    const roomStatusLogs = bookingDetails.map(bd => ({
-      room_id: bd.room_id,
-      status: "reserved",
-      start_time: new Date(),
-      end_time: bd.expected_checkout,
-      note: `Phòng được giữ chỗ bởi: ${booking[0]._id} trong vòng 1 tiếng kể từ khi đặt`,
-      handled_by: booking.handled_by,
-    }));
-
-    await RoomStatusLog.insertMany(roomStatusLogs, { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // Gửi thông báo cho tất cả user (admin, employee, customer) về booking mới
-    try {
-      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
-      const userIds = allUsers.map(u => u._id);
-      
-      if (userIds.length > 0) {
-        await pushNotificationToUsers(
-          userIds,
-          "Booking mới",
-          `Có booking mới #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.email || customer.full_name || 'N/A'}`,
-          "booking",
-          "Booking",
-          booking[0]._id,
-          "unread"
-        );
-      }
-    } catch (notifError) {
-      console.error("Error sending notification:", notifError);
-      // Không throw error để không ảnh hưởng đến response chính
-    }
-
-    return res.status(201).json({
-      message: "Đặt phòng thành công.",
-      booking_id: booking[0]._id,
-    });
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return res.status(500).json({
-      message: error.message || "Không thể đặt phòng.",
-    });
-  }
-};
-
 // xác nhận thanh toán tiền cọc thành công
 export const confirmBooking = async (req, res) => {
   const { booking_id } = req.params;
   const employee_id = req.user.userId;
   
   try {
-    //console.log("Confirming booking:", booking_id, "by employee:", employee_id);
+    console.log("Confirming booking:", booking_id, "by employee:", employee_id);
     const booking = await confirmBookingInternal(booking_id, employee_id);
-    //console.log("Booking confirmed:", booking);
-    const customer_id = booking.customer_id;
-    const customer = await Customer.findById(customer_id);
-
-    try {
-      // gửi thông báo cho admin
-      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
-      const adminIds = allAdmins.map(u => u._id);
-      if (allAdmins.length > 0) {
-        await pushNotificationToUsers(
-          adminIds,
-          "Booking đã xác nhận thanh toán tiền cọc",
-          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
-          "booking",
-          "Booking",
-          booking._id,
-          "unread"
-        );
-      }
-
-      // gửi thông báo cho khách hàng
-      const customerUser = await Customer.findById(customer_id).select("user_id").lean();
-      if (customerUser && customerUser.user_id) {
-        await pushNotification(
-          customerUser.user_id,
-          "Booking đặt cọc thành công",
-          `Bạn đã đặt cọc booking có ID: #${booking._id.toString().slice(-6)} thành công!
-            Hãy để ý ngày giờ checkin nhé.`,
-          "booking",
-          "Booking",
-          booking._id,
-          "unread"
-        );
-      }
-
-      // gửi thông báo cho nhân viên thực hiện booking
-      const employee = await Employee.findById(booking.handled_by).select("user_id").lean();
-      if (employee && employee.user_id) {
-        await pushNotification(
-          employee.user_id,
-          "Booking đặt cọc thành công",
-          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng 
-            ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
-          "booking",
-          "Booking",
-          booking._id,
-          "unread"
-        );
-      }
-      console.log("Notifications sent for booking confirmation.");
-      // const receptionistEmployees = await Employee.find(
-      //   { role: "receptionist" },
-      //   { user_id: 1 }
-      // );
-      // const userIds = receptionistEmployees.map(e => e.user_id);
-
-      // const validUsers = await User.find({
-      //   _id: { $in: userIds },
-      //   isBanned: { $ne: true }
-      // }).select("_id");
-
-      // await pushNotification(
-      //   validUsers.map(u => u._id),
-      //   "Booking đặt cọc thành công",
-      //   `Booking có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"} đã xác nhận đặt cọc thành công.`,
-      //   "booking",
-      //   "Booking",
-      //   booking[0]._id,
-      //   "unread"
-      // );
-    } catch (notifError) {
-      console.error("Error sending notification:", notifError);
-    }
+    console.log("Booking confirmed:", booking);
 
     return res.status(200).json({
       message: "Xác nhận đặt phòng thành công.",
@@ -1709,8 +1181,8 @@ export const checkoutBookingDetail = async (req, res) => {
       { session }
     );
 
-    // BẢNG MỚI
-    await RoomLog.create(
+    // BẢNG MỚI - Tạo RoomLog cho cleaning (chưa gán nhân viên)
+    const [roomLog] = await RoomLog.create(
       [{
         booking_id: detail.booking_id,
         room_id: detail.room_id,
@@ -1719,7 +1191,19 @@ export const checkoutBookingDetail = async (req, res) => {
         end_time: cleaningEndTime,
         expected_end_time: cleaningEndTime,
         note: `Phòng đã được checkout theo booking ${booking._id}, chuyển sang dọn dẹp.`,
-        handled_by: booking.handled_by || null,
+        handled_by: null, // Sẽ được gán sau khi admin chọn nhân viên
+      }],
+      { session }
+    );
+
+    // Tạo CleaningTask với status pending
+    await CleaningTask.create(
+      [{
+        room_id: detail.room_id,
+        room_log_id: roomLog._id,
+        booking_id: bookingId,
+        status: "pending",
+        note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
       }],
       { session }
     );
@@ -1830,7 +1314,14 @@ export const checkoutBookingDetail = async (req, res) => {
     }
 
     return res.json({
-      message: "Checkout thành công. Phòng đang được dọn dẹp.",
+      success: true,
+      message: "Checkout thành công. Vui lòng gán nhân viên dọn dẹp.",
+      data: {
+        room_log_id: roomLog._id,
+        room_id: detail.room_id,
+        room_number: room.room_number,
+        booking_id: bookingId,
+      },
     });
 
   } catch (error) {
@@ -1842,8 +1333,6 @@ export const checkoutBookingDetail = async (req, res) => {
     });
   }
 };
-
-//---- BOOKING CANCELLATION ----//
 
 // hủy một phòng cụ thể trong booking
 export const cancelBookingDetail = async (req, res) => {
@@ -2237,7 +1726,7 @@ export const cancelBooking = async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ messsage: "SERVER ERROR (cancelBooking): " + err.message });
   }
 };
 

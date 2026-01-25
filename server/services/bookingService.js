@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 import { Booking, BookingDetail, BookingStatusLog, RoomStatusLog, RoomLog,
-    Room,
+    Room, Customer, Employee, User
  } from "../models/index.js";
+import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 // Helper function để confirm booking (có thể gọi từ paymentSucceeded)
 export const confirmBookingInternal = async (booking_id, employee_id = null, session = null) => {
@@ -13,7 +14,7 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
   }
 
   try {
-    console.log("IM ALWAYS HERE");
+    //console.log("IM ALWAYS HERE");
     const booking = await Booking.findById(booking_id).session(useSession);
     if (!booking) {
       throw new Error("Không tìm thấy dữ liệu đặt phòng.");
@@ -31,7 +32,7 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
     }
 
     for (const bd of bookingDetails) {
-      const conflictLog = await RoomStatusLog.findOne({
+      const conflictLog = await RoomLog.findOne({
         room_id: bd.room_id,
         status: { $in: ["booked", "occupied"] },
         start_time: { $lt: bd.expected_checkout },
@@ -148,6 +149,60 @@ export const confirmBookingInternal = async (booking_id, employee_id = null, ses
       await useSession.commitTransaction();
       useSession.endSession();
       console.log("Transaction committed.");
+    }
+
+    // gửi thông báo
+    const customer_id = booking.customer_id;
+    const customer = await Customer.findById(customer_id);
+
+    try {
+      // gửi thông báo cho admin
+      const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+      const adminIds = allAdmins.map(u => u._id);
+      if (allAdmins.length > 0) {
+        await pushNotificationToUsers(
+          adminIds,
+          "Booking đã xác nhận thanh toán tiền cọc",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho khách hàng
+      const customerUser = await Customer.findById(customer_id).select("user_id").lean();
+      if (customerUser && customerUser.user_id) {
+        await pushNotification(
+          customerUser.user_id,
+          "Booking đặt cọc thành công",
+          `Bạn đã đặt cọc booking có ID: #${booking._id.toString().slice(-6)} thành công!
+            Hãy để ý ngày giờ checkin nhé.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+
+      // gửi thông báo cho nhân viên thực hiện booking
+      const employee = await Employee.findById(booking.handled_by).select("user_id").lean();
+      if (employee && employee.user_id) {
+        await pushNotification(
+          employee.user_id,
+          "Booking đặt cọc thành công",
+          `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng 
+            ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
+          "booking",
+          "Booking",
+          booking._id,
+          "unread"
+        );
+      }
+      console.log("Notifications sent for booking confirmation.");
+    } catch (notifError) {
+      console.error("Error sending notification:", notifError);
     }
 
     return booking;

@@ -6,6 +6,7 @@ import {
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import { RankBadge } from "../../../components/ui/label.jsx";
+import Pagination from "../../../components/pagination.jsx";
 
 export default function EquipmentCategoryTab() {
   const [categories, setCategories] = useState([]);
@@ -14,9 +15,8 @@ export default function EquipmentCategoryTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("a-z");
   const [filterUnit, setFilterUnit] = useState("all");
-
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const itemsPerPage = 15;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { FiTrash2, FiPlus, FiX, FiAlertCircle, FiChevronLeft, FiChevronRight, FiSettings, FiCheckCircle, FiArrowUp, FiArrowDown, FiFilter } from "react-icons/fi";
+import { FiTrash2, FiPlus, FiX, FiAlertCircle, FiChevronLeft, FiChevronRight, FiSettings, FiCheckCircle, FiArrowUp, FiArrowDown, FiFilter, FiCheck } from "react-icons/fi";
 import { roomApi } from "../../api/roomApi.js";
 import { equipmentApi } from "../../api/equipmentApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
 import dayjs from "dayjs";
 import { StatusPill } from "../../../components/ui/label.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const STATUS_MAP = {
   new:         { label: "Mới tạo",  color: "blue" },
@@ -18,10 +20,19 @@ const STATUS_MAP = {
 const MANUAL_STATUSES = ["available", "cleaning", "maintenance", "new"];
 
 export default function RoomListTab() {
+  const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [cleaningTasksMap, setCleaningTasksMap] = useState({}); // Map room_id -> cleaningTask
+  const [loadingCleaningTasks, setLoadingCleaningTasks] = useState(false);
+
+  // Kiểm tra role của user
+  const isManager = useMemo(() => {
+    const role = (user?.role || localStorage.getItem("role") || "").toLowerCase();
+    return role === "manager";
+  }, [user]);
 
   const renderUnit = (unit) => {
     switch (unit) {
@@ -56,6 +67,40 @@ export default function RoomListTab() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    // Lấy thông tin cleaning tasks cho các phòng có status "cleaning"
+    checkCleaningTasks();
+  }, [rooms]);
+
+  const checkCleaningTasks = async () => {
+    setLoadingCleaningTasks(true);
+    try {
+      const cleaningRooms = rooms.filter(r => {
+        const status = r.roomStatusLog?.status || r.room_status;
+        return status === "cleaning";
+      });
+
+      const tasksMap = {};
+      for (const room of cleaningRooms) {
+        try {
+          const res = await bookingApi.getCleaningTaskByRoom({
+            room_id: room._id
+          });
+          if (res.success && res.task) {
+            tasksMap[room._id] = res.task;
+          }
+        } catch (error) {
+          console.error(`Error checking cleaning task for room ${room._id}:`, error);
+        }
+      }
+      setCleaningTasksMap(tasksMap);
+    } catch (error) {
+      console.error("Error checking cleaning tasks:", error);
+    } finally {
+      setLoadingCleaningTasks(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -533,6 +578,33 @@ export default function RoomListTab() {
                     <td className="py-4 font-medium text-gray-600 text-xs">{end_time}</td>
                     <td className="py-4 text-right pr-4">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Button xác nhận cleaning cho phòng có status "cleaning" và cleaning task status "completed" */}
+                        {displayStatus === "cleaning" && cleaningTasksMap[room._id] && cleaningTasksMap[room._id].status === "completed" && (
+                          <button 
+                            onClick={async () => {
+                              if (!window.confirm(`Xác nhận hoàn thành dọn dẹp phòng ${room.room_number}?`)) {
+                                return;
+                              }
+                              try {
+                                await bookingApi.confirmCleaning(cleaningTasksMap[room._id]._id);
+                                alert('Xác nhận hoàn thành dọn dẹp thành công!');
+                                await checkCleaningTasks();
+                                fetchData();
+                              } catch (error) {
+                                alert('Lỗi: ' + (error.response?.data?.message || error.message));
+                              }
+                            }}
+                            disabled={!isManager || loadingCleaningTasks}
+                            className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded transition ${
+                              isManager && !loadingCleaningTasks
+                                ? "text-green-600 bg-green-50 hover:bg-green-100"
+                                : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                            }`}
+                            title={!isManager ? "Chỉ quản lý mới có thể xác nhận" : "Xác nhận hoàn thành dọn dẹp"}
+                          >
+                            <FiCheck size={14}/> Xác nhận dọn dẹp
+                          </button>
+                        )}
                         {room.room_status === "new" && (
                           <button 
                             onClick={() => {

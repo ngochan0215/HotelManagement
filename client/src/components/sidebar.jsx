@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUser, FiUsers, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign, FiBriefcase
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
 import { useAuth } from "../features/auth/hooks/authContext.jsx";
@@ -13,7 +13,7 @@ const NORMAL_TEXT = "text-gray-400";
 const HOVER_BG = "hover:bg-gray-800 hover:text-white";
 
 const sidebarConfig = [
-  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard",allowed: [] }, // Ai cũng xem được
+  { type: "main", title: "Bảng điều khiển", icon: FiGrid, path: "/dashboard", allowed: [] }, // Ai cũng xem được
   {
     type: "main",
     title: "Lịch phòng",
@@ -26,7 +26,23 @@ const sidebarConfig = [
     title: "Thu nhập",
     icon: FiDollarSign,
     path: "/earnings",
-    allowed: [] // Tất cả nhân viên đều xem được
+    allowed: [], // Tất cả nhân viên đều xem được
+    excludeManager: true // Manager không được xem
+  },
+  {
+    type: "main",
+    title: "Công việc của tôi",
+    icon: FiBriefcase,
+    path: "/my-work",
+    allowed: ["technician", "housekeeper"], // Nhân viên kỹ thuật và buồng phòng
+    excludeManager: true
+  },
+  {
+    type: "main",
+    title: "Quản lý Công việc",
+    icon: FiBriefcase,
+    path: "/all-tasks",
+    allowed: [],
   },
   {
     type: "group",
@@ -36,6 +52,7 @@ const sidebarConfig = [
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
       { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
+      //{ name: "Quản lý công việc", path: "/all-tasks", icon: FiBriefcase, allowed: [] }, // Chỉ Manager
       { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },
@@ -88,6 +105,9 @@ export default function Sidebar() {
   };
 
   const checkPermission = (item) => {
+    // Nếu item có excludeManager, manager không được xem
+    if (item.excludeManager && userRole === "manager") return false;
+    
     if (userRole === "manager") return true;
     if (!item.allowed) return true;
     return item.allowed.includes(userPosition);

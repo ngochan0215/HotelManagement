@@ -6,6 +6,7 @@ import {
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import { StatusPill } from "../../../components/ui/label.jsx";
+import Pagination from "../../../components/pagination.jsx";
 
 const STATUS_MAP = {
   "in-stock": { label: "Trong kho", color: "gray", icon: "info" },
@@ -24,7 +25,6 @@ export default function EquipmentListTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
-
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;

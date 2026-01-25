@@ -2,12 +2,15 @@ import express from "express";
 import {
     createBooking, getCancellationReasonStats, getBookingDetail, updateBookingStatus,
     cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail,
-    cancelBookingDetail, previewBookingPrice, previewBookingPricee, createBookingg
+    cancelBookingDetail,
 } from "../controllers/bookingController.js";
-
 import { getCalendarRooms } from "../controllers/managerController.js";
-
-import { isManager, verifyToken, isCustomer, isEmployee, canAccessBooking } from "../middleware/authMiddleware.js";
+import {
+    getAvailableHousekeepers, assignCleaningTask, startCleaningTask,
+    completeCleaningTask, confirmCleaning, getAllTasks, getMyCleaningTasks,
+    getCleaningTaskByRoom
+} from "../controllers/cleaningController.js";
+import { isManager, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -16,12 +19,10 @@ router.get("/all", verifyToken, isEmployee, getAllBookings);
 router.get("/:id", verifyToken, getBookingDetail);
 
 // preview và thêm booking cho checkin-out chung
-router.post("/preview/general", verifyToken, previewBookingPrice);
 router.post("/add/general", verifyToken, createBooking);
 
 // preview và thêm booking cho checkin-out riêng
-router.post("/preview/particular", verifyToken, previewBookingPricee);
-router.post("/add/particular", verifyToken, createBookingg);
+//router.post("/add/particular", verifyToken, createBookingg);
 
 // update trạng thái toàn bộ booking (nên dùng cho booking có checkin-out chung)
 router.put("/:booking_id/update", verifyToken, updateBookingStatus);
@@ -40,5 +41,15 @@ router.patch("/:bookingId/cancel", verifyToken, cancelBooking);
 
 // thống kê lý do hủy phòng
 router.get("/statistics/cancellation-reasons", verifyToken, isManager, getCancellationReasonStats);
+
+// Cleaning Tasks Routes
+router.get("/cleaning/available-housekeepers", verifyToken, isManager, getAvailableHousekeepers);
+router.post("/cleaning/assign", verifyToken, isManager, assignCleaningTask);
+router.get("/cleaning/my-tasks", verifyToken, isEmployee, getMyCleaningTasks);
+router.post("/cleaning/:id/start", verifyToken, isEmployee, startCleaningTask);
+router.post("/cleaning/:id/complete", verifyToken, isEmployee, completeCleaningTask);
+router.post("/cleaning/:id/confirm", verifyToken, isManager, confirmCleaning);
+router.get("/tasks/all", verifyToken, isManager, getAllTasks);
+router.get("/cleaning/task-by-room", verifyToken, isEmployee, getCleaningTaskByRoom);
 
 export default router;
