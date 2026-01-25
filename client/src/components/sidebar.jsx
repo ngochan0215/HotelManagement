@@ -53,7 +53,7 @@ const sidebarConfig = [
       { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
       //{ name: "Quản lý công việc", path: "/all-tasks", icon: FiBriefcase, allowed: [] }, // Chỉ Manager
-      { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
+      { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: [] },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: [ "customer_service"] },

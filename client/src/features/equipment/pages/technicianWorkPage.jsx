@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { 
-  FiClock, FiCheckCircle, FiPlay, FiAlertCircle, 
-  FiArrowRight, FiArrowLeft, FiRefreshCw, FiEye
+import {
+  FiClock, FiCheckCircle, FiPlay, FiAlertCircle,
+  FiRefreshCw, FiEye, FiSearch, FiFilter, FiCalendar, FiTool, FiArrowRight, FiArrowLeft, FiList, FiArrowUp, FiArrowDown
 } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
@@ -16,475 +16,270 @@ export default function TechnicianWorkPage() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [toast, setToast] = useState(null);
-  const [confirmState, setConfirmState] = useState({
-    open: false,
-    title: "",
-    message: "",
-    onConfirm: null
-  });
-  const [filterStatus, setFilterStatus] = useState("");
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
+
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const params = filterStatus ? { status: filterStatus } : {};
-      const res = await equipmentApi.getMyInstallTickets(params);
+      const res = await equipmentApi.getMyInstallTickets({});
       setTickets(res.installs || []);
     } catch (error) {
       setToast({
         type: "error",
-        message: "Lỗi khi tải danh sách công việc: " + (error.response?.data?.message || error.message)
+        message: "Lỗi tải dữ liệu: " + (error.response?.data?.message || error.message)
       });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchTickets();
-  }, [filterStatus]);
+  useEffect(() => { fetchTickets(); }, []);
 
-  const handleStart = async (ticket) => {
+  const handleAction = (ticket, actionType) => {
+    const isStart = actionType === 'start';
     setConfirmState({
       open: true,
-      title: "Bắt đầu công việc",
-      message: `Bạn có chắc chắn muốn bắt đầu phiếu ${ticket.type === 'install' ? 'lắp đặt' : 'tháo dỡ'} #${ticket._id.slice(-6)}?`,
+      title: isStart ? "Bắt đầu công việc" : "Hoàn thành công việc",
+      message: `Xác nhận ${isStart ? 'bắt đầu' : 'hoàn tất'} phiếu tại phòng ${ticket.room_id?.room_number}?`,
       onConfirm: async () => {
         try {
-          await equipmentApi.startInstallTicket(ticket._id);
-          setToast({
-            type: "success",
-            message: "Đã bắt đầu công việc!"
-          });
+          if (isStart) await equipmentApi.startInstallTicket(ticket._id);
+          else await equipmentApi.completeInstallTicket(ticket._id);
+          setToast({ type: "success", message: "Thao tác thành công!" });
           setConfirmState({ ...confirmState, open: false });
           fetchTickets();
         } catch (error) {
-          setToast({
-            type: "error",
-            message: error.response?.data?.message || "Lỗi khi bắt đầu công việc"
-          });
+          setToast({ type: "error", message: error.response?.data?.message || "Lỗi thao tác" });
         }
       }
     });
   };
 
-  const handleComplete = async (ticket) => {
-    setConfirmState({
-      open: true,
-      title: "Hoàn thành công việc",
-      message: `Bạn có chắc chắn đã hoàn thành phiếu ${ticket.type === 'install' ? 'lắp đặt' : 'tháo dỡ'} #${ticket._id.slice(-6)}?`,
-      onConfirm: async () => {
-        try {
-          await equipmentApi.completeInstallTicket(ticket._id);
-          setToast({
-            type: "success",
-            message: "Đã hoàn thành công việc! Đang chờ admin xác nhận."
-          });
-          setConfirmState({ ...confirmState, open: false });
-          fetchTickets();
-        } catch (error) {
-          setToast({
-            type: "error",
-            message: error.response?.data?.message || "Lỗi khi hoàn thành công việc"
-          });
-        }
-      }
+  const processedTickets = useMemo(() => {
+    let result = tickets.filter(t => {
+      const hasStart = t.started_at && t.started_at !== "";
+      const hasEnd = t.completed_at && t.completed_at !== "";
+      const isPending = t.status === "assigned" || (t.status === "waiting_confirm" && !hasStart);
+      const isDoing = t.status === "waiting_confirm" && hasStart && !hasEnd;
+      const isCompleted = t.status === "completed" || hasEnd;
+      if (filterStatus === 'assigned' && !isPending) return false;
+      if (filterStatus === 'waiting_confirm' && !isDoing) return false;
+      if (filterStatus === 'completed' && !isCompleted) return false;
+      if (!searchTerm) return true;
+      const lowerTerm = searchTerm.toLowerCase();
+      const room = t.room_id?.room_number?.toLowerCase() || "";
+      const code = t._id.toLowerCase();
+      return room.includes(lowerTerm) || code.includes(lowerTerm);
     });
-  };
+    result.sort((a, b) => {
+      const dateA = new Date(a.install_date);
+      const dateB = new Date(b.install_date);
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+    return result;
+  }, [tickets, searchTerm, sortOrder, filterStatus]);
+
+  const stats = useMemo(() => {
+    return {
+      pending: tickets.filter(t => t.status === "assigned" || (t.status === "waiting_confirm" && (!t.started_at || t.started_at === ""))).length,
+      doing: tickets.filter(t => t.status === "waiting_confirm" && (t.started_at && t.started_at !== "") && (!t.completed_at || t.completed_at === "")).length,
+      done: tickets.filter(t => t.status === "completed" || (t.completed_at && t.completed_at !== "")).length
+    };
+  }, [tickets]);
 
   const getStatusBadge = (status, started_at, completed_at) => {
-    const statusMap = {
-      assigned: { 
-        label: "Chờ bắt đầu", 
-        color: "bg-gray-100 text-gray-800",
-        icon: <FiClock className="w-4 h-4" />
-      },
-      waiting_confirm: { 
-        label: started_at && !completed_at ? "Đang làm" : "Chờ Quản lý xác nhận", 
-        color: started_at && !completed_at ? "bg-blue-100 text-blue-800" : "bg-yellow-100 text-yellow-800",
-        icon: started_at && !completed_at ? <FiPlay className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />
-      },
-      completed: { 
-        label: "Hoàn tất", 
-        color: "bg-green-100 text-green-800",
-        icon: <FiCheckCircle className="w-4 h-4" />
-      }
-    };
-    const statusInfo = statusMap[status] || statusMap.pending;
+    const hasStart = started_at && started_at !== "";
+    const hasEnd = completed_at && completed_at !== "";
+    if (status === "assigned" || (status === "waiting_confirm" && !hasStart)) return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black border shadow-sm bg-red-600 text-white border-red-700">
+        <FiClock /> CHỜ BẮT ĐẦU
+      </span>
+    );
+    if (status === "waiting_confirm" && hasStart && !hasEnd) return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black border shadow-sm bg-blue-600 text-white border-blue-700">
+        <FiPlay /> ĐANG THỰC HIỆN
+      </span>
+    );
     return (
-      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
-        {statusInfo.icon}
-        {statusInfo.label}
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black border shadow-sm bg-emerald-600 text-white border-emerald-700">
+        <FiCheckCircle /> HOÀN TẤT
       </span>
     );
   };
 
   const getTypeBadge = (type) => {
     return type === 'install' ? (
-      <span className="inline-flex items-center gap-1 text-indigo-600 bg-indigo-50 px-2 py-1 rounded text-xs font-bold border border-indigo-100">
+      <span className="inline-flex items-center gap-1 text-indigo-900 bg-white/70 px-2 py-0.5 rounded text-[10px] font-black border border-indigo-200 uppercase">
         <FiArrowRight /> Lắp đặt
       </span>
     ) : (
-      <span className="inline-flex items-center gap-1 text-orange-600 bg-orange-50 px-2 py-1 rounded text-xs font-bold border border-orange-100">
+      <span className="inline-flex items-center gap-1 text-rose-900 bg-white/70 px-2 py-0.5 rounded text-[10px] font-black border border-rose-200 uppercase">
         <FiArrowLeft /> Tháo dỡ
       </span>
     );
   };
 
-  const filteredTickets = filterStatus 
-    ? tickets.filter(t => t.status === filterStatus)
-    : tickets;
-
-  const pendingTickets = tickets.filter(t => t.status === "pending" || (t.status === "waiting_confirm" && !t.started_at));
-  const inProgressTickets = tickets.filter(t => t.status === "waiting_confirm" && t.started_at && !t.completed_at);
-  const completedTickets = tickets.filter(t => t.completed_at);
-
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-[#F8FAFC] font-sans text-sm text-gray-800">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 ml-[270px] flex flex-col overflow-hidden">
         <Topbar />
-        
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Công việc của tôi</h1>
-              <p className="text-gray-600">Quản lý các phiếu lắp đặt/tháo dỡ thiết bị được gán</p>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-gray-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Chờ bắt đầu</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{pendingTickets.length}</p>
-                  </div>
-                  <FiClock className="w-8 h-8 text-gray-500" />
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Đang làm</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{inProgressTickets.length}</p>
-                  </div>
-                  <FiPlay className="w-8 h-8 text-blue-500" />
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-green-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Đã hoàn thành</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{completedTickets.length}</p>
-                  </div>
-                  <FiCheckCircle className="w-8 h-8 text-green-500" />
-                </div>
+        <main className="flex-1 overflow-y-auto p-4 no-scrollbar">
+          <div className="max-w-7xl mx-auto space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+              <div>
+                <h1 className="text-xl font-black text-gray-900 tracking-tight uppercase">Công việc của tôi</h1>
+                <p className="text-gray-500 text-xs font-medium italic">Nhân viên kỹ thuật thiết bị</p>
               </div>
             </div>
-
-            {/* Filter */}
-            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-              <div className="flex items-center gap-4">
-                <label className="text-sm font-medium text-gray-700">Lọc theo trạng thái:</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="">Tất cả</option>
-                  <option value="pending">Chờ bắt đầu</option>
-                  <option value="waiting_confirm">Đang làm / Chờ xác nhận</option>
-                  <option value="completed">Hoàn tất</option>
-                </select>
-                <button
-                  onClick={fetchTickets}
-                  className="ml-auto px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 flex items-center gap-2"
-                >
-                  <FiRefreshCw className="w-4 h-4" />
-                  Làm mới
-                </button>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <StatCard label="Cần xử lý" count={stats.pending} icon={FiClock} color="orange" active={filterStatus === 'assigned'} onClick={() => setFilterStatus('assigned')} />
+              <StatCard label="Đang làm" count={stats.doing} icon={FiPlay} color="blue" active={filterStatus === 'waiting_confirm'} onClick={() => setFilterStatus('waiting_confirm')} />
+              <StatCard label="Đã xong" count={stats.done} icon={FiCheckCircle} color="green" active={filterStatus === 'completed'} onClick={() => setFilterStatus('completed')} />
             </div>
-
-            {/* Tickets List */}
-            <div className="bg-white rounded-lg shadow-sm">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-col md:flex-row items-center gap-2 sticky top-0 z-10">
+              <div className="flex bg-gray-100 p-1 rounded-md w-full md:w-auto overflow-x-auto no-scrollbar">
+                <FilterTab label="Tất cả" active={filterStatus === 'all'} onClick={() => setFilterStatus('all')} />
+                <FilterTab label="Chờ làm" active={filterStatus === 'assigned'} onClick={() => setFilterStatus('assigned')} count={stats.pending} />
+                <FilterTab label="Đang chạy" active={filterStatus === 'waiting_confirm'} onClick={() => setFilterStatus('waiting_confirm')} count={stats.doing} />
+                <FilterTab label="Hoàn tất" active={filterStatus === 'completed'} onClick={() => setFilterStatus('completed')} />
+              </div>
+              <div className="w-px h-6 bg-gray-200 hidden md:block mx-1"></div>
+              <div className="flex bg-gray-100 p-1 rounded-md shrink-0 border border-gray-200">
+                <button onClick={() => setSortOrder("desc")} className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-black transition-all ${sortOrder === "desc" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}><FiArrowDown size={14}/> MỚI NHẤT</button>
+                <button onClick={() => setSortOrder("asc")} className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-black transition-all ${sortOrder === "asc" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}><FiArrowUp size={14}/> CŨ NHẤT</button>
+              </div>
+              <div className="relative w-full md:flex-1">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                <input type="text" placeholder="Tìm phòng, mã phiếu..." className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-transparent focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded-md text-xs font-medium outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+              <button onClick={fetchTickets} className="p-1.5 bg-gray-50 text-gray-600 rounded-md hover:bg-white hover:text-indigo-600 hover:shadow-sm border border-transparent hover:border-gray-200 transition-all"><FiRefreshCw className={loading ? "animate-spin" : ""} size={14} /></button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-6">
               {loading ? (
-                <div className="p-12 text-center">
-                  <FiRefreshCw className="w-8 h-8 text-gray-400 mx-auto animate-spin" />
-                  <p className="mt-4 text-gray-600">Đang tải...</p>
-                </div>
-              ) : filteredTickets.length === 0 ? (
-                <div className="p-12 text-center">
-                  <FiAlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Chưa có công việc nào</p>
-                </div>
+                <div className="col-span-full p-12 text-center text-gray-400 font-bold uppercase"><FiRefreshCw className="animate-spin inline mr-2" /> Đang đồng bộ...</div>
+              ) : processedTickets.length === 0 ? (
+                <div className="col-span-full p-12 text-center bg-white rounded-lg border-2 border-dashed border-gray-200 text-gray-400 font-bold uppercase tracking-widest">Không có dữ liệu hiển thị</div>
               ) : (
-                <div className="divide-y divide-gray-200">
-                  {filteredTickets.map((ticket) => {
-                    const roomDisplay = ticket.room_id ? `P.${ticket.room_id.room_number}` : "---";
-                    const canStart = ticket.status === "assigned" || (ticket.status === "waiting_confirm" && !ticket.started_at);
-                    const canComplete = ticket.status === "waiting_confirm" && ticket.started_at && !ticket.completed_at;
-
-                    return (
-                      <div key={ticket._id} className="p-6 hover:bg-gray-50 transition">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              {getTypeBadge(ticket.type)}
-                              {getStatusBadge(ticket.status, ticket.started_at, ticket.completed_at)}
-                              <span className="text-xs text-gray-500 font-mono">
-                                #{ticket._id.slice(-6).toUpperCase()}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                              <div>
-                                <p className="text-xs text-gray-500 mb-1">Phòng</p>
-                                <p className="font-semibold text-gray-900">{roomDisplay}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500 mb-1">Ngày thực hiện</p>
-                                <p className="font-semibold text-gray-900">
-                                  {format(parseISO(ticket.install_date), "dd/MM/yyyy")}
-                                </p>
-                              </div>
-                              {ticket.started_at && (
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Bắt đầu lúc</p>
-                                  <p className="font-semibold text-gray-900">
-                                    {format(parseISO(ticket.started_at), "dd/MM/yyyy HH:mm")}
-                                  </p>
-                                </div>
-                              )}
-                              {ticket.completed_at && (
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Hoàn thành lúc</p>
-                                  <p className="font-semibold text-green-600">
-                                    {format(parseISO(ticket.completed_at), "dd/MM/yyyy HH:mm")}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 ml-4">
-                            <button
-                              onClick={() => {
-                                setSelectedTicket(ticket);
-                                setShowDetailModal(true);
-                              }}
-                              className="px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-2"
-                            >
-                              <FiEye className="w-4 h-4" />
-                              Chi tiết
-                            </button>
-
-                            {canStart && (
-                              <button
-                                onClick={() => handleStart(ticket)}
-                                className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
-                              >
-                                <FiPlay className="w-4 h-4" />
-                                Bắt đầu
-                              </button>
-                            )}
-
-                            {canComplete && (
-                              <button
-                                onClick={() => handleComplete(ticket)}
-                                className="px-4 py-2 text-sm text-white bg-green-600 rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium"
-                              >
-                                <FiCheckCircle className="w-4 h-4" />
-                                Hoàn thành
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                processedTickets.map((ticket) => (
+                  <TicketCard key={ticket._id} ticket={ticket} onView={() => { setSelectedTicket(ticket); setShowDetailModal(true); }} onAction={handleAction} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
+                ))
               )}
             </div>
           </div>
         </main>
       </div>
-
-      {/* Detail Modal */}
-      {showDetailModal && selectedTicket && (
-        <TicketDetailModal
-          ticket={selectedTicket}
-          onClose={() => {
-            setShowDetailModal(false);
-            setSelectedTicket(null);
-          }}
-          onRefresh={fetchTickets}
-        />
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <Toast
-          type={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
-
-      {/* Confirm Modal */}
-      <ConfirmModal
-        open={confirmState.open}
-        title={confirmState.title}
-        message={confirmState.message}
-        onConfirm={confirmState.onConfirm}
-        onCancel={() => setConfirmState({ ...confirmState, open: false })}
-      />
+      {showDetailModal && selectedTicket && <TicketDetailModal ticket={selectedTicket} onClose={() => { setShowDetailModal(false); setSelectedTicket(null); }} />}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+      <ConfirmModal open={confirmState.open} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({ ...confirmState, open: false })} />
     </div>
   );
 }
 
-// Detail Modal Component
-function TicketDetailModal({ ticket, onClose, onRefresh }) {
+const FilterTab = ({ label, active, onClick, count }) => (
+  <button onClick={onClick} className={`relative px-3 py-1.5 rounded-md text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5 ${active ? "bg-white text-indigo-700 shadow-md ring-1 ring-black/5" : "text-gray-500 hover:bg-gray-200"}`}>
+    {label} {count > 0 && <span className={`text-[10px] px-1 py-0.5 rounded-full ${active ? 'bg-indigo-100' : 'bg-gray-200'}`}>{count}</span>}
+  </button>
+);
+
+const StatCard = ({ label, count, icon: Icon, color, active, onClick }) => {
+  const colors = { orange: "text-red-700 bg-red-100", blue: "text-blue-700 bg-blue-100", green: "text-emerald-700 bg-emerald-100" };
+  const borders = { orange: "border-red-500", blue: "border-blue-500", green: "border-emerald-500" };
+  return (
+    <div onClick={onClick} className={`bg-white rounded-lg p-3 border-2 shadow-sm flex items-center justify-between transition-all cursor-pointer ${active ? `${borders[color]} ring-2 ring-black/5 scale-[1.02]` : "border-gray-200"}`}>
+      <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{label}</p><p className="text-2xl font-black text-gray-900">{count}</p></div>
+      <div className={`p-2 rounded-lg ${colors[color]}`}><Icon className="w-5 h-5" /></div>
+    </div>
+  );
+};
+
+const TicketCard = ({ ticket, onView, onAction, getTypeBadge, getStatusBadge }) => {
+  const roomDisplay = ticket.room_id ? `P.${ticket.room_id.room_number}` : "---";
+  const hasStart = ticket.started_at && ticket.started_at !== "";
+  const hasEnd = ticket.completed_at && ticket.completed_at !== "";
+  const canStart = ticket.status === "assigned" || (ticket.status === "waiting_confirm" && !hasStart);
+  const canComplete = ticket.status === "waiting_confirm" && hasStart && !hasEnd;
+  const isCompleted = ticket.status === "completed" || hasEnd;
+  let cardStyle = "rounded-xl p-4 border-2 shadow-md transition-all duration-200 flex flex-col";
+  let btnStyle = "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm";
+  let roomStyle = "text-gray-900";
+  if (canStart) {
+    cardStyle += " bg-red-50 border-red-500";
+    btnStyle = "bg-red-600 text-white hover:bg-red-700 border-transparent shadow-lg shadow-red-100";
+    roomStyle = "text-red-900";
+  } else if (canComplete) {
+    cardStyle += " bg-blue-50 border-blue-500";
+    btnStyle = "bg-blue-600 text-white hover:bg-blue-700 border-transparent shadow-lg shadow-blue-100";
+    roomStyle = "text-blue-900";
+  } else if (isCompleted) {
+    cardStyle += " bg-gray-100 border-gray-300 opacity-60 grayscale-[40%]";
+    btnStyle = "bg-emerald-600 text-white hover:bg-emerald-700 border-transparent";
+    roomStyle = "text-gray-600";
+  }
+  return (
+    <div className={cardStyle}>
+      <div className="flex flex-row items-center justify-between gap-3 mb-3 pb-3 border-b border-black/5">
+        <div className="flex items-center gap-2">{getStatusBadge(ticket.status, ticket.started_at, ticket.completed_at)}<span className="text-[10px] font-mono font-black opacity-60 tracking-tighter">#{ticket._id.slice(-6).toUpperCase()}</span></div>
+        <div>{getTypeBadge(ticket.type)}</div>
+      </div>
+      <div className="flex items-end justify-between gap-2 mb-4">
+        <div><p className="text-[10px] font-black opacity-50 uppercase tracking-widest mb-0.5">PHÒNG SỐ</p><p className={`text-3xl font-black leading-none tracking-tighter ${roomStyle}`}>{roomDisplay}</p></div>
+        <div className="flex flex-col items-end">
+           <p className="text-[10px] font-black opacity-50 uppercase tracking-widest mb-0.5">LỊCH HẸN</p>
+           <div className="flex items-center gap-1 font-black text-xs bg-white/80 px-2 py-1 rounded border shadow-sm"><FiCalendar size={12} className="text-gray-500" />{format(parseISO(ticket.install_date), "dd/MM/yyyy")}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-auto pt-3 border-t border-black/5">
+        <button onClick={onView} className="flex-1 py-2 rounded-lg text-xs font-black bg-white border-2 border-gray-200 hover:bg-gray-50 transition uppercase tracking-tighter shadow-sm">Chi tiết</button>
+        {canStart && <button onClick={() => onAction(ticket, 'start')} className={`flex-[1.5] py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 uppercase tracking-tighter ${btnStyle}`}><FiPlay className="fill-current" size={10} /> BẮT ĐẦU</button>}
+        {canComplete && <button onClick={() => onAction(ticket, 'complete')} className={`flex-[1.5] py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 uppercase tracking-tighter ${btnStyle}`}><FiCheckCircle size={12} /> HOÀN TẤT</button>}
+      </div>
+    </div>
+  );
+};
+
+const TicketDetailModal = ({ ticket, onClose }) => {
   const [details, setDetails] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fullTicket, setFullTicket] = useState(ticket);
-
   useEffect(() => {
     const fetchDetails = async () => {
       try {
         const res = await equipmentApi.getEquipmentInstallById(ticket._id);
-        if (res.success) {
-          setFullTicket(res.install);
-          setDetails(res.install.install_details || []);
-        }
-      } catch (error) {
-        console.error("Error fetching details:", error);
-      } finally {
-        setLoading(false);
-      }
+        if (res.success) setDetails(res.install.install_details || []);
+      } catch (error) { console.error(error); } finally { setLoading(false); }
     };
     fetchDetails();
   }, [ticket._id]);
 
-  const roomDisplay = ticket.room_id ? `Phòng ${ticket.room_id.room_number}` : "---";
-  const typeText = ticket.type === 'install' ? 'Lắp đặt' : 'Tháo dỡ';
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-          <h3 className="font-bold text-lg text-gray-800">Chi tiết phiếu {typeText}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
-            <span className="text-xl">×</span>
-          </button>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border-4 border-white">
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <div><h3 className="font-black text-lg text-gray-900 uppercase">Thông tin phiếu</h3><p className="text-[10px] text-gray-400 font-mono mt-0.5">#{ticket._id}</p></div>
+          <button onClick={onClose} className="p-2 bg-white rounded-full text-gray-400 hover:text-red-500 shadow-sm transition">✕</button>
         </div>
-
-        <div className="p-6 overflow-y-auto flex-1">
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Mã phiếu</p>
-                <p className="font-mono font-bold text-gray-900">#{ticket._id.slice(-6).toUpperCase()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Loại</p>
-                <p className="font-semibold text-gray-900">{typeText}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Phòng</p>
-                <p className="font-semibold text-gray-900">{roomDisplay}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Ngày thực hiện</p>
-                <p className="font-semibold text-gray-900">
-                  {format(parseISO(ticket.install_date), "dd/MM/yyyy")}
-                </p>
-              </div>
-              {ticket.started_at && (
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Bắt đầu lúc</p>
-                  <p className="font-semibold text-blue-600">
-                    {format(parseISO(ticket.started_at), "dd/MM/yyyy HH:mm")}
-                  </p>
-                </div>
-              )}
-              {ticket.completed_at && (
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Hoàn thành lúc</p>
-                  <p className="font-semibold text-green-600">
-                    {format(parseISO(ticket.completed_at), "dd/MM/yyyy HH:mm")}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {loading ? (
-              <div className="text-center py-8">
-                <FiRefreshCw className="w-6 h-6 text-gray-400 mx-auto animate-spin" />
-                <p className="mt-2 text-gray-600">Đang tải chi tiết...</p>
-              </div>
-            ) : details.length > 0 ? (
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-3">Danh sách thiết bị ({details.length})</p>
-                <div className="space-y-2">
-                  {(() => {
-                    // Nhóm thiết bị theo category
-                    const groupedByCategory = {};
-                    details.forEach((detail) => {
-                      const category = detail.equipment_id?.category_id;
-                      const categoryId = category?._id || category || 'unknown';
-                      const categoryName = category?.name || "Thiết bị";
-                      
-                      if (!groupedByCategory[categoryId]) {
-                        groupedByCategory[categoryId] = {
-                          name: categoryName,
-                          description: category?.description,
-                          count: 0
-                        };
-                      }
-                      groupedByCategory[categoryId].count += 1;
-                    });
-
-                    // Hiển thị danh sách đã nhóm
-                    return Object.values(groupedByCategory).map((group, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-gray-900">
-                              {group.name} {group.count > 1 && <span className="text-indigo-600">(x{group.count})</span>}
-                            </p>
-                            {group.description && (
-                              <p className="text-xs text-gray-500 mt-1">{group.description}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Danh sách thiết bị</p>
-                <p className="text-sm text-gray-500">Chưa có thiết bị nào</p>
-              </div>
-            )}
+        <div className="p-5 overflow-y-auto bg-white flex-1 no-scrollbar">
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 shadow-inner"><p className="text-[10px] font-black text-indigo-400 uppercase mb-1 text-xs">VỊ TRÍ</p><p className="text-2xl font-black text-indigo-900">Phòng {ticket.room_id?.room_number}</p></div>
+            <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 shadow-inner"><p className="text-[10px] font-black text-rose-400 uppercase mb-1 text-xs">LOẠI VIỆC</p><p className="text-lg font-black text-rose-900 uppercase">{ticket.type === 'install' ? 'Lắp đặt' : 'Tháo dỡ'}</p></div>
           </div>
+          <h4 className="font-black text-gray-800 mb-3 flex items-center gap-2 border-b-2 border-gray-100 pb-2 text-xs uppercase tracking-widest"><FiTool className="text-indigo-500" /> Thiết bị yêu cầu ({details.length})</h4>
+          {loading ? <div className="py-10 text-center font-bold text-gray-300">Đang tải...</div> : details.length === 0 ? <p className="text-gray-400 italic p-4 text-center text-xs bg-gray-50 rounded-xl">Không có thiết bị chi tiết</p> : (
+            <div className="space-y-2">{details.map((item, idx) => (
+              <div key={idx} className="flex items-center p-3 rounded-xl border-2 border-gray-100 bg-white shadow-sm hover:border-indigo-300 transition-all">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black mr-3 text-xs shadow-md">{idx + 1}</div>
+                <div><p className="font-black text-gray-800 text-sm leading-tight">{item.equipment_id?.category_id?.name || item.equipment_id?.name || "Thiết bị không tên"}</p></div>
+                <div className="ml-auto"><span className="px-3 py-1 bg-gray-100 border border-gray-200 rounded-lg text-xs font-black text-gray-600 shadow-inner">x1</span></div>
+              </div>
+            ))}</div>
+          )}
         </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
-          >
-            Đóng
-          </button>
-        </div>
+        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end"><button onClick={onClose} className="px-8 py-2 bg-gray-900 text-white font-black rounded-xl text-xs hover:bg-black transition uppercase tracking-widest shadow-lg">Đóng lại</button></div>
       </div>
     </div>
   );
-}
+};
