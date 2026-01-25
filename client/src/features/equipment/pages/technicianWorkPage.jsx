@@ -141,7 +141,7 @@ export default function TechnicianWorkPage() {
               <StatCard label="Đang làm" count={stats.doing} icon={FiPlay} color="blue" active={filterStatus === 'waiting_confirm'} onClick={() => setFilterStatus('waiting_confirm')} />
               <StatCard label="Đã xong" count={stats.done} icon={FiCheckCircle} color="green" active={filterStatus === 'completed'} onClick={() => setFilterStatus('completed')} />
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-col md:flex-row items-center gap-2 sticky top-0 z-10">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex flex-col md:flex-row items-center gap-2">
               <div className="flex bg-gray-100 p-1 rounded-md w-full md:w-auto overflow-x-auto no-scrollbar">
                 <FilterTab label="Tất cả" active={filterStatus === 'all'} onClick={() => setFilterStatus('all')} />
                 <FilterTab label="Chờ làm" active={filterStatus === 'assigned'} onClick={() => setFilterStatus('assigned')} count={stats.pending} />
