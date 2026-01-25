@@ -489,6 +489,210 @@ export const getGoodTicketById = async (req, res) => {
   }
 };
 
+// Lấy danh sách sản phẩm hết tồn kho để preview
+export const getOutOfStockServices = async (req, res) => {
+    try {
+        // Tìm tất cả sản phẩm có storage_quantity = 0 hoặc null/undefined
+        const outOfStockServices = await Service.find({
+            $or: [
+                { storage_quantity: 0 },
+                { storage_quantity: { $exists: false } },
+                { storage_quantity: null }
+            ]
+        }).select("_id name description unit price storage_quantity status");
+
+        return res.status(200).json({
+            success: true,
+            services: outOfStockServices,
+            count: outOfStockServices.length
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: "ERROR: " + err.message });
+    }
+};
+
+// Tự động tạo phiếu nhập cho sản phẩm có số lượng tồn = 0
+export const autoCreateGoodTicket = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const employee_id = req.user.userId;
+        const { import_date, goods_list, default_quantity = 10, default_price_percent = 0.8 } = req.body;
+
+        if (!employee_id) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Yêu cầu nhập thông tin đầy đủ." });
+        }
+
+        const employee = await Employee.findOne({ user_id: employee_id }).session(session);
+        if (!employee) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ success: false, message: "Không tìm thấy nhân viên." });
+        }
+
+        // Nếu có goods_list từ frontend, sử dụng goods_list đó (đã được chỉnh sửa)
+        // Nếu không, tự động tìm sản phẩm hết tồn kho
+        let items = goods_list;
+        let outOfStockServices = [];
+
+        if (items && Array.isArray(items) && items.length > 0) {
+            // Validate items từ frontend
+            const serviceIds = items.map(item => item.service_id);
+            const uniqueServiceIds = [...new Set(serviceIds)];
+            if (uniqueServiceIds.length !== serviceIds.length) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ success: false, message: "Danh sách sản phẩm nhập bị trùng." });
+            }
+
+            // Validate từng item
+            for (const item of items) {
+                if (!item.service_id || !mongoose.Types.ObjectId.isValid(item.service_id)) {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ success: false, message: "service_id không hợp lệ." });
+                }
+                if (typeof item.import_price !== "number" || item.import_price <= 0) {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ success: false, message: "Đơn giá nhập phải là số nguyên lớn hơn 0." });
+                }
+                if (!Number.isInteger(item.import_quantity) || item.import_quantity <= 0) {
+                    await session.abortTransaction();
+                    session.endSession();
+                    return res.status(400).json({ success: false, message: "Số lượng nhập phải là số nguyên lớn hơn 0." });
+                }
+            }
+
+            // Lấy thông tin service để verify
+            const services = await Service.find({ _id: { $in: serviceIds } }).session(session);
+            if (services.length !== serviceIds.length) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ success: false, message: "Có sản phẩm không tồn tại trong hệ thống." });
+            }
+            outOfStockServices = services;
+        } else {
+            // Tự động tìm sản phẩm hết tồn kho
+            outOfStockServices = await Service.find({
+                $or: [
+                    { storage_quantity: 0 },
+                    { storage_quantity: { $exists: false } },
+                    { storage_quantity: null }
+                ]
+            }).session(session);
+
+            if (outOfStockServices.length === 0) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(200).json({
+                    success: true,
+                    message: "Không có sản phẩm nào hết tồn kho.",
+                    ticket_id: null,
+                    items_count: 0
+                });
+            }
+
+            // Tạo goods_list mặc định
+            items = outOfStockServices.map(service => ({
+                service_id: service._id,
+                import_quantity: default_quantity,
+                import_price: Math.round(service.price * default_price_percent)
+            }));
+        }
+
+        if (!items || items.length === 0) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                success: false,
+                message: "Không có sản phẩm nào để tạo phiếu nhập."
+            });
+        }
+
+        // Kiểm tra ngày nhập
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let importDate;
+        
+        if (import_date) {
+            importDate = new Date(import_date);
+            importDate.setHours(0, 0, 0, 0);
+            if (importDate < today) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại."
+                });
+            }
+        } else {
+            // Mặc định là ngày mai
+            importDate = new Date(today);
+            importDate.setDate(importDate.getDate() + 1);
+        }
+
+        // Kiểm tra xem đã có phiếu nhập cho ngày này chưa (chỉ check pending)
+        const existing = await GoodTicket.findOne({ 
+            import_date: importDate, 
+            status: "pending" 
+        }).session(session);
+        if (existing) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({
+                success: false,
+                message: `Đã có phiếu nhập đang chờ cho ngày ${importDate.toISOString().split('T')[0]}. Vui lòng cập nhật phiếu đó hoặc chọn ngày khác.`
+            });
+        }
+
+        const isToday = importDate.getTime() === today.getTime();
+        const status = isToday ? "pending" : "waiting_confirm";
+
+        // Tạo phiếu nhập sản phẩm
+        const employeeId = employee._id;
+        const ticket = await GoodTicket.create(
+            [{ employee_id: employeeId, import_date: importDate, status }],
+            { session }
+        );
+
+        const ticketId = ticket[0]._id;
+
+        // Tạo từng chi tiết phiếu nhập
+        const detailDocs = items.map((item) => ({
+            ticket_id: ticketId,
+            service_id: item.service_id,
+            import_price: item.import_price,
+            import_quantity: item.import_quantity,
+        }));
+
+        await GoodImport.insertMany(detailDocs, { session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(201).json({
+            success: true,
+            message: `Tự động tạo phiếu nhập thành công cho ${items.length} loại sản phẩm hết tồn kho!`,
+            data: {
+                ticket: ticket[0],
+                total_items: detailDocs.length,
+            },
+            ticket_id: ticketId,
+            items_count: items.length,
+            import_date: importDate
+        });
+
+    } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(500).json({ success: false, message: "ERROR: " + err.message });
+    }
+};
+
 export const updateGoodTicket = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

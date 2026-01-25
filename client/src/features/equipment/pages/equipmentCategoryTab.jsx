@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   FiEdit, FiTrash2, FiPlus, FiX, FiSearch, FiList, FiChevronDown, FiFilter,
-  FiChevronLeft, FiChevronRight
+  FiChevronLeft, FiChevronRight, FiZap, FiCheck
 } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
@@ -22,6 +22,17 @@ export default function EquipmentCategoryTab() {
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({ name: "", description: "", unit: "item", price: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
+  
+  // Auto create import ticket states
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [outOfStockCategories, setOutOfStockCategories] = useState([]);
+  const [previewItems, setPreviewItems] = useState([]);
+  const [previewFormData, setPreviewFormData] = useState({
+    import_date: "",
+    default_quantity: 10,
+    default_price_percent: 0.8
+  });
+  const [creating, setCreating] = useState(false);
 
   const UNIT_MAP = { item: "Cái", box: "Bộ" };
   const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
@@ -191,15 +202,118 @@ export default function EquipmentCategoryTab() {
       }
     };
 
+  // Auto create import ticket handlers
+  const handleOpenPreview = async () => {
+    try {
+      const res = await equipmentApi.getOutOfStockCategories();
+      if (res.success && res.categories && res.categories.length > 0) {
+        setOutOfStockCategories(res.categories);
+        
+        // Tạo preview items với giá trị mặc định
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const formattedDate = tomorrow.toISOString().split('T')[0];
+        
+        const items = res.categories.map(cat => ({
+          category_id: cat._id,
+          category_name: cat.name,
+          category_price: cat.price,
+          import_quantity: previewFormData.default_quantity,
+          import_price: Math.round(cat.price * previewFormData.default_price_percent)
+        }));
+        
+        setPreviewItems(items);
+        setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
+        setShowPreviewModal(true);
+      } else {
+        alert("Không có thiết bị nào hết tồn kho (số lượng = 0).");
+      }
+    } catch (error) {
+      console.error("Error fetching out of stock categories:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleUpdatePreviewItem = (index, field, value) => {
+    const updated = [...previewItems];
+    if (field === 'import_quantity') {
+      updated[index].import_quantity = parseInt(value) || 0;
+    } else if (field === 'import_price') {
+      updated[index].import_price = parseInt(value) || 0;
+    }
+    setPreviewItems(updated);
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!previewFormData.import_date) {
+      alert("Vui lòng chọn ngày nhập!");
+      return;
+    }
+
+    if (previewItems.length === 0) {
+      alert("Không có thiết bị nào để tạo phiếu nhập!");
+      return;
+    }
+
+    // Validate items
+    for (let i = 0; i < previewItems.length; i++) {
+      const item = previewItems[i];
+      if (!item.import_quantity || item.import_quantity <= 0) {
+        alert(`Thiết bị "${item.category_name}": Số lượng nhập phải > 0`);
+        return;
+      }
+      if (!item.import_price || item.import_price <= 0) {
+        alert(`Thiết bị "${item.category_name}": Giá nhập phải > 0`);
+        return;
+      }
+    }
+
+    setCreating(true);
+    try {
+      const items = previewItems.map(item => ({
+        category_id: item.category_id,
+        import_quantity: item.import_quantity,
+        import_price: item.import_price
+      }));
+
+      const res = await equipmentApi.autoCreateImportTicket({
+        import_date: previewFormData.import_date,
+        items: items
+      });
+
+      if (res.success) {
+        alert(res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại thiết bị!`);
+        setShowPreviewModal(false);
+        setPreviewItems([]);
+        loadData(); // Reload để cập nhật dữ liệu
+      } else {
+        alert("Lỗi: " + (res.message || "Không thể tạo phiếu nhập"));
+      }
+    } catch (error) {
+      console.error("Error creating import ticket:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <button
-            onClick={() => { setEditingItem(null); setFormData({ name: "", description: "", unit: "item", price: "" }); setIsModalOpen(true); }}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition shadow-indigo-200 shadow-lg"
-        >
-          <FiPlus /> Tạo danh mục
-        </button>
+        <div className="flex gap-3">
+          <button
+              onClick={() => { setEditingItem(null); setFormData({ name: "", description: "", unit: "item", price: "" }); setIsModalOpen(true); }}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition shadow-indigo-200 shadow-lg"
+          >
+            <FiPlus /> Tạo danh mục
+          </button>
+          <button
+              onClick={handleOpenPreview}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition shadow-emerald-200 shadow-lg"
+          >
+            <FiZap /> Tự động tạo phiếu nhập
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 justify-between mb-6">
@@ -342,6 +456,119 @@ export default function EquipmentCategoryTab() {
         </div>
       )}
       {confirmDelete.open && (<ConfirmModal open={confirmDelete.open} title="Xóa danh mục" message="Bạn chắc chắn muốn xóa?" confirmText="Xóa" cancelText="Hủy" onConfirm={handleDelete} onCancel={() => setConfirmDelete({ open: false })} />)}
+
+      {/* Preview Modal for Auto Create Import Ticket */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="font-bold text-xl text-gray-900">Preview Phiếu Nhập Thiết Bị</h3>
+              <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-gray-600">
+                <FiX size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="mb-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ngày nhập</label>
+                  <input
+                    type="date"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-500"
+                    value={previewFormData.import_date}
+                    onChange={(e) => setPreviewFormData(prev => ({ ...prev, import_date: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <h4 className="font-bold text-gray-900 mb-3">Danh sách thiết bị hết tồn kho ({previewItems.length} loại)</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-200 bg-gray-50">
+                        <th className="py-3 pl-4">Tên thiết bị</th>
+                        <th className="py-3 text-center">Giá bán</th>
+                        <th className="py-3 text-center">Số lượng nhập</th>
+                        <th className="py-3 text-center">Giá nhập (VNĐ)</th>
+                        <th className="py-3 text-right pr-4">Thành tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-700 text-sm">
+                      {previewItems.map((item, index) => {
+                        const total = item.import_quantity * item.import_price;
+                        return (
+                          <tr key={item.category_id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 pl-4 font-medium">{item.category_name}</td>
+                            <td className="py-3 text-center">{item.category_price.toLocaleString()} đ</td>
+                            <td className="py-3 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                className="w-20 border border-gray-300 rounded px-2 py-1 text-center focus:outline-none focus:border-indigo-500"
+                                value={item.import_quantity}
+                                onChange={(e) => handleUpdatePreviewItem(index, 'import_quantity', e.target.value)}
+                              />
+                            </td>
+                            <td className="py-3 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                className="w-32 border border-gray-300 rounded px-2 py-1 text-center focus:outline-none focus:border-indigo-500"
+                                value={item.import_price}
+                                onChange={(e) => handleUpdatePreviewItem(index, 'import_price', e.target.value)}
+                              />
+                            </td>
+                            <td className="py-3 text-right pr-4 font-bold text-indigo-600">
+                              {total.toLocaleString()} đ
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 border-t-2 border-gray-200">
+                        <td colSpan="4" className="py-3 pl-4 font-bold text-gray-900">Tổng cộng</td>
+                        <td className="py-3 text-right pr-4 font-bold text-indigo-600 text-lg">
+                          {previewItems.reduce((sum, item) => sum + (item.import_quantity * item.import_price), 0).toLocaleString()} đ
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                disabled={creating}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleConfirmCreate}
+                disabled={creating}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Đang tạo...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiCheck size={18} />
+                    <span>Xác nhận tạo phiếu nhập</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

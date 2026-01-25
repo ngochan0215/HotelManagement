@@ -8,6 +8,7 @@ import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
 import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import UpdateInstallTicketModal from "../components/updateInstallTicketModal.jsx";
 import InstallTicketDetailModal from "../components/installTicketDetailModal.jsx";
+import ImportTicketDetailModal from "../components/importTicketDetailModal.jsx";
 import Pagination from "../../../components/pagination.jsx";
 
 export default function EquipmentTicketTab() {
@@ -19,6 +20,7 @@ export default function EquipmentTicketTab() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedImportTicket, setSelectedImportTicket] = useState(null);
   
   // Pagination states
   const [installsPage, setInstallsPage] = useState(1);
@@ -228,6 +230,15 @@ export default function EquipmentTicketTab() {
           onClose={() => {
             setShowDetailModal(false);
             setSelectedTicket(null);
+          }} 
+        />
+      )}
+      {showImportModal && selectedImportTicket && (
+        <ImportTicketDetailModal 
+          ticket={selectedImportTicket}
+          onClose={() => {
+            setShowImportModal(false);
+            setSelectedImportTicket(null);
           }} 
         />
       )}
@@ -478,11 +489,23 @@ export default function EquipmentTicketTab() {
                             </td>
                             <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
-                                {item.status === 'waiting_confirm' && (
-                                    <button onClick={() => handleConfirmImport(item._id)} className="text-blue-600 hover:text-blue-800 font-bold text-xs border border-blue-200 px-2 py-1 rounded hover:bg-blue-50">
-                                        Nhập kho
+                                <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            setSelectedImportTicket(item);
+                                            setShowImportModal(true);
+                                        }}
+                                        className="text-blue-600 hover:text-blue-800 font-bold text-xs border border-blue-200 px-2 py-1 rounded hover:bg-blue-50 transition flex items-center gap-1"
+                                    >
+                                        <FiEye className="w-3 h-3" />
+                                        Chi tiết
                                     </button>
-                                )}
+                                    {item.status === 'waiting_confirm' && (
+                                        <button onClick={() => handleConfirmImport(item._id)} className="text-green-600 hover:text-green-800 font-bold text-xs border border-green-200 px-2 py-1 rounded hover:bg-green-50">
+                                            Nhập kho
+                                        </button>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}

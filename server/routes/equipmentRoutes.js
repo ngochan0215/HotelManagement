@@ -5,7 +5,7 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket, 
         createInstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
         confirmEquipmentInstall, startInstallTicket, completeInstallTicket, getAvailableTechnicians, getMyInstallTickets,
-        confirmEquipmentImportTicket, getSmartInstallSuggestions
+        confirmEquipmentImportTicket, getSmartInstallSuggestions, autoCreateImportTicket, getOutOfStockCategories
 } from "../controllers/equipmentController.js";
 import { isManager, isNotCustomer, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
@@ -25,7 +25,9 @@ router.get("/all", verifyToken, isNotCustomer, getAllEquipments);
 router.get("/:id", verifyToken, isNotCustomer, getEquipmentById);
 
 //----PHIẾU NHẬP THIẾT BỊ - EQUIPMENT TICKET----//
+router.get("/ticket/out-of-stock", verifyToken, isManager, getOutOfStockCategories);
 router.post("/ticket/add", verifyToken, isManager, createEquipmentTicket);
+router.post("/ticket/auto-create", verifyToken, isManager, autoCreateImportTicket);
 router.get("/ticket/all", verifyToken, isNotCustomer, getAllEquipmentTickets);
 router.get("/ticket/:id", verifyToken, isNotCustomer, getEquipmentTicketById);
 router.patch("/ticket/:id", verifyToken, isManager, updateEquipmentTicket);

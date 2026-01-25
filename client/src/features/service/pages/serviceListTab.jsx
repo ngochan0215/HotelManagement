@@ -1,18 +1,21 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiImage, FiList, FiChevronDown,
-  FiChevronLeft, FiChevronRight
+  FiChevronLeft, FiChevronRight, FiZap, FiCheck, FiX
 } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 export default function ServiceListTab() {
   const [services, setServices] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,14 +23,39 @@ export default function ServiceListTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
 
-  const isManager = localStorage.getItem("role") === "manager";
+  const [previewItems, setPreviewItems] = useState([]);
+  const [outOfStockServices, setOutOfStockServices] = useState([]);
+  const [creating, setCreating] = useState(false);
+
+  const [previewFormData, setPreviewFormData] = useState({
+    import_date: "",
+    default_quantity: 20,
+    default_price_percent: 0.8
+  });
+
+  const { user } = useAuth();
+  let userId = user?._id;
+  if (!userId && user?.token) {
+    try { userId = jwtDecode(user.token).userId; } catch (err) {}
+  }
+  if (!userId) 
+    return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+  const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
+  
+  useEffect(() => {
+    console.log("🔍 Debug ServiceListTab:");
+    console.log("- user?.role:", user?.role);
+    console.log("- localStorage role:", localStorage.getItem("role"));
+    console.log("- isManager:", isManager);
+  }, [user, isManager]);
+  
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCategory, sortOrder]);
+  }, [searchTerm, filterCategory, filterStatus, sortOrder]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -66,6 +94,108 @@ export default function ServiceListTab() {
     }
   };
 
+  // Auto create import ticket handlers
+  const handleOpenPreview = async () => {
+    try {
+      const res = await serviceApi.getOutOfStockServices();
+      if (res.success && res.services && res.services.length > 0) {
+        setOutOfStockServices(res.services);
+        
+        // Tạo preview items với giá trị mặc định
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const formattedDate = tomorrow.toISOString().split('T')[0];
+        
+        const items = res.services.map(service => ({
+          service_id: service._id,
+          service_name: service.name,
+          service_price: service.price,
+          service_unit: service.unit,
+          import_quantity: previewFormData.default_quantity,
+          import_price: Math.round(service.price * previewFormData.default_price_percent)
+        }));
+        
+        setPreviewItems(items);
+        setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
+        setShowPreviewModal(true);
+      } else {
+        alert("Không có sản phẩm nào hết tồn kho (số lượng = 0).");
+      }
+    } catch (error) {
+      console.error("Error fetching out of stock services:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleUpdatePreviewItem = (index, field, value) => {
+    const updated = [...previewItems];
+    if (field === 'import_quantity') {
+      updated[index].import_quantity = parseInt(value) || 0;
+    } else if (field === 'import_price') {
+      updated[index].import_price = parseInt(value) || 0;
+    }
+    setPreviewItems(updated);
+  };
+
+  const handleRemovePreviewItem = (index) => {
+    const updated = [...previewItems];
+    updated.splice(index, 1);
+    setPreviewItems(updated);
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!previewFormData.import_date) {
+      alert("Vui lòng chọn ngày nhập!");
+      return;
+    }
+
+    if (previewItems.length === 0) {
+      alert("Không có sản phẩm nào để tạo phiếu nhập!");
+      return;
+    }
+
+    // Validate items
+    for (let i = 0; i < previewItems.length; i++) {
+      const item = previewItems[i];
+      if (!item.import_quantity || item.import_quantity <= 0) {
+        alert(`Sản phẩm "${item.service_name}": Số lượng nhập phải > 0`);
+        return;
+      }
+      if (!item.import_price || item.import_price <= 0) {
+        alert(`Sản phẩm "${item.service_name}": Giá nhập phải > 0`);
+        return;
+      }
+    }
+
+    setCreating(true);
+    try {
+      const goods_list = previewItems.map(item => ({
+        service_id: item.service_id,
+        import_quantity: item.import_quantity,
+        import_price: item.import_price
+      }));
+
+      const res = await serviceApi.autoCreateGoodTicket({
+        import_date: previewFormData.import_date,
+        goods_list: goods_list
+      });
+
+      if (res.success) {
+        alert(res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!`);
+        setShowPreviewModal(false);
+        setPreviewItems([]);
+        fetchData(); // Reload để cập nhật dữ liệu
+      } else {
+        alert("Lỗi: " + (res.message || "Không thể tạo phiếu nhập"));
+      }
+    } catch (error) {
+      console.error("Error creating import ticket:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filteredServices = useMemo(() => {
     let result = [...services];
 
@@ -83,6 +213,10 @@ export default function ServiceListTab() {
         });
     }
 
+    if (filterStatus !== "all") {
+        result = result.filter(item => item.status === filterStatus);
+    }
+
     result.sort((a, b) => {
         if (sortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         if (sortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
@@ -93,7 +227,7 @@ export default function ServiceListTab() {
     });
 
     return result;
-  }, [services, searchTerm, filterCategory, sortOrder]);
+  }, [services, searchTerm, filterCategory, filterStatus, sortOrder]);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -179,12 +313,20 @@ export default function ServiceListTab() {
 
         <div className="flex justify-between items-center mb-6">
             {isManager ? (
-                <button
-                    onClick={handleCreate}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition shadow-indigo-200 shadow-lg"
-                >
-                    <FiPlus /> Tạo dịch vụ mới
-                </button>
+                <div className="flex gap-3 flex-wrap">
+                    <button
+                        onClick={handleCreate}
+                        className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition shadow-indigo-200 shadow-lg whitespace-nowrap"
+                    >
+                        <FiPlus /> Tạo dịch vụ mới
+                    </button>
+                    <button
+                        onClick={handleOpenPreview}
+                        className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition shadow-emerald-200 shadow-lg whitespace-nowrap"
+                    >
+                        <FiZap /> Tự động tạo phiếu nhập
+                    </button>
+                </div>
             ) : (
                 <div></div>
             )}
@@ -210,6 +352,39 @@ export default function ServiceListTab() {
                         {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 bg-gray-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setFilterStatus("all")} 
+                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                            filterStatus === "all" 
+                                ? "bg-white text-indigo-600 shadow-sm" 
+                                : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    >
+                        Tất cả
+                    </button>
+                    <button 
+                        onClick={() => setFilterStatus("active")} 
+                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                            filterStatus === "active" 
+                                ? "bg-white text-green-600 shadow-sm" 
+                                : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    >
+                        Hoạt động
+                    </button>
+                    <button 
+                        onClick={() => setFilterStatus("inactive")} 
+                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                            filterStatus === "inactive" 
+                                ? "bg-white text-red-600 shadow-sm" 
+                                : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    >
+                        Ngưng
+                    </button>
                 </div>
 
                 <div className="relative min-w-[180px]">
@@ -299,6 +474,141 @@ export default function ServiceListTab() {
 
         {isManager && (
             <ServiceModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} initialData={editingService} />
+        )}
+
+        {/* Preview Modal for Auto Create Import Ticket */}
+        {showPreviewModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 className="font-bold text-xl text-gray-900">Preview Phiếu Nhập Sản Phẩm</h3>
+                <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <FiX size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1">
+                <div className="mb-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Ngày nhập</label>
+                    <input
+                      type="date"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:border-indigo-500"
+                      value={previewFormData.import_date}
+                      onChange={(e) => setPreviewFormData(prev => ({ ...prev, import_date: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <h4 className="font-bold text-gray-900 mb-3">Danh sách sản phẩm hết tồn kho ({previewItems.length} loại)</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="text-gray-500 text-xs uppercase font-semibold border-b border-gray-200 bg-gray-50">
+                          <th className="py-3 pl-4">Tên sản phẩm</th>
+                          <th className="py-3 text-center">Đơn vị</th>
+                          <th className="py-3 text-center">Giá bán</th>
+                          <th className="py-3 text-center">Số lượng nhập</th>
+                          <th className="py-3 text-center">Giá nhập (VNĐ)</th>
+                          <th className="py-3 text-right pr-4">Thành tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-700 text-sm">
+                        {previewItems.map((item, index) => {
+                          const total = item.import_quantity * item.import_price;
+                          const unitMap = {
+                            'hour': 'Giờ',
+                            'day': 'Ngày',
+                            'item': 'Cái',
+                            'can': 'Lon',
+                            'bottle': 'Chai',
+                            'portion': 'Phần',
+                            'ticket': 'Vé'
+                          };
+                          return (
+                            <tr key={item.service_id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 pl-4 font-medium">{item.service_name}</td>
+                              <td className="py-3 text-center text-gray-600">
+                                {unitMap[item.service_unit] || item.service_unit}
+                              </td>
+                              <td className="py-3 text-center">{item.service_price.toLocaleString()} đ</td>
+                              <td className="py-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  className="w-20 border border-gray-300 rounded px-2 py-1 text-center focus:outline-none focus:border-indigo-500"
+                                  value={item.import_quantity}
+                                  onChange={(e) => handleUpdatePreviewItem(index, 'import_quantity', e.target.value)}
+                                />
+                              </td>
+                              <td className="py-3 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  className="w-32 border border-gray-300 rounded px-2 py-1 text-center focus:outline-none focus:border-indigo-500"
+                                  value={item.import_price}
+                                  onChange={(e) => handleUpdatePreviewItem(index, 'import_price', e.target.value)}
+                                />
+                              </td>
+                              <td className="py-3 text-right pr-4 font-bold text-indigo-600">
+                                {total.toLocaleString()} đ
+                              </td>
+                              <td className="py-3 text-center">
+                                <button
+                                  onClick={() => handleRemovePreviewItem(index)}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition"
+                                  title="Xóa sản phẩm này"
+                                >
+                                  <FiTrash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-50 border-t-2 border-gray-200">
+                          <td colSpan="6" className="py-3 pl-4 font-bold text-gray-900">Tổng cộng</td>
+                          <td className="py-3 text-right pr-4 font-bold text-indigo-600 text-lg">
+                            {previewItems.reduce((sum, item) => sum + (item.import_quantity * item.import_price), 0).toLocaleString()} đ
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                  disabled={creating}
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleConfirmCreate}
+                  disabled={creating}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiCheck size={18} />
+                      <span>Xác nhận tạo phiếu nhập</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
     </div>
   );

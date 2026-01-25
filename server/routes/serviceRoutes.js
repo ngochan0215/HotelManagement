@@ -8,7 +8,7 @@ import {
     cancelUsageDetail,
     confirmServiceUsage,
     cancelServiceUsage,
-
+    getOutOfStockServices, autoCreateGoodTicket
 } from "../controllers/serviceController.js";
 
 import { isEmployee, isManager, isNotCustomer } from "../middleware/authMiddleware.js";
@@ -28,7 +28,9 @@ router.patch('/category/update/:id', verifyToken, isManager, uploadServiceCatego
 router.delete('/category/delete/:id', verifyToken, isManager, deleteServiceCategory);
 
 //manager/employee manage goods import
+router.get("/import/out-of-stock", verifyToken, isManager, getOutOfStockServices);
 router.post("/import/add", verifyToken, isManager, createGoodTicket);
+router.post("/import/auto-create", verifyToken, isManager, autoCreateGoodTicket);
 router.get("/import/all", verifyToken, isNotCustomer, getAllGoodTickets);
 router.get("/import/:id", verifyToken, isNotCustomer, getGoodTicketById);
 router.patch("/import/:id", verifyToken, isManager, updateGoodTicket);

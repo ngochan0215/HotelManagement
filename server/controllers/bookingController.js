@@ -1699,6 +1699,7 @@ export const cancelBooking = async (req, res) => {
       };
     });
 
+    await RoomStatusLog.insertMany(availableLogs, { session });
 
     // KHÔNG update room.room_status ngay - để scheduled job tự động sync từ log
     // Chỉ update start_time và end_time để tracking

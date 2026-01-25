@@ -44,8 +44,16 @@ export const serviceApi = {
     return res.data;
   },
 
+    getOutOfStockServices: async () => {
+      const res = await axios.get(`${BASE_URL}/import/out-of-stock`, getAuthHeader());
+      return res.data;
+    },
     createGoodTicket: async (data) => {
       const res = await axios.post(`${BASE_URL}/import/add`, data, getAuthHeader());
+      return res.data;
+    },
+    autoCreateGoodTicket: async (data = {}) => {
+      const res = await axios.post(`${BASE_URL}/import/auto-create`, data, getAuthHeader());
       return res.data;
     },
     getAllGoodTickets: async () => {
