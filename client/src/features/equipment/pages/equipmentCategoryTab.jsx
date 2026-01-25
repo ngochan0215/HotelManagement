@@ -16,7 +16,7 @@ export default function EquipmentCategoryTab() {
   const [sortOrder, setSortOrder] = useState("a-z");
   const [filterUnit, setFilterUnit] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const itemsPerPage = 6;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
