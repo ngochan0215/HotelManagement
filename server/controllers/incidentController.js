@@ -63,7 +63,7 @@ export const updateEquipmentByResolution = async ({ equipment_id, resolution, ha
 //---- INCIDENT ----//
 export const createIncident = async (req, res) => {
   try {
-    const { room_id, booking_id, causer_id, caused_by, description, type, severity, occured_at } = req.body;
+    const { room_id, booking_id, causer_id, caused_by, description, type, severity, occured_at, equipment_ids } = req.body;
     const reporter_id = req.user.userId;
 
     if (!description || !type || !caused_by || !severity || !occured_at) {
@@ -74,6 +74,20 @@ export const createIncident = async (req, res) => {
         const room = await Room.findById(room_id);
         if (!room) return res.status(404).json({ message: "Phòng không tồn tại." });
     }
+
+    // Validate equipment_ids nếu có
+    if (equipment_ids && Array.isArray(equipment_ids) && equipment_ids.length > 0) {
+      for (const eqId of equipment_ids) {
+        if (!mongoose.Types.ObjectId.isValid(eqId)) {
+          return res.status(400).json({ message: `Equipment ID không hợp lệ: ${eqId}` });
+        }
+        const equipment = await Equipment.findById(eqId);
+        if (!equipment) {
+          return res.status(404).json({ message: `Không tìm thấy thiết bị với ID: ${eqId}` });
+        }
+      }
+    }
+
     // ... (Giữ nguyên logic validate booking, causer như code cũ của bạn)
 
     const occuredDate = new Date(occured_at);
@@ -81,8 +95,18 @@ export const createIncident = async (req, res) => {
     if (diffDays > MAX_DAYS) return res.status(400).json({ message: "Sự cố đã xảy ra quá 30 ngày." });
 
     const incident = await Incident.create({
-        room_id: room_id || null, reporter_id, causer_id: causer_id || null, booking_id: booking_id || null,
-        description, type, caused_by, severity, occured_at, status: "new", compensation_status: "none",
+        room_id: room_id || null, 
+        reporter_id, 
+        causer_id: causer_id || null, 
+        booking_id: booking_id || null,
+        equipment_ids: equipment_ids && Array.isArray(equipment_ids) ? equipment_ids : [],
+        description, 
+        type, 
+        caused_by, 
+        severity, 
+        occured_at, 
+        status: "new", 
+        compensation_status: "none",
     });
     await incident.save();
     return res.status(201).json({ message: "Thêm sự cố thành công.", data: incident });
@@ -101,20 +125,42 @@ export const updateIncident = async (req, res) => {
     const incident = await Incident.findById(id);
     if (!incident) return res.status(404).json({ message: "Không tìm thấy sự cố." });
     if (incident.status === "closed") return res.status(400).json({ message: "Sự cố đã đóng, không thể sửa." });
-    if (incident.status !== "new") return res.status(400).json({ message: "Chỉ sửa được khi trạng thái là new." });
 
-    if (updates.room_id) incident.room_id = updates.room_id;
-    if (updates.booking_id) incident.booking_id = updates.booking_id;
-    if (updates.causer_id) incident.causer_id = updates.causer_id;
-    if (updates.type) incident.type = updates.type;
-    if (updates.severity) incident.severity = updates.severity;
-    if (updates.caused_by) incident.caused_by = updates.caused_by;
+    // Cho phép update processing_note bất kể status
+    if (updates.processing_note !== undefined) {
+      incident.processing_note = updates.processing_note;
+    }
+
+    // Các trường khác chỉ update khi status là "new"
+    if (incident.status === "new") {
+      if (updates.room_id) incident.room_id = updates.room_id;
+      if (updates.booking_id) incident.booking_id = updates.booking_id;
+      if (updates.causer_id) incident.causer_id = updates.causer_id;
+      if (updates.type) incident.type = updates.type;
+      if (updates.severity) incident.severity = updates.severity;
+      if (updates.caused_by) incident.caused_by = updates.caused_by;
+      if (updates.status) incident.status = updates.status;
+    } else {
+      // Cho phép update status và assignee khi không phải "new"
+      if (updates.status) incident.status = updates.status;
+      if (updates.assignee && updates.department) {
+        const assignee = await Employee.findById(updates.assignee);
+        if (assignee) {
+          incident.assignee_info = {
+            assignee_id: assignee._id,
+            assignee_name: assignee.full_name,
+            assignee_department: updates.department,
+            assigned_at: incident.assignee_info?.assigned_at || new Date(),
+          };
+        }
+      }
+    }
 
     await incident.save();
 
     await IncidentLog.create({
-      incident_id: incident._id, action: "updated", from_status: incident.status, to_status: null,
-      actor_id: actor._id, actor_name: actor.full_name, actor_role: actor.position, note: "Cập nhật thông tin sự cố"
+      incident_id: incident._id, action: "updated", from_status: incident.status, to_status: updates.status || null,
+      actor_id: actor._id, actor_name: actor.full_name, actor_role: actor.position, note: updates.processing_note ? "Cập nhật ghi chú xử lý" : "Cập nhật thông tin sự cố"
     });
     return res.status(200).json({ message: "Cập nhật sự cố thành công.", data: incident });
   } catch (error) {
@@ -149,6 +195,7 @@ export const assignIncident = async (req, res) => {
       assignee_id: assignee._id, assignee_name: assignee.full_name, assignee_role: assignee.position, assigned_at: new Date(),
     };
     incident.status = "in_progress";
+    if (note) incident.processing_note = note; // Lưu ghi chú vào processing_note nếu có
     await incident.save();
 
     // ghi log
@@ -193,6 +240,7 @@ export const resolveIncident = async (req, res) => {
 
     incident.status = "resolved";
     incident.resolved_at = new Date();
+    incident.processing_note = note; // Lưu ghi chú vào processing_note
     await incident.save();
 
     // ghi log
@@ -237,6 +285,7 @@ export const closedIncident = async (req, res) => {
     const oldStatus = incident.status;
     incident.status = "closed";
     incident.closed_at = new Date();
+    if (note) incident.processing_note = note; // Lưu ghi chú vào processing_note nếu có
     await incident.save();
 
     if (incident.room_id) await reevaluateRoomStatus(incident.room_id);
@@ -429,6 +478,7 @@ export const createCompensateTicket = async (req, res) => {
     // thêm phiếu đền bù
     const ticket = await CompensateTicket.create([{
       incident_id,
+      booking_id: incident.booking_id || null, // Lấy booking_id từ incident
       payer_type,
       payer_id: payer_id || null,
       note: note || "",
@@ -520,6 +570,7 @@ export const createCompensateTickett = async (req, res) => {
     // thêm phiếu đền bù
       const ticket = await CompensateTicket.create([{
       incident_id,
+      booking_id: incident.booking_id || null, // Lấy booking_id từ incident
       payer_type,
       payer_id: payer_id || null,
       note: note || "",
@@ -594,6 +645,34 @@ export const getAllCompensateTickets = async (req, res) => {
         causer_name = causerProfile?.full_name || null;
           }
 
+          // Kiểm tra xem ticket có trong receipt chưa thanh toán không
+          let isInReceipt = false;
+          let receiptStatus = null;
+          if (ticket.booking_id) {
+            const Receipt = (await import("../models/Revenue/Receipts.js")).default;
+            const receipt = await Receipt.findOne({
+              booking_id: ticket.booking_id,
+              compensate_ticket_id: ticket._id
+            }).select("status");
+            
+            if (receipt) {
+              isInReceipt = true;
+              receiptStatus = receipt.status;
+            } else {
+              // Nếu không tìm thấy bằng compensate_ticket_id, tìm bằng booking_id và compensate_fee > 0
+              const receiptByBooking = await Receipt.findOne({
+                booking_id: ticket.booking_id,
+                compensate_fee: { $gt: 0 },
+                status: { $in: ["pending", "half-paid"] }
+              }).select("status");
+              
+              if (receiptByBooking) {
+                isInReceipt = true;
+                receiptStatus = receiptByBooking.status;
+              }
+            }
+          }
+
       result.push({
         ...ticket.toObject(),
         incident: incident
@@ -602,6 +681,8 @@ export const getAllCompensateTickets = async (req, res) => {
               causer_name,
         }
           : null,
+        is_in_receipt: isInReceipt,
+        receipt_status: receiptStatus,
       });
     }
 

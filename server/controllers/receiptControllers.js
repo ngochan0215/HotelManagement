@@ -49,17 +49,17 @@ export const updateReceiptAfterCheckout = async (booking_id, session = null) => 
       serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
     }
 
-    // Tìm TẤT CẢ CompensateTicket đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
+    // Tìm TẤT CẢ CompensateTicket pending cho booking này (một booking có thể có nhiều phiếu)
     let compensateFee = 0;
     let compensateTicketId = null;
     const compensates = session
       ? await CompensateTicket.find({
           booking_id,
-          status: "completed",
+          status: "pending", // Tìm các phiếu đang pending để gộp vào hóa đơn
         }).session(session)
       : await CompensateTicket.find({
           booking_id,
-          status: "completed",
+          status: "pending",
         });
 
     if (compensates && compensates.length > 0) {
@@ -215,13 +215,13 @@ export const createReceipt = async (req, res) => {
       serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
     }
 
-    // Tìm TẤT CẢ CompensateTicket đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
+    // Tìm TẤT CẢ CompensateTicket pending cho booking này (một booking có thể có nhiều phiếu)
     let compensateFee = 0;
     let compensateTicketId = null;
 
     const compensates = await CompensateTicket.find({
       booking_id,
-      status: "completed",
+      status: "pending", // Tìm các phiếu đang pending để gộp vào hóa đơn
     }).session(session);
 
     if (compensates && compensates.length > 0) {
@@ -474,6 +474,38 @@ export const updateReceipt = async (req, res) => {
           { $inc: { booking_count: 1 } }
         );
       }
+
+      // Tự động cập nhật compensation tickets thành "paid" nếu có trong hóa đơn
+      if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
+        try {
+          // Tìm tất cả compensation tickets pending của booking này
+          const compensateTickets = await CompensateTicket.find({
+            booking_id: receipt.booking_id,
+            status: "pending"
+          });
+
+          // Cập nhật tất cả thành "paid"
+          for (const ticket of compensateTickets) {
+            ticket.status = "paid";
+            ticket.paid_at = new Date();
+            await ticket.save();
+
+            // Cập nhật incident liên quan
+            const incident = await Incident.findById(ticket.incident_id);
+            if (incident && incident.compensation_status === "pending") {
+              incident.compensation_status = "done";
+              if (incident.status !== "closed") {
+                incident.status = "closed";
+                incident.closed_at = new Date();
+              }
+              await incident.save();
+            }
+          }
+        } catch (compError) {
+          console.error("Error updating compensation tickets:", compError);
+          // Không throw error để không ảnh hưởng đến update receipt
+        }
+      }
     }
 
     if (status === "cancelled" && !receipt.cancelled_at) {
@@ -604,6 +636,48 @@ export const updateReceipt = async (req, res) => {
   }
 };
 
+// Cập nhật hóa đơn sau checkout để refresh compensation và service fees
+export const refreshReceiptAfterCheckout = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "receipt_id không hợp lệ." });
+    }
+
+    const receipt = await Receipt.findById(id);
+    if (!receipt) {
+      return res.status(404).json({ message: "Không tìm thấy hóa đơn." });
+    }
+
+    // Nếu hóa đơn đã thanh toán hoặc đã hủy, không cho phép cập nhật
+    if (receipt.status === "paid" || receipt.status === "cancelled") {
+      return res.status(400).json({ 
+        message: `Hóa đơn đã ở trạng thái "${receipt.status}", không thể cập nhật.` 
+      });
+    }
+
+    // Gọi hàm updateReceiptAfterCheckout để refresh
+    const updatedReceipt = await updateReceiptAfterCheckout(receipt.booking_id);
+
+    if (!updatedReceipt) {
+      return res.status(404).json({ 
+        message: "Không tìm thấy hóa đơn để cập nhật." 
+      });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật hóa đơn thành công.",
+      receipt: updatedReceipt
+    });
+  } catch (error) {
+    console.error("Error refreshing receipt:", error);
+    return res.status(500).json({
+      message: error.message || "Không thể cập nhật hóa đơn."
+    });
+  }
+};
+
 export const markReceiptAsPaid = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -672,6 +746,33 @@ export const markReceiptAsPaid = async (req, res) => {
       { $inc: { booking_count: 1 } },
       { session }
     );
+
+    // Tự động cập nhật compensation tickets thành "paid" nếu có trong hóa đơn
+    if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
+      // Tìm tất cả compensation tickets pending của booking này
+      const compensateTickets = await CompensateTicket.find({
+        booking_id: receipt.booking_id,
+        status: "pending"
+      }).session(session);
+
+      // Cập nhật tất cả thành "paid"
+      for (const ticket of compensateTickets) {
+        ticket.status = "paid";
+        ticket.paid_at = new Date();
+        await ticket.save({ session });
+
+        // Cập nhật incident liên quan
+        const incident = await Incident.findById(ticket.incident_id).session(session);
+        if (incident && incident.compensation_status === "pending") {
+          incident.compensation_status = "done";
+          if (incident.status !== "closed") {
+            incident.status = "closed";
+            incident.closed_at = new Date();
+          }
+          await incident.save({ session });
+        }
+      }
+    }
 
     await session.commitTransaction();
 

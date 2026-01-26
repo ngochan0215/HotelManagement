@@ -7,6 +7,7 @@ import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
 import { updateCustomerPoints } from "../controllers/customerController.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
+import { updateReceiptAfterCheckout } from "../controllers/receiptControllers.js";
 
 // hàm tính số giờ khách ở
 const calcNights = (expected_checkin, expected_checkout) => {
@@ -1315,7 +1316,6 @@ export const checkoutBookingDetail = async (req, res) => {
 
     // Cập nhật hóa đơn sau khi checkout để thêm các phí dịch vụ và đền bù
     try {
-      const { updateReceiptAfterCheckout } = await import("../controllers/receiptControllers.js");
       await updateReceiptAfterCheckout(bookingId, session);
     } catch (receiptError) {
       console.error("Lỗi khi cập nhật hóa đơn sau checkout:", receiptError);

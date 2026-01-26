@@ -53,6 +53,12 @@ export const incidentApi = {
     return res.data;
   },
 
+  // Tạo phiếu đền bù với chi tiết thiết bị
+  createCompensationTicketWithDetails: async (id, data) => {
+    const res = await axios.post(`${BASE_URL}/${id}/compensation-ticket/add`, data, getAuthHeader());
+    return res.data;
+  },
+
   // --- CÁC HÀM BẠN ĐANG THIẾU ---
 
   // Lấy danh sách phiếu đền bù

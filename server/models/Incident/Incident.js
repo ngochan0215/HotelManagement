@@ -6,6 +6,7 @@ const incidentSchema = new mongoose.Schema(
     reporter_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     causer_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     booking_id: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", default: null },
+    equipment_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: "Equipment", default: null }],
 
     description: { type: String, trim: true, required: true },
     type: { type: String, enum: ["equipment", "technical", "facility", "service", "safety", "other"], required: true },
@@ -24,7 +25,8 @@ const incidentSchema = new mongoose.Schema(
       assignee_name: { type: String, trim: true },    
       assignee_department: { type: String, trim: true },
       assigned_at: { type: Date, default: null },      // thời điểm nhận xử lý
-    }
+    },
+    processing_note: { type: String, trim: true, default: "" }  // Ghi chú/kết quả xử lý của nhân viên
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

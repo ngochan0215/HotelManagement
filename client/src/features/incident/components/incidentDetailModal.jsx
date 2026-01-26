@@ -16,6 +16,13 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const [status, setStatus] = useState(incident?.status || 'new');
   const [processingNote, setProcessingNote] = useState(incident?.processing_note || "");
 
+  // Cập nhật processingNote khi incident thay đổi
+  useEffect(() => {
+    if (incident?.processing_note) {
+      setProcessingNote(incident.processing_note);
+    }
+  }, [incident?.processing_note]);
+
   const [employees, setEmployees] = useState([]);
   const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
   const [showCompensation, setShowCompensation] = useState(false);
@@ -211,15 +218,37 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
                   </div>
               )}
 
+              {/* Hiển thị ghi chú hiện tại của nhân viên (nếu có) - chỉ cho quản lý xem */}
+              {isManager && incident.processing_note && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-green-700 uppercase">Ghi chú của nhân viên:</span>
+                    {incident.assignee_info?.assignee_name && (
+                      <span className="text-xs text-green-600">({incident.assignee_info.assignee_name})</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-700 bg-white p-2 rounded border border-green-100 whitespace-pre-wrap">
+                    {incident.processing_note}
+                  </div>
+                </div>
+              )}
+
               <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú / Kết quả</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    {isManager ? "Ghi chú / Kết quả (Có thể chỉnh sửa)" : "Ghi chú / Kết quả"}
+                  </label>
                   <textarea
                       value={processingNote}
                       onChange={e => setProcessingNote(e.target.value)}
                       className="w-full border rounded p-2 min-h-[80px] text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       disabled={status === 'closed' || (!isManager && !isAssignee)}
-                      placeholder={isAssignee ? "Nhập kết quả xử lý..." : "Ghi chú..."}
+                      placeholder={isAssignee ? "Nhập kết quả xử lý..." : isManager ? "Nhập hoặc chỉnh sửa ghi chú..." : "Ghi chú..."}
                   />
+                  {!isManager && isAssignee && (
+                    <div className="text-xs text-gray-500 mt-1 italic">
+                      * Vui lòng nhập kết quả xử lý trước khi báo cáo hoàn thành
+                    </div>
+                  )}
               </div>
           </div>
         </div>

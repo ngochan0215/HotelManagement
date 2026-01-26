@@ -152,16 +152,21 @@ export const assignCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
-        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+        // Gửi thông báo (không ảnh hưởng đến transaction)
         try {
+            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            const roomNumber = room?.room_number || "N/A";
+            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
+
             // gửi thông báo cho admin
             const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
             const adminIds = allAdmins.map(u => u._id);
-            if (allAdmins.length > 0) {
+            if (adminIds.length > 0) {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp mới",
-                    `Nhân viên ${housekeeper.full_name} đã được chỉ định dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
+                    `Nhân viên ${housekeeper.full_name} đã được chỉ định dọn dẹp phòng ${roomInfo}`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -174,7 +179,7 @@ export const assignCleaningTask = async (req, res) => {
                 await pushNotification(
                     housekeeper.user_id,
                     "Công việc dọn dẹp mới",
-                    `Bạn được gán dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
+                    `Bạn được gán dọn dẹp phòng ${roomInfo}`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -183,6 +188,7 @@ export const assignCleaningTask = async (req, res) => {
             }
         } catch (notifError) {
             console.error("Error sending notification:", notifError);
+            // Không throw error để không ảnh hưởng đến response
         }
 
         res.status(200).json({
@@ -230,7 +236,7 @@ export const startCleaningTask = async (req, res) => {
             });
         }
 
-        const room = await Room.findById(task.room_id);
+        const room = await Room.findById(task.room_id).populate("category_id", "name");
         if (!room) {
             await session.abortTransaction();
             return res.status(404).json({
@@ -264,8 +270,12 @@ export const startCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
-        // Gửi thông báo cho admin
+        // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
+            const roomNumber = room?.room_number || "N/A";
+            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
+
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
             const adminIds = admins.map(a => a._id);
             
@@ -273,7 +283,7 @@ export const startCleaningTask = async (req, res) => {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp đã được bắt đầu",
-                    `Phòng ${room.room_number} đã được nhân viên ${employee.full_name} xác nhận bắt đầu làm.`,
+                    `Phòng ${roomNumber} đã được nhân viên ${employee.full_name} xác nhận bắt đầu làm.`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -286,7 +296,7 @@ export const startCleaningTask = async (req, res) => {
                 await pushNotification(
                     employee.user_id,
                     "Công việc dọn dẹp đã bắt đầu",
-                    `Bạn đã xác nhận bắt đầu dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
+                    `Bạn đã xác nhận bắt đầu dọn dẹp phòng ${roomInfo}`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -295,6 +305,7 @@ export const startCleaningTask = async (req, res) => {
             }
         } catch (notifError) {
             console.error("Error sending notification:", notifError);
+            // Không throw error để không ảnh hưởng đến response
         }
 
         res.status(200).json({
@@ -366,9 +377,13 @@ export const completeCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
-        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
-        // Gửi thông báo cho admin
+        // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
+            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            const roomNumber = room?.room_number || task.room_id?.room_number || "N/A";
+            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
+
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
             const adminIds = admins.map(a => a._id);
             
@@ -376,7 +391,7 @@ export const completeCleaningTask = async (req, res) => {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp đã hoàn thành",
-                    `Phòng ${task.room_id.room_number} đã được dọn dẹp xong. Vui lòng xác nhận.`,
+                    `Phòng ${roomNumber} đã được dọn dẹp xong. Vui lòng xác nhận.`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -389,8 +404,7 @@ export const completeCleaningTask = async (req, res) => {
                 await pushNotification(
                     employee.user_id,
                     "Công việc dọn dẹp đã hoàn thành",
-                    `Bạn đã xác nhận hoàn thành việc dọn dẹp phòng ${room.room_number}${room.room_category_id ? 
-                        ` (${room.room_category_id.name})` : ''}`,
+                    `Bạn đã xác nhận hoàn thành việc dọn dẹp phòng ${roomInfo}`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -399,6 +413,7 @@ export const completeCleaningTask = async (req, res) => {
             }
         } catch (notifError) {
             console.error("Error sending notification:", notifError);
+            // Không throw error để không ảnh hưởng đến response
         }
 
         res.status(200).json({
@@ -462,8 +477,11 @@ export const confirmCleaning = async (req, res) => {
 
         // Đóng RoomLog cleaning
         const now = new Date();
+        const roomId = task.room_id._id || task.room_id;
+        const roomLogId = task.room_log_id._id || task.room_log_id;
+        
         await RoomLog.findByIdAndUpdate(
-            task.room_log_id._id,
+            roomLogId,
             { end_time: now },
             { session }
         );
@@ -471,7 +489,7 @@ export const confirmCleaning = async (req, res) => {
         // Tạo RoomLog available mới
         await RoomLog.create(
             [{
-                room_id: task.room_id._id,
+                room_id: roomId,
                 status: "available",
                 start_time: now,
                 end_time: null,
@@ -482,16 +500,21 @@ export const confirmCleaning = async (req, res) => {
 
         // Cập nhật room status
         await Room.findByIdAndUpdate(
-            task.room_id._id,
+            roomId,
             { room_status: "available" },
             { session }
         );
 
         await session.commitTransaction();
 
-        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
-        // Gửi thông báo cho admin
+        // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
+            const roomId = task.room_id._id || task.room_id;
+            const room = await Room.findById(roomId).populate("room_category_id", "name");
+            const roomNumber = room?.room_number || task.room_id?.room_number || "N/A";
+            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
+
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
             const adminIds = admins.map(a => a._id);
             
@@ -499,7 +522,7 @@ export const confirmCleaning = async (req, res) => {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp đã xác nhận hoàn thành",
-                    `Phòng ${task.room_id.room_number} đã được xác nhận hoàn thành dọn dẹp.`,
+                    `Phòng ${roomNumber} đã được xác nhận hoàn thành dọn dẹp.`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -509,12 +532,11 @@ export const confirmCleaning = async (req, res) => {
 
             // gửi thông báo cho nhân viên
             const employee = await Employee.findById(task.handled_by);
-            if (employee.user_id) {
+            if (employee && employee.user_id) {
                 await pushNotification(
                     employee.user_id,
                     "Công việc dọn dẹp đã hoàn thành",
-                    `Bạn đã xác nhận hoàn thành việc dọn dẹp phòng ${room.room_number}${room.room_category_id ? 
-                        ` (${room.room_category_id.name})` : ''}`,
+                    `Công việc dọn dẹp phòng ${roomInfo} đã được xác nhận hoàn thành.`,
                     "room",
                     "CleaningTask",
                     task._id,
@@ -523,6 +545,7 @@ export const confirmCleaning = async (req, res) => {
             }
         } catch (notifError) {
             console.error("Error sending notification:", notifError);
+            // Không throw error để không ảnh hưởng đến response
         }
 
         res.status(200).json({

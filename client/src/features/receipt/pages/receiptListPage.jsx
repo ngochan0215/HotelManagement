@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag,
-  FiChevronLeft, FiChevronRight
+  FiChevronLeft, FiChevronRight, FiRefreshCw
 } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
@@ -330,13 +330,31 @@ export default function ReceiptList() {
                                         </button>
                                     )}
                                     {(item.status === 'pending' || item.status === 'half-paid') && (
-                                        <button
-                                            onClick={() => setPaymentModalData(item)}
-                                            className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
-                                            title="Xác nhận thu tiền"
-                                        >
-                                            <FiDollarSign /> Thu tiền
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                  if (!window.confirm("Cập nhật hóa đơn để làm mới phí dịch vụ và bồi thường sau checkout?")) return;
+                                                  try {
+                                                    await receiptApi.refreshReceipt(item._id);
+                                                    alert("Đã cập nhật hóa đơn thành công!");
+                                                    fetchReceipts();
+                                                  } catch (error) {
+                                                    alert("Lỗi: " + (error.response?.data?.message || error.message));
+                                                  }
+                                                }}
+                                                className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-200 transition"
+                                                title="Cập nhật phí dịch vụ và bồi thường sau checkout"
+                                            >
+                                                <FiRefreshCw size={14} /> Cập nhật
+                                            </button>
+                                            <button
+                                                onClick={() => setPaymentModalData(item)}
+                                                className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-200 transition"
+                                                title="Xác nhận thu tiền"
+                                            >
+                                                <FiDollarSign /> Thu tiền
+                                            </button>
+                                        </>
                                     )}
                                     <button
                                         onClick={() => setSelectedReceipt(item)}

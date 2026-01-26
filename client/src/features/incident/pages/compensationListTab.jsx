@@ -30,7 +30,7 @@ export default function CompensationListTab() {
     if (!window.confirm("Xác nhận khoản bồi thường này đã được thanh toán?")) return;
 
     try {
-      await incidentApi.confirmCompensationPaid(ticketId); // ⬅ gọi đúng mapping
+      await incidentApi.confirmCompensationPaid(ticketId); // gọi đúng mapping
       alert("Đã xác nhận thanh toán. Sự cố liên quan đã được đóng.");
       fetchTickets();
     } catch (err) {
@@ -99,6 +99,7 @@ export default function CompensationListTab() {
                     {t.total_fee?.toLocaleString()} <span className="text-[10px] text-gray-400">đ</span>
                   </td>
                   <td className="py-4 px-6 text-center">
+                    <div className="flex flex-col items-center gap-1">
                     <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${
                       t.status === 'paid'
                         ? 'bg-emerald-100 text-emerald-700'
@@ -110,15 +111,26 @@ export default function CompensationListTab() {
                         : t.status === 'cancelled' ? "Đã hủy"
                         : "Chờ thu tiền"}
                     </span>
+                      {t.is_in_receipt && t.status === 'pending' && (
+                        <span className="text-[10px] text-blue-600 font-semibold italic">
+                          Đã gộp vào hóa đơn
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    {t.status === 'pending' && (
+                    {t.status === 'pending' && !t.is_in_receipt && (
                       <button
                         onClick={() => handleConfirmPaid(t._id)}
                         className="inline-flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
                       >
                         <FiCheckCircle /> Xác nhận thu
                       </button>
+                    )}
+                    {t.status === 'pending' && t.is_in_receipt && (
+                      <span className="text-xs text-gray-500 italic">
+                        Sẽ tự động thanh toán khi hóa đơn được thanh toán
+                      </span>
                     )}
                   </td>
                 </tr>

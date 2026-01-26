@@ -29,6 +29,11 @@ export const receiptApi = {
   updateReceipt: async (id, data) => {
     const res = await axios.patch(`${BASE_URL}/update/${id}`, data, getAuthHeader());
     return res.data;
+  },
+
+  refreshReceipt: async (id) => {
+    const res = await axios.patch(`${BASE_URL}/${id}/refresh`, {}, getAuthHeader());
+    return res.data;
   }
 
 };

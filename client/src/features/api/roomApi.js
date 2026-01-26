@@ -116,4 +116,9 @@ export const roomApi = {
       return res.data;
     },
 
+    getRoomEquipments: async (roomId) => {
+      const res = await axios.get(`${BASE_URL}/${roomId}/equipments`, getAuthHeader());
+      return res.data;
+    },
+
 };

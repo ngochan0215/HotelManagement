@@ -1,6 +1,6 @@
 import { payOSpayment, payOSpayout } from '../config/payos.js';
 import  { Transaction, Receipt, Booking, Customer, Employee, User, 
-    PayoutEmployee, EmployeeEarning,
+    PayoutEmployee, EmployeeEarning, CompensateTicket, Incident
 }  from '../models/index.js';
 import mongoose from 'mongoose';
 import { updateCustomerPoints } from '../controllers/customerController.js';
@@ -358,6 +358,38 @@ export const paymentSucceeded = async (orderCode) => {
                         customer._id,
                         { $inc: { booking_count: 1 } }
                     );
+                }
+            }
+
+            // Tự động cập nhật compensation tickets thành "paid" nếu có trong hóa đơn
+            if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
+                try {
+                    // Tìm tất cả compensation tickets pending của booking này
+                    const compensateTickets = await CompensateTicket.find({
+                        booking_id: receipt.booking_id,
+                        status: "pending"
+                    });
+
+                    // Cập nhật tất cả thành "paid"
+                    for (const ticket of compensateTickets) {
+                        ticket.status = "paid";
+                        ticket.paid_at = new Date();
+                        await ticket.save();
+
+                        // Cập nhật incident liên quan
+                        const incident = await Incident.findById(ticket.incident_id);
+                        if (incident && incident.compensation_status === "pending") {
+                            incident.compensation_status = "done";
+                            if (incident.status !== "closed") {
+                                incident.status = "closed";
+                                incident.closed_at = new Date();
+                            }
+                            await incident.save();
+                        }
+                    }
+                } catch (compError) {
+                    console.error("Error updating compensation tickets:", compError);
+                    // Không throw error để không ảnh hưởng đến payment flow
                 }
             }
         }

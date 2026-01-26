@@ -32,6 +32,10 @@ export const equipmentApi = {
       });
       return res.data;
     },
+  getEquipmentById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
+    return res.data;
+  },
   updateEquipment: async (id, data) => {
     const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return res.data;

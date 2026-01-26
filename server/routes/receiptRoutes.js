@@ -1,7 +1,7 @@
 import express from "express";
 import { isNotCustomer, verifyToken } from "../middleware/authMiddleware.js";
 import { createReceipt, getAllReceipts, getReceiptById, updateReceipt 
-    , markReceiptAsPaid
+    , markReceiptAsPaid, refreshReceiptAfterCheckout
 } from "../controllers/receiptControllers.js";
 import { createPaymentLink, initiatePayout, getLinkDetail, getPaymentTransactionDetail, 
     updateSuccessfulTransaction, updateFailedTransaction, payoutStatusDetail, 
@@ -28,6 +28,7 @@ router.patch("/transaction/:bookingId/failed", updateFailedTransaction);
 router.post("/add", verifyToken, isNotCustomer, createReceipt);
 router.get("/all", verifyToken, isNotCustomer, getAllReceipts);
 router.patch("/update/:id", verifyToken, isNotCustomer, updateReceipt);
+router.patch("/:id/refresh", verifyToken, isNotCustomer, refreshReceiptAfterCheckout); // Cập nhật hóa đơn sau checkout
 router.patch("/:id/paid", verifyToken, isNotCustomer, markReceiptAsPaid);
 router.get("/:id", verifyToken, isNotCustomer, getReceiptById);
 

@@ -4,6 +4,8 @@ import mongoose from "mongoose";
 const compensateTicketSchema = new mongoose.Schema(
   {
     incident_id: { type: mongoose.Schema.Types.ObjectId, ref: "Incident", unique: true, required: true },
+    
+    booking_id: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", default: null }, // Link với booking để gộp vào hóa đơn
 
     payer_type: { type: String, enum: ["customer", "employee", "hotel"], default: "hotel", required: true },
 
