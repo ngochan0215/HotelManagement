@@ -26,6 +26,7 @@ export default function EquipmentCategoryTab() {
   // Auto create import ticket states
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [outOfStockCategories, setOutOfStockCategories] = useState([]);
+  const [allCategoriesForPreview, setAllCategoriesForPreview] = useState([]);
   const [previewItems, setPreviewItems] = useState([]);
   const [previewFormData, setPreviewFormData] = useState({
     import_date: "",
@@ -33,6 +34,7 @@ export default function EquipmentCategoryTab() {
     default_price_percent: 0.8
   });
   const [creating, setCreating] = useState(false);
+  const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState("");
 
   const UNIT_MAP = { item: "Cái", box: "Bộ" };
   const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
@@ -205,16 +207,21 @@ export default function EquipmentCategoryTab() {
   // Auto create import ticket handlers
   const handleOpenPreview = async () => {
     try {
-      const res = await equipmentApi.getOutOfStockCategories();
-      if (res.success && res.categories && res.categories.length > 0) {
-        setOutOfStockCategories(res.categories);
+      const [outOfStockRes, allCatsRes] = await Promise.all([
+        equipmentApi.getOutOfStockCategories(),
+        equipmentApi.getAllCategories()
+      ]);
+      
+      if (outOfStockRes.success && outOfStockRes.categories && outOfStockRes.categories.length > 0) {
+        setOutOfStockCategories(outOfStockRes.categories);
+        setAllCategoriesForPreview(allCatsRes.categories || []);
         
         // Tạo preview items với giá trị mặc định
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const formattedDate = tomorrow.toISOString().split('T')[0];
         
-        const items = res.categories.map(cat => ({
+        const items = outOfStockRes.categories.map(cat => ({
           category_id: cat._id,
           category_name: cat.name,
           category_price: cat.price,
@@ -242,6 +249,52 @@ export default function EquipmentCategoryTab() {
       updated[index].import_price = parseInt(value) || 0;
     }
     setPreviewItems(updated);
+  };
+
+  const handleRemovePreviewItem = (index) => {
+    if (previewItems.length === 1) {
+      alert("Phải có ít nhất 1 thiết bị trong phiếu nhập!");
+      return;
+    }
+    const updated = previewItems.filter((_, i) => i !== index);
+    setPreviewItems(updated);
+  };
+
+  const handleAddPreviewItem = () => {
+    if (!selectedCategoryToAdd) {
+      alert("Vui lòng chọn thiết bị cần thêm!");
+      return;
+    }
+    
+    // Kiểm tra xem category đã có trong danh sách chưa
+    const existingIds = previewItems.map(item => item.category_id);
+    if (existingIds.includes(selectedCategoryToAdd)) {
+      alert("Thiết bị này đã có trong phiếu nhập!");
+      return;
+    }
+    
+    // Tìm category được chọn
+    const categoryToAdd = allCategoriesForPreview.find(cat => cat._id === selectedCategoryToAdd);
+    if (!categoryToAdd) {
+      alert("Không tìm thấy danh mục được chọn!");
+      return;
+    }
+    
+    const newItem = {
+      category_id: categoryToAdd._id,
+      category_name: categoryToAdd.name,
+      category_price: categoryToAdd.price,
+      import_quantity: previewFormData.default_quantity,
+      import_price: Math.round(categoryToAdd.price * previewFormData.default_price_percent)
+    };
+    
+    setPreviewItems([...previewItems, newItem]);
+    setSelectedCategoryToAdd(""); // Reset selection
+  };
+
+  const getAvailableCategoriesForAdd = () => {
+    const existingIds = previewItems.map(item => item.category_id);
+    return allCategoriesForPreview.filter(cat => !existingIds.includes(cat._id));
   };
 
   const handleConfirmCreate = async () => {
@@ -483,7 +536,32 @@ export default function EquipmentCategoryTab() {
               </div>
 
               <div className="mb-4">
-                <h4 className="font-bold text-gray-900 mb-3">Danh sách thiết bị hết tồn kho ({previewItems.length} loại)</h4>
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-gray-900">Danh sách thiết bị ({previewItems.length} loại)</h4>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedCategoryToAdd}
+                      onChange={(e) => setSelectedCategoryToAdd(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500 min-w-[200px]"
+                    >
+                      <option value="">-- Chọn thiết bị --</option>
+                      {getAvailableCategoriesForAdd().map(cat => (
+                        <option key={cat._id} value={cat._id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAddPreviewItem}
+                      disabled={!selectedCategoryToAdd}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FiPlus size={16} />
+                      Thêm
+                    </button>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -493,13 +571,14 @@ export default function EquipmentCategoryTab() {
                         <th className="py-3 text-center">Số lượng nhập</th>
                         <th className="py-3 text-center">Giá nhập (VNĐ)</th>
                         <th className="py-3 text-right pr-4">Thành tiền</th>
+                        <th className="py-3 text-center">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="text-gray-700 text-sm">
                       {previewItems.map((item, index) => {
                         const total = item.import_quantity * item.import_price;
                         return (
-                          <tr key={item.category_id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <tr key={`${item.category_id}-${index}`} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 pl-4 font-medium">{item.category_name}</td>
                             <td className="py-3 text-center">{item.category_price.toLocaleString()} đ</td>
                             <td className="py-3 text-center">
@@ -522,6 +601,16 @@ export default function EquipmentCategoryTab() {
                             </td>
                             <td className="py-3 text-right pr-4 font-bold text-indigo-600">
                               {total.toLocaleString()} đ
+                            </td>
+                            <td className="py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePreviewItem(index)}
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                title="Xóa thiết bị"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
                             </td>
                           </tr>
                         );

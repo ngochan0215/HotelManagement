@@ -29,40 +29,44 @@ export const updateReceiptAfterCheckout = async (booking_id, session = null) => 
       return receipt;
     }
 
-    // Tìm ServiceUsage đã hoàn thành cho booking này
+    // Tìm TẤT CẢ ServiceUsage đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
     let serviceFee = 0;
     let serviceUsageId = null;
-    const serviceUsage = session
-      ? await ServiceUsage.findOne({
+    const serviceUsages = session
+      ? await ServiceUsage.find({
           booking_id,
           status: "completed",
         }).session(session)
-      : await ServiceUsage.findOne({
+      : await ServiceUsage.find({
           booking_id,
           status: "completed",
         });
 
-    if (serviceUsage) {
-      serviceFee = serviceUsage.total_fee || 0;
-      serviceUsageId = serviceUsage._id;
+    if (serviceUsages && serviceUsages.length > 0) {
+      // Tính tổng fee từ tất cả các phiếu sử dụng dịch vụ
+      serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
+      // Lưu ID của phiếu mới nhất (hoặc có thể lưu ID đầu tiên)
+      serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
     }
 
-    // Tìm CompensateTicket đã hoàn thành cho booking này
+    // Tìm TẤT CẢ CompensateTicket đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
     let compensateFee = 0;
     let compensateTicketId = null;
-    const compensate = session
-      ? await CompensateTicket.findOne({
+    const compensates = session
+      ? await CompensateTicket.find({
           booking_id,
           status: "completed",
         }).session(session)
-      : await CompensateTicket.findOne({
+      : await CompensateTicket.find({
           booking_id,
           status: "completed",
         });
 
-    if (compensate) {
-      compensateFee = compensate.total_fee || 0;
-      compensateTicketId = compensate._id;
+    if (compensates && compensates.length > 0) {
+      // Tính tổng fee từ tất cả các phiếu đền bù
+      compensateFee = compensates.reduce((sum, comp) => sum + (comp.total_fee || 0), 0);
+      // Lưu ID của phiếu mới nhất (hoặc có thể lưu ID đầu tiên)
+      compensateTicketId = compensates[compensates.length - 1]._id;
     }
 
     // Tính lại final_amount và amount_due
@@ -195,30 +199,36 @@ export const createReceipt = async (req, res) => {
       }
     }
 
+    // Tìm TẤT CẢ ServiceUsage đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
     let serviceFee = 0;
     let serviceUsageId = null;
 
-    const serviceUsage = await ServiceUsage.findOne({
+    const serviceUsages = await ServiceUsage.find({
       booking_id,
       status: "completed",
     }).session(session);
 
-    if (serviceUsage) {
-      serviceFee = serviceUsage.total_fee;
-      serviceUsageId = serviceUsage._id;
+    if (serviceUsages && serviceUsages.length > 0) {
+      // Tính tổng fee từ tất cả các phiếu sử dụng dịch vụ
+      serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
+      // Lưu ID của phiếu mới nhất
+      serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
     }
 
+    // Tìm TẤT CẢ CompensateTicket đã hoàn thành cho booking này (một booking có thể có nhiều phiếu)
     let compensateFee = 0;
     let compensateTicketId = null;
 
-    const compensate = await CompensateTicket.findOne({
+    const compensates = await CompensateTicket.find({
       booking_id,
       status: "completed",
     }).session(session);
 
-    if (compensate) {
-      compensateFee = compensate.total_fee;
-      compensateTicketId = compensate._id;
+    if (compensates && compensates.length > 0) {
+      // Tính tổng fee từ tất cả các phiếu đền bù
+      compensateFee = compensates.reduce((sum, comp) => sum + (comp.total_fee || 0), 0);
+      // Lưu ID của phiếu mới nhất
+      compensateTicketId = compensates[compensates.length - 1]._id;
     }
 
     const totalFee = booking.total_fee;

@@ -89,4 +89,12 @@ export const serviceApi = {
       const res = await axios.patch(`${BASE_URL}/usage/${id}/update`, data, getAuthHeader());
       return res.data;
     },
+    updateGoodTicket: async (id, data) => {
+      const res = await axios.patch(`${BASE_URL}/import/${id}`, data, getAuthHeader());
+      return res.data;
+    },
+    deleteGoodTicket: async (id) => {
+      const res = await axios.delete(`${BASE_URL}/import/${id}`, getAuthHeader());
+      return res.data;
+    },
 };

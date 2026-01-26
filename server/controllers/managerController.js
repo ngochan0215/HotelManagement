@@ -219,6 +219,7 @@ export const getCalendarRooms = async (req, res) => {
 
       // Strategy 1: Exact time overlap match (most precise)
       for (const detail of details) {
+        console.log("DETAIL: ", detail);
         const bookingId = (detail.booking_id?._id || detail.booking_id).toString();
         const booking = bookingMap[bookingId];
         

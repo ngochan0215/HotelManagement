@@ -41,6 +41,23 @@ export default function TechnicianWorkPage() {
 
   const handleAction = (ticket, actionType) => {
     const isStart = actionType === 'start';
+    
+    // Kiểm tra ngày hẹn lịch nếu là action 'start'
+    if (isStart) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const installDate = new Date(ticket.install_date);
+      installDate.setHours(0, 0, 0, 0);
+      
+      // Nếu ngày hẹn lịch không phải hôm nay, cảnh báo và return
+      if (installDate.getTime() !== today.getTime()) {
+        const dateStr = format(parseISO(ticket.install_date), "dd/MM/yyyy");
+        alert(`Bạn chỉ có thể bắt đầu công việc vào ngày hẹn lịch (${dateStr}). Vui lòng đợi đến ngày đó để thực hiện.`);
+        return;
+      }
+    }
+    
     setConfirmState({
       open: true,
       title: isStart ? "Bắt đầu công việc" : "Hoàn thành công việc",

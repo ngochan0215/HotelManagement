@@ -152,6 +152,7 @@ export const assignCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
+        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
         try {
             // gửi thông báo cho admin
             const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
@@ -169,7 +170,6 @@ export const assignCleaningTask = async (req, res) => {
             }
 
             // gửi thông báo cho nhân viên
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
             if (housekeeper.user_id) {
                 await pushNotification(
                     housekeeper.user_id,
@@ -282,7 +282,6 @@ export const startCleaningTask = async (req, res) => {
             }
 
             // gửi thông báo cho nhân viên
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
             if (employee.user_id) {
                 await pushNotification(
                     employee.user_id,
@@ -367,6 +366,7 @@ export const completeCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
+        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
         // Gửi thông báo cho admin
         try {
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
@@ -385,7 +385,6 @@ export const completeCleaningTask = async (req, res) => {
             }
 
             // gửi thông báo cho nhân viên
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
             if (employee.user_id) {
                 await pushNotification(
                     employee.user_id,
@@ -490,6 +489,7 @@ export const confirmCleaning = async (req, res) => {
 
         await session.commitTransaction();
 
+        const room = await Room.findById(task.room_id).populate("room_category_id", "name");
         // Gửi thông báo cho admin
         try {
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
@@ -508,9 +508,7 @@ export const confirmCleaning = async (req, res) => {
             }
 
             // gửi thông báo cho nhân viên
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
             const employee = await Employee.findById(task.handled_by);
-            
             if (employee.user_id) {
                 await pushNotification(
                     employee.user_id,

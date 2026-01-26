@@ -27,6 +27,7 @@ export default function ServiceTicketTab() {
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [selectedUsageId, setSelectedUsageId] = useState(null);
   const [editingUsageId, setEditingUsageId] = useState(null);
+  const [editingImportId, setEditingImportId] = useState(null);
 
   const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
 
@@ -280,6 +281,26 @@ export default function ServiceTicketTab() {
       }
   };
 
+  const canUpdateOrDeleteImport = (ticket) => {
+    if (!ticket || ticket.status !== 'pending') return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const importDate = new Date(ticket.import_date);
+    importDate.setHours(0, 0, 0, 0);
+    return importDate > today;
+  };
+
+  const handleDeleteImport = async (id) => {
+    if (!window.confirm("Bạn chắc chắn muốn xóa phiếu nhập này?")) return;
+    try {
+      await serviceApi.deleteGoodTicket(id);
+      alert("Đã xóa phiếu nhập thành công!");
+      fetchTickets();
+    } catch (err) {
+      alert("Lỗi: " + (err.response?.data?.message || err.message));
+    }
+  };
+
   const renderStatus = (status) => {
     const config = {
       pending: { label: "Đang chờ đến ngày nhập", class: "bg-blue-100 text-blue-700 border border-blue-200" },
@@ -307,7 +328,16 @@ export default function ServiceTicketTab() {
   return (
     <div className="space-y-8 pb-10 animate-fade-in relative">
 
-      {showImportModal && isManager && <AddImportTicketModal onClose={() => setShowImportModal(false)} onSuccess={fetchTickets} />}
+      {showImportModal && isManager && (
+        <AddImportTicketModal 
+          ticket={editingImportId ? imports.find(i => i._id === editingImportId) : null}
+          onClose={() => {
+            setShowImportModal(false);
+            setEditingImportId(null);
+          }} 
+          onSuccess={fetchTickets} 
+        />
+      )}
       {showUsageModal && <AddServiceUsageModal onClose={() => setShowUsageModal(false)} onSuccess={fetchTickets} />}
       {selectedUsageId && <ServiceUsageDetailModal usageId={selectedUsageId} onClose={() => setSelectedUsageId(null)} />}
       {editingUsageId && <UpdateServiceUsageModal usageId={editingUsageId} onClose={() => setEditingUsageId(null)} onSuccess={fetchTickets} />}
@@ -606,21 +636,43 @@ export default function ServiceTicketTab() {
                             </td>
                             <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
-                                {item.status === 'waiting_confirm' ? (
-                                    <button
-                                        onClick={() => handleConfirmImport(item._id)}
-                                        className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm ml-auto"
-                                        title="Xác nhận nhập kho"
-                                    >
-                                        <FiCheckCircle /> Nhập kho
-                                    </button>
-                                ) : item.status === 'completed' ? (
-                                    <span className="text-gray-300 text-xs italic">---</span>
-                                ) : item.status === 'expired' || item.status === 'cancelled' ? (
-                                    <span className="text-red-300 text-xs italic">Đã hết hạn</span>
-                                ) : (
-                                    <span className="text-gray-300 text-xs italic">Chưa đến ngày nhập</span>
-                                )}
+                                <div className="flex justify-end gap-2">
+                                    {item.status === 'waiting_confirm' ? (
+                                        <button
+                                            onClick={() => handleConfirmImport(item._id)}
+                                            className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm"
+                                            title="Xác nhận nhập kho"
+                                        >
+                                            <FiCheckCircle /> Nhập kho
+                                        </button>
+                                    ) : item.status === 'completed' ? (
+                                        <span className="text-gray-300 text-xs italic">---</span>
+                                    ) : item.status === 'expired' || item.status === 'cancelled' ? (
+                                        <span className="text-red-300 text-xs italic">Đã hết hạn</span>
+                                    ) : canUpdateOrDeleteImport(item) ? (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingImportId(item._id);
+                                                    setShowImportModal(true);
+                                                }}
+                                                className="inline-flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-indigo-700 shadow-sm"
+                                                title="Cập nhật phiếu nhập"
+                                            >
+                                                <FiEdit /> Cập nhật
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteImport(item._id)}
+                                                className="inline-flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-red-700 shadow-sm"
+                                                title="Xóa phiếu nhập"
+                                            >
+                                                <FiXCircle /> Xóa
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-300 text-xs italic">Chưa đến ngày nhập</span>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}
