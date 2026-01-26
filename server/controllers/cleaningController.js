@@ -466,25 +466,42 @@ export const confirmCleaning = async (req, res) => {
 // Lấy tất cả công việc (admin)
 export const getAllTasks = async (req, res) => {
     try {
-        const { type, status } = req.query; 
+        const { type, status } = req.query;
         // type: 'cleaning' | 'install' | 'equipment_import' | 'product_import' | 'incident' | 'all'
-        
+
         const tasks = [];
-        
+
         // Cleaning tasks
         if (!type || type === 'all' || type === 'cleaning') {
             const cleaningTasks = await CleaningTask.find(status ? { status } : {})
                 .populate("room_id", "room_number room_category_id")
                 .populate("handled_by", "full_name phone_number")
-                .populate("booking_id", "_id")
+                .populate({
+                    path: "booking_id",
+                    select: "expected_checkin expected_checkout status", // Lấy ngày giờ
+                    populate: {
+                        path: "customer_id",
+                        select: "full_name phone_number email" // Lấy tên khách
+                    }
+                })
                 .sort({ created_at: -1 });
-            
-            tasks.push(...cleaningTasks.map(t => ({
-                ...t.toObject(),
-                task_type: "cleaning"
-            })));
+
+            tasks.push(...cleaningTasks.map(t => {
+                const taskObj = t.toObject();
+                return {
+                    ...taskObj,
+                    task_type: "cleaning",
+                    booking_info: t.booking_id ? {
+                        customer_name: t.booking_id.customer_id?.full_name,
+                        customer_phone: t.booking_id.customer_id?.phone_number,
+                        checkin: t.booking_id.expected_checkin,
+                        checkout: t.booking_id.expected_checkout,
+                        status: t.booking_id.status
+                    } : null
+                };
+            }));
         }
-        
+
         // Equipment install tasks
         if (!type || type === 'all' || type === 'install') {
             const installTasks = await EquipmentInstall.find(status ? { status } : {})
@@ -492,97 +509,88 @@ export const getAllTasks = async (req, res) => {
                 .populate("handled_by", "full_name phone_number")
                 .sort({ created_at: -1 })
                 .lean();
-            
+
             // Lấy install_details cho từng install task
             const installIds = installTasks.map(t => t._id);
             const installDetails = await InstallDetail.find({ install_id: { $in: installIds } })
                 .populate({
                     path: "equipment_id",
-                    populate: {
-                        path: "category_id",
-                        select: "name description"
-                    },
+                    populate: { path: "category_id", select: "name description" },
                     select: "category_id condition status code"
                 })
                 .lean();
-            
+
             // Group install_details theo install_id
             const detailsMap = {};
             installDetails.forEach(detail => {
                 const installId = detail.install_id.toString();
-                if (!detailsMap[installId]) {
-                    detailsMap[installId] = [];
-                }
+                if (!detailsMap[installId]) detailsMap[installId] = [];
                 detailsMap[installId].push(detail);
             });
-            
+
             tasks.push(...installTasks.map(t => ({
                 ...t,
                 task_type: "install",
                 install_details: detailsMap[t._id.toString()] || []
             })));
         }
-        
+
         // Equipment import tickets
         if (!type || type === 'all' || type === 'equipment_import') {
             const equipmentTickets = await EquipmentTicket.find(status ? { status } : {})
                 .populate("employee_id", "full_name phone_number")
                 .sort({ created_at: -1 })
                 .lean();
-            
+
             // Lấy import details cho từng ticket
             const ticketIds = equipmentTickets.map(t => t._id);
             const equipmentImports = await EquipmentImport.find({ ticket_id: { $in: ticketIds } })
                 .populate("category_id", "name description")
                 .lean();
-            
+
             // Group imports theo ticket_id
             const importsMap = {};
             equipmentImports.forEach(imp => {
                 const ticketId = imp.ticket_id.toString();
-                if (!importsMap[ticketId]) {
-                    importsMap[ticketId] = [];
-                }
+                if (!importsMap[ticketId]) importsMap[ticketId] = [];
                 importsMap[ticketId].push(imp);
             });
-            
+
             tasks.push(...equipmentTickets.map(t => ({
                 ...t,
                 task_type: "equipment_import",
                 import_details: importsMap[t._id.toString()] || []
             })));
         }
-        
+
         // Product import tickets (GoodTicket)
         if (!type || type === 'all' || type === 'product_import') {
             const goodTickets = await GoodTicket.find(status ? { status } : {})
                 .populate("employee_id", "full_name phone_number")
                 .sort({ created_at: -1 })
                 .lean();
-            
+
             // Lấy import details cho từng ticket
             const ticketIds = goodTickets.map(t => t._id);
             const goodImports = await GoodImport.find({ ticket_id: { $in: ticketIds } })
                 .populate("service_id", "name description")
                 .lean();
-            
+
             // Group imports theo ticket_id
             const importsMap = {};
             goodImports.forEach(imp => {
                 const ticketId = imp.ticket_id.toString();
-                if (!importsMap[ticketId]) {
-                    importsMap[ticketId] = [];
-                }
+                if (!importsMap[ticketId]) importsMap[ticketId] = [];
                 importsMap[ticketId].push(imp);
             });
-            
+
             tasks.push(...goodTickets.map(t => ({
                 ...t,
                 task_type: "product_import",
                 import_details: importsMap[t._id.toString()] || []
             })));
         }
-        
+
         // Incidents
         if (!type || type === 'all' || type === 'incident') {
             const incidents = await Incident.find(status ? { status } : {})
@@ -593,26 +601,21 @@ export const getAllTasks = async (req, res) => {
                 .populate("assignee_info.assignee_id", "full_name phone_number")
                 .sort({ created_at: -1 })
                 .lean();
-            
+
             tasks.push(...incidents.map(t => ({
                 ...t,
                 task_type: "incident"
             })));
         }
-        
+
         // Sắp xếp theo thời gian tạo
         tasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        
-        res.status(200).json({
-            success: true,
-            tasks: tasks
-        });
-        
+
+        res.status(200).json({ success: true, tasks: tasks });
+
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Lỗi server: " + error.message
-        });
+        console.error("GetAllTasks Error:", error);
+        res.status(500).json({ success: false, message: "Lỗi server: " + error.message });
     }
 };
 
