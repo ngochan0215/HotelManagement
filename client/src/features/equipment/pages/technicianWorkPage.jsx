@@ -29,6 +29,7 @@ export default function TechnicianWorkPage() {
     try {
       const params = filterStatus ? { status: filterStatus } : {};
       const res = await equipmentApi.getMyInstallTickets(params);
+      console.log("RES: ", res);
       setTickets(res.installs || []);
     } catch (error) {
       setToast({
@@ -108,8 +109,14 @@ export default function TechnicianWorkPage() {
         label: "Hoàn tất", 
         color: "bg-green-100 text-green-800",
         icon: <FiCheckCircle className="w-4 h-4" />
+      },
+      expired: {
+        label: "Hết hạn", 
+        color: "bg-green-100 text-green-800",
+        icon: <FiAlertCircle className="w-4 h-4" />
       }
     };
+    console.log("STATUS: ", status);
     const statusInfo = statusMap[status] || statusMap.pending;
     return (
       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>

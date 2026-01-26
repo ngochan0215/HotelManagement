@@ -179,7 +179,6 @@ export const getCalendarRooms = async (req, res) => {
 
     const findBookingForLog = (log) => {
       // First, try to use booking_id from RoomLog if available
-      // RoomLog.booking_id is a direct link created when booking is made, so we trust it
       if (log.booking_id) {
         let bookingId;
         if (typeof log.booking_id === 'object' && log.booking_id._id) {

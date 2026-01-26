@@ -226,20 +226,32 @@ export default function BookingList() {
     // Tính tổng tiền: giá phòng * số đêm (giống backend)
     const total = selectedRooms.reduce((sum, r) => sum + (r.price * nights), 0);
     let finalTotal = total;
-    if (selectedDiscount && selectedDiscount.discount_amount > 0) {
-      finalTotal = total - selectedDiscount.discount_amount;
+    
+    // Tính lại discount_amount từ total hiện tại để đảm bảo chính xác
+    if (selectedDiscount) {
+      let discountAmount = 0;
+      if (selectedDiscount.discount_type === "PERCENT") {
+        discountAmount = Math.round(total * selectedDiscount.discount_value / 100);
+        if (selectedDiscount.max_discount && discountAmount > selectedDiscount.max_discount) {
+          discountAmount = selectedDiscount.max_discount;
+        }
+      } else {
+        discountAmount = selectedDiscount.discount_value || 0;
+      }
+      finalTotal = Math.max(0, total - discountAmount); // Đảm bảo không âm
     }
+    
     const deposit = (bookingMode === 'immediate' || isWalkIn) ? 0 : (finalTotal * 0.3);
     setCalcValues({ total_price: finalTotal, deposit_required: deposit });
     setFormData(prev => ({...prev, deposit: deposit}));
   }, [selectedRooms, isWalkIn, isPreviewLocked, bookingMode, formData.expected_checkin, formData.expected_checkout, selectedDiscount]);
 
-  // useEffect để fetch discounts khi selectedRooms thay đổi
+  // useEffect để fetch discounts khi selectedRooms hoặc thời gian thay đổi
   useEffect(() => {
-    if (formData.customer_id && selectedRooms.length > 0) {
+    if (formData.customer_id && selectedRooms.length > 0 && formData.expected_checkin && formData.expected_checkout) {
       fetchAvailableDiscounts();
     }
-  }, [selectedRooms, formData.customer_id]);
+  }, [selectedRooms, formData.customer_id, formData.expected_checkin, formData.expected_checkout]);
 
 
   const fetchData = async () => {
@@ -371,23 +383,29 @@ export default function BookingList() {
 
   // Hàm fetch available discounts
   const fetchAvailableDiscounts = async () => {
-    if (!formData.customer_id || !selectedRooms.length) {
+    if (!formData.customer_id || !selectedRooms.length || !formData.expected_checkin || !formData.expected_checkout) {
       setAvailableDiscounts([]);
       return;
     }
     
     setLoadingDiscounts(true);
     try {
-      // Tính tổng tiền đơn hàng
+      // Tính số đêm giống như trong useEffect (đồng bộ với cách tính total)
+      const diffMs = new Date(formData.expected_checkout) - new Date(formData.expected_checkin);
+      if (diffMs <= 0) {
+        setAvailableDiscounts([]);
+        return;
+      }
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const days = diffHours / 24;
+      const nights = Math.ceil(days * 100) / 100; // Làm tròn lên 2 chữ số thập phân giống backend
+      
+      // Tính tổng tiền đơn hàng (phải giống với cách tính trong useEffect)
       const totalOrderValue = selectedRooms.reduce((sum, room) => {
-        const nights = Math.ceil((new Date(formData.expected_checkout) - new Date(formData.expected_checkin)) / (1000 * 60 * 60 * 24));
         return sum + (room.price * nights);
       }, 0);
-      //console.log("Total order value for discounts:", totalOrderValue);
       
-      //console.log("Fetching available discounts for customer:", formData.customer_id);
       const res = await discountApi.getAvailableDiscounts(formData.customer_id, totalOrderValue);
-      //console.log("Available discounts fetched:", res);
       if (res.success) {
         setAvailableDiscounts(res.discounts || []);
       }
