@@ -9,7 +9,7 @@ const equipmentSchema = new mongoose.Schema(
         install_ticket_id: { type: mongoose.Schema.Types.ObjectId, ref: "EquipmentInstall" },
 
         condition: { type: String, enum: ["new", "good", "maintenance", "broken"], default: "good", required: true },
-        status: { type: String, enum: ["in-stock", "installing", "in-use", "maintenance", "lost", "disposed"], default: "in-stock", required: true },
+        status: { type: String, enum: ["in-stock", "installing", "removing", "in-use", "maintenance", "lost", "disposed"], default: "in-stock", required: true },
         note: { type: String }
     },
     {

@@ -34,7 +34,7 @@ export const startInstallTicketJob = () =>
 export const startGoodTicketJob = () =>
   startCronJob({
     name: "import goods tickets",
-    schedule: "*/5 * * * *",
+    schedule: "* * * * *",
     handler: notifyGoodTickets,
   });
 

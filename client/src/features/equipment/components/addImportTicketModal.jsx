@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { FiX, FiPlus, FiTrash2, FiSave, FiAlertCircle } from "react-icons/fi";
 
-export default function AddImportTicketModal({ onClose, onSuccess }) {
+export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const isUpdateMode = !!ticket;
 
   const [formData, setFormData] = useState({
     import_date: new Date().toISOString().split("T")[0],
@@ -23,6 +24,20 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
     };
     fetchCats();
   }, []);
+
+  // Load dữ liệu ticket nếu là update mode
+  useEffect(() => {
+    if (ticket) {
+      setFormData({
+        import_date: ticket.import_date ? new Date(ticket.import_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+        items: ticket.import_details?.map(detail => ({
+          category_id: detail.category_id?._id || detail.category_id || "",
+          import_price: detail.import_price || 0,
+          import_quantity: detail.import_quantity || 1
+        })) || [{ category_id: "", import_price: 0, import_quantity: 1 }]
+      });
+    }
+  }, [ticket]);
 
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
@@ -81,7 +96,11 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
             }))
         };
 
-        await equipmentApi.createImportTicket(payload);
+        if (isUpdateMode) {
+          await equipmentApi.updateImportTicket(ticket._id, payload);
+        } else {
+          await equipmentApi.createImportTicket(payload);
+        }
         onSuccess();
         onClose();
     } catch (err) {
@@ -96,8 +115,8 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
       <div className="bg-white rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
             <div>
-                <h2 className="text-xl font-bold text-gray-800">Tạo Phiếu Nhập Kho Mới</h2>
-                <p className="text-sm text-gray-500">Nhập thông tin thiết bị mua mới từ nhà cung cấp</p>
+                <h2 className="text-xl font-bold text-gray-800">{isUpdateMode ? "Cập nhật Phiếu Nhập Kho" : "Tạo Phiếu Nhập Kho Mới"}</h2>
+                <p className="text-sm text-gray-500">{isUpdateMode ? "Cập nhật thông tin phiếu nhập thiết bị" : "Nhập thông tin thiết bị mua mới từ nhà cung cấp"}</p>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><FiX size={20}/></button>
         </div>
@@ -215,7 +234,7 @@ export default function AddImportTicketModal({ onClose, onSuccess }) {
                 type="submit" form="import-form" disabled={loading}
                 className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-lg shadow-blue-200"
             >
-                {loading ? "Đang xử lý..." : <><FiSave /> Tạo Phiếu Nhập</>}
+                {loading ? "Đang xử lý..." : <><FiSave /> {isUpdateMode ? "Cập nhật Phiếu" : "Tạo Phiếu Nhập"}</>}
             </button>
         </div>
       </div>

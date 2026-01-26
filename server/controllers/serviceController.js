@@ -393,7 +393,8 @@ export const createGoodTicket = async (req, res) => {
     // tạo phiếu nhập sản phẩm trước
     const employeeId = employee._id;
     const ticket = await GoodTicket.create( 
-      [{ employee_id: employeeId, import_date, status: isToday? "pending" : "waiting_confirm" }], 
+      [{ employee_id: employeeId, import_date, 
+        status: isToday ? "waiting_confirm" : "pending" }], 
       { session });
 
     // thêm chi tiết nhập

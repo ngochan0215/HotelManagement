@@ -5,7 +5,8 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket, 
         createInstallTicket, createUninstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
         confirmEquipmentInstall, startInstallTicket, completeInstallTicket, getAvailableTechnicians, getMyInstallTickets,
-        confirmEquipmentImportTicket, getSmartInstallSuggestions, autoCreateImportTicket, getOutOfStockCategories
+        confirmEquipmentImportTicket, getSmartInstallSuggestions, autoCreateImportTicket, getOutOfStockCategories,
+        syncEquipmentCategoryQuantities
 } from "../controllers/equipmentController.js";
 import { isManager, isNotCustomer, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
@@ -17,6 +18,7 @@ router.patch("/category/:id", verifyToken, isManager, updateEquipmentCategory);
 router.delete("/category/:id", verifyToken, isManager, deleteEquipmentCategory);
 router.get("/category/all", verifyToken, getAllEquipmentCategories);
 router.get("/category/:id", verifyToken, getEquipmentCategoryById);
+router.post("/category/sync-quantities", verifyToken, isManager, syncEquipmentCategoryQuantities);
 
 //----THIẾT BỊ - EQUIPMENT----//
 router.patch("/:id", verifyToken, isNotCustomer, updateEquipment);
@@ -38,12 +40,18 @@ router.post("/ticket/:id/confirm-import", verifyToken, isManager, confirmEquipme
 router.get("/install/available-technicians", verifyToken, isManager, getAvailableTechnicians);
 router.get("/install/smart-suggestions", verifyToken, isManager, getSmartInstallSuggestions);
 router.get("/install/my-tickets", verifyToken, isEmployee, getMyInstallTickets);
+
+// tạo phiếu lắp đặt
 router.post("/install/add", verifyToken, isManager, createInstallTicket);
+// tạo phiếu tháo dỡ
 router.post("/install/uninstall", verifyToken, isManager, createUninstallTicket);
+
 router.get("/install/all", verifyToken, isNotCustomer, getAllEquipmentInstalls);
 router.get("/install/:id", verifyToken, isNotCustomer, getEquipmentInstallById);
 router.patch("/install/:id", verifyToken, isManager, updateEquipmentInstall);
 router.delete("/install/:id", verifyToken, isManager, deleteEquipmentInstall);
+
+// xác nhận trạng thái phiếu
 router.post("/install/:id/start", verifyToken, isEmployee, startInstallTicket);
 router.post("/install/:id/complete", verifyToken, isEmployee, completeInstallTicket);
 router.post("/install/:id/confirm-install", verifyToken, isManager, confirmEquipmentInstall);

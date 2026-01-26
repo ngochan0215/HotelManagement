@@ -26,9 +26,40 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
   useEffect(() => {
     const fetchRooms = async () => {
         try {
+            // Fetch tất cả phòng
             const res = await roomApi.getAllRooms();
-            setRooms(res.rooms || []);
-        } catch (error) { console.error(error); }
+            const allRooms = res.rooms || [];
+
+            // Fetch danh sách phiếu lắp đặt đang active (chưa completed/expired)
+            // Chỉ lấy phiếu lắp đặt (type='install'), không lấy phiếu tháo dỡ
+            const installTicketsRes = await equipmentApi.getAllInstallTickets();
+            const activeTickets = (installTicketsRes.installs || []).filter(ticket => 
+                ticket.type === 'install' && // Chỉ lấy phiếu lắp đặt
+                ticket.status !== 'completed' && 
+                ticket.status !== 'expired' &&
+                ticket.room_id // Chỉ lấy phiếu có room_id
+            );
+
+            // Lấy danh sách room_id đang có phiếu lắp đặt active
+            const busyRoomIds = new Set(
+                activeTickets
+                    .map(ticket => {
+                        const roomId = ticket.room_id?._id || ticket.room_id;
+                        return roomId ? roomId.toString() : null;
+                    })
+                    .filter(id => id) // Loại bỏ null/undefined
+            );
+
+            // Filter phòng: loại bỏ những phòng đang có phiếu lắp đặt active
+            const availableRooms = allRooms.filter(room => {
+                const roomId = room._id?.toString() || room._id?.toString();
+                return !busyRoomIds.has(roomId);
+            });
+
+            setRooms(availableRooms);
+        } catch (error) { 
+            console.error("Lỗi tải danh sách phòng:", error); 
+        }
     };
     fetchRooms();
   }, []);
@@ -37,6 +68,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
     const fetchTechnicians = async () => {
         try {
             const res = await equipmentApi.getAvailableTechnicians();
+            console.log("AVAILABLE TECHNICIANS: ", res);
             setTechnicians(res.technicians || []);
         } catch (error) { 
             console.error("Lỗi tải danh sách nhân viên kỹ thuật:", error);
@@ -86,6 +118,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                     return;
                 }
 
+                // Fetch thiết bị trong phòng
                 res = await equipmentApi.getAllEquipments({
                     room_id: selectedRoomId,
                     status: 'in-use'
@@ -93,14 +126,72 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
                 const eqs = res.equipments || [];
 
-                const specificOptions = eqs.map(eq => {
+                // Fetch danh sách phiếu tháo dỡ cùng thời điểm để loại trừ thiết bị đã có trong đó
+                let busyEquipmentIds = new Set();
+                try {
+                    const installTicketsRes = await equipmentApi.getAllInstallTickets();
+                    const allTickets = installTicketsRes.installs || [];
+                    
+                    // Lấy ngày được chọn (nếu có)
+                    const selectedDate = installDate ? new Date(installDate) : new Date();
+                    selectedDate.setHours(0, 0, 0, 0);
+                    
+                    // Tìm các phiếu tháo dỡ cùng thời điểm (cùng install_date)
+                    const sameDateUninstallTickets = allTickets.filter(ticket => {
+                        if (ticket.type !== 'uninstall') return false;
+                        if (!['pending', 'assigned', 'waiting_confirm'].includes(ticket.status)) return false;
+                        
+                        const ticketDate = new Date(ticket.install_date);
+                        ticketDate.setHours(0, 0, 0, 0);
+                        return ticketDate.getTime() === selectedDate.getTime();
+                    });
+                    
+                    // Lấy danh sách equipment_id từ các phiếu đó
+                    for (const ticket of sameDateUninstallTickets) {
+                        try {
+                            const ticketDetailRes = await equipmentApi.getEquipmentInstallById(ticket._id);
+                            if (ticketDetailRes.success && ticketDetailRes.install?.install_details) {
+                                ticketDetailRes.install.install_details.forEach(detail => {
+                                    const eqId = detail.equipment_id?._id || detail.equipment_id;
+                                    if (eqId) {
+                                        busyEquipmentIds.add(eqId.toString());
+                                    }
+                                });
+                            }
+                        } catch (err) {
+                            console.error(`Error fetching ticket ${ticket._id} details:`, err);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching busy equipment:", err);
+                }
+
+                // Filter thiết bị: loại trừ thiết bị có status "removing" và thiết bị đã có trong phiếu khác cùng thời điểm
+                const availableEqs = eqs.filter(eq => {
+                    const eqId = eq._id?.toString() || eq._id;
+                    // Loại trừ thiết bị có status "removing"
+                    if (eq.status === 'removing') return false;
+                    // Loại trừ thiết bị đã có trong phiếu khác cùng thời điểm
+                    if (busyEquipmentIds.has(eqId)) return false;
+                    return true;
+                });
+
+                const specificOptions = availableEqs.map(eq => {
                     const code = eq.code ? eq.code : eq._id.slice(-6).toUpperCase();
                     const conditionText = CONDITION_MAP[eq.condition] || eq.condition;
+                    
+                    // Đảm bảo lấy đúng equipment_id, không phải category_id
+                    const equipmentId = eq._id?.toString() || eq._id;
+                    const categoryId = eq.category_id?._id?.toString() || eq.category_id?.toString() || eq.category_id;
+                    const categoryName = eq.category_id?.name || "Unknown";
+
 
                     return {
-                        value: eq._id,
-                        label: `${eq.category_id?.name} (#${code}) - ${conditionText}`,
-                        type: 'specific'
+                        value: equipmentId, // Đảm bảo là string - ĐÂY LÀ ID THIẾT BỊ, KHÔNG PHẢI CATEGORY_ID
+                        label: `${categoryName} (#${code}) - ${conditionText}`,
+                        type: 'specific',
+                        equipmentId: equipmentId, // Lưu thêm để debug
+                        categoryId: categoryId // Lưu để so sánh
                     };
                 });
                 setDropdownOptions(specificOptions);
@@ -114,7 +205,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
     };
 
     fetchData();
-  }, [mode, selectedRoomId]);
+  }, [mode, selectedRoomId, installDate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -132,13 +223,34 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
     setLoading(true);
     try {
-      const payloadItems = items.map(item => {
+      const payloadItems = items.map((item, idx) => {
           if (mode === 'install') {
               return { category_id: item.id, quantity: item.quantity };
           } else {
-              return { specific_equipment_id: item.id, quantity: 1 };
+              // Đảm bảo item.id là equipment_id, không phải category_id
+              // Kiểm tra xem item.id có trong dropdownOptions với type='specific' không
+              const option = dropdownOptions.find(opt => opt.value === item.id && opt.type === 'specific');
+              if (!option) {
+                  console.error(`[ERROR] Item ${idx}: item.id=${item.id} không tìm thấy trong dropdownOptions`);
+                  console.error(`[ERROR] Available options:`, dropdownOptions.map(opt => ({ value: opt.value, type: opt.type, label: opt.label })));
+                  throw new Error(`Thiết bị được chọn không hợp lệ. Vui lòng chọn lại.`);
+              }
+              
+              // Đảm bảo sử dụng equipmentId từ option, không phải item.id (có thể bị sai)
+              const equipmentId = option.equipmentId || option.value || item.id;
+              
+              console.log(`[Payload] Item ${idx}: item.id=${item.id}, option.value=${option.value}, option.equipmentId=${option.equipmentId}, final equipmentId=${equipmentId}`);
+              
+              return { specific_equipment_id: equipmentId, quantity: 1 };
           }
       });
+
+      // Debug log để kiểm tra payload
+      if (mode === 'uninstall') {
+          console.log("Uninstall payload items:", payloadItems);
+          console.log("Selected room:", selectedRoomId);
+          console.log("Dropdown options:", dropdownOptions);
+      }
 
       if (mode === 'install') {
         // Tạo phiếu lắp đặt
@@ -161,6 +273,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
           handled_by: selectedTechnicianId || null,
         };
 
+        console.log("PAYLOAd IN CREATING UNINSTALL TICKET: ", payload);
         await equipmentApi.createUninstallTicket(payload);
         alert("Tạo phiếu tháo dỡ thành công!");
       }
@@ -228,7 +341,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
           alert("Không tìm thấy thiết bị gợi ý trong kho. Vui lòng kiểm tra lại.");
         }
       } else {
-        alert(res.message || "Phòng này đã có đủ thiết bị mặc định hoặc không có thiết bị mặc định nào.");
+        alert(res.message || "Phòng này đã có đủ thiết bị mặc định hoặc loại phòng này không có danh sách thiết bị mặc định.");
       }
     } catch (error) {
       console.error("Error fetching smart suggestions:", error);
@@ -344,15 +457,30 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                                 required
                                 className="w-full border border-gray-300 rounded-lg p-2.5 outline-none text-sm"
                                 value={item.id}
-                                onChange={e => updateItem(index, "id", e.target.value)}
+                                onChange={e => {
+                                    const selectedValue = e.target.value;
+                                    // Đảm bảo lưu đúng equipmentId, không phải categoryId
+                                    const selectedOption = dropdownOptions.find(opt => opt.value === selectedValue);
+                                    if (mode === 'uninstall' && selectedOption) {
+                                        // Lưu equipmentId từ option, không phải value (có thể bị sai)
+                                        const equipmentId = selectedOption.equipmentId || selectedOption.value;
+                                        console.log(`[Select Change] Selected value=${selectedValue}, option.equipmentId=${selectedOption.equipmentId}, final equipmentId=${equipmentId}`);
+                                        updateItem(index, "id", equipmentId);
+                                    } else {
+                                        updateItem(index, "id", selectedValue);
+                                    }
+                                }}
                             >
                                 <option value="">-- Chọn thiết bị --</option>
                                 {dropdownOptions.map(opt => {
                                     const isSelectedAlready = mode === 'uninstall' && items.some((i, idx) => i.id === opt.value && idx !== index);
                                     if (isSelectedAlready) return null;
 
+                                    // Đảm bảo value là equipmentId, không phải categoryId
+                                    const optionValue = mode === 'uninstall' ? (opt.equipmentId || opt.value) : opt.value;
+
                                     return (
-                                        <option key={opt.value} value={opt.value}>
+                                        <option key={opt.value} value={optionValue}>
                                             {opt.label} {mode === 'install' ? `(Tồn: ${stockMap[opt.value]})` : ''}
                                         </option>
                                     )
