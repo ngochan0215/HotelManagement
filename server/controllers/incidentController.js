@@ -384,8 +384,8 @@ export const createCompensateTicket = async (req, res) => {
     const actor = await Employee.findOne({ user_id: req.user.userId });
 
     if ( !payer_type || !compensation_details ) {
-      return res.status(404).json({ message: "Yêu cầu nhập đầy đủ thông tin." });
-    }
+      return res.status(400).json({ message: "Yêu cầu nhập đầy đủ thông tin (payer_type, compensation_details)." });
+          }
 
     const incident = await Incident.findById(incident_id).session(session);
     if (!incident) {
