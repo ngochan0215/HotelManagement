@@ -20,7 +20,7 @@ const equipmentLogSchema = new mongoose.Schema(
     },
     
     status: { 
-        type: String, enum: ["in-stock", "installing", "in-use", "maintenance", "lost", "disposed"], 
+        type: String, enum: ["in-stock", "installing", "in-use", "maintenance", "lost", "disposed", "removing"], 
         default: "in-stock", required: true 
     },
 

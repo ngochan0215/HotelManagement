@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import {
-  FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft, FiEdit, FiEye,
+  FiCheckCircle, FiPlus, FiArrowRight, FiArrowLeft, FiEdit, FiEye, FiTrash2,
   FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
 import AddInstallTicketModal from "../components/addInstallTicketModal.jsx";
@@ -18,7 +18,9 @@ export default function EquipmentTicketTab() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showUpdateImportModal, setShowUpdateImportModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showImportDetailModal, setShowImportDetailModal] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [selectedImportTicket, setSelectedImportTicket] = useState(null);
   
@@ -112,7 +114,7 @@ export default function EquipmentTicketTab() {
                 disabled={currentPage === totalPages}
                 className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <FiChevronRight />
+                <FiChevronRight/>
             </button>
         </div>
     );
@@ -126,12 +128,99 @@ export default function EquipmentTicketTab() {
     } catch (err) { alert("Lỗi: " + err.message); }
   };
 
+  const handleDeleteImport = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy phiếu nhập này?")) return;
+    try {
+      await equipmentApi.deleteImportTicket(id);
+      alert("Đã hủy phiếu nhập thành công!"); 
+      fetchTickets();
+    } catch (err) { 
+      alert("Lỗi: " + (err.response?.data?.message || err.message)); 
+    }
+  };
+
+  // Kiểm tra xem có thể cập nhật/hủy phiếu nhập không (chưa đến ngày nhập)
+  const canUpdateOrDeleteImport = (ticket) => {
+    if (ticket.status === 'completed' || ticket.status === 'expired') {
+      return false;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const importDate = new Date(ticket.import_date);
+    importDate.setHours(0, 0, 0, 0);
+    
+    // Chỉ cho phép update/delete nếu chưa đến ngày nhập
+    return importDate > today;
+  };
+
   const handleConfirmInstall = async (id) => {
     if (!window.confirm("Xác nhận hoàn tất phiếu này?")) return;
     try {
       await equipmentApi.confirmInstallTicket(id);
-      alert("Thành công!"); fetchTickets();
-    } catch (err) { alert("Lỗi: " + err.message); }
+      alert("Thành công!"); 
+      fetchTickets();
+    } catch (err) 
+    { 
+        alert("Lỗi: " + err.message); 
+    }
+  };
+
+  const handleDeleteInstall = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy phiếu này?")) return;
+    try {
+      await equipmentApi.deleteInstallTicket(id);
+      alert("Đã hủy phiếu thành công!"); 
+      fetchTickets();
+    } catch (err) { 
+      alert("Lỗi: " + (err.response?.data?.message || err.message)); 
+    }
+  };
+
+  // Kiểm tra xem có thể cập nhật phiếu không (trước ngày lắp đặt/tháo dỡ)
+  const canUpdateTicket = (ticket) => {
+    // Nếu đã completed hoặc expired → không cho cập nhật
+    if (ticket.status === 'completed' || ticket.status === 'expired') {
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const installDate = new Date(ticket.install_date);
+    installDate.setHours(0, 0, 0, 0);
+    
+    // Chỉ cho phép cập nhật nếu chưa đến ngày lắp đặt/tháo dỡ
+    return installDate > today;
+  };
+
+  // Kiểm tra xem có thể hủy phiếu không
+  const canCancelTicket = (ticket) => {
+    // Nếu đã completed hoặc expired → không cho hủy
+    if (ticket.status === 'completed' || ticket.status === 'expired') {
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const installDate = new Date(ticket.install_date);
+    installDate.setHours(0, 0, 0, 0);
+    
+    const isToday = installDate.getTime() === today.getTime();
+    
+    // Nếu phiếu không phải hôm nay → cho hủy (dù có gán nhân viên hay không)
+    if (!isToday) {
+      return true;
+    }
+    
+    // Nếu phiếu hôm nay → chỉ cho hủy nếu chưa started_at (nhân viên chưa nhận việc)
+    if (isToday && !ticket.started_at) {
+      return true;
+    }
+    
+    return false;
   };
 
   const isInstallType = (ticket) => {
@@ -152,6 +241,17 @@ export default function EquipmentTicketTab() {
       },
       completed: { label: "Hoàn tất", class: "bg-green-100 text-green-700" },
       expired: { label: "Đã hủy", class: "bg-red-100 text-red-700" },
+    };
+    const s = config[status] || config.pending;
+    return <span className={`px-2 py-1 rounded text-xs font-medium ${s.class}`}>{s.label}</span>;
+  };
+
+  const renderImportTicketStatus = (status, completed_at) => {
+    const config = {
+      pending: { label: "Chờ đến ngày nhập", class: "bg-gray-100 text-gray-500" },
+      waiting_confirm: { label: "Chờ admin xác nhận", class: "bg-yellow-100 text-yellow-800" },
+      completed: { label: "Hoàn tất", class: "bg-green-100 text-green-700" },
+      expired: { label: "Hết hạn", class: "bg-red-100 text-red-700" },
     };
     const s = config[status] || config.pending;
     return <span className={`px-2 py-1 rounded text-xs font-medium ${s.class}`}>{s.label}</span>;
@@ -233,13 +333,33 @@ export default function EquipmentTicketTab() {
           }} 
         />
       )}
-      {showImportModal && selectedImportTicket && (
+      {showImportDetailModal && selectedImportTicket && (
         <ImportTicketDetailModal 
           ticket={selectedImportTicket}
           onClose={() => {
-            setShowImportModal(false);
+            setShowImportDetailModal(false);
             setSelectedImportTicket(null);
           }} 
+        />
+      )}
+      {showUpdateImportModal && selectedImportTicket && (
+        <AddImportTicketModal 
+          ticket={selectedImportTicket}
+          onClose={() => {
+            setShowUpdateImportModal(false);
+            setSelectedImportTicket(null);
+          }} 
+          onSuccess={fetchTickets}
+        />
+      )}
+      {showUpdateImportModal && selectedImportTicket && (
+        <AddImportTicketModal 
+          ticket={selectedImportTicket}
+          onClose={() => {
+            setShowUpdateImportModal(false);
+            setSelectedImportTicket(null);
+          }} 
+          onSuccess={fetchTickets}
         />
       )}
 
@@ -272,6 +392,16 @@ export default function EquipmentTicketTab() {
                   }`}
               >
                   Chờ xử lý
+              </button>
+              <button 
+                  onClick={() => setInstallsFilterStatus("assigned")} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                      installsFilterStatus === "assigned" 
+                          ? "bg-white text-indigo-600 shadow-sm" 
+                          : "text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                  Đã phân việc
               </button>
               <button 
                   onClick={() => setInstallsFilterStatus("waiting_confirm")} 
@@ -366,7 +496,7 @@ export default function EquipmentTicketTab() {
                                           Chi tiết
                                       </button>
                                       
-                                      {(item.status === 'pending' || (item.status === 'waiting_confirm' && !item.started_at)) && (
+                                      {canUpdateTicket(item) && (
                                           <button 
                                               onClick={() => {
                                                   setSelectedTicket(item);
@@ -385,6 +515,16 @@ export default function EquipmentTicketTab() {
                                               className="text-green-600 hover:text-green-800 font-bold text-xs border border-green-200 px-2 py-1 rounded hover:bg-green-50 transition"
                                           >
                                               Xác nhận
+                                          </button>
+                                      )}
+                                      
+                                      {canCancelTicket(item) && (
+                                          <button 
+                                              onClick={() => handleDeleteInstall(item._id)} 
+                                              className="text-red-600 hover:text-red-800 font-bold text-xs border border-red-200 px-2 py-1 rounded hover:bg-red-50 transition flex items-center gap-1"
+                                          >
+                                              <FiTrash2 className="w-3 h-3" />
+                                              Hủy
                                           </button>
                                       )}
                                   </div>
@@ -487,13 +627,13 @@ export default function EquipmentTicketTab() {
                             <td className="px-4 py-3 text-xs max-w-[200px] truncate">
                                 {item.import_details?.map(d => `${d.category_id?.name} (x${d.import_quantity})`).join(", ")}
                             </td>
-                            <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
+                            <td className="px-4 py-3 text-center">{renderImportTicketStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
                                 <div className="flex items-center justify-end gap-2">
                                     <button 
                                         onClick={() => {
                                             setSelectedImportTicket(item);
-                                            setShowImportModal(true);
+                                            setShowImportDetailModal(true);
                                         }}
                                         className="text-blue-600 hover:text-blue-800 font-bold text-xs border border-blue-200 px-2 py-1 rounded hover:bg-blue-50 transition flex items-center gap-1"
                                     >
@@ -504,6 +644,28 @@ export default function EquipmentTicketTab() {
                                         <button onClick={() => handleConfirmImport(item._id)} className="text-green-600 hover:text-green-800 font-bold text-xs border border-green-200 px-2 py-1 rounded hover:bg-green-50">
                                             Nhập kho
                                         </button>
+                                    )}
+                                    
+                                    {canUpdateOrDeleteImport(item) && (
+                                        <>
+                                            <button 
+                                                onClick={() => {
+                                                    setSelectedImportTicket(item);
+                                                    setShowUpdateImportModal(true);
+                                                }}
+                                                className="text-indigo-600 hover:text-indigo-800 font-bold text-xs border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 transition flex items-center gap-1"
+                                            >
+                                                <FiEdit className="w-3 h-3" />
+                                                Cập nhật
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteImport(item._id)} 
+                                                className="text-red-600 hover:text-red-800 font-bold text-xs border border-red-200 px-2 py-1 rounded hover:bg-red-50 transition flex items-center gap-1"
+                                            >
+                                                <FiTrash2 className="w-3 h-3" />
+                                                Hủy
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </td>

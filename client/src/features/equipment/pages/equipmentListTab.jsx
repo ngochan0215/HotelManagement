@@ -11,13 +11,14 @@ import Pagination from "../../../components/pagination.jsx";
 const STATUS_MAP = {
   "in-stock": { label: "Trong kho", color: "gray", icon: "info" },
   "installing": { label: "Đang lắp", color: "blue", icon: "wait" },
+  "removing": { label: "Đang tháo", color: "orange", icon: "wait" },
   "in-use": { label: "Đang dùng", color: "indigo", icon: "success" },
   "maintenance": { label: "Bảo trì", color: "yellow", icon: "warning" },
   "lost": { label: "Thất lạc", color: "red", icon: "error" },
   "disposed": { label: "Đã hủy", color: "red", icon: "error" }
 };
 
-const ALLOWED_UPDATE_STATUSES = ["maintenance", "lost", "disposed"];
+const ALLOWED_UPDATE_STATUSES = ["maintenance", "lost", "disposed", "removing"];
 
 export default function EquipmentListTab() {
   const [equipments, setEquipments] = useState([]);

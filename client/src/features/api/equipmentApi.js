@@ -65,6 +65,14 @@ export const equipmentApi = {
     const res = await axios.post(`${BASE_URL}/ticket/${id}/confirm-import`, {}, getAuthHeader());
     return res.data;
   },
+  updateImportTicket: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/ticket/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+  deleteImportTicket: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/ticket/${id}`, getAuthHeader());
+    return res.data;
+  },
 
   getAllInstallTickets: async () => {
     const res = await axios.get(`${BASE_URL}/install/all`, getAuthHeader());
@@ -114,6 +122,10 @@ export const equipmentApi = {
   },
   getEquipmentInstallById: async (id) => {
     const res = await axios.get(`${BASE_URL}/install/${id}`, getAuthHeader());
+    return res.data;
+  },
+  deleteInstallTicket: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/install/${id}`, getAuthHeader());
     return res.data;
   }
 };

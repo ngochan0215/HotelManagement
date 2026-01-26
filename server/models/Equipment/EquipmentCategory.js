@@ -5,9 +5,10 @@ const equipmentCategorySchema = new mongoose.Schema(
     {
         name: { type: String, required: true, trim: true },
         description: { type: String, required: true, trim: true },
-        unit: { type: String, enum: ["item", "box"], default: "item" },
+        unit: { type: String, enum: ["item", "box", "Cái", "Bộ"], default: "item" },
         price: { type: Number, min: 1, required: true },
-        storage_quantity: { type: Number, default: 0 },
+        storage_quantity: { type: Number, default: 0 }, // Số lượng thiết bị tồn kho (status=in-stock, condition=new/good, room_id=null)
+        total_quantity: { type: Number, default: 0 }, // Tổng số lượng thiết bị hiện tại (tất cả status)
         image: { type: String }
     }, 
     {

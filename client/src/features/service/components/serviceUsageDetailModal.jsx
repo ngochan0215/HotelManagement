@@ -10,12 +10,20 @@ export default function ServiceUsageDetailModal({ usageId, onClose }) {
 
   const renderUnit = (unit) => {
     const unitsMap = {
-        hour: "giờ",
-        day: "ngày",
-        service: "lần",
-        unit: "cái",
+      hour: "giờ",
+      day: "ngày",
+      service: "lần",
+      unit: "cái",
     };
     return unitsMap[unit] || unit;
+  }
+
+  const renderStatus = (status) => {
+    const statusesMap = {
+      checked_in: "Đã check-in",
+      checked_out: "Đã check-out"
+    };
+    return statusesMap[status] || status || "Không xác định";
   }
 
   useEffect(() => {
@@ -95,7 +103,7 @@ export default function ServiceUsageDetailModal({ usageId, onClose }) {
                       {data.rooms.map((room, idx) => (
                         <p key={idx} className="text-gray-700 font-semibold">
                           Phòng {room.room_number}
-                          <span className="ml-2 text-xs text-gray-500">({room.status})</span>
+                          <span className="ml-2 text-xs text-gray-500">({renderStatus(room.status)})</span>
                         </p>
                       ))}
                     </div>
