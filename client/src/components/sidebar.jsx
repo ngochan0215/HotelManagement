@@ -48,13 +48,13 @@ const sidebarConfig = [
     type: "group",
     title: "QUẢN LÝ",
     children: [
-      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed, allowed: [ "housekeeper"] },
+      { name: "Phòng & Loại phòng", path: "/room-types", icon: FaBed, allowed: [] },
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
       { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
       //{ name: "Quản lý công việc", path: "/all-tasks", icon: FiBriefcase, allowed: [] }, // Chỉ Manager
-      { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: ["technician"] },
-      { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist", "housekeeper"] },
+      { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: [] },
+      { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist"] },
       { name: "Hóa đơn", path: "/invoices", icon: FiFileText, allowed: ["receptionist", "accountant"] },
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: [ "customer_service"] },
       { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle, allowed: ["technician", "receptionist", "housekeeper"] },
