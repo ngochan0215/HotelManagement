@@ -84,7 +84,7 @@ export const assignCleaningTask = async (req, res) => {
 
         // Kiểm tra xem task đã có handled_by chưa
         const hasHandledBy = task.handled_by && 
-                            (typeof task.handled_by === 'object' ? task.handled_by._id : task.handled_by);
+            (typeof task.handled_by === 'object' ? task.handled_by._id : task.handled_by);
         
         // Nếu đã có handled_by và đang thay đổi
         if (hasHandledBy && task.handled_by.toString() !== handled_by) {
@@ -152,15 +152,30 @@ export const assignCleaningTask = async (req, res) => {
 
         await session.commitTransaction();
 
-        // Gửi thông báo cho nhân viên
         try {
+            // gửi thông báo cho admin
+            const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+            const adminIds = allAdmins.map(u => u._id);
+            if (allAdmins.length > 0) {
+                await pushNotificationToUsers(
+                    adminIds,
+                    "Công việc dọn dẹp mới",
+                    `Nhân viên ${housekeeper.full_name} đã được chỉ định dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
+                    "room",
+                    "CleaningTask",
+                    task._id,
+                    "unread"
+                );
+            }
+
+            // gửi thông báo cho nhân viên
             const room = await Room.findById(task.room_id).populate("room_category_id", "name");
             if (housekeeper.user_id) {
                 await pushNotification(
                     housekeeper.user_id,
                     "Công việc dọn dẹp mới",
                     `Bạn được gán dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
-                    "booking",
+                    "room",
                     "CleaningTask",
                     task._id,
                     "unread"
@@ -224,8 +239,8 @@ export const startCleaningTask = async (req, res) => {
             });
         }
 
-        console.log("TASK IN START CLEANING: ", task);
-        console.log("ROOM NUMBER: ", room.room_number);
+        // console.log("TASK IN START CLEANING: ", task);
+        // console.log("ROOM NUMBER: ", room.room_number);
 
         if (task.handled_by?.toString() !== employee._id.toString()) {
             await session.abortTransaction();
@@ -258,8 +273,22 @@ export const startCleaningTask = async (req, res) => {
                 await pushNotificationToUsers(
                     adminIds,
                     "Công việc dọn dẹp đã được bắt đầu",
-                    `Phòng ${room.room_number} đã được nhân viên xác nhận bắt đầu làm.`,
-                    "booking",
+                    `Phòng ${room.room_number} đã được nhân viên ${employee.full_name} xác nhận bắt đầu làm.`,
+                    "room",
+                    "CleaningTask",
+                    task._id,
+                    "unread"
+                );
+            }
+
+            // gửi thông báo cho nhân viên
+            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            if (employee.user_id) {
+                await pushNotification(
+                    employee.user_id,
+                    "Công việc dọn dẹp đã bắt đầu",
+                    `Bạn đã xác nhận bắt đầu dọn dẹp phòng ${room.room_number}${room.room_category_id ? ` (${room.room_category_id.name})` : ''}`,
+                    "room",
                     "CleaningTask",
                     task._id,
                     "unread"
@@ -348,7 +377,22 @@ export const completeCleaningTask = async (req, res) => {
                     adminIds,
                     "Công việc dọn dẹp đã hoàn thành",
                     `Phòng ${task.room_id.room_number} đã được dọn dẹp xong. Vui lòng xác nhận.`,
-                    "booking",
+                    "room",
+                    "CleaningTask",
+                    task._id,
+                    "unread"
+                );
+            }
+
+            // gửi thông báo cho nhân viên
+            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            if (employee.user_id) {
+                await pushNotification(
+                    employee.user_id,
+                    "Công việc dọn dẹp đã hoàn thành",
+                    `Bạn đã xác nhận hoàn thành việc dọn dẹp phòng ${room.room_number}${room.room_category_id ? 
+                        ` (${room.room_category_id.name})` : ''}`,
+                    "room",
                     "CleaningTask",
                     task._id,
                     "unread"
@@ -445,6 +489,43 @@ export const confirmCleaning = async (req, res) => {
         );
 
         await session.commitTransaction();
+
+        // Gửi thông báo cho admin
+        try {
+            const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
+            const adminIds = admins.map(a => a._id);
+            
+            if (adminIds.length > 0) {
+                await pushNotificationToUsers(
+                    adminIds,
+                    "Công việc dọn dẹp đã xác nhận hoàn thành",
+                    `Phòng ${task.room_id.room_number} đã được xác nhận hoàn thành dọn dẹp.`,
+                    "room",
+                    "CleaningTask",
+                    task._id,
+                    "unread"
+                );
+            }
+
+            // gửi thông báo cho nhân viên
+            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            const employee = await Employee.findById(task.handled_by);
+            
+            if (employee.user_id) {
+                await pushNotification(
+                    employee.user_id,
+                    "Công việc dọn dẹp đã hoàn thành",
+                    `Bạn đã xác nhận hoàn thành việc dọn dẹp phòng ${room.room_number}${room.room_category_id ? 
+                        ` (${room.room_category_id.name})` : ''}`,
+                    "room",
+                    "CleaningTask",
+                    task._id,
+                    "unread"
+                );
+            }
+        } catch (notifError) {
+            console.error("Error sending notification:", notifError);
+        }
 
         res.status(200).json({
             success: true,
