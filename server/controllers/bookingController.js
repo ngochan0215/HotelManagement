@@ -294,12 +294,12 @@ export const createBooking = async (req, res) => {
       const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
       const adminIds = allAdmins.map(u => u._id);
       
-      // gửi thông báo cho admin
+      // gửi thông báo cho quản lý
       if (allAdmins.length > 0) {
         await pushNotification(
           adminIds,
           "Booking mới",
-          `Có booking mới có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
+          `Có booking mới với ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
           "booking",
           "Booking",
           booking[0]._id,
@@ -334,7 +334,7 @@ export const createBooking = async (req, res) => {
       await pushNotification(
         validUsers.map(u => u._id),
         "Booking mới",
-        `Có booking mới có ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"}`,
+        `Có booking mới với ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"}`,
         "booking",
         "Booking",
         booking[0]._id,
@@ -1054,20 +1054,6 @@ export const checkinBookingDetail = async (req, res) => {
       { session }
     );
 
-    // tạo log occupied (BẢNG MỚI)
-    await RoomLog.create(
-      [{
-        booking_id: detail.booking_id,
-        room_id: detail.room_id,
-        status: "occupied",
-        start_time: now,
-        end_time: detail.expected_checkout,
-        note: `Phòng đã được checkin theo booking ${booking._id}`,
-        handled_by: booking.handled_by || null,
-      }],
-      { session }
-    );
-
     // update BookingDetail
     detail.status = "checked_in";
     detail.actual_checkin = now;
@@ -1110,14 +1096,14 @@ export const checkinBookingDetail = async (req, res) => {
     const customer = await Customer.findById(customer_id);
 
     try {
-      // gửi thông báo cho admin
+      // gửi thông báo cho quản lý 
       const allAdmins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
       const adminIds = allAdmins.map(u => u._id);
       if (allAdmins.length > 0) {
         await pushNotificationToUsers(
           adminIds,
           "Booking đã xác nhận check-in",
-          `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
+          `Phòng ${room.room_number} thuộc booking với ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
             đã xác nhận checkin.`,
           "booking",
           "Booking",
@@ -1127,7 +1113,6 @@ export const checkinBookingDetail = async (req, res) => {
       }
 
       // gửi thông báo cho khách hàng
-      // Lấy user_id từ customer
       const customerUser = await Customer.findById(customer_id).select("user_id").lean();
       if (customerUser && customerUser.user_id) {
         await pushNotification(
@@ -1377,7 +1362,7 @@ export const checkoutBookingDetail = async (req, res) => {
       if (booking.handled_by && booking.handled_by.user_id) {
         await pushNotification(
           booking.handled_by.user_id,
-          "Booking check-in thành công",
+          "Booking check-out thành công",
           `Phòng ${room.room_number} thuộc booking #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
             đã xác nhận check-out. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
           "booking",
@@ -1493,7 +1478,7 @@ export const cancelBookingDetail = async (req, res) => {
         start_time: now,
         end_time: null,
         note: "Hủy phòng khỏi booking",
-        handled_by: req.user?._id || null,
+        handled_by: req.user?.userId || null,
       }],
       { session }
     );
@@ -1506,7 +1491,7 @@ export const cancelBookingDetail = async (req, res) => {
         start_time: now,
         end_time: null,
         note: "Hủy phòng khỏi booking",
-        handled_by: req.user?._id || null,
+        handled_by: req.user?.userId || null,
       }],
       { session }
     );
@@ -1680,7 +1665,7 @@ export const cancelBooking = async (req, res) => {
         start_time: now,
         end_time: null,
         note: `Phòng được giải phóng sau khi hủy booking ${booking._id}`,
-        handled_by: req.user?._id || null,
+        handled_by: req.user?.userId || null,
       };
     });
 
@@ -1695,7 +1680,7 @@ export const cancelBooking = async (req, res) => {
         start_time: now,
         end_time: null,
         note: `Phòng được giải phóng sau khi hủy booking ${booking._id}`,
-        handled_by: req.user?._id || null,
+        handled_by: req.user?.userId || null,
       };
     });
 

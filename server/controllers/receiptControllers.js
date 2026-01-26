@@ -451,17 +451,19 @@ export const updateReceipt = async (req, res) => {
       receipt.paid_at = new Date();
       
       const booking = await Booking.findById(receipt.booking_id);
-      // cộng điểm khách vì hoàn thành xong booking
-      await updateCustomerPoints({
-        customer_id: booking.customer_id,
-        points: Math.floor(receipt.final_amount / 10000),
-        reason: "Trừ 2 điểm vì hủy booking"
-      });
+      if (booking) {
+        // cộng điểm khách vì hoàn thành xong booking
+        await updateCustomerPoints({
+          customer_id: booking.customer_id,
+          points: Math.floor(receipt.final_amount / 10000),
+          reason: "Hoàn tất thanh toán hóa đơn"
+        });
 
-      await Customer.findOneAndUpdate(
-        { _id: booking.customer_id },
-        { $inc: { booking_count: 1 } }
-      );
+        await Customer.findOneAndUpdate(
+          { _id: booking.customer_id },
+          { $inc: { booking_count: 1 } }
+        );
+      }
     }
 
     if (status === "cancelled" && !receipt.cancelled_at) {
@@ -472,22 +474,102 @@ export const updateReceipt = async (req, res) => {
     receipt.status = status;
     await receipt.save();
 
-    // Gửi thông báo cho tất cả user (admin, employee, customer) về thay đổi trạng thái hóa đơn
+    // Gửi thông báo về thay đổi trạng thái hóa đơn
     try {
-      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
-      const userIds = allUsers.map(u => u._id);
+      // Populate để lấy thông tin booking, customer, employee
+      const populatedReceipt = await Receipt.findById(id)
+        .populate({
+          path: "booking_id",
+          populate: [
+            {
+              path: "customer_id",
+              select: "user_id full_name"
+            },
+            {
+              path: "handled_by",
+              select: "user_id full_name"
+            }
+          ]
+        })
+        .populate({
+          path: "employee_id",
+          select: "user_id full_name"
+        });
+
+      if (!populatedReceipt || !populatedReceipt.booking_id) {
+        throw new Error("Không thể lấy thông tin booking từ receipt");
+      }
+
+      const booking = populatedReceipt.booking_id;
+      const customer = booking.customer_id;
+      const receiptEmployee = populatedReceipt.employee_id;
       
       const statusLabels = {
         pending: "Đang chờ thanh toán",
         paid: "Đã thanh toán",
+        "half-paid": "Đã thanh toán một phần",
         cancelled: "Đã hủy"
       };
+
+      const receiptIdShort = id.toString().slice(-6);
+      const statusLabel = statusLabels[status] || status;
+      const message = `Hóa đơn #${receiptIdShort} đã chuyển sang trạng thái "${statusLabel}"`;
+
+      // 1. Gửi thông báo cho toàn bộ admin
+      const adminUsers = await User.find({ 
+        isBanned: { $ne: true },
+        system_role: "manager"
+      }).select("_id");
+      const adminUserIds = adminUsers.map(u => u._id);
       
-      if (userIds.length > 0) {
+      if (adminUserIds.length > 0) {
         await pushNotificationToUsers(
-          userIds,
+          adminUserIds,
           "Thay đổi trạng thái hóa đơn",
-          `Hóa đơn #${id.toString().slice(-6)} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
+          message,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+
+      // 2. Gửi thông báo cho nhân viên phụ trách hóa đơn (employee_id trong receipt)
+      if (receiptEmployee && receiptEmployee.user_id) {
+        await pushNotificationToUsers(
+          [receiptEmployee.user_id],
+          "Thay đổi trạng thái hóa đơn",
+          message,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+
+      // 3. Gửi thông báo cho nhân viên phụ trách booking (nếu có handled_by trong booking)
+      const bookingEmployee = booking.handled_by;
+      if (bookingEmployee && bookingEmployee.user_id) {
+        // Chỉ gửi nếu không phải cùng nhân viên với receipt employee
+        if (!receiptEmployee || bookingEmployee.user_id.toString() !== receiptEmployee.user_id.toString()) {
+          await pushNotificationToUsers(
+            [bookingEmployee.user_id],
+            "Thay đổi trạng thái hóa đơn",
+            message,
+            "booking",
+            "Order",
+            id,
+            "unread"
+          );
+        }
+      }
+
+      // 4. Gửi thông báo cho khách hàng có booking
+      if (customer && customer.user_id) {
+        await pushNotificationToUsers(
+          [customer.user_id],
+          "Thay đổi trạng thái hóa đơn",
+          message,
           "booking",
           "Order",
           id,
@@ -582,18 +664,95 @@ export const markReceiptAsPaid = async (req, res) => {
     );
 
     await session.commitTransaction();
-    session.endSession();
 
-    // Gửi thông báo cho tất cả user (admin, employee, customer) về thay đổi trạng thái hóa đơn
+    // Gửi thông báo về thay đổi trạng thái hóa đơn
     try {
-      const allUsers = await User.find({ isBanned: { $ne: true } }).select("_id");
-      const userIds = allUsers.map(u => u._id);
+      // Populate để lấy thông tin booking, customer, employee
+      const populatedReceipt = await Receipt.findById(id)
+        .populate({
+          path: "booking_id",
+          populate: [
+            {
+              path: "customer_id",
+              select: "user_id full_name"
+            },
+            {
+              path: "handled_by",
+              select: "user_id full_name"
+            }
+          ]
+        })
+        .populate({
+          path: "employee_id",
+          select: "user_id full_name"
+        });
+
+      if (!populatedReceipt || !populatedReceipt.booking_id) {
+        throw new Error("Không thể lấy thông tin booking từ receipt");
+      }
+
+      const booking = populatedReceipt.booking_id;
+      const customer = booking.customer_id;
+      const receiptEmployee = populatedReceipt.employee_id;
       
-      if (userIds.length > 0) {
+      const receiptIdShort = id.toString().slice(-6);
+      const message = `Hóa đơn #${receiptIdShort} đã chuyển sang trạng thái "Đã thanh toán"`;
+
+      // 1. Gửi thông báo cho toàn bộ admin
+      const adminUsers = await User.find({ 
+        isBanned: { $ne: true },
+        system_role: "manager"
+      }).select("_id");
+      const adminUserIds = adminUsers.map(u => u._id);
+      
+      if (adminUserIds.length > 0) {
         await pushNotificationToUsers(
-          userIds,
+          adminUserIds,
           "Thay đổi trạng thái hóa đơn",
-          `Hóa đơn #${id.toString().slice(-6)} đã chuyển sang trạng thái "Đã thanh toán"`,
+          message,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+
+      // 2. Gửi thông báo cho nhân viên phụ trách hóa đơn (employee_id trong receipt)
+      if (receiptEmployee && receiptEmployee.user_id) {
+        await pushNotificationToUsers(
+          [receiptEmployee.user_id],
+          "Thay đổi trạng thái hóa đơn",
+          message,
+          "booking",
+          "Order",
+          id,
+          "unread"
+        );
+      }
+
+      // 3. Gửi thông báo cho nhân viên phụ trách booking (nếu có handled_by trong booking)
+      const bookingEmployee = booking.handled_by;
+      if (bookingEmployee && bookingEmployee.user_id) {
+        // Chỉ gửi nếu không phải cùng nhân viên với receipt employee
+        if (!receiptEmployee || bookingEmployee.user_id.toString() !== receiptEmployee.user_id.toString()) {
+          await pushNotificationToUsers(
+            [bookingEmployee.user_id],
+            "Thay đổi trạng thái hóa đơn",
+            message,
+            "booking",
+            "Order",
+            id,
+            "unread"
+          );
+        }
+      }
+
+      // 4. Gửi thông báo cho khách hàng có booking
+      if (customer && customer.user_id) {
+        await pushNotificationToUsers(
+          [customer.user_id],
+          "Thay đổi trạng thái hóa đơn",
+          message,
           "booking",
           "Order",
           id,
@@ -604,6 +763,8 @@ export const markReceiptAsPaid = async (req, res) => {
       console.error("Error sending notification:", notifError);
       // Không throw error để không ảnh hưởng đến response chính
     }
+
+    session.endSession();
 
     return res.status(200).json({
       message: "Thanh toán hóa đơn thành công.",
