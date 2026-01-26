@@ -1337,12 +1337,7 @@ export default function BookingList() {
                             </button>
                         </div>
 
-                        {bookingMode === 'immediate' && (
-                            <div className={`cursor-pointer px-3 py-2 rounded-lg border transition-all flex items-center gap-2 select-none ${isWalkIn ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`} onClick={() => setIsWalkIn(!isWalkIn)}>
-                                 {isWalkIn ? <FiCheckSquare size={18}/> : <FiSquare size={18}/>}
-                                 <span className="text-xs font-bold">Khách tại quầy</span>
-                            </div>
-                        )}
+                        {bookingMode === 'immediate'}
                     </div>
 
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mt-1">
