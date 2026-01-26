@@ -41,12 +41,39 @@ export const incidentApi = {
     const res = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
   },
-    closeIncident: async (id, data) => {
-      const res = await axios.patch(`${BASE_URL}/${id}/closed`, data, getAuthHeader());
-      return res.data;
-    },
+
+  closeIncident: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/${id}/closed`, data, getAuthHeader());
+    return res.data;
+  },
+
+  // Tạo phiếu đền bù (chung/tiền mặt)
   createCompensationTicket: async (id, data) => {
-    const res = await axios.post(`${BASE_URL}/${id}/compensation-ticket/add`, data, getAuthHeader());
+    const res = await axios.post(`${BASE_URL}/${id}/compensation-ticket/add-one`, data, getAuthHeader());
+    return res.data;
+  },
+
+  // --- CÁC HÀM BẠN ĐANG THIẾU ---
+
+  // Lấy danh sách phiếu đền bù
+  getAllCompensateTickets: async (params = {}) => {
+    const res = await axios.get(`${BASE_URL}/compensation-ticket/all`, {
+      ...getAuthHeader(),
+      params,
+    });
+    return res.data;
+  },
+
+  // Lấy chi tiết phiếu
+  getCompensateTicketById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/compensation-ticket/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  // Xác nhận thanh toán xong
+  confirmCompensationPaid: async (id) => {
+    // Lưu ý: Route backend cần sửa thành /:id/confirmed-done
+    const res = await axios.post(`${BASE_URL}/compensation-ticket/${id}/confirmed-done`, {}, getAuthHeader());
     return res.data;
   }
 };

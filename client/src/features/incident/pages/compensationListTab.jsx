@@ -6,17 +6,23 @@ export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchTickets = async () => {
-    setLoading(true);
-    try {
-      const data = await incidentApi.getAllCompensateTickets(); // ⬅ data = res.data
-      setTickets(data || []);
-    } catch (err) {
-      console.error("Lỗi fetch bồi thường:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ...
+    const fetchTickets = async () => {
+      setLoading(true);
+      try {
+        const res = await incidentApi.getAllCompensateTickets();
+        // SỬA Ở ĐÂY: Lấy res.data vì backend trả về { total, data: [...] }
+        // Kiểm tra kỹ xem res có phải mảng hay object chứa data
+        const list = Array.isArray(res) ? res : (res.data || []);
+        setTickets(list);
+      } catch (err) {
+        console.error("Lỗi fetch bồi thường:", err);
+        setTickets([]); // Đảm bảo luôn là mảng để không crash
+      } finally {
+        setLoading(false);
+      }
+    };
+  // ...
 
   useEffect(() => { fetchTickets(); }, []);
 

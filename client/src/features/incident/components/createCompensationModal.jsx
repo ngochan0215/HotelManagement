@@ -7,10 +7,16 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Lấy tên người gây ra
   const payerName = incident.causer_name || "Chưa xác định";
-  const payerType = incident.caused_by === 'customer' ? 'Khách hàng'
-                  : incident.caused_by === 'employee' ? 'Nhân viên'
-                  : 'Không xác định';
+
+  // Map type hiển thị
+  const payerTypeMap = {
+      customer: 'Khách hàng',
+      employee: 'Nhân viên',
+      hotel: 'Khách sạn'
+  };
+  const payerTypeLabel = payerTypeMap[incident.caused_by] || 'Không xác định';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,15 +26,21 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
 
     setLoading(true);
     try {
-      await incidentApi.createCompensationTicket(incident._id, {
+      // Chuẩn bị payload đầy đủ theo yêu cầu Backend (add-one)
+      const payload = {
+        payer_type: incident.caused_by || 'customer', // Bắt buộc
+        payer_id: incident.causer_id?._id || incident.causer_id, // Bắt buộc
         total_fee: Number(amount),
-        description: note || `Bồi thường cho sự cố: ${incident.type}`,
-      });
+        note: note || `Bồi thường cho sự cố: ${incident.type}`,
+      };
+
+      await incidentApi.createCompensationTicket(incident._id, payload);
 
       alert("Đã tạo phiếu bồi thường thành công!");
       onSuccess?.();
       onClose();
     } catch (err) {
+      console.error(err);
       alert("Lỗi: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
@@ -49,7 +61,7 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
           <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm">
             <div className="flex justify-between mb-1">
                 <span className="text-gray-500">Đối tượng:</span>
-                <span className="font-bold text-gray-800 uppercase">{payerType}</span>
+                <span className="font-bold text-gray-800 uppercase">{payerTypeLabel}</span>
             </div>
             <div className="flex justify-between">
                 <span className="text-gray-500">Họ tên:</span>

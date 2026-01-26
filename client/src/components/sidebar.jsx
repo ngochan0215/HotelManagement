@@ -59,7 +59,6 @@ const sidebarConfig = [
       { name: "Khuyến mãi", path: "/promotions", icon: FiTag, allowed: [ "customer_service"] },
       { name: "Sự cố", path: "/incidents", icon: FiAlertTriangle, allowed: ["technician", "receptionist", "housekeeper"] },
       { name: "Báo cáo thống kê", path: "/reports", icon: FiFileText, allowed: ["accountant"] }, // Chỉ kế toán + Manager
-      { name: "Quét QR căn cước", path: "/qr-scanner", icon: FiCamera, allowed: ["receptionist"] },
     ],
   },
 ];
