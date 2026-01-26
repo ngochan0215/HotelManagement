@@ -68,6 +68,8 @@ export default function RoomCalendar() {
                 'cleaning': 'cleaning', 'maintenance': 'maintenance'
             };
             const now = new Date();
+            const dayStart = startOfDay(currentDate);
+            const dayEnd = endOfDay(currentDate);
 
             const processedEvents = eventList.map(event => {
                 const booking = event.booking;
@@ -75,13 +77,22 @@ export default function RoomCalendar() {
                 const componentStatus = statusMap[apiStatus] || apiStatus;
 
                 let isCompleted = false;
-                if (booking && ['cancelled', 'expired', 'completed'].includes(booking.booking_status)) {
+                
+                // Cleaning và maintenance là trạng thái của phòng, không liên quan đến booking
+                // Sau khi khách checkout và thanh toán, booking đã hoàn thành và không liên quan nữa
+                // Trạng thái cleaning/maintenance là của phòng, nên luôn hiển thị (không đánh dấu completed)
+                if (componentStatus === 'cleaning' || componentStatus === 'maintenance') {
+                    isCompleted = false; // Luôn hiển thị cleaning/maintenance
+                } else if (booking && ['cancelled', 'expired', 'completed'].includes(booking.booking_status)) {
+                    // Đối với các trạng thái liên quan đến booking, đánh dấu completed nếu booking đã hủy/hết hạn/hoàn thành
                     isCompleted = true;
                 } else {
+                    // Đối với các trạng thái khác (pending, confirmed, occupied), đánh dấu completed nếu đã kết thúc
                     const eventEnd = new Date(event.end);
-                    if (eventEnd < now && componentStatus !== 'occupied') isCompleted = true;
+                    if (eventEnd < now && componentStatus !== 'occupied') {
+                        isCompleted = true;
+                    }
                 }
-
                 return {
                     _id: event._id,
                     room_id: event.room_id,

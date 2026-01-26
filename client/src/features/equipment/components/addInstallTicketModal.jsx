@@ -53,8 +53,13 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         try {
             let res;
             if (mode === 'install') {
+                // Chỉ lấy thiết bị khả dụng: in-stock, condition=new/good, room_id=null
+                // Lưu ý: Backend sẽ filter thêm, nhưng FE cũng nên filter để hiển thị chính xác
                 res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
-                const eqs = res.equipments || [];
+                const eqs = (res.equipments || []).filter(eq => 
+                    (eq.condition === 'new' || eq.condition === 'good') && 
+                    !eq.room_id // room_id phải null
+                );
 
                 const map = {};
                 const uniqueCats = [];
@@ -135,17 +140,31 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
           }
       });
 
-      const payload = {
-        install_date: installDate,
-        items: payloadItems,
-        room_id: selectedRoomId,
-        type: mode,
-        from_room_id: mode === 'uninstall' ? selectedRoomId : null,
-        handled_by: selectedTechnicianId || null,
-      };
+      if (mode === 'install') {
+        // Tạo phiếu lắp đặt
+        const payload = {
+          install_date: installDate,
+          items: payloadItems,
+          room_id: selectedRoomId,
+          from_room_id: null, // Có thể thêm sau nếu muốn điều chuyển từ phòng khác
+          handled_by: selectedTechnicianId || null,
+        };
 
-      await equipmentApi.createInstallTicket(payload);
-      alert("Tạo phiếu thành công!");
+        await equipmentApi.createInstallTicket(payload);
+        alert("Tạo phiếu lắp đặt thành công!");
+      } else {
+        // Tạo phiếu tháo dỡ
+        const payload = {
+          install_date: installDate,
+          items: payloadItems,
+          from_room_id: selectedRoomId,
+          handled_by: selectedTechnicianId || null,
+        };
+
+        await equipmentApi.createUninstallTicket(payload);
+        alert("Tạo phiếu tháo dỡ thành công!");
+      }
+      
       onSuccess();
       onClose();
     } catch (error) {

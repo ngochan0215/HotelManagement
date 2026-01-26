@@ -85,6 +85,10 @@ export const equipmentApi = {
     const res = await axios.post(`${BASE_URL}/install/add`, data, getAuthHeader());
     return res.data;
   },
+  createUninstallTicket: async (data) => {
+    const res = await axios.post(`${BASE_URL}/install/uninstall`, data, getAuthHeader());
+    return res.data;
+  },
   startInstallTicket: async (id) => {
     const res = await axios.post(`${BASE_URL}/install/${id}/start`, {}, getAuthHeader());
     return res.data;

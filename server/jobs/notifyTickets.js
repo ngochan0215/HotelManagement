@@ -1,6 +1,6 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
     GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
-    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentLog, InstallDetail, Employee
+    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentCategory, EquipmentLog, InstallDetail, Employee
 } from "../models/index.js";
 import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
@@ -115,19 +115,41 @@ export const notifyInstallTickets = async () => {
       const equipmentIds = details.map(d => d.equipment_id);
 
       if (equipmentIds.length) {
-        // update equipment về trạng thái gốc
+        // Lấy thông tin thiết bị để đếm theo category
+        const equipments = await Equipment.find({ _id: { $in: equipmentIds } });
+        
+        // update equipment về trạng thái gốc và xóa room_id
         await Equipment.updateMany(
           { _id: { $in: equipmentIds } },
-          { status: "in-stock", condition: "new" },
-          //{ session }
+          { 
+            status: "in-stock", 
+            condition: "new",
+            room_id: null // Xóa room_id khi phiếu hết hạn
+          }
         );
+
+        // Cập nhật storage_quantity: Cộng lại số lượng thiết bị về kho
+        // Chỉ áp dụng cho phiếu lắp đặt (type = 'install') - thiết bị đã được trừ kho trước đó
+        if (ticket.type === 'install') {
+          const categoryCountMap = new Map();
+          equipments.forEach(eq => {
+            const categoryId = eq.category_id.toString();
+            categoryCountMap.set(categoryId, (categoryCountMap.get(categoryId) || 0) + 1);
+          });
+          
+          for (const [categoryId, count] of categoryCountMap.entries()) {
+            await EquipmentCategory.updateOne(
+              { _id: categoryId },
+              { $inc: { storage_quantity: count } } // Cộng lại số lượng về kho
+            );
+          }
+        }
 
         // đóng log cũ (chỉ log của phiếu này)
         await EquipmentLog.updateMany(
           {
             equipment_id: { $in: equipmentIds },
             end_time: null,
-            //note: { $regex: ticket._id.toString() },
           },
           { $set: { end_time: now } }
         );
@@ -135,11 +157,11 @@ export const notifyInstallTickets = async () => {
         // tạo log mới
         const logs = equipmentIds.map(equipmentId => ({
           equipment_id: equipmentId,
-          room_id: ticket.room_id,
+          room_id: null, // room_id = null khi về kho
           status: "in-stock",
           condition: "new",
           start_time: now,
-          note: `Thiết bị quay về kho do phiếu lắp đặt ${ticket._id} quá hạn`,
+          note: `Thiết bị quay về kho do phiếu ${ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt'} ${ticket._id} quá hạn`,
           handled_by: ticket.employee_id || null,
         }));
 

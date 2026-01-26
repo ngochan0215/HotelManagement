@@ -25,9 +25,7 @@ export default function TechnicianWorkPage() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const params = filterStatus ? { status: filterStatus } : {};
-      const res = await equipmentApi.getMyInstallTickets(params);
-      console.log("RES: ", res);
+      const res = await equipmentApi.getMyInstallTickets({});
       setTickets(res.installs || []);
     } catch (error) {
       setToast({

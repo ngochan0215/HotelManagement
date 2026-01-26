@@ -75,7 +75,11 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
             let res;
             if (mode === 'install') {
                 res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
-                const eqs = res.equipments || [];
+                // Chỉ lấy thiết bị khả dụng: in-stock, condition=new/good, room_id=null
+                const eqs = (res.equipments || []).filter(eq => 
+                    (eq.condition === 'new' || eq.condition === 'good') && 
+                    !eq.room_id // room_id phải null
+                );
 
                 const map = {};
                 const uniqueCats = [];

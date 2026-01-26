@@ -3,7 +3,7 @@ import { createEquipmentCategory, updateEquipmentCategory, deleteEquipmentCatego
         getAllEquipmentCategories, getEquipmentCategoryById,
         getAllEquipments, getEquipmentById, updateEquipment, deleteEquipment,
         createEquipmentTicket, getAllEquipmentTickets, getEquipmentTicketById, updateEquipmentTicket, deleteEquipmentTicket, 
-        createInstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
+        createInstallTicket, createUninstallTicket, getAllEquipmentInstalls, getEquipmentInstallById, updateEquipmentInstall, deleteEquipmentInstall,
         confirmEquipmentInstall, startInstallTicket, completeInstallTicket, getAvailableTechnicians, getMyInstallTickets,
         confirmEquipmentImportTicket, getSmartInstallSuggestions, autoCreateImportTicket, getOutOfStockCategories
 } from "../controllers/equipmentController.js";
@@ -39,6 +39,7 @@ router.get("/install/available-technicians", verifyToken, isManager, getAvailabl
 router.get("/install/smart-suggestions", verifyToken, isManager, getSmartInstallSuggestions);
 router.get("/install/my-tickets", verifyToken, isEmployee, getMyInstallTickets);
 router.post("/install/add", verifyToken, isManager, createInstallTicket);
+router.post("/install/uninstall", verifyToken, isManager, createUninstallTicket);
 router.get("/install/all", verifyToken, isNotCustomer, getAllEquipmentInstalls);
 router.get("/install/:id", verifyToken, isNotCustomer, getEquipmentInstallById);
 router.patch("/install/:id", verifyToken, isManager, updateEquipmentInstall);

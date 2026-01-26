@@ -101,17 +101,31 @@ export const getCalendarRooms = async (req, res) => {
 
     const roomIds = rooms.map(r => r._id);
 
+    // Lấy tất cả RoomLog có overlap với ngày được chọn hoặc nằm hoàn toàn trong ngày đó
+    // Bao gồm cả log cleaning/maintenance nằm hoàn toàn trong ngày
     const statusLogs = await RoomLog.find({
       room_id: { $in: roomIds },
-      start_time: { $lte: endOfDay },
       $or: [
-        { end_time: { $gte: startOfDay } },
-        { end_time: null }
+        // Log có overlap với ngày được chọn (bắt đầu trước và kết thúc sau hoặc trong ngày)
+        {
+          start_time: { $lte: endOfDay },
+          $or: [
+            { end_time: { $gte: startOfDay } },
+            { end_time: null }
+          ]
+        },
+        // Log nằm hoàn toàn trong ngày được chọn (cả start và end đều trong ngày)
+        // Điều này đảm bảo lấy được log cleaning/maintenance nằm hoàn toàn trong ngày
+        {
+          start_time: { $gte: startOfDay, $lte: endOfDay },
+          end_time: { $gte: startOfDay, $lte: endOfDay }
+        }
       ],
       status: { $ne: "available" }
     })
       .populate("room_id", "room_number")
       .populate("booking_id")
+      .sort({ start_time: 1 }) // Sắp xếp theo thời gian bắt đầu
       .lean();
 
     // Get all booking IDs from RoomLogs that have booking_id
