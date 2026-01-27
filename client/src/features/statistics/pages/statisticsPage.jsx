@@ -5,7 +5,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell
 } from "recharts";
 import {
-    FiDownload, FiCalendar, FiDollarSign, FiUsers, FiBox, FiActivity, FiLayers, FiGrid
+    FiDownload, FiCalendar, FiDollarSign, FiUsers, FiBox, FiActivity, FiLayers, FiGrid, FiFileText
 } from "react-icons/fi";
 
 import Sidebar from "../../../components/sidebar.jsx";
@@ -93,6 +93,30 @@ export default function StatisticPage() {
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      const params = { from: dateRange.from, to: dateRange.to };
+      let typeMap = {
+        room: 'room-operation',
+        booking: 'booking',
+        customer: 'customers',
+        equipment: 'equipments',
+        service: 'services'
+      };
+
+      const blob = await statisticApi.exportReportPDF(typeMap[activeTab], params);
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `BaoCao_${activeTab}_${params.from}_${params.to}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert("Lỗi xuất file PDF");
+    }
+  };
+
   const TabButton = ({ id, label, icon: Icon }) => (
     <button
       onClick={() => { setActiveTab(id); setData(null); }}
@@ -154,6 +178,12 @@ export default function StatisticPage() {
                         className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition shadow-sm"
                     >
                         <FiDownload /> Xuất Excel
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition shadow-sm"
+                    >
+                        <FiFileText /> Xuất PDF
                     </button>
                 </div>
              </div>

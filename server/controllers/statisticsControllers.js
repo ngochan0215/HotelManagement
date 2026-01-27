@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { Receipt, Booking, ServiceUsage, CompensateTicket,
-    EquipmentTicket, Room, RoomStatusLog, BookingDetail,
+    EquipmentTicket, Room, RoomLog, BookingDetail,
     BookingStatusLog, Equipment, EquipmentLog, EquipmentInstall,
     EquipmentCategory, EquipmentImport, InstallDetail,
     Customer, Service, ServiceCategory, UsageDetail

@@ -65,5 +65,14 @@ export const statisticApi = {
             responseType: 'blob',
         });
         return res.data;
+    },
+
+    exportReportPDF: async (type, params) => {
+        const res = await axios.get(`${BASE_URL}/reports/${type}/pdf`, {
+            ...getAuthHeader(),
+            params,
+            responseType: 'blob',
+        });
+        return res.data;
     }
 };
