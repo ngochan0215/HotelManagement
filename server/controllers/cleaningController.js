@@ -47,6 +47,27 @@ export const getAvailableHousekeepers = async (req, res) => {
             count: availableHousekeepers.length,
             housekeepers: availableHousekeepers
         });
+        // const housekeepers = await Employee.find({
+        //     position: "housekeeper",
+        //     status: "working"
+        // })
+        //     .populate("user_id", "email system_role avatar")
+        //     .select("full_name phone_number user_id");
+
+        // // Trả về tất cả, KHÔNG lọc theo phiếu
+        // const result = housekeepers.map(house => ({
+        //     _id: house._id,
+        //     employee_id: house._id,
+        //     full_name: house.full_name,
+        //     phone_number: house.phone_number,
+        //     user_id: house.user_id
+        // }));
+
+        // res.status(200).json({
+        //     success: true,
+        //     count: result.length,
+        //     housekeepers: result
+        // });
     } catch (error) {
         res.status(500).json({ 
             success: false, 
@@ -273,7 +294,7 @@ export const startCleaningTask = async (req, res) => {
         // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
             const roomNumber = room?.room_number || "N/A";
-            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomCategoryName = room?.category_id?.name || "";
             const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
 
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
@@ -379,9 +400,9 @@ export const completeCleaningTask = async (req, res) => {
 
         // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            const room = await Room.findById(task.room_id).populate("category_id", "name");
             const roomNumber = room?.room_number || task.room_id?.room_number || "N/A";
-            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomCategoryName = room?.category_id?.name || "";
             const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
 
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });
@@ -510,9 +531,9 @@ export const confirmCleaning = async (req, res) => {
         // Gửi thông báo cho admin (không ảnh hưởng đến transaction)
         try {
             const roomId = task.room_id._id || task.room_id;
-            const room = await Room.findById(roomId).populate("room_category_id", "name");
+            const room = await Room.findById(roomId).populate("category_id", "name");
             const roomNumber = room?.room_number || task.room_id?.room_number || "N/A";
-            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomCategoryName = room?.category_id?.name || "";
             const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
 
             const admins = await User.find({ system_role: "manager", isBanned: { $ne: true } });

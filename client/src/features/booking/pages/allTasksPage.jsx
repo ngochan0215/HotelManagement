@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   FiRefreshCw, FiEye, FiCheckCircle, FiSearch, FiChevronDown,
   FiCalendar, FiClipboard, FiChevronLeft, FiChevronRight,
-  FiMapPin, FiInfo, FiUser, FiClock, FiTool, FiAlertTriangle, FiPackage, FiTruck, FiCheckSquare
+  FiMapPin, FiInfo, FiUser, FiClock, FiTool, FiAlertTriangle, FiPackage, FiTruck, FiCheckSquare, FiUserPlus, FiCheck
 } from 'react-icons/fi';
 import { bookingApi } from '../../api/bookingApi.js';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
+import AssignHousekeeperModal from "../components/assignHousekeeperModal.jsx";
 
 const STATUS_OPTIONS_BY_TYPE = {
   all: [
@@ -70,10 +72,13 @@ const STATUS_MAP = {
 };
 
 export default function AllTasksPage() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [cleaningData, setCleaningData] = useState(null);
 
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -81,6 +86,12 @@ export default function AllTasksPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+
+  // Kiểm tra role của user
+  const isManager = useMemo(() => {
+    const role = (user?.role || user?.system_role || localStorage.getItem("role") || "").toLowerCase();
+    return role === "manager" || role === "admin";
+  }, [user]);
 
   useEffect(() => {
     setFilterStatus('all');
@@ -114,6 +125,41 @@ export default function AllTasksPage() {
   const handleViewDetail = (task) => {
     setSelectedTask(task);
     setShowDetailModal(true);
+  };
+
+  const hasCleaningAssignee = (task) => {
+    const handledBy = task?.handled_by;
+    if (!handledBy) return false;
+    if (typeof handledBy === "object") return !!handledBy._id;
+    return true; // string/ObjectId
+  };
+
+  const handleAssignCleaning = async (task) => {
+    try {
+      // Lấy thông tin room_log_id từ task hoặc API
+      let room_log_id = task.room_log_id?._id || task.room_log_id;
+      
+      if (!room_log_id) {
+        // Nếu chưa có, gọi API để lấy
+        const res = await bookingApi.getCleaningTaskByRoom({
+          room_id: task.room_id?._id || task.room_id,
+          booking_id: task.booking_id?._id || task.booking_id
+        });
+        room_log_id = res.room_log_id || null;
+      }
+
+      setCleaningData({
+        room_id: task.room_id?._id || task.room_id,
+        room_number: task.room_id?.room_number,
+        booking_id: task.booking_id?._id || task.booking_id,
+        room_log_id: room_log_id,
+        task_id: task._id
+      });
+      setShowAssignModal(true);
+    } catch (error) {
+      console.error("Error preparing assign modal:", error);
+      alert("Lỗi: " + (error.response?.data?.message || error.message));
+    }
   };
 
   const getHandlerName = (task) => {
@@ -288,9 +334,44 @@ export default function AllTasksPage() {
                                 </span>
                               </td>
                               <td className="px-8 py-5 text-center">
-                                <button onClick={() => handleViewDetail(task)} className="p-3 bg-slate-100 rounded-2xl text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-90">
-                                  <FiEye size={18} />
-                                </button>
+                                <div className="flex items-center justify-center gap-2">
+                                  {task.task_type === 'cleaning' && isManager && (
+                                    <>
+                                      {/* Nút gán nhân viên dọn dẹp - hiển thị khi chưa có handled_by hoặc status là pending */}
+                                      {!hasCleaningAssignee(task) && (
+                                        <button
+                                          onClick={() => handleAssignCleaning(task)}
+                                          className="p-2 bg-yellow-50 rounded-xl text-yellow-600 hover:bg-yellow-100 transition-all shadow-sm active:scale-90"
+                                          title="Gán nhân viên dọn dẹp"
+                                        >
+                                          <FiUserPlus size={16} />
+                                        </button>
+                                      )}
+                                      {/* Nút xác nhận hoàn thành - hiển thị khi status là completed */}
+                                      {task.status === 'completed' && (
+                                        <button
+                                          onClick={async () => {
+                                            if (!window.confirm('Xác nhận hoàn tất dọn dẹp cho phòng này?')) return;
+                                            try {
+                                              await bookingApi.confirmCleaning(task._id);
+                                              alert('Xác nhận hoàn thành dọn dẹp thành công!');
+                                              fetchTasks();
+                                            } catch (error) {
+                                              alert('Lỗi: ' + (error.response?.data?.message || error.message));
+                                            }
+                                          }}
+                                          className="p-2 bg-green-50 rounded-xl text-green-600 hover:bg-green-100 transition-all shadow-sm active:scale-90"
+                                          title="Xác nhận hoàn thành dọn dẹp"
+                                        >
+                                          <FiCheck size={16} />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                  <button onClick={() => handleViewDetail(task)} className="p-3 bg-slate-100 rounded-2xl text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-90">
+                                    <FiEye size={18} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -313,13 +394,34 @@ export default function AllTasksPage() {
       </div>
 
       {showDetailModal && selectedTask && (
-        <TaskDetailModal task={selectedTask} onClose={() => { setShowDetailModal(false); setSelectedTask(null); }} onRefresh={fetchTasks} />
+        <TaskDetailModal 
+          task={selectedTask} 
+          onClose={() => { setShowDetailModal(false); setSelectedTask(null); }} 
+          onRefresh={fetchTasks}
+          isManager={isManager}
+          onAssignCleaning={handleAssignCleaning}
+        />
+      )}
+
+      {showAssignModal && cleaningData && (
+        <AssignHousekeeperModal
+          cleaningData={cleaningData}
+          onClose={() => {
+            setShowAssignModal(false);
+            setCleaningData(null);
+          }}
+          onSuccess={() => {
+            fetchTasks();
+            setShowAssignModal(false);
+            setCleaningData(null);
+          }}
+        />
       )}
     </div>
   );
 }
 
-function TaskDetailModal({ task, onClose, onRefresh }) {
+function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning }) {
   const [confirming, setConfirming] = useState(false);
 
   const handleConfirmCleaning = async () => {
@@ -327,11 +429,18 @@ function TaskDetailModal({ task, onClose, onRefresh }) {
     setConfirming(true);
     try {
         await bookingApi.confirmCleaning(task._id);
-        onRefresh(); onClose();
+        alert('Xác nhận hoàn thành dọn dẹp thành công!');
+        onRefresh(); 
+        onClose();
     }
-    catch (error) { alert(error.message); }
+    catch (error) { 
+      alert('Lỗi: ' + (error.response?.data?.message || error.message)); 
+    }
     finally { setConfirming(false); }
   };
+
+  const needsAssignment = task.task_type === 'cleaning' && (!task.handled_by || (typeof task.handled_by === "object" && !task.handled_by?._id));
+  const canConfirm = task.task_type === 'cleaning' && task.status === 'completed' && isManager;
 
   const typeConfig = TASK_TYPES[task.task_type] || TASK_TYPES.cleaning;
   const statusConfig = STATUS_MAP[task.status] || { label: task.status, color: 'bg-gray-100' };
@@ -564,10 +673,31 @@ function TaskDetailModal({ task, onClose, onRefresh }) {
         </div>
 
         <div className="p-5 bg-slate-50 flex flex-col gap-2 border-t border-slate-100">
-          {task.task_type === 'cleaning' && task.status === 'completed' && (
-            <button onClick={handleConfirmCleaning} disabled={confirming} className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
-               <FiCheckCircle size={16}/> Xác nhận hoàn tất
-            </button>
+          {task.task_type === 'cleaning' && isManager && (
+            <>
+              {/* Nút gán nhân viên dọn dẹp */}
+              {needsAssignment && (
+                <button 
+                  onClick={() => {
+                    onAssignCleaning(task);
+                    onClose();
+                  }}
+                  className="w-full py-3 bg-yellow-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-yellow-600 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <FiUserPlus size={16}/> Gán nhân viên dọn dẹp
+                </button>
+              )}
+              {/* Nút xác nhận hoàn thành */}
+              {canConfirm && (
+                <button 
+                  onClick={handleConfirmCleaning} 
+                  disabled={confirming} 
+                  className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <FiCheckCircle size={16}/> {confirming ? 'Đang xác nhận...' : 'Xác nhận hoàn tất'}
+                </button>
+              )}
+            </>
           )}
           <button onClick={onClose} className="w-full py-3 bg-white text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:text-slate-800 hover:bg-slate-100 transition-all border border-slate-200">
             Đóng cửa sổ

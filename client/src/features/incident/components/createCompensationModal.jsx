@@ -124,6 +124,8 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
     };
 
     fetchBookingInfo();
+    // console.log("BOOKING INFO: ", bookingInfo);
+    // console.log("INCIDENT: ", incident);
   }, [incident, isCustomer]);
 
   // Cập nhật penalty_fee khi thay đổi rate hoặc resolution
@@ -260,7 +262,7 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
                     <FiCalendar size={14} className="text-gray-400" />
                     <span className="text-gray-600">Mã Booking:</span>
                     <span className="font-bold text-gray-800">
-                      {bookingInfo?.booking_code || incident.booking_id?.toString().slice(-6) || "N/A"}
+                      {bookingInfo?.booking_code || incident.booking_id?._id?.toString().slice(-6) || "N/A"}
                     </span>
                   </div>
                 </div>

@@ -326,15 +326,32 @@ export const getAllIncidents = async (req, res) => {
       .populate("room_id", "room_number").populate("reporter_id", "system_role").populate("causer_id", "system_role")
       .sort({ created_at: -1 });
 
+    // Lấy tất cả incident_ids để check compensate_ticket
+    const incidentIds = incidents.map(inc => inc._id);
+    const compensateTickets = await CompensateTicket.find({ incident_id: { $in: incidentIds } })
+      .select("incident_id _id")
+      .lean();
+    
+    // Tạo map incident_id -> compensate_ticket_id
+    const compensateMap = {};
+    compensateTickets.forEach(ticket => {
+      const incidentId = ticket.incident_id?.toString() || ticket.incident_id;
+      compensateMap[incidentId] = ticket._id;
+    });
+
     const result = [];
     for (const incident of incidents) {
       const reporterProfile = await resolveUserFullName(incident.reporter_id);
       const causerProfile = await resolveUserFullName(incident.causer_id);
+      const incidentId = incident._id.toString();
+      const hasCompensateTicket = !!compensateMap[incidentId];
 
       result.push({
         ...incident.toObject(),
         reporter_name: reporterProfile?.full_name || null,
         causer_name: causerProfile?.full_name || null,
+        has_compensate_ticket: hasCompensateTicket,
+        compensate_ticket_id: compensateMap[incidentId] || null,
       });
     }
 
@@ -362,11 +379,17 @@ export const getIncidentById = async (req, res) => {
         const reporterProfile = await resolveUserFullName(incident.reporter_id);
         const causerProfile = await resolveUserFullName(incident.causer_id);
 
+        // Kiểm tra xem đã có phiếu đền bù chưa
+        const compensateTicket = await CompensateTicket.findOne({ incident_id: id })
+          .select("_id status");
+
         return res.status(200).json({
           data: {
             ...incident.toObject(),
             reporter_name: reporterProfile?.full_name || null,
             causer_name: causerProfile?.full_name || null,
+            has_compensate_ticket: !!compensateTicket,
+            compensate_ticket_id: compensateTicket?._id || null,
           },
         });
       } catch (error) {

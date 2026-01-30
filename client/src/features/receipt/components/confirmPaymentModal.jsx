@@ -116,10 +116,6 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
                   )}
                 </div>
              )}
-             <div className="flex justify-between">
-                <span className="text-gray-600">Tiền phòng (sau KM):</span>
-                <span className="font-medium">{roomFee.toLocaleString()} đ</span>
-             </div>
              {discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-700">
                     <span className="text-emerald-700">Giảm giá:</span>
@@ -127,13 +123,17 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
                 </div>
              )}
              <div className="flex justify-between">
-                <span className="text-gray-600">Dịch vụ sử dụng:</span>
+                <span className="text-gray-600">Tiền phòng (sau KM):</span>
+                <span className="font-medium">{roomFee.toLocaleString()} đ</span>
+             </div>
+             <div className="flex justify-between">
+                <span className="text-gray-600">Phí sử dụng dịch vụ (nếu có):</span>
                 <span className={`font-medium ${serviceFee > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
                     {serviceFee > 0 ? `+ ${serviceFee.toLocaleString()}` : "0"} đ
                 </span>
              </div>
              <div className="flex justify-between">
-                <span className="text-gray-600">Phụ phí:</span>
+                <span className="text-gray-600">Phí đền bù (nếu có):</span>
                 <span className={`font-medium ${compensateFee > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
                     {compensateFee > 0 ? `+ ${compensateFee.toLocaleString()}` : "0"} đ
                 </span>

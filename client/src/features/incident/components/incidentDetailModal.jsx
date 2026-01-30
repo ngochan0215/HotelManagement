@@ -7,21 +7,49 @@ import CreateCompensationModal from "./createCompensationModal.jsx";
 
 export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const { user } = useAuth();
+  const [incidentData, setIncidentData] = useState(incident);
 
-  const incidentAssigneeId = incident.assignee_info?.assignee_id || "";
-
-  const [department, setDepartment] = useState(incident?.department || "");
-  const [assignee, setAssignee] = useState(incidentAssigneeId ? incidentAssigneeId.toString() : "");
-  const [severityAdmin, setSeverityAdmin] = useState(incident?.severity_admin || incident?.severity_user);
-  const [status, setStatus] = useState(incident?.status || 'new');
-  const [processingNote, setProcessingNote] = useState(incident?.processing_note || "");
-
-  // Cập nhật processingNote khi incident thay đổi
+  // Fetch chi tiết incident để có thông tin mới nhất về compensate_ticket
   useEffect(() => {
-    if (incident?.processing_note) {
-      setProcessingNote(incident.processing_note);
+    if (incident?._id) {
+      incidentApi.getIncidentById(incident._id)
+        .then(res => {
+          if (res?.data) {
+            setIncidentData(res.data);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching incident details:", err);
+        });
     }
-  }, [incident?.processing_note]);
+  }, [incident?._id]);
+
+  const incidentAssigneeId = incidentData?.assignee_info?.assignee_id || "";
+
+  const [department, setDepartment] = useState(incidentData?.department || "");
+  const [assignee, setAssignee] = useState(incidentAssigneeId ? incidentAssigneeId.toString() : "");
+  const [severityAdmin, setSeverityAdmin] = useState(incidentData?.severity_admin || incidentData?.severity_user);
+  const [status, setStatus] = useState(incidentData?.status || 'new');
+  const [processingNote, setProcessingNote] = useState(incidentData?.processing_note || "");
+
+  // Cập nhật processingNote khi incidentData thay đổi
+  useEffect(() => {
+    if (incidentData?.processing_note) {
+      setProcessingNote(incidentData.processing_note);
+    }
+    if (incidentData?.department) {
+      setDepartment(incidentData.department);
+    }
+    if (incidentData?.severity_admin || incidentData?.severity_user) {
+      setSeverityAdmin(incidentData.severity_admin || incidentData.severity_user);
+    }
+    if (incidentData?.status) {
+      setStatus(incidentData.status);
+    }
+    if (incidentData?.assignee_info?.assignee_id) {
+      setAssignee(incidentData.assignee_info.assignee_id.toString());
+    }
+  }, [incidentData]);
 
   const [employees, setEmployees] = useState([]);
   const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
@@ -61,9 +89,9 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const getRoleLabel = (roleId) => POSITIONS.find(p => p.id === roleId)?.label || roleId;
 
   const getReporterName = () => {
-    if (incident.reporter_name) return incident.reporter_name;
-    if (incident.reporter_id && typeof incident.reporter_id === 'object') {
-        return incident.reporter_id.full_name || incident.reporter_id.username || incident.reporter_id.email;
+    if (incidentData.reporter_name) return incidentData.reporter_name;
+    if (incidentData.reporter_id && typeof incidentData.reporter_id === 'object') {
+        return incidentData.reporter_id.full_name || incidentData.reporter_id.username || incidentData.reporter_id.email;
     }
     return "Ẩn danh / Admin";
   };
@@ -89,7 +117,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
         }
       };
 
-      await incidentApi.updateIncident(incident._id, payload);
+      await incidentApi.updateIncident(incidentData._id, payload);
       alert("Cập nhật thành công!");
       onUpdated?.();
       onClose();
@@ -101,7 +129,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const handleAssign = async () => {
     if (!assignee) return alert("Vui lòng chọn người xử lý");
     try {
-        await incidentApi.assignIncident(incident._id, {
+        await incidentApi.assignIncident(incidentData._id, {
             assignee_id: assignee,
             note: processingNote,
         });
@@ -118,7 +146,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
     if(!window.confirm("Xác nhận đã khắc phục xong sự cố?")) return;
 
     try {
-        await incidentApi.resolveIncident(incident._id, { note: processingNote });
+        await incidentApi.resolveIncident(incidentData._id, { note: processingNote });
         alert("Đã báo cáo hoàn thành!");
         onUpdated?.();
         onClose();
@@ -130,7 +158,7 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const handleClose = async () => {
       if(!window.confirm("Xác nhận đóng sự cố này?")) return;
       try {
-          await incidentApi.closeIncident(incident._id, { note: processingNote });
+          await incidentApi.closeIncident(incidentData._id, { note: processingNote });
           alert("Đã đóng hồ sơ thành công!");
           onUpdated?.();
           onClose();
@@ -160,16 +188,16 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
           <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-sm space-y-3">
              <div className="flex justify-between">
                 <span className="font-bold text-blue-800">Người báo: {getReporterName()}</span>
-                <span className="text-gray-500 text-xs">{new Date(incident.occured_at).toLocaleString("vi-VN")}</span>
+                <span className="text-gray-500 text-xs">{new Date(incidentData.occured_at).toLocaleString("vi-VN")}</span>
              </div>
              <div className="flex gap-2 text-xs">
                 <span className="font-bold text-gray-500 uppercase">Nguyên nhân:</span>
-                <span className={`font-bold uppercase ${incident.caused_by !== 'other' ? 'text-red-600' : 'text-gray-700'}`}>
-                    {incident.caused_by === 'customer' ? 'Khách hàng' : incident.caused_by === 'employee' ? 'Nhân viên' : 'Khách quan'}
-                    {incident.causer_name && ` - ${incident.causer_name}`}
+                <span className={`font-bold uppercase ${incidentData.caused_by !== 'other' ? 'text-red-600' : 'text-gray-700'}`}>
+                    {incidentData.caused_by === 'customer' ? 'Khách hàng' : incidentData.caused_by === 'employee' ? 'Nhân viên' : 'Khách quan'}
+                    {incidentData.causer_name && ` - ${incidentData.causer_name}`}
                 </span>
              </div>
-             <p className="bg-white p-3 rounded border border-blue-100 italic text-gray-700">"{incident.description}"</p>
+             <p className="bg-white p-3 rounded border border-blue-100 italic text-gray-700">"{incidentData.description}"</p>
           </div>
 
           <div className="space-y-4">
@@ -212,23 +240,23 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
                   <div className="bg-gray-50 p-3 rounded border text-sm">
                       Người xử lý: <b>{
                         employees.find(e => String(e._id) === String(incidentAssigneeId))?.full_name ||
-                        incident.assignee_info?.assignee_name ||
+                        incidentData.assignee_info?.assignee_name ||
                         "Chưa phân công"
                       }</b>
                   </div>
               )}
 
               {/* Hiển thị ghi chú hiện tại của nhân viên (nếu có) - chỉ cho quản lý xem */}
-              {isManager && incident.processing_note && (
+              {isManager && incidentData.processing_note && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-bold text-green-700 uppercase">Ghi chú của nhân viên:</span>
-                    {incident.assignee_info?.assignee_name && (
-                      <span className="text-xs text-green-600">({incident.assignee_info.assignee_name})</span>
+                    {incidentData.assignee_info?.assignee_name && (
+                      <span className="text-xs text-green-600">({incidentData.assignee_info.assignee_name})</span>
                     )}
                   </div>
                   <div className="text-sm text-gray-700 bg-white p-2 rounded border border-green-100 whitespace-pre-wrap">
-                    {incident.processing_note}
+                    {incidentData.processing_note}
                   </div>
                 </div>
               )}
@@ -262,12 +290,18 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
             {/* QUẢN LÝ */}
             {isManager && status !== 'closed' && (
                 <>
-                    {incident.caused_by !== 'other' && (
+                    {incidentData.caused_by !== 'other' && (
                         <button
                             onClick={() => setShowCompensation(true)}
-                            className="px-4 py-2 rounded bg-orange-100 text-orange-700 font-bold hover:bg-orange-200 text-sm border border-orange-200"
+                            disabled={incidentData.has_compensate_ticket}
+                            className={`px-4 py-2 rounded font-bold text-sm border ${
+                                incidentData.has_compensate_ticket
+                                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200"
+                            }`}
+                            title={incidentData.has_compensate_ticket ? "Sự cố này đã có phiếu đền bù" : "Tạo phiếu đền bù"}
                         >
-                           Tạo Đền Bù
+                           {incidentData.has_compensate_ticket ? "Đã có phiếu đền bù" : "Tạo Đền Bù"}
                         </button>
                     )}
 
@@ -315,10 +349,19 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
 
       {showCompensation && (
         <CreateCompensationModal
-            incident={incident}
+            incident={incidentData}
             onClose={() => setShowCompensation(false)}
             onSuccess={() => {
-                onClose();
+                // Refresh incident data sau khi tạo phiếu đền bù
+                if (incidentData?._id) {
+                  incidentApi.getIncidentById(incidentData._id)
+                    .then(res => {
+                      if (res?.data) {
+                        setIncidentData(res.data);
+                      }
+                    })
+                    .catch(err => console.error("Error refreshing incident:", err));
+                }
                 onUpdated?.();
             }}
         />

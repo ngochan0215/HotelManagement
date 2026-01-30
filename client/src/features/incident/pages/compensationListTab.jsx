@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { FiDollarSign, FiCheckCircle, FiLoader, FiAlertCircle } from "react-icons/fi";
+import { FiDollarSign, FiCheckCircle, FiLoader, FiAlertCircle, FiEye } from "react-icons/fi";
 import { incidentApi } from "../../api/incidentApi.js";
+import CompensationDetailModal from "../components/compensationDetailModal.jsx";
 
 export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
 
   // ...
     const fetchTickets = async () => {
@@ -119,19 +121,28 @@ export default function CompensationListTab() {
                     </div>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    {t.status === 'pending' && !t.is_in_receipt && (
+                    <div className="flex justify-end items-center gap-2">
                       <button
-                        onClick={() => handleConfirmPaid(t._id)}
-                        className="inline-flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                        onClick={() => setSelectedTicketId(t._id)}
+                        className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition shadow-sm"
+                        title="Xem chi tiết"
                       >
-                        <FiCheckCircle /> Xác nhận thu
+                        <FiEye /> Chi tiết
                       </button>
-                    )}
-                    {t.status === 'pending' && t.is_in_receipt && (
-                      <span className="text-xs text-gray-500 italic">
-                        Sẽ tự động thanh toán khi hóa đơn được thanh toán
-                      </span>
-                    )}
+                      {t.status === 'pending' && !t.is_in_receipt && (
+                        <button
+                          onClick={() => handleConfirmPaid(t._id)}
+                          className="inline-flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                        >
+                          <FiCheckCircle /> Xác nhận thu
+                        </button>
+                      )}
+                      {t.status === 'pending' && t.is_in_receipt && (
+                        <span className="text-xs text-gray-500 italic">
+                          Sẽ tự động thanh toán khi hóa đơn được thanh toán
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -139,6 +150,13 @@ export default function CompensationListTab() {
           </tbody>
         </table>
       </div>
+
+      {selectedTicketId && (
+        <CompensationDetailModal
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+        />
+      )}
     </div>
   );
 }

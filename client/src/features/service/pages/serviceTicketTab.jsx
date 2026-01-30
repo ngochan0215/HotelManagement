@@ -443,9 +443,20 @@ export default function ServiceTicketTab() {
 
                             <td className="px-4 py-3 text-gray-600">
                                 {item.booking_id ? (
-                                <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                                    Theo Booking
-                                </span>
+                                <div className="flex flex-col gap-1">
+                                    <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-medium">
+                                        Booking: #{item.booking_id.booking_code || item.booking_id._id?.slice(-6).toUpperCase() || "N/A"}
+                                    </span>
+                                    {item.booking_id.rooms && item.booking_id.rooms.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {item.booking_id.rooms.map((roomNum, idx) => (
+                                                <span key={idx} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-200">
+                                                    Phòng {roomNum}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                                 ) : "Vãng lai"}
                             </td>
 

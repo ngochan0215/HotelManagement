@@ -1094,15 +1094,55 @@ export const getAllServiceUsage = async (req, res) => {
 
     const serviceUsages = await ServiceUsage.find(filter)
       .select("-__v -created_at -updated_at")
-      .populate("booking_id", "status")
+      .populate("booking_id", "status _id")
       .populate("customer_id", "full_name phone")
       .populate("employee_id", "full_name")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Lấy thông tin phòng cho mỗi booking
+    const { BookingDetail } = await import("../models/index.js");
+    const bookingIds = serviceUsages
+      .map(su => su.booking_id?._id || su.booking_id)
+      .filter(Boolean);
+    
+    const bookingDetails = await BookingDetail.find({
+      booking_id: { $in: bookingIds }
+    })
+      .populate("room_id", "room_number")
+      .select("booking_id room_id")
+      .lean();
+
+    // Tạo map booking_id -> rooms[]
+    const bookingRoomsMap = {};
+    bookingDetails.forEach(bd => {
+      const bookingId = bd.booking_id?.toString() || bd.booking_id;
+      if (!bookingRoomsMap[bookingId]) {
+        bookingRoomsMap[bookingId] = [];
+      }
+      if (bd.room_id) {
+        bookingRoomsMap[bookingId].push(bd.room_id.room_number);
+      }
+    });
+
+    // Thêm thông tin phòng vào mỗi service usage
+    const serviceUsagesWithRooms = serviceUsages.map(su => {
+      const bookingId = su.booking_id?._id?.toString() || su.booking_id?.toString() || su.booking_id;
+      const rooms = bookingRoomsMap[bookingId] || [];
+      return {
+        ...su,
+        booking_id: {
+          ...su.booking_id,
+          rooms: rooms,
+          booking_code: bookingId ? bookingId.slice(-6).toUpperCase() : null
+        }
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      total: serviceUsages.length,
-      data: serviceUsages,
+      total: serviceUsagesWithRooms.length,
+      data: serviceUsagesWithRooms,
     });
   } catch (error) {
     console.error("getAllServiceUsage error:", error);
