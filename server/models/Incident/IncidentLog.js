@@ -18,7 +18,8 @@ const incidentLogSchema = new mongoose.Schema(
         "resolved",
         "closed",
         "reopened",
-        "compensation_updated"
+        "compensation_updated",
+        "compensation_paid_closed"
       ],
       required: true,
     },

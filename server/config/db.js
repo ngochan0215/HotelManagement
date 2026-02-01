@@ -12,6 +12,8 @@ if (!process.env.DB_URI) {
   dotenv.config({ path: join(__dirname, "../../.env") });
 }
 
+console.log("DB_URI =", process.env.DB_URI);
+
 const connectDB = async () => {
     try {
         const mongoURI = process.env.DB_URI;
@@ -19,10 +21,12 @@ const connectDB = async () => {
             throw new Error("Lỗi kết nối: biến môi trường DB_URI không được tìm thấy");
         }
 
-        await mongoose.connect(mongoURI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        // await mongoose.connect(mongoURI, {
+        //     useNewUrlParser: true,
+        //     useUnifiedTopology: true,
+        //     dbName: "HotelManagement"
+        // });
+        await mongoose.connect(mongoURI);
 
         console.log("Kết nối MongoDB thành công");
     } catch (error) {
