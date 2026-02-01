@@ -7,7 +7,7 @@ import { bookingApi } from "../../api/bookingApi.js";
 export default function CreateCompensationModal({ incident, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [loadingEquipments, setLoadingEquipments] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(incident?.description || "");
   const [equipments, setEquipments] = useState([]);
   const [bookingInfo, setBookingInfo] = useState(null);
   const [totalFeeNonEquipment, setTotalFeeNonEquipment] = useState(0);
@@ -52,6 +52,11 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
       discard: baseRate.discard ? (baseRate.discard * multiplier) : 0
     };
   };
+
+  // Tự động đọc ghi chú từ sự cố vào ô ghi chú (người dùng có thể giữ hoặc xóa ghi lại)
+  useEffect(() => {
+    setNote(incident?.description || "");
+  }, [incident]);
 
   // Fetch thông tin thiết bị
   useEffect(() => {

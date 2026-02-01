@@ -71,19 +71,19 @@ app.get(/.*/, (req, res) => {
   );
 });
 
-// startImportTicketJob();
-// startInstallTicketJob();
-// startGoodTicketJob();
-// startServiceUsageJob();
-// startCancelPendingBookingJob();
-// startCancelCheckinLateBookingJob();
-// startCustomerTierJob();
-// startCheckinReminderJob();
-// startCheckoutReminderJob();
-// startDepositDeadlineReminderJob();
-// startCheckinTimeReminderJob();
-// startSyncRoomStatusJob();
-// startFixRoomLogsJob();
+startImportTicketJob();
+startInstallTicketJob();
+startGoodTicketJob();
+startServiceUsageJob();
+startCancelPendingBookingJob();
+startCancelCheckinLateBookingJob();
+startCustomerTierJob();
+startCheckinReminderJob();
+startCheckoutReminderJob();
+startDepositDeadlineReminderJob();
+startCheckinTimeReminderJob();
+startSyncRoomStatusJob();
+startFixRoomLogsJob();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { 

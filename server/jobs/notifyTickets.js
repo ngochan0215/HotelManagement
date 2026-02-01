@@ -1,6 +1,7 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
     GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
-    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentCategory, EquipmentLog, InstallDetail, Employee
+    BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentCategory, 
+    EquipmentLog, InstallDetail, Employee, Receipt
 } from "../models/index.js";
 import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
@@ -49,8 +50,8 @@ export const notifyImportTickets = async () => {
 
     // phiếu đến ngày
     const todayTickets = await EquipmentTicket.find({
-        status: "pending",
-        import_date: { $gte: start, $lte: end }
+      status: "pending",
+      import_date: { $gte: start, $lte: end }
     });
 
     if (todayTickets.length > 0) {
@@ -101,7 +102,7 @@ export const notifyInstallTickets = async () => {
       install_date: { $lt: start },
     });
 
-    console.log("EXPIRED TICKETS: ", expiredTickets);
+    //console.log("EXPIRED TICKETS: ", expiredTickets);
 
     for (const ticket of expiredTickets) {
       ticket.status = "expired";
@@ -254,7 +255,7 @@ export const notifyGoodTickets = async () => {
       import_date: { $lt: start }
     });
 
-    console.log("Expired good tickets found:", expiredTickets.length);
+    //console.log("Expired good tickets found:", expiredTickets.length);
     if (expiredTickets.length > 0) {
         await GoodTicket.updateMany(
             { _id: { $in: expiredTickets.map(t => t._id) } },
@@ -511,6 +512,18 @@ export const cancelExpiredDepositBookings = async () => {
       reason: "Trừ 10 điểm vì booking bị hủy do chưa đặt cọc."
     });
 
+    // hủy luôn hóa đơn
+    await Receipt.updateMany(
+      {
+        booking_id: booking._id
+      },
+      { $set: { 
+        status: "cancelled",
+        note: "Hóa đơn bị hủy vì đã quá hạn thanh toán cọc (quá 1h kể từ thời điểm khách đặt phòng)" 
+      } },
+      { session }
+    );
+
     // Gửi thông báo
     const customer = booking.customer_id;
     const bookingId = booking._id;
@@ -695,6 +708,18 @@ export const cancelCheckinLateBookings = async () => {
       points: -20,
       reason: "Trừ 20 điểm vì booking bị hủy do checkin trễ."
     });
+
+    // hủy luôn hóa đơn
+    await Receipt.updateMany(
+      {
+        booking_id: booking._id
+      },
+      { $set: { 
+        status: "cancelled",
+        note: "Hóa đơn bị hủy vì khách hàng không đến check-in (đã quá 1h kể từ thời điểm check-in dự kiến)" 
+      } },
+      { session }
+    );
 
     // Gửi thông báo
     const customer = booking.customer_id;

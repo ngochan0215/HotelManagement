@@ -54,14 +54,14 @@ export const getAllRooms = async (req, res) => {
         }
 
         if (room_status) {
-            const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance", "new"];
+            const validStatuses = ["available", "booked", "occupied", "cleaning", "maintenance", "new", "reserved"];
             if (!validStatuses.includes(room_status))
-                return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
+              return res.status(400).json({ success: false, message: "Trạng thái phòng không hợp lệ!" });
             filter.room_status = room_status;
         }
 
         if (room_number) {
-            filter.room_number = parseInt(room_number);
+          filter.room_number = parseInt(room_number);
         }
 
         const now = new Date();
@@ -74,6 +74,7 @@ export const getAllRooms = async (req, res) => {
                 start_time: { $lte: now },
                 end_time: { $gte: now },
               },
+              //options: { sort: { start_time: -1 }, limit: 1 },
               select: "status start_time end_time note",
           })
           .select("-__v")
@@ -235,6 +236,7 @@ export const updateRoom = async (req, res) => {
   session.startTransaction();
 
   try {
+    console.log("IM CALLED");
     const { id } = req.params;
     const { category_id, room_number, room_status, start_time, end_time, note } = req.body;
     const now = new Date();
@@ -286,7 +288,7 @@ export const updateRoom = async (req, res) => {
       }).sort({ start_time: -1 });
 
       const currentStatus = activeLog?.status || room.room_status || "new";
-
+      console.log("CURRENT STATUS: ", currentStatus);
       // nếu trạng thái hiện tại là occupied thì không cho đổi
       if (["occupied"].includes(currentStatus)) {
         return res.status(400).json({

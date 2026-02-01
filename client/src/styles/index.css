@@ -133,3 +133,12 @@ button:focus-visible {
   color: #333;
 }
 
+/* Ẩn scrollbar nhưng vẫn cuộn được (dùng cho sidebar nav) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+

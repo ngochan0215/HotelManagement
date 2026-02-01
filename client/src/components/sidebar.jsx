@@ -120,7 +120,7 @@ export default function Sidebar() {
             <span className="text-xl font-bold text-white tracking-wide">SE HOTEL</span>
         </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-6 custom-scrollbar">
+      <nav className="flex-1 overflow-y-auto px-3 py-6 scrollbar-hide">
         <div className="mb-8">
           {sidebarConfig
             .filter(item => item.type === "main" && checkPermission(item))

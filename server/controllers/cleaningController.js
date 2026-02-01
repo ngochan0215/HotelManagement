@@ -175,9 +175,9 @@ export const assignCleaningTask = async (req, res) => {
 
         // Gửi thông báo (không ảnh hưởng đến transaction)
         try {
-            const room = await Room.findById(task.room_id).populate("room_category_id", "name");
+            const room = await Room.findById(task.room_id).populate("category_id", "name");
             const roomNumber = room?.room_number || "N/A";
-            const roomCategoryName = room?.room_category_id?.name || "";
+            const roomCategoryName = room?.category_id?.name || "";
             const roomInfo = roomCategoryName ? `${roomNumber} (${roomCategoryName})` : roomNumber;
 
             // gửi thông báo cho admin
@@ -597,7 +597,7 @@ export const getAllTasks = async (req, res) => {
         // Cleaning tasks
         if (!type || type === 'all' || type === 'cleaning') {
             const cleaningTasks = await CleaningTask.find(status ? { status } : {})
-                .populate("room_id", "room_number room_category_id")
+                .populate("room_id", "room_number category_id")
                 .populate("handled_by", "full_name phone_number")
                 .populate({
                     path: "booking_id",
@@ -759,7 +759,7 @@ export const getCleaningTaskByRoom = async (req, res) => {
         if (booking_id) filter.booking_id = booking_id;
         
         const task = await CleaningTask.findOne(filter)
-            .populate("room_id", "room_number room_category_id")
+            .populate("room_id", "room_number category_id")
             .populate("handled_by", "full_name phone_number")
             .populate("room_log_id")
             .sort({ created_at: -1 });
@@ -809,7 +809,7 @@ export const getMyCleaningTasks = async (req, res) => {
         }
         
         const tasks = await CleaningTask.find({ handled_by: employee._id })
-            .populate("room_id", "room_number room_category_id")
+            .populate("room_id", "room_number category_id")
             .populate("booking_id", "_id")
             .sort({ created_at: -1 });
         

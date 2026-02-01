@@ -297,7 +297,7 @@ export const createBooking = async (req, res) => {
       
       // gửi thông báo cho quản lý
       if (allAdmins.length > 0) {
-        await pushNotification(
+        await pushNotificationToUsers(
           adminIds,
           "Booking mới",
           `Có booking mới với ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'}`,
@@ -332,7 +332,7 @@ export const createBooking = async (req, res) => {
         isBanned: { $ne: true }
       }).select("_id");
 
-      await pushNotification(
+      await pushNotificationToUsers(
         validUsers.map(u => u._id),
         "Booking mới",
         `Có booking mới với ID: #${booking[0]._id.toString().slice(-6)} từ khách hàng ${customer.full_name || "N/A"}`,

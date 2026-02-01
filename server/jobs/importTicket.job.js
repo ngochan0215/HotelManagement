@@ -34,7 +34,7 @@ export const startInstallTicketJob = () =>
 export const startGoodTicketJob = () =>
   startCronJob({
     name: "import goods tickets",
-    schedule: "* * * * *",
+    schedule: "*/5 * * * *",
     handler: notifyGoodTickets,
   });
 
@@ -104,7 +104,7 @@ export const startSyncRoomStatusJob = () =>
 export const startFixRoomLogsJob = () =>
   startCronJob({
     name: "fix room logs from cancelled bookings",
-    schedule: "* * * * *", // Chạy mỗi 10 phút để sửa lại room_log từ booking đã hủy
+    schedule: "* * * * *", // Chạy mỗi phút để sửa lại room_log từ booking đã hủy
     handler: fixRoomLogsFromCancelledBookings,
   });
 

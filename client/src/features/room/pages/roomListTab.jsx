@@ -56,6 +56,11 @@ export default function RoomListTab() {
   const [loadingEquipments, setLoadingEquipments] = useState(false);
   const [newRoomId, setNewRoomId] = useState(null); // Lưu room_id sau khi tạo phòng
   const [suggestedRoomNumber, setSuggestedRoomNumber] = useState(""); // Số phòng được gợi ý
+  const [technicians, setTechnicians] = useState([]);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
+  const [loadingTechnicians, setLoadingTechnicians] = useState(false);
+  // Phòng đã có phiếu lắp đặt chưa hủy (pending/assigned/waiting_confirm/completed) → ẩn nút "Tạo phiếu lắp đặt"
+  const [roomIdsWithActiveInstallTicket, setRoomIdsWithActiveInstallTicket] = useState(new Set());
   
   // --- STATE SẮP XẾP ---
   const [sortBy, setSortBy] = useState(null); // "status" | "category" | null
@@ -72,6 +77,51 @@ export default function RoomListTab() {
     // Lấy thông tin cleaning tasks cho các phòng có status "cleaning"
     checkCleaningTasks();
   }, [rooms]);
+
+  // Lấy danh sách phòng đã có phiếu lắp đặt chưa hủy (để ẩn nút "Tạo phiếu lắp đặt")
+  useEffect(() => {
+    const fetchActiveInstallTickets = async () => {
+      try {
+        const res = await equipmentApi.getAllInstallTickets();
+        const installs = res.installs || [];
+        const statusNotCancelled = ["pending", "assigned", "waiting_confirm", "completed"];
+        const ids = new Set();
+        installs.forEach((ticket) => {
+          if (ticket.type !== "install") return;
+          const status = (ticket.status || "").toLowerCase();
+          if (!statusNotCancelled.includes(status)) return;
+          const roomId = ticket.room_id?._id || ticket.room_id;
+          if (roomId) ids.add(roomId.toString());
+        });
+        setRoomIdsWithActiveInstallTicket(ids);
+      } catch (err) {
+        console.error("Lỗi tải phiếu lắp đặt:", err);
+        setRoomIdsWithActiveInstallTicket(new Set());
+      }
+    };
+    fetchActiveInstallTickets();
+  }, [rooms]);
+
+  // Lấy danh sách nhân viên kỹ thuật khi mở modal xem trước phiếu lắp đặt
+  useEffect(() => {
+    if (!showInstallPreview) {
+      setSelectedTechnicianId("");
+      return;
+    }
+    const fetchTechnicians = async () => {
+      setLoadingTechnicians(true);
+      try {
+        const res = await equipmentApi.getAvailableTechnicians();
+        setTechnicians(res.technicians || []);
+      } catch (err) {
+        console.error("Lỗi tải danh sách nhân viên kỹ thuật:", err);
+        setTechnicians([]);
+      } finally {
+        setLoadingTechnicians(false);
+      }
+    };
+    fetchTechnicians();
+  }, [showInstallPreview]);
 
   const checkCleaningTasks = async () => {
     setLoadingCleaningTasks(true);
@@ -110,6 +160,7 @@ export default function RoomListTab() {
       ]);
 
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
+        console.log("ROOMS: ", roomsRes.rooms);
         setRooms(roomsRes.rooms);
       } else {
         setRooms([]);
@@ -265,9 +316,35 @@ export default function RoomListTab() {
 
     setLoadingEquipments(true);
     try {
-      const res = await roomApi.getDefaultEquipmentsByCategory(categoryId);
+      const [res, stockRes] = await Promise.all([
+        roomApi.getDefaultEquipmentsByCategory(categoryId),
+        equipmentApi.getAllEquipments({ status: "in-stock" })
+      ]);
+
       if (res.success && res.default_equipments && res.default_equipments.length > 0) {
-        setDefaultEquipments(res.default_equipments);
+        // Đếm tồn kho theo danh mục: chỉ thiết bị in-stock, condition new/good, chưa gắn phòng
+        const eqs = (stockRes.equipments || []).filter(
+          (eq) => (eq.condition === "new" || eq.condition === "good") && !eq.room_id
+        );
+        const stockByCategory = {};
+        eqs.forEach((eq) => {
+          const catId = eq.category_id?._id || eq.category_id;
+          if (catId) stockByCategory[catId] = (stockByCategory[catId] || 0) + 1;
+        });
+
+        const enriched = res.default_equipments.map((de) => {
+          const catId = de.equipment_category_id?._id || de.equipment_category_id;
+          const needed = Number(de.quantity) || 0;
+          const available = stockByCategory[catId] || 0;
+          const canInstall = available >= needed;
+          return {
+            ...de,
+            stock_available: available,
+            can_install: canInstall
+          };
+        });
+
+        setDefaultEquipments(enriched);
         setNewRoomId(targetRoomId);
         setShowInstallPreview(true);
       } else {
@@ -286,8 +363,9 @@ export default function RoomListTab() {
       return;
     }
 
-    if (defaultEquipments.length === 0) {
-      alert("Không có thiết bị nào để lắp đặt!");
+    const installableItems = defaultEquipments.filter((de) => de.can_install !== false);
+    if (installableItems.length === 0) {
+      alert("Không có thiết bị nào đủ tồn kho để lắp đặt. Vui lòng nhập thêm thiết bị trước.");
       return;
     }
 
@@ -297,7 +375,7 @@ export default function RoomListTab() {
       installDate.setDate(installDate.getDate() + 30);
       installDate.setHours(0, 0, 0, 0);
 
-      const items = defaultEquipments.map(de => ({
+      const items = installableItems.map((de) => ({
         category_id: de.equipment_category_id._id || de.equipment_category_id,
         quantity: de.quantity
       }));
@@ -306,11 +384,17 @@ export default function RoomListTab() {
         room_id: newRoomId,
         install_date: installDate.toISOString(),
         items: items,
-        type: 'install'
+        type: "install",
+        handled_by: selectedTechnicianId || null
       };
 
       await equipmentApi.createInstallTicket(payload);
-      alert("Tạo phiếu lắp đặt tự động thành công!");
+      const skippedCount = defaultEquipments.length - installableItems.length;
+      alert(
+        skippedCount > 0
+          ? `Đã tạo phiếu lắp đặt với ${installableItems.length} loại thiết bị (${skippedCount} loại thiếu tồn kho đã bỏ qua).`
+          : "Tạo phiếu lắp đặt tự động thành công!"
+      );
       setShowInstallPreview(false);
       setDefaultEquipments([]);
       setNewRoomId(null);
@@ -612,7 +696,7 @@ export default function RoomListTab() {
                             <FiCheck size={14}/> Xác nhận dọn dẹp
                           </button>
                         )}
-                        {room.room_status === "new" && (
+                        {room.room_status === "new" && !roomIdsWithActiveInstallTicket.has(String(room._id)) && (
                           <button 
                             onClick={() => {
                               if (room.category_id?._id || room.category_id) {
@@ -858,28 +942,71 @@ export default function RoomListTab() {
                 </p>
               </div>
 
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Phân công nhân viên</label>
+                <select
+                  value={selectedTechnicianId}
+                  onChange={(e) => setSelectedTechnicianId(e.target.value)}
+                  disabled={loadingTechnicians}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                >
+                  <option value="">— Không phân công —</option>
+                  {technicians.map((tech) => (
+                    <option key={tech._id} value={tech._id}>
+                      {tech.full_name || "Nhân viên"}
+                      {tech.phone_number ? ` (${tech.phone_number})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {loadingTechnicians && (
+                  <p className="text-xs text-gray-500 mt-1">Đang tải danh sách nhân viên...</p>
+                )}
+              </div>
+
               <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100 border-b border-gray-200">
                     <tr>
                       <th className="py-3 px-4 text-left font-bold text-gray-700">Thiết bị</th>
                       <th className="py-3 px-4 text-center font-bold text-gray-700">Số lượng</th>
-                      <th className="py-3 px-4 text-right font-bold text-gray-700">Đơn vị</th>
+                      <th className="py-3 px-4 text-center font-bold text-gray-700">Đơn vị</th>
+                      <th className="py-3 px-4 text-left font-bold text-gray-700">Tình trạng tồn kho</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {defaultEquipments.map((de, index) => {
                       const eqCategory = de.equipment_category_id;
+                      const canInstall = de.can_install !== false;
+                      const needed = Number(de.quantity) || 0;
+                      const available = de.stock_available ?? 0;
                       return (
-                        <tr key={index} className="hover:bg-gray-50">
+                        <tr
+                          key={index}
+                          className={
+                            canInstall
+                              ? "hover:bg-gray-50"
+                              : "bg-red-50/70 hover:bg-red-50 text-gray-600"
+                          }
+                        >
                           <td className="py-3 px-4 font-medium text-gray-800">
                             {eqCategory?.name || "N/A"}
                           </td>
                           <td className="py-3 px-4 text-center font-bold text-indigo-600">
                             {de.quantity}
                           </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
+                          <td className="py-3 px-4 text-center text-gray-600">
                             {renderUnit(eqCategory?.unit) || "N/A"}
+                          </td>
+                          <td className="py-3 px-4">
+                            {canInstall ? (
+                              <span className="text-emerald-600 font-medium">
+                                Đủ tồn ({available} trong kho)
+                              </span>
+                            ) : (
+                              <span className="text-red-600 font-medium" title="Sẽ không đưa vào phiếu lắp đặt">
+                                Tồn kho không đủ (cần {needed}, có {available})
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -892,6 +1019,12 @@ export default function RoomListTab() {
                 <div className="text-center py-8 text-gray-400">
                   Không có thiết bị mặc định nào
                 </div>
+              )}
+
+              {defaultEquipments.some((de) => de.can_install === false) && (
+                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Thiết bị thiếu tồn kho vẫn hiển thị trong danh sách nhưng sẽ không được đưa vào phiếu lắp đặt. Chỉ những thiết bị đủ tồn kho mới được lắp đặt.
+                </p>
               )}
             </div>
 
