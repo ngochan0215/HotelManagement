@@ -8,7 +8,8 @@ import connectDB from "./config/db.js";
 import { startImportTicketJob, startInstallTicketJob, startGoodTicketJob, startCustomerTierJob,
     startServiceUsageJob, startCancelCheckinLateBookingJob, startCancelPendingBookingJob, 
     startCheckinReminderJob, startCheckoutReminderJob, startDepositDeadlineReminderJob,
-    startCheckinTimeReminderJob, startSyncRoomStatusJob, startFixRoomLogsJob
+    startCheckinTimeReminderJob, startSyncRoomStatusJob, startFixRoomLogsJob,
+    startAutoAvailableNewRoomsJob
 } from "./jobs/importTicket.job.js";
 
 import authRoute from "./routes/authRoutes.js";
@@ -84,6 +85,7 @@ startDepositDeadlineReminderJob();
 startCheckinTimeReminderJob();
 startSyncRoomStatusJob();
 startFixRoomLogsJob();
+startAutoAvailableNewRoomsJob();
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => { 

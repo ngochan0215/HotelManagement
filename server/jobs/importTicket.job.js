@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { notifyImportTickets, notifyInstallTickets, notifyGoodTickets, updateAllCustomerTiers,
   notifyServiceUsageTickets, cancelCheckinLateBookings, cancelExpiredDepositBookings, notifyCheckinReminder,
   notifyCheckoutReminder, notifyDepositDeadlineReminder, notifyCheckinTimeReminder, syncRoomStatusFromLogs,
-  fixRoomLogsFromCancelledBookings
+  fixRoomLogsFromCancelledBookings, autoAvailableNewRoomsWhenEquipmentReady
 } from "../jobs/notifyTickets.js";
 
 const startCronJob = ({ name, schedule, handler }) => {
@@ -106,6 +106,13 @@ export const startFixRoomLogsJob = () =>
     name: "fix room logs from cancelled bookings",
     schedule: "* * * * *", // Chạy mỗi phút để sửa lại room_log từ booking đã hủy
     handler: fixRoomLogsFromCancelledBookings,
+  });
+
+export const startAutoAvailableNewRoomsJob = () =>
+  startCronJob({
+    name: "auto available new rooms when default equipment ready",
+    schedule: "*/5 * * * *", // Chạy mỗi 5 phút
+    handler: autoAvailableNewRoomsWhenEquipmentReady,
   });
 
 

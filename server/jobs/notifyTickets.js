@@ -1,7 +1,7 @@
 import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
     GoodTicket, RoomLog, UsageDetail, Booking, BookingDetail, 
     BookingStatusLog, Room, RoomStatusLog, Equipment, EquipmentCategory, 
-    EquipmentLog, InstallDetail, Employee, Receipt
+    EquipmentLog, InstallDetail, Employee, Receipt, DefaultEquipment
 } from "../models/index.js";
 import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
@@ -1539,5 +1539,106 @@ export const fixRoomLogsFromCancelledBookings = async () => {
     }
   } catch (error) {
     console.error("[CRON] fixRoomLogsFromCancelledBookings error:", error);
+  }
+};
+
+/**
+ * Cron: Phòng mới (status=new) đã lắp đủ thiết bị mặc định theo loại phòng
+ * → tự động chuyển sang available, ghi log và gửi thông báo cho quản lý.
+ */
+export const autoAvailableNewRoomsWhenEquipmentReady = async () => {
+  try {
+    const now = new Date();
+    const newRooms = await Room.find({ room_status: "new" })
+      .populate("category_id", "_id category_name");
+    if (newRooms.length === 0) return;
+
+    const managers = await User.find({ system_role: "manager" }).select("_id");
+    const managerIds = (managers || []).map((m) => m._id).filter(Boolean);
+
+    for (const room of newRooms) {
+      const roomCategoryId = room.category_id?._id || room.category_id;
+      if (!roomCategoryId) continue;
+
+      const defaultEquipments = await DefaultEquipment.find({
+        category_id: roomCategoryId,
+      }).select("equipment_category_id quantity");
+
+      if (defaultEquipments.length === 0) continue;
+
+      let allSatisfied = true;
+      for (const def of defaultEquipments) {
+        const catId = def.equipment_category_id?.toString?.() || def.equipment_category_id;
+        const required = Number(def.quantity) || 0;
+        const count = await Equipment.countDocuments({
+          room_id: room._id,
+          category_id: catId,
+        });
+        if (count < required) {
+          allSatisfied = false;
+          break;
+        }
+      }
+      if (!allSatisfied) continue;
+
+      const session = await mongoose.startSession();
+      session.startTransaction();
+      try {
+        await RoomLog.create(
+          [
+            {
+              room_id: room._id,
+              status: "available",
+              start_time: now,
+              end_time: null,
+              note: "Cron: thiết bị mặc định đã lắp đủ, tự động chuyển available",
+              handled_by: null,
+            },
+          ],
+          { session }
+        );
+        await RoomStatusLog.create(
+          [
+            {
+              room_id: room._id,
+              status: "available",
+              start_time: now,
+              end_time: null,
+              note: "Cron: thiết bị mặc định đã lắp đủ, tự động chuyển available",
+              handled_by: null,
+            },
+          ],
+          { session }
+        );
+        room.room_status = "available";
+        await room.save({ session });
+        await session.commitTransaction();
+      } catch (txErr) {
+        await session.abortTransaction();
+        console.error(`[CRON] autoAvailableNewRooms: tx error for room ${room._id}:`, txErr);
+        continue;
+      } finally {
+        session.endSession();
+      }
+
+      const roomNumber = room.room_number || room._id?.toString?.().slice(-6);
+      if (managerIds.length > 0) {
+        try {
+          await pushNotificationToUsers(
+            managerIds,
+            "Phòng mới đã sẵn sàng",
+            `Phòng ${roomNumber} đã lắp đủ thiết bị mặc định và được chuyển sang trạng thái Trống (available).`,
+            "system",
+            "room",
+            room._id,
+            "unread"
+          );
+        } catch (notifErr) {
+          console.error(`[CRON] autoAvailableNewRooms: notify error for room ${room._id}:`, notifErr);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[CRON] autoAvailableNewRoomsWhenEquipmentReady error:", error);
   }
 };

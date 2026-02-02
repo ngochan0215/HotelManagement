@@ -54,7 +54,7 @@ export const markAsReadAll = async (req, res) => {
 export const getMyNotifications = async (req, res) => {
     try {
         const userId = req.user.userId;
-        console.log("Fetching notifications for user:", userId);
+        //console.log("Fetching notifications for user:", userId);
         const notifications = await Notification
             .find({ user_id: userId, status: ["read", "unread"] })
             .sort({ created_at: -1 })

@@ -12,7 +12,7 @@ dotenv.config();
 
 // Tạo payment link PayOS và lưu transaction tương ứng
 export const createPayment = async (transaction, userId) => {
-    console.log("Creating PayOS payment for transaction:", transaction);
+    //console.log("Creating PayOS payment for transaction:", transaction);
     // tạo orderCode cho PayOS và cho transaction nội bộ
     const bookingCode = Date.now();
 
@@ -312,7 +312,7 @@ export const paymentSucceeded = async (orderCode) => {
     const isFullPayment = transaction.amount >= receipt.amount_due;
     const isPartialPayment = !isFullPayment && transaction.amount > 0 && transaction.amount < receipt.amount_due;
     
-    console.log(`Payment succeeded for transaction ${transaction._id}. Receipt status: ${receipt.status}, Deposit: ${isDepositPayment}, Full: ${isFullPayment}, Partial: ${isPartialPayment}`);
+    //console.log(`Payment succeeded for transaction ${transaction._id}. Receipt status: ${receipt.status}, Deposit: ${isDepositPayment}, Full: ${isFullPayment}, Partial: ${isPartialPayment}`);
 
     // Nếu là tiền cọc cho booking mới và booking chưa được confirm, gọi confirmBooking
     if (isDepositPayment && booking && booking.status === "pending") {
@@ -349,7 +349,11 @@ export const paymentSucceeded = async (orderCode) => {
             if (booking) {
                 const customer = await Customer.findById(booking.customer_id);
                 if (customer) {
-                    const rewardPoints = Math.floor(receipt.final_amount / 10000);
+                    const rewardPoints = Math.max(
+                        0,
+                        Math.floor(receipt.final_amount / 10000)
+                    );
+
                     await updateCustomerPoints({
                         customer_id: customer._id,
                         points: rewardPoints,
