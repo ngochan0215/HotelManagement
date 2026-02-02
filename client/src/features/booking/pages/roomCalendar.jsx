@@ -251,7 +251,7 @@ export default function RoomCalendar() {
                                     filteredRooms.map(room => (
                                         <div key={room._id} className="flex border-b border-slate-100 hover:bg-slate-50 transition" style={{height:ROW_HEIGHT}}>
                                             <div className="sticky left-0 z-30 bg-white border-r border-slate-200 flex flex-col justify-center px-5 w-[220px] shrink-0 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                                <div className="flex justify-between items-center"><span className="font-bold text-slate-800 text-lg">{room.room_number}</span><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">T{room.floor||1}</span></div>
+                                                <div className="flex justify-between items-center"><span className="font-bold text-slate-800 text-lg">{room.room_number}</span></div>
                                                 <div className="text-xs text-slate-500 mt-1 truncate">{room.category_id?.category_name || "---"}</div>
                                             </div>
                                             <div className="relative flex" style={{width:totalCalendarWidth}}>
