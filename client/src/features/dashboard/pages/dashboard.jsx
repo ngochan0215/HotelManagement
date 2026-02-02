@@ -51,7 +51,16 @@ export default function Dashboard() {
   if (!overview || !bookingStats || !roomStatus || !cancelReasons)
     return <div className="p-6 text-center">Đang tải dữ liệu thực tế...</div>;
 
-  const cancelColors = ["#3B82F6", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"];
+   const cancelColors = [
+        "#3B82F6", // Blue
+        "#F59E0B", // Amber
+        "#10B981", // Emerald
+        "#EF4444", // Red
+        "#8B5CF6", // Violet
+        "#EC4899", // Pink
+        "#06B6D4", // Cyan
+        "#94A3B8", // Slate
+      ];
   const cancelChartData = cancelReasons.filter(item => item.value > 0);
 
   const roomStatusData = [
