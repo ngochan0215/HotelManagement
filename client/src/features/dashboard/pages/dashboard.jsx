@@ -69,6 +69,8 @@ export default function Dashboard() {
     { label: "Sửa chữa", value: roomStatus.maintenance, color: "#EF4444" },
     { label: "Đang dọn dẹp", value: roomStatus.cleaning, color: "#3593c2ff" },
     { label: "Đã đặt trước", value: roomStatus.booked, color: "#f9d478ff" },
+    { label: "Mới tạo", value: roomStatus.new, color: "#EC4899" },
+    { label: "Đang chờ cọc", value: roomStatus.reserved, color: "#94A3B8" },
   ];
 
   const isBookingIncrease = bookingStats.percentChange >= 0;

@@ -766,6 +766,7 @@ export const getRoomStatusSummary = async (req, res) => {
       occupied: 0,
       cleaning: 0,
       maintenance: 0,
+      reserved: 0,
       total: 0,
     };
 
