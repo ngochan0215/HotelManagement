@@ -39,14 +39,16 @@ export const createPayment = async (transaction, userId) => {
 
     // Lấy base URL từ environment hoặc dùng default
     const baseUrl = process.env.FRONTEND_URL || process.env.API_BASE_URL || 'http://localhost:5173';
-    
+    // Phân biệt thanh toán hóa đơn (receipt) vs đặt cọc phòng (booking) để trang kết quả hiển thị đúng
+    const source = (transaction.receipt_id || transaction.receiptId) ? 'receipt' : 'booking';
+
     const paymentData = {
         orderCode: bookingCode,
         amount,
         description,
         items,
-        cancelUrl: `${baseUrl}/payment/cancel?orderCode=${bookingCode}`,
-        returnUrl: `${baseUrl}/payment/success?orderCode=${bookingCode}`,
+        cancelUrl: `${baseUrl}/payment/cancel?orderCode=${bookingCode}&source=${source}`,
+        returnUrl: `${baseUrl}/payment/success?orderCode=${bookingCode}&source=${source}`,
         expiredAt: Math.floor(Date.now() / 1000) + (15 * 60), // 15 phút thay vì 5 phút
     };
 

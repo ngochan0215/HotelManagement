@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
-  FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag,
+  FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag, FiLogOut,
   FiChevronLeft, FiChevronRight, FiRefreshCw
 } from "react-icons/fi";
 import Sidebar from "../../../components/sidebar.jsx";
@@ -247,12 +247,19 @@ export default function ReceiptList() {
                                     #{item._id.slice(-6).toUpperCase()}
                                 </td>
                                 <td className="py-4 px-6 font-bold text-gray-800">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         {item.booking_id?.customer_id?.full_name || "Khách vãng lai"}
                                         {item.discount_snapshot && item.discount_snapshot.discount_amount > 0 && (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold" title={`Khuyến mãi: ${item.discount_snapshot.name || item.discount_snapshot.code}`}>
                                                 <FiTag size={10}/>
                                                 KM
+                                            </span>
+                                        )}
+                                        {(item.status === "pending" || item.status === "half-paid") &&
+                                         (item.booking_id?.status === "checked_out" || item.booking_id?.status === "completed") && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold" title="Đã checkout, chờ thanh toán">
+                                                <FiLogOut size={10}/>
+                                                Đã CO
                                             </span>
                                         )}
                                     </div>
