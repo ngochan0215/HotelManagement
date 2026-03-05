@@ -5,7 +5,7 @@ import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
 } from "../models/index.js";
 import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
-import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../controllers/customerController.js";
+import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../services/customerService.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 export const notifyImportTickets = async () => {

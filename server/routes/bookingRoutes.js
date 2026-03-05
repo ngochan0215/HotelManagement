@@ -7,7 +7,7 @@ import {
 import { getCalendarRooms } from "../controllers/managerController.js";
 import {
     getAvailableHousekeepers, assignCleaningTask, startCleaningTask,
-    completeCleaningTask, confirmCleaning, getAllTasks, getMyCleaningTasks,
+    completeCleaningTask, confirmCleaningTask, getAllTasks, getMyCleaningTasks,
     getCleaningTaskByRoom
 } from "../controllers/cleaningController.js";
 import { isManager, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
@@ -48,7 +48,7 @@ router.post("/cleaning/assign", verifyToken, isManager, assignCleaningTask);
 router.get("/cleaning/my-tasks", verifyToken, isEmployee, getMyCleaningTasks);
 router.post("/cleaning/:id/start", verifyToken, isEmployee, startCleaningTask);
 router.post("/cleaning/:id/complete", verifyToken, isEmployee, completeCleaningTask);
-router.post("/cleaning/:id/confirm", verifyToken, isManager, confirmCleaning);
+router.post("/cleaning/:id/confirm", verifyToken, isManager, confirmCleaningTask);
 router.get("/tasks/all", verifyToken, isManager, getAllTasks);
 router.get("/cleaning/task-by-room", verifyToken, isEmployee, getCleaningTaskByRoom);
 

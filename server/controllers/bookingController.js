@@ -5,7 +5,7 @@ import { Booking, BookingDetail, Customer, Room, RoomCancellation,
 } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
-import { updateCustomerPoints } from "../controllers/customerController.js";
+import { updateCustomerPoints } from "../services/customerService.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 import { updateReceiptAfterCheckout } from "../controllers/receiptControllers.js";
 

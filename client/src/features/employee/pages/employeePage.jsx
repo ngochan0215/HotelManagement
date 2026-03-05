@@ -181,6 +181,7 @@ export default function EmployeePage() {
               showToast("Đã tạo tài khoản thành công!", "success");
           } else {
               if (accForm.password) {
+                    console.log("Resetting password for employee ID with password:", accountModal.employee._id, accForm.password);
                   await employeeApi.resetPassword(accountModal.employee._id, accForm.password);
                   showToast("Đã cập nhật mật khẩu mới!", "success");
               } else {

@@ -160,7 +160,7 @@ export default function RoomListTab() {
       ]);
 
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
-        console.log("ROOMS: ", roomsRes.rooms);
+        //console.log("ROOMS: ", roomsRes.rooms);
         setRooms(roomsRes.rooms);
       } else {
         setRooms([]);

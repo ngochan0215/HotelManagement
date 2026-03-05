@@ -30,7 +30,7 @@ export default function Dashboard() {
         ]);
 
         setRoomStatus(roomData);
-        setTopRoomTypes(topRooms);
+        setTopRoomTypes(topRooms.result);
 
         const totalCancel = cancelData.reduce((sum, item) => sum + item.total, 0);
         setCancelReasons(cancelData.map(item => ({

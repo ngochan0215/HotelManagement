@@ -1,6 +1,75 @@
 import { Notification } from "../models/index.js";
 import { getSocketInstance } from "../sockets/instance.js";
 
+export const markAsReadService = async (notificationId, userId) => {
+    try {
+        const now = new Date();
+        await Notification.updateOne(
+            { _id: notificationId, user_id: userId },
+            { 
+                status: "read",
+                read_at: now  
+            }
+        );
+        return { success: true };
+
+    } catch (error) {
+        console.log("Failed to mark read notification: ", error);
+        throw new Error("Failed to mark read notification: " + error.message);
+    }
+};
+
+export const markAsDeletedService = async (notificationId, userId) => {
+    try {
+        const now = new Date();
+        await Notification.updateMany(
+            { _id: notificationId, user_id: userId },
+            { 
+                status: "deleted",
+                deleted_at: now  
+            }
+        );
+        return { success: true };
+
+    } catch (error) {
+        console.log("Failed to delete notification: ", error);
+        throw new Error("Failed to delete notification: " + error.message);
+    }
+};
+
+export const markAsReadAllService = async (userId) => {
+    try {
+        const now = new Date();
+        await Notification.updateMany(
+            { user_id: userId },
+            { 
+                status: "read",
+                read_at: now  
+            }
+        );
+        return { success: true };
+
+    } catch (error) {
+        console.log("Failed to mark read all notifications: ", error);
+        throw new Error("Failed to mark read all notifications: " + error.message);
+    }
+};
+
+export const getMyNotificationsService = async (userId) => {
+    try {
+        const notifications = await Notification
+            .find({ user_id: userId, status: ["read", "unread"] })
+            .sort({ created_at: -1 })
+            .limit(20);
+
+        return notifications;
+    } catch (error) {
+        console.log("Failed to get all notifications: ", error);
+        throw new Error("Failed to get all notifications: " + error.message);
+    }
+};
+
+// send notification to a single user
 export async function pushNotification(userId, title, content, type, kind, refId, status = "unread") {
     try {
         const notification = await Notification.create({
@@ -37,7 +106,7 @@ export async function pushNotification(userId, title, content, type, kind, refId
     }
 }
 
-// Gửi thông báo cho nhiều user cùng lúc
+// send notification to multiple users
 export async function pushNotificationToUsers(userIds, title, content, type, kind, refId, status = "unread") {
     try {
         const notifications = [];

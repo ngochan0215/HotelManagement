@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
   BookingDetail, Employee, Incident, Customer, User, Discount
 } from "../models/index.js";
-import { updateCustomerPoints } from "./customerController.js";
+import { updateCustomerPoints } from "../services/customerService.js";
 import { pushNotificationToUsers } from "../services/notificationService.js";
 
 /**

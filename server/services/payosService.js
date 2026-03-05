@@ -3,7 +3,7 @@ import  { Transaction, Receipt, Booking, Customer, Employee, User,
     PayoutEmployee, EmployeeEarning, CompensateTicket, Incident
 }  from '../models/index.js';
 import mongoose from 'mongoose';
-import { updateCustomerPoints } from '../controllers/customerController.js';
+import { updateCustomerPoints } from "../services/customerService.js";
 import { confirmBookingInternal } from '../services/bookingService.js';
 import crypto from "crypto";
 import dotenv from "dotenv";

@@ -1,16 +1,14 @@
 import { Notification } from "../models/index.js";
+import * as notificationService from "../services/notificationService.js";
 
 export const markAsRead = async (req, res) => {
     try {
-        const now = new Date();
-        await Notification.updateOne(
-            { _id: req.params.id, user_id: req.user.userId },
-            { 
-                status: "read",
-                read_at: now  
-            }
-        );
-        res.json({ success: true });
+        await notificationService.markAsReadService(req.params.id, req.user.userId);
+        
+        return res.status(200).json({
+            success: true,
+            message: "Notification marked as read",
+        });
 
     } catch (error) {
         res.status(500).json({ message: "Failed to mark read notification: ", error: error.message });
@@ -19,48 +17,39 @@ export const markAsRead = async (req, res) => {
 
 export const markAsDeleted = async (req, res) => {
     try {
-        const now = new Date();
-        await Notification.updateMany(
-            { _id: req.params.id, user_id: req.user.userId },
-            { 
-                status: "deleted",
-                deleted_at: now  
-            }
-        );
-        res.json({ success: true });
+        await notificationService.markAsDeletedService(req.params.id, req.user.userId);
+        
+        return res.status(200).json({
+            success: true,
+            message: "Notification marked as deleted",
+        });
 
     } catch (error) {
-        res.status(500).json({ message: "Failed to delete notification:", error: error.message });
+        res.status(500).json({ message: "Failed to mark deleted notification: ", error: error.message });
     }
 };
 
 export const markAsReadAll = async (req, res) => {
     try {
-        const now = new Date();
-        await Notification.updateMany(
-            { user_id: req.user.userId },
-            { 
-                status: "read",
-                read_at: now  
-            }
-        );
-        res.json({ success: true });
+        await notificationService.markAsReadAllService(req.user.userId);
+        
+        return res.status(200).json({
+            success: true,
+            message: "All notifications marked as read",
+        });
 
     } catch (error) {
-        res.status(500).json({ message: "Failed to mark read all notifications:", error: error.message });
+        res.status(500).json({ message: "Failed to mark read all notifications: ", error: error.message });
     }
 };
 
 export const getMyNotifications = async (req, res) => {
     try {
-        const userId = req.user.userId;
-        //console.log("Fetching notifications for user:", userId);
-        const notifications = await Notification
-            .find({ user_id: userId, status: ["read", "unread"] })
-            .sort({ created_at: -1 })
-            .limit(20);
-
-        res.json(notifications);
+        const notifications = await notificationService.getMyNotificationsService(req.user.userId);
+        return res.status(200).json({
+            success: true,
+            notifications
+        });
     } catch (error) {
         res.status(500).json({ message: "Failed to get all notifications: ", error: error.message });
     }
