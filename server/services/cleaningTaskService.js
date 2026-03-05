@@ -248,6 +248,8 @@ export const completeCleaningTaskService = async (taskId, userId) => {
     const session = await mongoose.startSession();
     
     try {
+        session.startTransaction();
+
         const employee = await Employee.findOne({ user_id: userId }).session(session);
         if (!employee) {
             throw new Error("Không tìm thấy thông tin nhân viên");

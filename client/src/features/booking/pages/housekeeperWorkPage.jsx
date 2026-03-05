@@ -25,6 +25,7 @@ export default function HousekeeperWorkPage() {
     setLoading(true);
     try {
       const res = await bookingApi.getMyCleaningTasks();
+      console.log("Fetched tasks:", res);
       setTasks(res.tasks || []);
     } catch (error) {
       setToast({ type: "error", message: "Lỗi tải dữ liệu: " + (error.response?.data?.message || error.message) });

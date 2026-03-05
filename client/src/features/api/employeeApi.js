@@ -42,7 +42,8 @@ export const employeeApi = {
       const url = `${BASE_URL}/${employeeId}/create-account`;
       return axios.post(url, data, getAuthHeader());
     },
-getProfile: async () => {
+
+  getProfile: async () => {
       const res = await axios.get(`${BASE_URL}/profile/me`, getAuthHeader());
       return res.data;
   },

@@ -72,7 +72,7 @@ export class EmployeeController {
 
   getMyProfile = async (req, res) => {
     try {
-      const { employee } = await this.employeeService.getMyProfile(req.params.id);
+      const { employee } = await this.employeeService.getMyProfile(req.user.userId);
       return res.status(200).json({ employee });
     } catch (err) {
       return res.status(400).json({ message: err.message });

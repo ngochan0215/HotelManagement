@@ -49,10 +49,7 @@ export const startCleaningTask = async (req, res) => {
 
 export const completeCleaningTask = async (req, res) => {
   try {
-    const task = await cleaningService.completeCleaningTaskService({
-        taskId: req.params.id,
-        userId: req.user?.userId,
-    });
+    const task = await cleaningService.completeCleaningTaskService(req.params.id, req.user?.userId);
 
     res.status(200).json({ success: true, message: "Hoàn thành công việc dọn dẹp. Chờ admin xác nhận.", data: task });
 
@@ -99,9 +96,7 @@ export const getCleaningTaskByRoom = async (req, res) => {
 
 export const getMyCleaningTasks = async (req, res) => {
   try {
-    const tasks = await cleaningService.getMyCleaningTasksService({
-        userId: req.user?.userId
-    });
+    const tasks = await cleaningService.getMyCleaningTasksService(req.user?.userId);
 
     res.status(200).json({ success: true, tasks: tasks });
 

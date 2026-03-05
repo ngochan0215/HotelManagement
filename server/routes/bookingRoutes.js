@@ -4,7 +4,7 @@ import {
     cancelBooking, getAllBookings, confirmBooking, checkinBookingDetail, checkoutBookingDetail,
     cancelBookingDetail,
 } from "../controllers/bookingController.js";
-import { getCalendarRooms } from "../controllers/managerController.js";
+import { ManagerController } from "../controllers/managerController.js";
 import {
     getAvailableHousekeepers, assignCleaningTask, startCleaningTask,
     completeCleaningTask, confirmCleaningTask, getAllTasks, getMyCleaningTasks,
@@ -13,8 +13,9 @@ import {
 import { isManager, verifyToken, isEmployee } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+const managerController = new ManagerController();
 
-router.get("/calendar/rooms", verifyToken, isEmployee, getCalendarRooms);
+router.get("/calendar/rooms", verifyToken, isEmployee, managerController.getCalendarRooms);
 router.get("/all", verifyToken, isEmployee, getAllBookings);
 router.get("/:id", verifyToken, getBookingDetail);
 
