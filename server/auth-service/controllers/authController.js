@@ -1,4 +1,4 @@
-import { container } from "../container/index.js";
+import { container } from "../containers/container.js";
 
 export class AuthController {
     constructor() {

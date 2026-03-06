@@ -3,7 +3,7 @@ import  { Transaction, Receipt, Booking, Customer, Employee, User,
     PayoutEmployee, EmployeeEarning, CompensateTicket, Incident
 }  from '../models/index.js';
 import mongoose from 'mongoose';
-import { updateCustomerPoints } from "../services/customerService.js";
+//import { updateCustomerPoints } from "../services/customerService.js";
 import { confirmBookingInternal } from '../services/bookingService.js';
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -354,11 +354,11 @@ export const paymentSucceeded = async (orderCode) => {
                         Math.floor(receipt.final_amount / 10000)
                     );
 
-                    await updateCustomerPoints({
-                        customer_id: customer._id,
-                        points: rewardPoints,
-                        reason: "Hoàn tất thanh toán qua PayOS"
-                    });
+                    // await updateCustomerPoints({
+                    //     customer_id: customer._id,
+                    //     points: rewardPoints,
+                    //     reason: "Hoàn tất thanh toán qua PayOS"
+                    // });
 
                     await Customer.findByIdAndUpdate(
                         customer._id,

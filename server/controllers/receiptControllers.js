@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Booking, ServiceUsage, CompensateTicket, Receipt,
   BookingDetail, Employee, Incident, Customer, User, Discount
 } from "../models/index.js";
-import { updateCustomerPoints } from "../services/customerService.js";
+//import { updateCustomerPoints } from "../services/customerService.js";
 import { pushNotificationToUsers } from "../services/notificationService.js";
 
 /**
@@ -463,11 +463,11 @@ export const updateReceipt = async (req, res) => {
       const booking = await Booking.findById(receipt.booking_id);
       if (booking) {
         // cộng điểm khách vì hoàn thành xong booking
-        await updateCustomerPoints({
-          customer_id: booking.customer_id,
-          points: Math.floor(receipt.final_amount / 10000),
-          reason: "Hoàn tất thanh toán hóa đơn"
-        });
+        // await updateCustomerPoints({
+        //   customer_id: booking.customer_id,
+        //   points: Math.floor(receipt.final_amount / 10000),
+        //   reason: "Hoàn tất thanh toán hóa đơn"
+        // });
 
         await Customer.findOneAndUpdate(
           { _id: booking.customer_id },
@@ -735,11 +735,11 @@ export const markReceiptAsPaid = async (req, res) => {
     // cộng điểm khách hàng
     const rewardPoints = Math.floor(receipt.final_amount / 10000);
 
-    await updateCustomerPoints({
-      customer_id: booking.customer_id,
-      points: rewardPoints,
-      reason: "Hoàn tất thanh toán hóa đơn"
-    });
+    // await updateCustomerPoints({
+    //   customer_id: booking.customer_id,
+    //   points: rewardPoints,
+    //   reason: "Hoàn tất thanh toán hóa đơn"
+    // });
 
     await Customer.findByIdAndUpdate(
       booking.customer_id,

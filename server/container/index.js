@@ -1,19 +1,30 @@
 import { User, Employee, Shift, Schedule, Attendance, Discount, Customer, Booking, 
   Room, RoomLog, BookingDetail, Equipment, Incident, CompensateTicket, IncidentLog,
-  CompensateDetail, Receipt, EquipmentCategory, EquipmentLog,  
+  CompensateDetail, Receipt, EquipmentCategory, EquipmentLog, PointsLog,
 } from "../models/index.js";
-import { defaultAvatars } from "../config/avatars.js";
+
 import { EmployeeService }  from "../services/employeeService.js";
 import { DiscountService } from "../services/discountService.js";
 import { ManagerService } from "../services/managerService.js";
 import { IncidentService } from "../services/incidentService.js";
 import { CompensateService } from "../services/compensateService.js";
+import { AuthService } from "../services/authService.js";
+import { CustomerService } from "../services/customerService.js";
 
+import { defaultAvatars } from "../config/avatars.js";
 import { timeToMinutes } from "../utils/time.js";
 import { resolveUserFullName } from "../helper/index.js";
+import { sendResetPasswordEmail } from "../utils/sendEmails.js";
 
 class Container {
   constructor() {
+    this.authService = new AuthService({
+      User,
+      Customer,
+      Employee,
+      sendResetPasswordEmail
+    });
+
     this.employeeService = new EmployeeService({
       User,
       Employee,
@@ -21,6 +32,12 @@ class Container {
       Attendance,
       defaultAvatars,
       timeToMinutes
+    });
+
+    this.customerService = new CustomerService({
+      Customer,
+      User,
+      PointsLog
     });
 
     this.discountService = new DiscountService({

@@ -5,7 +5,7 @@ import { EquipmentTicket, Notification, User, EquipmentInstall, Customer,
 } from "../models/index.js";
 import mongoose from "mongoose";
 import { recalcServiceUsageStatus } from "../controllers/serviceController.js";
-import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../services/customerService.js";
+//import { calculateMembershipTier, updateCustomerPoints, updateCustomerTier } from "../services/customerService.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 
 export const notifyImportTickets = async () => {
@@ -506,11 +506,11 @@ export const cancelExpiredDepositBookings = async () => {
     });
 
     // trừ điểm khách hàng
-    await updateCustomerPoints({
-      customer_id: booking.customer_id,
-      points: -10,
-      reason: "Trừ 10 điểm vì booking bị hủy do chưa đặt cọc."
-    });
+    // await updateCustomerPoints({
+    //   customer_id: booking.customer_id,
+    //   points: -10,
+    //   reason: "Trừ 10 điểm vì booking bị hủy do chưa đặt cọc."
+    // });
 
     // hủy luôn hóa đơn
     await Receipt.updateMany(
@@ -703,11 +703,11 @@ export const cancelCheckinLateBookings = async () => {
     });
 
     // trừ điểm khách hàng
-    await updateCustomerPoints({
-      customer_id: booking.customer_id,
-      points: -20,
-      reason: "Trừ 20 điểm vì booking bị hủy do checkin trễ."
-    });
+    // await updateCustomerPoints({
+    //   customer_id: booking.customer_id,
+    //   points: -20,
+    //   reason: "Trừ 20 điểm vì booking bị hủy do checkin trễ."
+    // });
 
     // hủy luôn hóa đơn
     await Receipt.updateMany(
@@ -795,10 +795,10 @@ export const updateAllCustomerTiers = async () => {
   const bulkOps = [];
 
   for (const customer of customers) {
-    const newTier = calculateMembershipTier({
-      booking_count: customer.booking_count || 0,
-      points: customer.points || 0,
-    });
+    // const newTier = calculateMembershipTier({
+    //   booking_count: customer.booking_count || 0,
+    //   points: customer.points || 0,
+    // });
 
     if (newTier !== customer.membership_tier) {
       bulkOps.push({

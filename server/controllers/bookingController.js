@@ -5,7 +5,7 @@ import { Booking, BookingDetail, Customer, Room, RoomCancellation,
 } from "../models/index.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { confirmBookingInternal } from "../services/bookingService.js";
-import { updateCustomerPoints } from "../services/customerService.js";
+//import { updateCustomerPoints } from "../services/customerService.js";
 import { pushNotificationToUsers, pushNotification } from "../services/notificationService.js";
 import { updateReceiptAfterCheckout } from "../controllers/receiptControllers.js";
 
@@ -1716,11 +1716,11 @@ export const cancelBooking = async (req, res) => {
     }
 
     // trừ điểm khách vì đã hủy
-    await updateCustomerPoints({
-      customer_id: booking.customer_id,
-      points: -20,
-      reason: "Trừ 20 điểm vì hủy booking"
-    });
+    // await updateCustomerPoints({
+    //   customer_id: booking.customer_id,
+    //   points: -20,
+    //   reason: "Trừ 20 điểm vì hủy booking"
+    // });
 
     // hủy luôn hóa đơn
     await Receipt.updateMany(
