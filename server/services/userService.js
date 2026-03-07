@@ -17,7 +17,6 @@ export const viewProfileService = async (userId) => {
     return profile;
 };
 
-
 export const updateProfileService = async (userId, data) => {
     const { phone, dob } = data;
 
@@ -46,7 +45,6 @@ export const updateProfileService = async (userId, data) => {
     return profile;
 };
 
-
 export const changePasswordService = async (userId, oldPassword, newPassword) => {
     const user = await User.findById(userId).select("+password");
     if (!user) 
@@ -65,7 +63,6 @@ export const changePasswordService = async (userId, oldPassword, newPassword) =>
     user.password = hashed;
     await user.save();
 };
-
 
 export const sendChangeEmailService = async (userId, newEmail) => {
     const user = await User.findById(userId);
@@ -88,7 +85,6 @@ export const sendChangeEmailService = async (userId, newEmail) => {
     await sendVerificationEmail(newEmail, otp);
 };
 
-
 export const verifyChangeEmailService = async (userId, otp) => {
     const user = await User.findById(userId);
     if (!user) throw new Error("Không tìm thấy người dùng.");
@@ -110,7 +106,6 @@ export const verifyChangeEmailService = async (userId, otp) => {
 
     return user.email;
 };
-
 
 export const updateAvatarService = async (userId, avatarUrl) => {
     if (!avatarUrl) 

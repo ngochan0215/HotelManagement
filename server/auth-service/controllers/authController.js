@@ -18,7 +18,6 @@ export class AuthController {
         }
     };
 
-
     verifyEmail = async (req, res) => {
         try {
             await this.authService.verifyEmail(req.user.userId, req.body.otp);
@@ -27,7 +26,6 @@ export class AuthController {
             res.status(400).json({ message: err.message });
         }
     };
-
 
     login = async (req, res) => {
         try {
@@ -38,11 +36,9 @@ export class AuthController {
         }
     };
 
-
     Logout = (req, res) => {
         res.json({ message: "Đăng xuất thành công" });
     };
-
 
     forgotPassword = async (req, res) => {
         try {
@@ -61,5 +57,20 @@ export class AuthController {
         } catch (err) {
             res.status(400).json({ message: err.message });
         }
+    };
+
+    getUserById = async (req, res) => {
+        const user = await this.authService.getUserById(req.params.id);
+        res.json(user);
+    };
+
+    getUserByEmail = async (req, res) => {
+        const user = await this.authService.getUserByEmail(req.params.email);
+        res.json(user);
+    };
+
+    updateUser = async (req, res) => {
+        const user = await this.authService.updateUser(req.params.id, req.body);
+        res.json(user);
     };
 }

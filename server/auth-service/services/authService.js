@@ -3,9 +3,9 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
 export class AuthService {
-    constructor({ User, Customer, Employee, sendResetPasswordEmail }) {
+    constructor({ User, customerClient, Employee, sendResetPasswordEmail }) {
         this.User = User;
-        this.Customer = Customer;
+        this.customerClient = customerClient;
         this.Employee = Employee;
         this.sendResetPasswordEmail = sendResetPasswordEmail;
     }
@@ -34,11 +34,11 @@ export class AuthService {
             throw err;
         }
 
-        if (await this.Customer.findOne({ phone_number })) {
+        if (await this.customerClient.findCustomerByPhone(phone_number)) {
             throw new Error("Số điện thoại đã tồn tại");
         }
 
-        if (await this.Customer.findOne({ CCCD })) {
+        if (await this.customerClient.findCustomerByCCCD(CCCD)) {
             throw new Error("CCCD đã tồn tại");
         }
 
@@ -60,8 +60,7 @@ export class AuthService {
             verifyEmailOtpExpires: Date.now() + 5 * 60 * 1000,
         });
 
-        const customer = await this.Customer.create({
-            user_id: user._id,
+        const customer = await this.customerClient.createCustomer(user._id, {
             date_birth,
             full_name,
             phone_number,
@@ -110,7 +109,7 @@ export class AuthService {
         let position = "";
 
         if (user.system_role === "customer") {
-            const customer = await this.Customer.findOne({ user_id: user._id });
+            const customer = await this.customerClient.getCustomerById(user._id);
             if (customer) fullName = customer.full_name;
         } else {
             const employee = await this.Employee.findOne({ user_id: user._id });
@@ -172,4 +171,16 @@ export class AuthService {
         await user.save();
         return { success: true };
     };
+
+    async getUserById(userId) {
+        return this.User.findById(userId).select("email system_role avatar isBanned");
+    }
+
+    async getUserByEmail(email) {
+        return this.User.findOne({ email });
+    }
+
+    async updateUser(userId, payload) {
+        return this.User.findByIdAndUpdate(userId, payload, { new: true });
+    }
 }

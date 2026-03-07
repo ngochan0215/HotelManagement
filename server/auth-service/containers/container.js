@@ -1,16 +1,24 @@
 import { AuthService } from "../services/authService.js";
+import { UserService } from "../services/userService.js";
 import User from "../models/User.js";
-import Customer from "../../customer-service/models/Customer.js";
+import { customerClient } from "../clients/customerClient.js";
 import Employee from "../../employee-service/models/Employee.js";
-import { sendResetPasswordEmail } from "../utils/emailService.js";
+import { sendResetPasswordEmail, sendVerificationEmail } from "../utils/emailService.js";
 
 class Container {
     constructor() {
         this.authService = new AuthService({
             User,
-            Customer,
+            customerClient,
             Employee,
             sendResetPasswordEmail
+        });
+
+        this.userService = new UserService({
+            User,
+            customerClient,
+            Employee,
+            sendVerificationEmail
         });
     }
 }
