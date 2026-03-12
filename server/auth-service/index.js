@@ -4,23 +4,37 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoute.js";
 import { connectDB } from "../shared/config/database.js";
+import { container } from "./containers/container.js";
 
 dotenv.config();
-const app = express();
 
-app.use(cors());
-app.use(express.json());
+const startServer = async () => {
+    const app = express();
 
-app.use((req, res, next) => {
-    console.log("Auth-Service received:", req.method, req.url);
-    next();
-});
+    app.use(cors());
+    app.use(express.json());
 
-app.use("/", authRoutes);
+    app.use((req, res, next) => {
+        console.log("Auth-Service received:", req.method, req.url);
+        next();
+    });
 
-const PORT = process.env.PORT || 3001;
-connectDB(process.env.DB_URI);
+    // connect database first
+    await connectDB(process.env.DB_URI);
 
-app.listen(process.env.PORT, () => {
-    console.log(`Auth-Service running on ${process.env.PORT}`);
+    // initialize dependencies (RabbitMQ, event subscriptions)
+    await container.init();
+
+    app.use("/", authRoutes);
+
+    const PORT = process.env.PORT || 3001;
+
+    app.listen(PORT, () => {
+        console.log(`Auth-Service running on ${PORT}`);
+    });
+};
+
+startServer().catch(err => {
+    console.error("Failed to start Auth-Service:", err);
+    process.exit(1);
 });

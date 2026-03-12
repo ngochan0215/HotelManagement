@@ -3,11 +3,12 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
 export class AuthService {
-    constructor({ User, customerClient, Employee, sendResetPasswordEmail }) {
+    constructor({ User, customerClient, Employee, sendResetPasswordEmail, eventBus }) {
         this.User = User;
         this.customerClient = customerClient;
         this.Employee = Employee;
         this.sendResetPasswordEmail = sendResetPasswordEmail;
+        this.eventBus = eventBus;
     }
 
     async register (data) {
@@ -60,13 +61,20 @@ export class AuthService {
             verifyEmailOtpExpires: Date.now() + 5 * 60 * 1000,
         });
 
-        const customer = await this.customerClient.createCustomer(user._id, {
-            date_birth,
-            full_name,
-            phone_number,
-            nationality,
-            CCCD,
-        });
+        await this.eventBus.publish("USER_CREATED", {
+            userId: user._id,
+            customer: {
+                date_birth, full_name, phone_number, nationality, CCCD
+            }
+        })
+
+        // const customer = await this.customerClient.createCustomer(user._id, {
+        //     date_birth,
+        //     full_name,
+        //     phone_number,
+        //     nationality,
+        //     CCCD,
+        // });
 
         return { user, customer };
     };

@@ -1,0 +1,79 @@
+
+# each item under services section is a seperate container
+# ports structure: host_port : container_port
+# volumes structure: 
+services:
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+    # creates a named Docker volume inside the container /data/db
+    # ensure that db data persists even if container is deleted
+      - mongo-data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"     # used for messaging protocol
+      - "15672:15672"   # used for rabbitMQ web dashboard
+    healthcheck:
+      # runs a command inside the container to check if RabbitMQ is ready.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s        # check every 5 seconds
+      timeout: 5s         # only allowed checking for 5s
+      retries: 10         # if 10 check fails then the container is unhealthy
+      start_period: 10s   # grace period before health checks start
+
+  auth-service:
+    # builds this container by using the dockerfile inside folder auth-service
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      DB_URI: mongodb://mongodb:27017/HotelManagement
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    volumes:
+      # maps local folder to container folder -> share common code between services
+      - ./shared:/shared
+    depends_on:
+      # container only starts after mongodb is running and rabbitmq passsed health check
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  customer-service:
+    build: ./customer-service
+    container_name: customer-service
+    ports:
+      - "3002:3002"
+    environment:
+      DB_URI: mongodb://mongodb:27017/HotelManagement
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - ./shared:/shared
+    depends_on:
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    # this service acts as the entry point for clients
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./shared:/shared
+    depends_on:
+      - auth-service
+      - customer-service
+
+volumes:
+  mongo-data:

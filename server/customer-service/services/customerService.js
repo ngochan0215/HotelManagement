@@ -307,16 +307,12 @@ export class CustomerService {
         return this.Customer.findOne({ user_id });
     }
 
-    async createCustomer (userId, data) {
-        const { date_birth, full_name, phone_number, nationality, CCCD } = data;
+    async createCustomer(data) {
+        const { userId, customer } = data;
 
-        return this.Customer.create({
+        await this.Customer.create({
             user_id: userId,
-            date_birth,
-            full_name,
-            phone_number,
-            nationality,
-            CCCD,
+            ...customer
         });
     }
 
