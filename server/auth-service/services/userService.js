@@ -74,14 +74,16 @@ export class UserService {
 
     sendChangeEmailService = async (userId, newEmail) => {
         const user = await this.User.findById(userId);
-        if (!user) throw new Error("Không tìm thấy người dùng.");
+        if (!user) 
+            throw new Error("Không tìm thấy người dùng.");
 
         const emailExists = await this.User.findOne({
             email: newEmail,
             _id: { $ne: user._id }
         });
 
-        if (emailExists) throw new Error("Email đã được sử dụng.");
+        if (emailExists) 
+            throw new Error("Email đã được sử dụng.");
 
         const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
 
@@ -95,7 +97,8 @@ export class UserService {
 
     verifyChangeEmailService = async (userId, otp) => {
         const user = await this.User.findById(userId);
-        if (!user) throw new Error("Không tìm thấy người dùng.");
+        if (!user) 
+            throw new Error("Không tìm thấy người dùng.");
 
         if (
             !user.emailChangeOtp ||
@@ -125,7 +128,8 @@ export class UserService {
             { new: true }
         );
 
-        if (!updatedUser) throw new Error("Không tìm thấy người dùng.");
+        if (!updatedUser) 
+            throw new Error("Không tìm thấy người dùng.");
 
         return updatedUser.avatar;
     };

@@ -310,6 +310,10 @@ export class CustomerService {
     async createCustomer(data) {
         const { userId, customer } = data;
 
+        const existed = this.Customer.findOne({ user_id: userId });
+        if (existed)
+            throw new Error("Đã tồn tại tài khoản khách hàng tương ứng cho người dùng.");
+
         await this.Customer.create({
             user_id: userId,
             ...customer

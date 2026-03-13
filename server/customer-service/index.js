@@ -19,12 +19,12 @@ const startServer = async () => {
     });
 
     // connect database first
-    await connectDB(process.env.DB_URI);
+    await connectDB(process.env.DB_URL);
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
 
-    app.use("/", customerRoutes);
+    app.use(customerRoutes);
 
     const PORT = process.env.PORT || 3002;
 

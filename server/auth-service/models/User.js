@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../../shared/config/mongoose.js";
 
 const userSchema = new mongoose.Schema(
     {
@@ -29,3 +29,5 @@ userSchema.index({ system_role: 1 });
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;
+
+console.log("User model mongoose state:", mongoose.connection.readyState);

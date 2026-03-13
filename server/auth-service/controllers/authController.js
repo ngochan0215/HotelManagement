@@ -7,11 +7,10 @@ export class AuthController {
 
     register = async (req, res) => {
         try {
-            const result = await this.authService.register(req.body);
+            const user = await this.authService.register(req.body);
             res.status(201).json({
                 message: "Đăng ký thành công.",
-                userID: result.user._id,
-                customerId: result.customer._id
+                userID: user._id
             });
         } catch (err) {
             res.status(err.status || 400).json({ message: err.message });

@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoute.js";
 import { connectDB } from "../shared/config/database.js";
@@ -19,13 +18,15 @@ const startServer = async () => {
         next();
     });
 
+    console.log("DB_URL:", process.env.DB_URL);
+
     // connect database first
-    await connectDB(process.env.DB_URI);
+    await connectDB(process.env.DB_URL);
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
 
-    app.use("/", authRoutes);
+    app.use(authRoutes);
 
     const PORT = process.env.PORT || 3001;
 

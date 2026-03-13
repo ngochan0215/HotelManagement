@@ -10,7 +10,7 @@ export const consumeUserEvents = async () => {
 
   channel.consume(QUEUE, async (msg) => {
     const event = JSON.parse(msg.content.toString());
-
+    console.log("hello world");
     if (event.event === "USER_CREATED") {
       const { userId, customer } = event.data;
 

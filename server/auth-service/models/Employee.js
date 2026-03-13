@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../../shared/config/mongoose.js";
 
 const employeeSchema = new mongoose.Schema(
     {
@@ -33,3 +33,4 @@ employeeSchema.index({ status: 1 });
 const Employee = mongoose.models.Employee || mongoose.model("Employee", employeeSchema);
 export default Employee;
 
+console.log("Employee model mongoose state:", mongoose.connection.readyState);

@@ -4,15 +4,15 @@
 # volumes structure: 
 services:
 
-  mongodb:
-    image: mongo:7
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-    # creates a named Docker volume inside the container /data/db
-    # ensure that db data persists even if container is deleted
-      - mongo-data:/data/db
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #   # creates a named Docker volume inside the container /data/db
+  #   # ensure that db data persists even if container is deleted
+  #     - mongo-data:/data/db
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -35,15 +35,13 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DB_URI: mongodb://mongodb:27017/HotelManagement
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       # maps local folder to container folder -> share common code between services
       - ./shared:/shared
     depends_on:
       # container only starts after mongodb is running and rabbitmq passsed health check
-      mongodb:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -53,13 +51,11 @@ services:
     ports:
       - "3002:3002"
     environment:
-      DB_URI: mongodb://mongodb:27017/HotelManagement
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
     depends_on:
-      mongodb:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 

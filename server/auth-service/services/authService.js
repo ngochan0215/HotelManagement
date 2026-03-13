@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
+import { USER_EVENTS } from "../../shared/events/userEvents.js";
 
 export class AuthService {
     constructor({ User, customerClient, Employee, sendResetPasswordEmail, eventBus }) {
@@ -35,14 +35,6 @@ export class AuthService {
             throw err;
         }
 
-        if (await this.customerClient.findCustomerByPhone(phone_number)) {
-            throw new Error("Số điện thoại đã tồn tại");
-        }
-
-        if (await this.customerClient.findCustomerByCCCD(CCCD)) {
-            throw new Error("CCCD đã tồn tại");
-        }
-
         const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
         if (!regex.test(password)) {
             throw new Error("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, thường, số và ký tự đặc biệt.");
@@ -61,22 +53,14 @@ export class AuthService {
             verifyEmailOtpExpires: Date.now() + 5 * 60 * 1000,
         });
 
-        await this.eventBus.publish("USER_CREATED", {
+        await this.eventBus.publish(USER_EVENTS.CREATED, {
             userId: user._id,
             customer: {
                 date_birth, full_name, phone_number, nationality, CCCD
             }
         })
 
-        // const customer = await this.customerClient.createCustomer(user._id, {
-        //     date_birth,
-        //     full_name,
-        //     phone_number,
-        //     nationality,
-        //     CCCD,
-        // });
-
-        return { user, customer };
+        return user;
     };
 
     async verifyEmail (userId, otp) {
