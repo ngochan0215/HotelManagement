@@ -1,0 +1,3 @@
+export const EMPLOYEE_EVENTS = {
+    REGISTERED: "EMPLOYEE_REGISTERED",
+};

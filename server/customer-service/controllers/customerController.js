@@ -19,6 +19,15 @@ export class CustomerController {
         }
     };
 
+    getCustomerById = async (req, res) => {
+        try {
+            const customer = await this.customerService.getCustomerById(req.params.id);
+            return res.status(200).json(customer);
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     updateCustomer = async (req, res) => {
         try {
             const customer = await this.customerService.updateCustomer(req.params.id, req.body);
@@ -69,8 +78,8 @@ export class CustomerController {
         }
     };
 
-    getCustomerById = async (req, res) => {
-        const customer = await this.customerService.getCustomerById(req.params.id);
+    getCustomerByUserId = async (req, res) => {
+        const customer = await this.customerService.getCustomerByUserId(req.params.id);
         res.json(customer);
     };
 
@@ -85,7 +94,11 @@ export class CustomerController {
     };
 
     createCustomer = async (req, res) => {
-        const customer = await this.customerService.updateUser(req.params.id, req.body);
-        res.json(customer);
+        try {
+            const customer = await this.customerService.createCustomer(req.params.userId, req.body);
+            res.status(201).json(customer);
+        } catch (error) {
+            res.status(error.status || 500).json({ message: error.message });
+        }
     };
 }

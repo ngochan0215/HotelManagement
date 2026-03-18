@@ -31,9 +31,9 @@ app.use(
 );
 
 app.use(
-  "/bookings",
+  "/employee",
   createProxyMiddleware({
-    target: "http://localhost:3003",
+    target: "http://employee-service:3003",
     changeOrigin: true
   })
 );

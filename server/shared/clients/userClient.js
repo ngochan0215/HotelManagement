@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const authAPI = axios.create({
-  baseURL: process.env.AUTH_SERVICE_URL || "http://localhost:3001",
+  baseURL: process.env.AUTH_SERVICE_URL || "http://auth-service:3001",
   timeout: 5000
 });
 

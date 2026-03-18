@@ -48,6 +48,18 @@ export class CustomerService {
         }
     };
 
+    async getCustomerById (customerId) {
+        const customer = await this.Customer.findById(customerId)
+            .select("-__v -created_at -updated_at -createdAt -updatedAt");
+            //.populate("user_id", "email system_role avatar -_id");
+
+        if (!customer) {
+            throw new Error("Không tìm thấy khách hàng.");
+        }
+        
+        return customer;
+    };
+
     updateCustomer = async (id, updateData) => {
         try {
             const {
@@ -126,20 +138,12 @@ export class CustomerService {
     };
 
     banCustomer = async (id) => {
-        const session = await mongoose.startSession();
-
         try {
-            session.startTransaction();
-
             if (!mongoose.Types.ObjectId.isValid(id)) {
                 throw new Error("ID khách hàng không hợp lệ.");
             }
 
-            if (!mongoose.Types.ObjectId.isValid(id)) {
-                throw new Error("ID khách hàng không hợp lệ.");
-            }
-
-            const customer = await this.Customer.findById(id).session(session);
+            const customer = await this.Customer.findById(id);
             if (!customer) {
                 throw new Error("Không tìm thấy khách hàng.");
             }
@@ -156,11 +160,9 @@ export class CustomerService {
                 throw new Error("Tài khoản này đã ngừng hoạt động.");
             }
 
-            // cập nhật customer
             customer.status = "banned";
-            await customer.save({ session });
+            await customer.save();
 
-            // cập nhật user liên kết
             const user = await this.userClient.updateUser(
                 customer.user_id,
                 { isBanned: true }
@@ -170,28 +172,20 @@ export class CustomerService {
                 throw new Error("Không tìm thấy user liên kết với customer.");
             }
 
-            await session.commitTransaction();
-            session.endSession();
-
             return { success: true };
         } catch (error) {
-            await session.abortTransaction();
-            session.endSession();
+            console.log("Ban customer unsuccessfully for error: " + error.message);
             throw error;
         }
     };
 
     unbanCustomer = async (id) => {
-        const session = await mongoose.startSession();
-
         try {
-            session.startTransaction();
-
             if (!mongoose.Types.ObjectId.isValid(id)) {
                 throw new Error("ID khách hàng không hợp lệ.");
             }
 
-            const customer = await this.Customer.findById(id).session(session);
+            const customer = await this.Customer.findById(id);
             if (!customer) {
                 throw new Error("Không tìm thấy khách hàng.");
             }
@@ -204,11 +198,9 @@ export class CustomerService {
                 throw new Error("Tài khoản này đã ngừng hoạt động.");
             }
 
-            // cập nhật customer
             customer.status = "active";
-            await customer.save({ session });
+            await customer.save();
 
-            // cập nhật user liên kết
             const user = await this.userClient.updateUser(
                 customer.user_id,
                 { isBanned: false }
@@ -218,14 +210,10 @@ export class CustomerService {
                 throw new Error("Không tìm thấy user liên kết với customer.");
             }
 
-            await session.commitTransaction();
-            session.endSession();
-
             return { success: true };
 
         } catch (error) {
-            await session.abortTransaction();
-            session.endSession();
+            console.log("Unban customer unsuccessfully for error: " + error.message);
             throw error;
         }
     };
@@ -303,21 +291,44 @@ export class CustomerService {
         return this.Customer.findOne({ CCCD });
     }
 
-    async getCustomerById (user_id) {
+    async getCustomerByUserId (user_id) {
         return this.Customer.findOne({ user_id });
     }
 
-    async createCustomer(data) {
-        const { userId, customer } = data;
+    async createCustomer(userId, customer) {
+        //console.log("USERID IN CUSTOMERSERVICE: ", userId);
+        //console.log("CUSTOMER IN CUSTOMERSERVICE: ", customer);
+        try {
+            const existed = await this.Customer.findOne({ user_id: userId });
+            if (existed)
+                throw new Error("Đã tồn tại tài khoản khách hàng tương ứng cho người dùng.");
 
-        const existed = this.Customer.findOne({ user_id: userId });
-        if (existed)
-            throw new Error("Đã tồn tại tài khoản khách hàng tương ứng cho người dùng.");
+            const { phone_number, CCCD } = customer;
 
-        await this.Customer.create({
-            user_id: userId,
-            ...customer
-        });
+            const existingPhone = await this.Customer.findOne({ phone_number });
+            if (existingPhone) {
+                throw new Error("Số điện thoại đã tồn tại.");
+            }
+
+            const existingCCCD = await this.Customer.findOne({ CCCD });
+            if (existingCCCD) {
+                throw new Error("Số căn cước công dân đã tồn tại.");
+            }
+
+            const the_customer = await this.Customer.create({
+                user_id: userId,
+                ...customer
+            });
+
+            console.log("Create customer successfully.");
+            return the_customer;
+
+        } catch (error) {
+            await this.userClient.deleteUser(userId);
+            console.log("Create customer unsuccessfully with error: " + error.message);
+            throw error;
+        }
+        
     }
 
 }

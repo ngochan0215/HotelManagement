@@ -1,10 +1,14 @@
 import { AuthService } from "../services/authService.js";
 import { UserService } from "../services/userService.js";
-import User from "../models/User.js";
+import mailService from "../utils/emailService.js";
+
 import { customerClient } from "../clients/customerClient.js";
-import Employee from "../models/Employee.js";
-import { sendResetPasswordEmail, sendVerificationEmail } from "../utils/emailService.js";
+import { employeeClient } from "../clients/employeeClient.js";
+
 import { EventBus } from "../../shared/messaging/eventBus.js";
+import { defaultAvatars } from "../../shared/constants/defaultAvatars.js";
+
+import User from "../models/User.js";
 
 class Container {
     constructor() {
@@ -12,18 +16,18 @@ class Container {
 
         this.authService = new AuthService({
             User,
-            customerClient,
-            Employee,
-            sendResetPasswordEmail,
+            customerClient, employeeClient,
+            mailService,
+            defaultAvatars,
             eventBus: this.eventBus
         });
 
-        this.userService = new UserService({
-            User,
-            customerClient,
-            Employee,
-            sendVerificationEmail
-        });
+        // this.userService = new UserService({
+        //     User,
+        //     customerClient,
+        //     Employee,
+        //     sendVerificationEmail
+        // });
     }
 
     async init() {

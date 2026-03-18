@@ -5,6 +5,24 @@ export class UserController {
         this.userService = container.userService;
     }
 
+    getAllUsers = async (req, res) => {
+        try {
+            const users = await this.userService.getAllUsers(req.query);
+            res.status(200).json({ message: "Get all users successfully.", users });
+        } catch (err) {
+            res.status(400).json({ message: err.message });
+        }
+    };
+
+    getUserById = async (req, res) => {
+        try {
+            const user = await this.userService.getUserById(req.params.id);
+            res.status(200).json({ message: "Get user information successfully.", user });
+        } catch (err) {
+            res.status(400).json({ message: err.message });
+        }
+    };
+
     viewProfile = async (req, res) => {
         try {
             const userId = req.user.userId || req.user._id;
@@ -15,7 +33,6 @@ export class UserController {
             res.status(400).json({ message: err.message });
         }
     };
-
 
     updateProfile = async (req, res) => {
         try {
@@ -66,7 +83,6 @@ export class UserController {
             res.status(400).json({ message: err.message });
         }
     };
-
 
     updateAvatar = async (req, res) => {
         try {

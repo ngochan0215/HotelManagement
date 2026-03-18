@@ -1,12 +1,12 @@
 import axios from "axios";
 
 const customerAPI = axios.create({
-  baseURL: process.env.CUSTOMER_SERVICE_URL || "http://localhost:3002",
+  baseURL: process.env.CUSTOMER_SERVICE_URL || "http://customer-service:3002",
   timeout: 5000
 });
 
 export const customerClient = {
-  getCustomerById: async (id) => {
+  getCustomerByUserId: async (id) => {
     const res = await customerAPI.get(`/get-customer/${id}`);
     return res.data;
   },
@@ -21,8 +21,8 @@ export const customerClient = {
     return res.data;
   },
 
-  createCustomer: async (id, payload) => {
-    const res = await customerAPI.post(`/create-customer/${id}`, payload);
+  createCustomer: async ({ userId, payload }) => {
+    const res = await customerAPI.post(`/create-customer/${userId}`, payload);
     return res.data;
   }
 };

@@ -1,23 +1,18 @@
 import axios from "axios";
 
-const authAPI = axios.create({
-  baseURL: process.env.EMPLOYEE_SERVICE_URL || "http://localhost:3003",
+const employeeAPI = axios.create({
+  baseURL: process.env.EMPLOYEE_SERVICE_URL || "http://employee-service:3003",
   timeout: 5000
 });
 
 export const employeeClient = {
-  getUserById: async (id) => {
-    const res = await authAPI.get(`/get-user/${id}`);
-    return res.data;
+  findEmployeeByUserId: async (id) => {
+    const res = await employeeAPI.get(`/find-by-userId/${id}`);
+    return res.data.employee;
   },
 
-  getUserByEmail: async (email) => {
-    const res = await authAPI.get(`/get-email/${email}`);
-    return res.data;
-  },
-
-  updateUser: async (id, payload) => {
-    const res = await authAPI.patch(`/update-user/${id}`, payload);
+  createEmployee: async ({ userId, payload }) => {
+    const res = await employeeAPI.post(`/create-employee/${userId}`, payload);
     return res.data;
   }
 };

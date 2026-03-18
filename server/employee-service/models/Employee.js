@@ -1,8 +1,8 @@
-import mongoose from "mongoose";
+import mongoose from "../../shared/config/mongoose.js";
 
 const employeeSchema = new mongoose.Schema(
     {
-        user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+        user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false, unique: true },
         full_name: { type: String, required: true, trim: true },
         date_birth: { type: Date },
         phone_number: { type: String, required: true, unique: true, trim: true },

@@ -20,8 +20,8 @@ export const connectDB = async (url) => {
             serverSelectionTimeoutMS: 5000
         });
 
-        console.log("MongoDB connected");
-        console.log("Mongoose connection readyState:", mongoose.connection.readyState);
+        console.log("MONGODB CONNECTED");
+        //console.log("Mongoose connection readyState:", mongoose.connection.readyState);
 
     } catch (error) {
         console.error("DATABSE CONNECTION ERROR: " + error.message);

@@ -1,0 +1,3 @@
+export const CUSTOMER_EVENTS = {
+    REGISTERED: "CUSTOMER_REGISTERED",
+};

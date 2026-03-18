@@ -40,6 +40,9 @@ services:
     volumes:
       # maps local folder to container folder -> share common code between services
       - ./shared:/shared
+      - ./auth-service:/app
+      - /app/node_modules
+    command: npm run dev
     depends_on:
       # container only starts after mongodb is running and rabbitmq passsed health check
       rabbitmq:
@@ -55,6 +58,26 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
+      - ./customer-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  employee-service:
+    build: ./employee-service
+    container_name: employee-service
+    ports:
+      - "3003:3003"
+    environment:
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./employee-service:/app
+      - /app/node_modules
+    command: npm run dev
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -70,6 +93,4 @@ services:
     depends_on:
       - auth-service
       - customer-service
-
-volumes:
-  mongo-data:
+      - employee-service

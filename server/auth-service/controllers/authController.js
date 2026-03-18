@@ -72,4 +72,27 @@ export class AuthController {
         const user = await this.authService.updateUser(req.params.id, req.body);
         res.json(user);
     };
+
+    createAccount = async (req, res) => {
+        try {
+            const user = await this.authService.createUserAccount(req.body);
+            res.status(201).json({ message: "Create user account successfully.", user });
+        } catch (error) {
+            res.status(error.status || 400).json({ message: error.message });
+        }
+    };
+
+    adminResetPassword = async(req, res) => {
+        try {
+            await this.authService.adminResetPassword(req.body);
+            res.status(200).json({ message: "Admin reset password for employee successfully."});
+        } catch (error) {
+            res.status(error.status || 400).json({ message: error.message });
+        }
+    }
+
+    deleteUser = async (req, res) => {
+        await this.authService.deleteUser(req.params.id);
+        res.json({ message: "Delete user successfully." });
+    };
 }

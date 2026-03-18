@@ -10,6 +10,31 @@ export class UserService {
         this.sendVerificationEmail = sendVerificationEmail;
     }
 
+    getAllUsers = async (query = {}) => {
+        const filter = {};
+        const { _id, email, system_role, isBanned } = query;
+
+        if (system_role != null) filter.system_role = system_role;
+        if (isBanned) filter.isBanned = isBanned;
+        if (email) filter.email = email;
+        if (_id) filter._id = _id;
+
+        let users = this.User.find(filter).select("email system_role avatar isBanned");
+        return users;
+    }
+
+    async getUserById (userId) {
+        const user = await this.User.findById(userId)
+            .select("email system_role avatar isBanned")
+            //.populate("user_id", "email system_role avatar -_id");
+
+        if (!user) {
+            throw new Error("User not found.");
+        }
+        
+        return user;
+    };
+
     viewProfileService = async (userId) => {
         let profile = await Employee.findOne({ user_id: userId })
             .populate("user_id", "email system_role avatar");
