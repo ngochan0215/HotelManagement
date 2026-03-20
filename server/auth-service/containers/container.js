@@ -22,12 +22,11 @@ class Container {
             eventBus: this.eventBus
         });
 
-        // this.userService = new UserService({
-        //     User,
-        //     customerClient,
-        //     Employee,
-        //     sendVerificationEmail
-        // });
+        this.userService = new UserService({
+            User,
+            customerClient, employeeClient,
+            mailService
+        });
     }
 
     async init() {

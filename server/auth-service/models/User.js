@@ -19,6 +19,8 @@ const userSchema = new mongoose.Schema(
         emailChangeOtp: {type: String },
         emailChangeNew: { type: String },
         emailChangeExpires: { type: Date },
+
+        type: { type: String, enum: ["default", "google"] }
     },
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

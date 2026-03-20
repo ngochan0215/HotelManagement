@@ -204,7 +204,8 @@ export class EmployeeService {
     };
 
     async findEmployeeByUserId (user_id) {
-        return this.Employee.findOne({ user_id });
+        return this.Employee.findOne({ user_id })
+            .select("-created_at -updated_at -__v -createdAt -updatedAt");
     }
 }
 

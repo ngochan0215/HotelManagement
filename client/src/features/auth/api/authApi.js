@@ -13,6 +13,15 @@ export const loginUser = async (credentials) => {
   }
 };
 
+export const loginGoogle = async (credentials) => {
+  try {
+    const response = await axios.post(`${API_URL}/login-google`, credentials);
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : error;
+  }
+};
+
 export const forgotPassword = async (email) => {
   try {
     const response = await axios.post(`${API_URL}/forgot-password`, { email });

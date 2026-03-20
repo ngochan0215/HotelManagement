@@ -4,9 +4,11 @@ import { useAuth } from '../hooks/authContext.jsx';
 import Input from "../../../components/ui/Input.jsx";
 import Button from "../../../components/ui/Button.jsx";
 import { employeeApi } from "../../api/employeeApi.js";
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { login, loginGoogle } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -76,6 +78,70 @@ const LoginPage = () => {
             {loading ? "Đang xử lý..." : "Đăng nhập"}
           </Button>
         </form>
+
+        <GoogleOAuthProvider clientId="10090795936-3p8j69nbncuu5rq1p8k7lc75n48g9j6c.apps.googleusercontent.com">
+          <GoogleLogin
+            // onSuccess={credentialResponse => {
+            //   console.log(credentialResponse);
+            // }}
+            onSuccess={async (credentialResponse) => {
+            try {
+              setLoading(true);
+              setError("");
+
+              const googleToken = credentialResponse.credential;
+
+              // Call your backend (you need to implement this API)
+              const response = await loginGoogle({
+                googleToken: googleToken
+              });
+
+              if (response.isNewUser) {
+                navigate("/register", {
+                  state: res.googleData
+                });
+                return;
+              }
+
+              const role = localStorage.getItem("role") || "employee";
+
+              if (role === 'manager') {
+                localStorage.setItem("position", "manager");
+                navigate("/dashboard");
+              } else {
+                try {
+                  const res = await employeeApi.getProfile();
+
+                  if (res.employee && res.employee.position) {
+                    localStorage.setItem("position", res.employee.position);
+                    const pos = res.employee.position;
+
+                    if (pos === 'receptionist') navigate("/room-calendar");
+                    else if (pos === 'technician') navigate("/incidents");
+                    else navigate("/dashboard");
+                  } else {
+                    localStorage.setItem("position", "employee");
+                    navigate("/dashboard");
+                  }
+                } catch (err) {
+                  console.error("Lỗi lấy profile:", err);
+                  localStorage.setItem("position", "unknown");
+                  navigate("/dashboard");
+                }
+              }
+
+            } catch (err) {
+              setError("Google login failed: " + (err.response?.data?.message || err.message));
+            } finally {
+              setLoading(false);
+            }
+          }}
+            onError={() => {
+              console.log('Login Failed');
+            }}
+          />
+        </GoogleOAuthProvider>
+
       </div>
     </div>
   );

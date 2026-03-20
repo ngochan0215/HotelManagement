@@ -292,7 +292,8 @@ export class CustomerService {
     }
 
     async getCustomerByUserId (user_id) {
-        return this.Customer.findOne({ user_id });
+        return this.Customer.findOne({ user_id })
+            .select("-created_at -updated_at -__v -createdAt -updatedAt");
     }
 
     async createCustomer(userId, customer) {

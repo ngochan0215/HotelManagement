@@ -3,11 +3,11 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
 export class UserService {
-    constructor({ User, Customer, Employee, sendVerificationEmail }) {
+    constructor({ User, customerClient, employeeClient, mailService }) {
         this.User = User;
-        this.Customer = Customer;
-        this.Employee = Employee;
-        this.sendVerificationEmail = sendVerificationEmail;
+        this.customerClient = customerClient;
+        this.employeeClient = employeeClient;
+        this.mailService = mailService;
     }
 
     getAllUsers = async (query = {}) => {
@@ -26,7 +26,6 @@ export class UserService {
     async getUserById (userId) {
         const user = await this.User.findById(userId)
             .select("email system_role avatar isBanned")
-            //.populate("user_id", "email system_role avatar -_id");
 
         if (!user) {
             throw new Error("User not found.");
@@ -35,48 +34,38 @@ export class UserService {
         return user;
     };
 
-    viewProfileService = async (userId) => {
-        let profile = await Employee.findOne({ user_id: userId })
-            .populate("user_id", "email system_role avatar");
+    async getUserProfile(userId) {
+        try {
+            const user = await this.User.findById(userId)
+                .select("email system_role avatar isBanned")
+                .lean();
 
-        if (!profile) {
-            profile = await this.User.findById(userId).select("email system_role avatar");
+            if (!user) {
+                throw new Error("User not found.");
+            }
+
+            let extraData = {};
+
+            if (user.system_role === "employee") {
+                extraData = await this.employeeClient.findEmployeeByUserId(userId);
+            } else {
+                extraData = await this.customerClient.getCustomerByUserId(userId);
+            }
+
+            console.log("EXXTRA DATA: ", extraData);
+            return {
+                ...user,
+                ...extraData
+            };
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.reponse?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
         }
-
-        if (!profile) {
-            throw new Error("Không tìm thấy hồ sơ người dùng.");
-        }
-
-        return profile;
-    };
-
-    updateProfileService = async (userId, data) => {
-        const { phone, dob } = data;
-
-        const user = await this.User.findById(userId).select("system_role");
-        if (!user) 
-            throw new Error("Không tìm thấy người dùng.");
-
-        let profileModel = null;
-
-        if (user.system_role === "customer") 
-            profileModel = Customer;
-        if (["employee", "manager"].includes(user.system_role)) 
-            profileModel = Employee;
-
-        if (!profileModel) 
-            throw new Error("Loại người dùng không hợp lệ.");
-
-        const profile = await profileModel.findOne({ user_id: user._id });
-        if (!profile) throw new Error("Không tìm thấy hồ sơ cá nhân.");
-
-        if (phone) profile.phone_number = phone;
-        if (dob) profile.date_birth = new Date(dob);
-
-        await profile.save();
-
-        return profile;
-    };
+        
+    }
 
     changePasswordService = async (userId, oldPassword, newPassword) => {
         const user = await this.User.findById(userId).select("+password");
@@ -117,7 +106,7 @@ export class UserService {
         user.emailChangeExpires = Date.now() + 10 * 60 * 1000;
 
         await user.save();
-        await this.sendVerificationEmail(newEmail, otp);
+        await this.mailService.sendVerificationEmail(newEmail, otp);
     };
 
     verifyChangeEmailService = async (userId, otp) => {
@@ -157,5 +146,44 @@ export class UserService {
             throw new Error("Không tìm thấy người dùng.");
 
         return updatedUser.avatar;
+    };
+
+    async setRole({ userId, newRole }) {
+        try {    
+            if (!userId || !newRole) {
+                throw new Error("Thiếu userId hoặc newRole.");
+            }
+    
+            if (!["employee", "customer"].includes(newRole)) {
+                throw new Error("Role không hợp lệ.");
+            }
+    
+            const user = await this.User.findById(userId);
+            if (!user) {
+                throw new Error("Không tìm thấy user.");
+            }
+    
+            if (user.system_role === newRole) {
+                throw new Error(`User đã là ${newRole}.`);
+            }
+    
+            user.system_role = newRole;
+            await user.save();
+
+            return { success: true };
+    
+            // const notification = await Notification.create({
+            //     user_id: user._id,
+            //     title: "Thay đổi quyền",
+            //     content: `Quyền hệ thống của bạn đã được đổi thành ${newRole}.`
+            // });
+    
+            // emitToUser(req.app.get("io"), user._id.toString(), "user:role_updated", {
+            //     notification,
+            // });
+        } catch (err) {
+            console.log("Admin setting new role failed for error: " + err.message);
+            throw err;
+        }
     };
 }

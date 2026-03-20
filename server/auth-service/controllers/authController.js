@@ -35,6 +35,16 @@ export class AuthController {
         }
     };
 
+    loginGoogle = async (req, res) => {
+        try {
+            const { googleToken } = req.body;
+            const result = await this.authService.loginGoogle(googleToken);
+            res.json({ message: "Đăng nhập bằng google thành công", ...result });
+        } catch (err) {
+            res.status(400).json({ message: err.message });
+        }
+    };
+
     Logout = (req, res) => {
         res.json({ message: "Đăng xuất thành công" });
     };

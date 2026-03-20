@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { loginUser as loginAPI } from "../api/authApi.js";
+import { loginUser as loginAPI, loginGoogle as loginGoogleAPI } from "../api/authApi.js";
 import { jwtDecode } from "jwt-decode";
 
 const AuthContext = createContext();
@@ -63,6 +63,25 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
+    const loginGoogle = async (credentials) => {
+      try {
+        const data = await loginGoogleAPI(credentials);
+        const userFromToken = parseTokenToUser(data.token);
+
+        if (userFromToken) {
+          const fullUser = { ...userFromToken, ...data.theUser };
+          setUser(fullUser);
+
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("user_info", JSON.stringify(data.theUser));
+          localStorage.setItem("position", data.theUser.position || "");
+        }
+        return data;
+      } catch (error) {
+        throw error;
+      }
+    };
+
     const logout = () => {
       setUser(null);
       localStorage.removeItem("token");
@@ -72,7 +91,7 @@ export const AuthProvider = ({ children }) => {
     };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, refreshUser }}>
+    <AuthContext.Provider value={{ user, login, loginGoogle, logout, isLoading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

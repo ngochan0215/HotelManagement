@@ -13,7 +13,7 @@ router.patch("/:id/ban", verifyToken, isManager, customerController.banCustomer)
 router.patch("/:id/unban", verifyToken, isManager, customerController.unbanCustomer);
 
 // for communication between services
-router.get("/get-customer", verifyToken, customerController.getCustomerByUserId);
+router.get("/get-customer/:userId", customerController.getCustomerByUserId);
 router.get("/get-customer-phone", verifyToken, customerController.findCustomerByPhone);
 router.get("/get-customer-cccd", verifyToken, customerController.findCustomerByCCCD);
 router.post("/create-customer/:userId", customerController.createCustomer);

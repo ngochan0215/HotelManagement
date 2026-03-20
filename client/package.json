@@ -12,6 +12,7 @@
     "watch:css": "npx tailwindcss -i ./src/styles/index.css -o ./dist/output.css --watch"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.4",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",

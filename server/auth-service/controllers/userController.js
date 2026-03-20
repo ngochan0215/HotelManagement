@@ -8,9 +8,10 @@ export class UserController {
     getAllUsers = async (req, res) => {
         try {
             const users = await this.userService.getAllUsers(req.query);
-            res.status(200).json({ message: "Get all users successfully.", users });
+            res.status(200).json({ message: "Get all users successfully.",
+                counts: users.length, users });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -19,32 +20,18 @@ export class UserController {
             const user = await this.userService.getUserById(req.params.id);
             res.status(200).json({ message: "Get user information successfully.", user });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
-    viewProfile = async (req, res) => {
+    getUserProfile = async (req, res) => {
         try {
-            const userId = req.user.userId || req.user._id;
-            const profile = await this.userService.viewProfileService(userId);
-
-            res.status(200).json({ message: "Lấy thông tin thành công.", data: profile });
+            const userProfile = await this.userService.getUserProfile(req.params.id);
+            res.status(200).json({ message: "Get user profile's information successfully.", userProfile });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
-
-    updateProfile = async (req, res) => {
-        try {
-            const userId = req.user.userId || req.user._id;
-            const profile = await this.userService.updateProfileService(userId, req.body);
-
-            res.status(200).json({ message: "Cập nhật thành công.", data: profile });
-        } catch (err) {
-            res.status(400).json({ message: err.message });
-        }
-    };
-
 
     changePassword = async (req, res) => {
         try {
@@ -56,7 +43,7 @@ export class UserController {
 
             res.status(200).json({ message: "Đổi mật khẩu thành công." });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -68,7 +55,7 @@ export class UserController {
 
             res.status(200).json({ message: "OTP đã gửi tới email mới." });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -80,7 +67,7 @@ export class UserController {
 
             res.status(200).json({ message: "Đổi email thành công.", newEmail });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -97,7 +84,18 @@ export class UserController {
                 avatar
             });
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
+
+    adminResetRole = async(req, res) => {
+        try {
+            console.log("IM CALLED");
+            console.log("REQ BODY: ", req.body);
+            await this.userService.setRole(req.body);
+            res.status(200).json({ message: "Admin reset role for user successfully."});
+        } catch (error) {
+            res.status(error.status || 400).json({ message: error.message });
+        }
+    }
 }

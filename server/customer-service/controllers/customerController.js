@@ -79,8 +79,12 @@ export class CustomerController {
     };
 
     getCustomerByUserId = async (req, res) => {
-        const customer = await this.customerService.getCustomerByUserId(req.params.id);
-        res.json(customer);
+        try {
+            const customer = await this.customerService.getCustomerByUserId(req.params.userId);
+            res.status(200).json(customer);
+        } catch (error) {
+            res.status(error.status || 500).json({ message: error.message });
+        }
     };
 
     findCustomerByPhone = async (req, res) => {

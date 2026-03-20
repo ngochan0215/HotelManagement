@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { EMPLOYEE_EVENTS } from "../../shared/events/employeeEvents.js";
 import { CUSTOMER_EVENTS } from "../../shared/events/customerEvents.js";
 
@@ -157,6 +158,27 @@ export class AuthService {
         if (!isMatch) 
             throw new Error("Sai mật khẩu");
 
+        const { payload, fullName } = await this.buildTokenPayLoad(user);
+
+        const token = jwt.sign(
+            payload, process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        return {
+            token,
+            theUser: {
+                _id: user._id,
+                name: fullName,
+                position: payload.position,
+                email: user.email,
+                role: user.system_role,
+                avatar: user.avatar
+            }
+        };
+    };
+
+    async buildTokenPayLoad(user) {
         let fullName = "Người dùng";
         let position = "";
         
@@ -182,22 +204,57 @@ export class AuthService {
             payload.position = position;
         }
 
-        const token = jwt.sign(
-            payload, process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        return { payload, fullName };
+    }
 
-        return {
-            token,
-            theUser: {
-                _id: user._id,
-                name: fullName,
-                position: position,
-                email: user.email,
-                role: user.system_role,
-                avatar: user.avatar
+    async loginGoogle (tokenGoogle) {
+        try {
+            const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+            // verify token with google
+            const ticket = await client.verifyIdToken({
+                idToken: tokenGoogle,
+                audience: process.env.GOOGLE_CLIENT_ID
+            });
+
+            const googlePayload = ticket.getPayload();
+            const { email, name, picture, sub: googleId } = googlePayload;
+
+            const user = await this.User.findOne({ email });
+            if (!user) {
+                return {
+                    isNewUser: true,
+                    googleData: {
+                        email, name, picture, googleId
+                    }
+                };
             }
-        };
+
+            const { payload, fullName } = await this.buildTokenPayLoad(user);
+
+            const token = jwt.sign(
+                payload, process.env.JWT_SECRET,
+                { expiresIn: "7d" }
+            );
+
+            return {
+                token,
+                theUser: {
+                    _id: user._id,
+                    name: fullName,
+                    position: payload.position,
+                    email: user.email,
+                    role: user.system_role,
+                    avatar: user.avatar
+                }
+            };
+
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     };
 
     async forgotPassword (email) {

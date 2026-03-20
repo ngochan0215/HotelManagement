@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoute.js";
+import userRoutes from "./routes/userRoute.js";
 import { connectDB } from "../shared/config/database.js";
 import { container } from "./containers/container.js";
 
@@ -25,6 +26,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(authRoutes);
+    app.use("/user", userRoutes);
 
     const PORT = process.env.PORT || 3001;
 
