@@ -27,14 +27,30 @@ export class EventBus {
                 this.channel = await connection.createChannel();
                 await this.channel.assertExchange(EXCHANGE_NAME, "direct", { durable: true });
 
-                if (options.queueName && options.bindEvents && options.bindEvents.length > 0) {
+                // if (options.queueName && options.bindEvents && options.bindEvents.length > 0) {
+                //     this.queueName = options.queueName;
+                //     this.bindEvents = options.bindEvents;
+                //     await this.channel.assertQueue(this.queueName, { durable: true });
+                //     for (const event of this.bindEvents) {
+                //         await this.channel.bindQueue(this.queueName, EXCHANGE_NAME, event);
+                //     }
+                //     console.log(`RabbitMQ connected (consumer queue: ${this.queueName}, events: ${this.bindEvents.join(", ")})`);
+                // } else {
+                //     console.log("RabbitMQ connected (publisher only)");
+                // }
+                if (options.queueName) {
                     this.queueName = options.queueName;
-                    this.bindEvents = options.bindEvents;
                     await this.channel.assertQueue(this.queueName, { durable: true });
-                    for (const event of this.bindEvents) {
-                        await this.channel.bindQueue(this.queueName, EXCHANGE_NAME, event);
+                    
+                    if (options.bindEvents && options.bindEvents.length > 0) {
+                        this.bindEvents = options.bindEvents;
+                        for (const event of options.bindEvents) {
+                            await this.channel.bindQueue(this.queueName, EXCHANGE_NAME, event);
+                        }
+                        console.log(`RabbitMQ connected (consumer queue: ${this.queueName})`);
+                    } else {
+                        console.log(`RabbitMQ connected (queue ready, no events bound)`);
                     }
-                    console.log(`RabbitMQ connected (consumer queue: ${this.queueName}, events: ${this.bindEvents.join(", ")})`);
                 } else {
                     console.log("RabbitMQ connected (publisher only)");
                 }
@@ -76,9 +92,61 @@ export class EventBus {
         this.channel.consume(this.queueName, async (msg) => {
             const message = JSON.parse(msg.content.toString());
 
-            await handler(message);
+            await handler(message, msg);
 
             this.channel.ack(msg);
+        });
+    }
+
+    async request(event, data, timeout = 5000) {
+        if (!this.channel) {
+            throw new Error("EventBus not connected!");
+        }
+
+        const correlationId = Math.random().toString(36).slice(2);
+        const replyQueue = `reply.${correlationId}`;
+
+        console.log(`[REQUEST] event: ${event}, correlationId: ${correlationId}`);
+
+        // create a temporary queue, automatically deleted if unused
+        await this.channel.assertQueue(replyQueue, {
+            durable: false,
+            exclusive: true,
+            autoDelete: true
+        });
+
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                console.log(`[REQUEST] TIMEOUT — no reply received for event: ${event}, correlationId: ${correlationId}`);
+                reject(new Error(`Request timeout: ${event}`));
+            }, timeout);
+
+            this.channel.consume(replyQueue, (msg) => {
+                if (!msg) {
+                    console.log(`[REQUEST] consume cancelled for ${replyQueue}`);
+                    return;
+                }
+                console.log(`[REQUEST] reply received, correlationId: ${msg.properties.correlationId}`);
+                clearTimeout(timer);
+                const response = JSON.parse(msg.content.toString());
+                this.channel.ack(msg);
+                resolve(response);
+            }, { noAck: false });
+
+            // publish request with replyTo and correlationId
+            const message = { event, data, timestamp: new Date() };
+            console.log(`[REQUEST] publishing event: ${event}`);
+            this.channel.publish(
+                EXCHANGE_NAME,
+                event,
+                Buffer.from(JSON.stringify(message)),
+                {
+                    persistent: false,
+                    replyTo: replyQueue,
+                    correlationId
+                }
+            );
+            console.log(`[REQUEST] published, waiting for reply...`);
         });
     }
 }

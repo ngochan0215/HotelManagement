@@ -32,6 +32,18 @@ export class EmployeeController {
         }
     };
 
+    getEmployeesById = async (req, res) => {
+        try {
+            const { employeeIds } = req.body;
+            const employees = await this.employeeService.getEmployeesById(employeeIds);
+
+            return res.status(200).json(employees);
+            
+        } catch (err) {
+            return res.status(400).json({ message: err.message });
+        }
+    };
+
     updateEmployee = async (req, res) => {
         try {
             const employee = await this.employeeService.updateEmployee(req.params.id, req.body);
@@ -56,6 +68,24 @@ export class EmployeeController {
             return res.status(200).json({ message: "Mật khẩu đã được đặt lại thành công." });
         } catch (err) {
             return res.status(400).json({ message: err.message });
+        }
+    };
+
+    getAvailableTechnicians = async (req, res) => {
+        try {
+            const { count, technicians } = await this.employeeService.getAvailableTechnicians();
+    
+            res.status(200).json({
+                success: true,
+                count, technicians 
+            });
+
+        } catch (error) {
+            res.status(500).json({ 
+                success: false, 
+                message: "Lỗi server", 
+                error: error.message 
+            });
         }
     };
 

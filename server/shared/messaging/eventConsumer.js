@@ -5,7 +5,7 @@ export class EventConsumer {
     }
 
     async start () {
-        await this.eventBus.subscribe(async (message) => {
+        await this.eventBus.subscribe(async (message, msg) => {
             const handler = this.handlers[message.event];
             if (!handler) {
                 console.log(`No handler for event ${message.event}`);
@@ -13,7 +13,7 @@ export class EventConsumer {
             }
 
             try {
-                await handler(message.data);
+                await handler(message.data, msg);
             } catch (error) {
                 console.error(`Handler failed for ${message.event} `, error);
                 throw error;

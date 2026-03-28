@@ -17,13 +17,19 @@ class Container {
             eventBus: this.eventBus
         });
 
-        this.employeeEventHandler = new EmployeeEventHandler(this.employeeService);
+        this.employeeEventHandler = new EmployeeEventHandler(this.employeeService, this.eventBus);
     }
 
     async init() {
         await this.eventBus.connect({
             queueName: "employee-service-events",
-            bindEvents: [EMPLOYEE_EVENTS.REGISTERED]
+            bindEvents: [
+                EMPLOYEE_EVENTS.REGISTERED,
+                EMPLOYEE_EVENTS.GET_INFO,
+                EMPLOYEE_EVENTS.GET_INFO_USERID,
+                EMPLOYEE_EVENTS.CHECK_EXISTS,
+                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+            ]
         });
 
         // lấy handlers từ class

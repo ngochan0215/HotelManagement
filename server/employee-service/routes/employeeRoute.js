@@ -6,8 +6,10 @@ const router = express.Router();
 const controller = new EmployeeController();
 
 router.get("/profile/me", verifyToken, controller.getMyProfile);
+router.get("/available/technicians", verifyToken, isManager, controller.getAvailableTechnicians);
 router.post("/add", verifyToken, isManager, controller.createEmployee);
 router.get("/all", verifyToken, isEmployee, controller.getAllEmployees);
+router.get("/some/by-ids", verifyToken, isManager, controller.getEmployeesById);
 router.get("/:id", verifyToken, isManager, controller.getEmployeeById);
 router.patch("/:id", verifyToken, isManager, controller.updateEmployee);
 

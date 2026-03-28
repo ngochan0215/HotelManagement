@@ -28,6 +28,63 @@ services:
       retries: 10         # if 10 check fails then the container is unhealthy
       start_period: 10s   # grace period before health checks start
 
+  # database region
+  # auth-db:
+  #   image: mongo:7
+  #   container_name: auth-db
+  #   ports:
+  #     -"27017:27017"
+  #   volumes:
+  #     - auth-db-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 10s
+    
+  # customer-db:
+  #   image: mongo:7
+  #   container_name: customer-db
+  #   ports:
+  #     - "27018:27017"
+  #   volumes:
+  #     - customer-db-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 10s
+
+  # employee-db:
+  #   image: mongo:7
+  #   container_name: employee-db
+  #   ports:
+  #     - "27019:27017"
+  #   volumes:
+  #     - employee-db-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 10s
+
+  # equipment-db:
+  #   image: mongo:7
+  #   container_name: equipment-db
+  #   ports:
+  #     - "27020:27017"
+  #   volumes:
+  #     - equipment-db-data:/data/db
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 10s
+  
   auth-service:
     # builds this container by using the dockerfile inside folder auth-service
     build: ./auth-service
@@ -81,6 +138,23 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+  
+  equipment-service:
+    build: ./equipment-service
+    container_name: equipment-service
+    ports:
+      - "3004:3004"
+    environment:
+      DB_URL: ${EQUIPMENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./equipment-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   api-gateway:
     # this service acts as the entry point for clients
@@ -94,3 +168,5 @@ services:
       - auth-service
       - customer-service
       - employee-service
+      - equipment-service
+

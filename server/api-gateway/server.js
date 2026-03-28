@@ -38,6 +38,21 @@ app.use(
   })
 );
 
+app.use(
+  "/equipment",
+  createProxyMiddleware({
+    target: "http://equipment-service:3004",
+    changeOrigin: true,
+    pathRewrite: { "^/equipment": "" },  // 👈 thêm dòng này
+    on: {
+      error: (err, req, res) => {
+        console.error("Proxy error:", err.message);
+        res.status(502).json({ error: "Bad Gateway", detail: err.message });
+      }
+    }
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

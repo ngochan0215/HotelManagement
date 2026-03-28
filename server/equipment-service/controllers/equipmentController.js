@@ -1,0 +1,138 @@
+import { container } from "../containers/container.js";
+
+export class EquipmentController {
+    constructor() {
+        this.equipmentService = container.equipmentService;
+    }
+
+    createEquipmentCategory = async (req, res) => {
+        try {
+            const category = await this.equipmentService.createEquipmentCategory(req.body);
+            return res.status(201).json({ success: true, message: "Thêm danh mục thiết bị mới thành công", category });
+    
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    };
+    
+    getAllEquipmentCategories = async (req, res) => {
+        try {
+            const {total, categories } = await this.equipmentService.getAllEquipmentCategories(req.query);
+            return res.status(200).json({ success: true, total, categories });
+    
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+    
+    getEquipmentCategoryById = async (req, res) => {
+        try {
+            const category = await this.equipmentService.getEquipmentCategoryById(req.params.id);
+
+            if (!category) {
+                return res.status(404).json({ success: false, message: "Không tìm thấy danh mục thiết bị." });
+            }
+            res.status(200).json({ success: true, category });
+    
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+    
+    updateEquipmentCategory = async (req, res) => {
+        try {
+            const updated = await this.equipmentService.updateEquipmentCategory(req.params.id, req.body);
+            return res.status(200).json({ success: true, message: "Cập nhật thành công!", category: updated });
+            
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+    
+    deleteEquipmentCategory = async (req, res) => {
+        try {
+            const force = req.query?.force === 'true';
+
+            await this.equipmentService.deleteEquipmentCategory(req.params.id, force);
+
+            return res.status(200).json({ success: true, message: "Xóa danh mục thiết bị thành công!" });
+    
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    };
+
+    syncEquipmentCategoryQuantities = async (req, res) => {
+        try {
+            const { total_categories, updated_categories, details } = await this.equipmentService.syncEquipmentCategoryQuantities();
+        
+            return res.status(200).json({
+                success: true,
+                message: `Đồng bộ thành công ${updatedCount} danh mục thiết bị.`,
+                data: {
+                    total_categories, updated_categories, details
+                }
+            });
+        
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "SERVER ERROR: " + error.message,
+            });
+        }
+    };
+    
+    // addEquipment = async (req, res) => {
+    //     // Business rule: Equipment is created only via import tickets
+    //     return res.status(405).json({ success: false, message: "Thiết bị chỉ được thêm qua phiếu nhập thiết bị." });
+    // };
+    
+    getAllEquipments = async (req, res) => {
+        try {
+            const { count, equipments } = await this.equipmentService.getAllEquipments(req.query);
+            return res.status(200).json({ success: true, count, equipments });
+    
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+    
+    getEquipmentById = async (req, res) => {
+        try {
+            const equipment = await this.equipmentService.getEquipmentById(req.params.id);   
+            return res.status(200).json({ success: true, equipment });
+    
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+    
+    updateEquipment = async (req, res) => {
+        try {
+            const updated = await this.equipmentService.updateEquipment(req.params.id, req.user.userId, req.body);
+    
+            return res.status(200).json({
+                success: true,
+                message: "Cập nhật thiết bị thành công!",
+                equipment: updated
+            });
+    
+        } catch (err) {
+            return res.status(500).json({
+                success: false,
+                message: "SERVER ERROR: " + err.message
+            });
+        }
+    };
+    
+    deleteEquipment = async (req, res) => {
+        try {
+            await this.equipmentService.deleteEquipment(req.params.id);
+    
+            return res.status(200).json({ success: true, message: "Xóa thiết bị thành công!" });
+    
+        } catch (err) {
+            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+        }
+    };
+}

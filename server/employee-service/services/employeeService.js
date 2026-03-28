@@ -89,6 +89,31 @@ export class EmployeeService {
         return employee;
     };
 
+    async getEmployeeByUserId (employeeUserId) {
+        const employee = await this.Employee.findOne({ user_id: employeeUserId })
+            .select("-__v -created_at -updated_at -createdAt -updatedAt");
+            //.populate("user_id", "email system_role avatar -_id");
+
+        if (!employee) {
+            throw new Error("Không tìm thấy nhân viên.");
+        }
+        
+        return employee;
+    };
+
+    async getEmployeesById (employeeIds) {
+        try {
+            return await this.Employee.find(
+                { _id: { $in: employeeIds } },
+                { full_name: 1, phone_number: 1 } 
+            ).lean();
+
+        } catch (error) {
+            console.log("Error in getting employees by ids: ", error.message);
+            throw error; 
+        }
+    };
+
     async updateEmployee (employeeId, updateData) {
         const { status, position, fixed_salary } = updateData;
 
@@ -177,6 +202,67 @@ export class EmployeeService {
         }
     };
 
+    async getAvailableTechnicians () {
+        try {
+            // // Tìm tất cả nhân viên kỹ thuật
+            // const technicians = await Employee.find({ 
+            //     position: "technician",
+            //     status: "working"
+            // })
+            // .populate("user_id", "email system_role avatar")
+            // .select("full_name phone_number user_id");
+    
+            // // Tìm các phiếu đang xử lý (pending hoặc waiting_confirm)
+            // const activeTickets = await EquipmentInstall.find({
+            //     handled_by: { $exists: true, $ne: null },
+            //     status: { $in: ["pending", "assigned", "waiting_confirm"] }
+            // }).select("handled_by");
+    
+            // // Lấy danh sách employee_id đang bận
+            // const busyEmployeeIds = new Set(
+            //     activeTickets.map(ticket => ticket.handled_by?.toString()).filter(Boolean)
+            // );
+    
+            // // Lọc ra những nhân viên rảnh
+            // const availableTechnicians = technicians
+            //     .filter(tech => {
+            //         const employeeId = tech._id.toString();
+            //         return !busyEmployeeIds.has(employeeId);
+            //     })
+            //     .map(tech => ({
+            //         _id: tech._id,
+            //         employee_id: tech._id,
+            //         full_name: tech.full_name,
+            //         phone_number: tech.phone_number,
+            //         user_id: tech.user_id
+            //     }));
+    
+            // res.status(200).json({
+            //     success: true,
+            //     count: availableTechnicians.length,
+            //     technicians: availableTechnicians
+            // });
+            
+            const technicians = await this.Employee.find({ position: "technician", status: "working" })
+                //.populate("user_id", "email system_role avatar")
+                .select("full_name phone_number user_id");
+    
+            const result = technicians.map(tech => ({
+                _id: tech._id,
+                employee_id: tech._id,
+                full_name: tech.full_name,
+                phone_number: tech.phone_number,
+                user_id: tech.user_id
+            }));
+
+            return { count: result.length, technicians: result };
+    
+        } catch (error) {
+            console.log("Error in getting available techinicians: ", error.message);
+            throw error; 
+        }
+    };
+
     async toggleBanUser (employeeId, isBanned) {
         const employee = await this.Employee.findById(employeeId);
         if (!employee || !employee.user_id) {
@@ -202,6 +288,11 @@ export class EmployeeService {
 
         return employee;
     };
+
+    async findEmployeeById (employeeId) {
+        return this.Employee.findById(employeeId)
+            .select("-created_at -updated_at -__v -createdAt -updatedAt");
+    }
 
     async findEmployeeByUserId (user_id) {
         return this.Employee.findOne({ user_id })
