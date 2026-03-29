@@ -29,6 +29,7 @@ class Container {
                 EMPLOYEE_EVENTS.GET_INFO_USERID,
                 EMPLOYEE_EVENTS.CHECK_EXISTS,
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE
             ]
         });
 

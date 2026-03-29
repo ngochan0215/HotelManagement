@@ -40,7 +40,6 @@ const equipmentLogSchema = new mongoose.Schema(
 
     handled_by: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
       default: null,
     },
   },

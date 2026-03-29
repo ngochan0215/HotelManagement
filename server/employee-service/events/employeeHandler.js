@@ -13,6 +13,7 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.CHECK_EXISTS_USERID]: this.employeeCheckExistsByUserId.bind(this),
             [EMPLOYEE_EVENTS.GET_INFO]: this.employeeGetInfo.bind(this),
             [EMPLOYEE_EVENTS.GET_INFO_USERID]: this.employeeGetInfoByUserId.bind(this),
+            [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
         }
     }
 
@@ -75,6 +76,21 @@ export class EmployeeEventHandler {
         const { employee_user_id } = data;
         const employee = await this.employeeService.getEmployeeByUserId(employee_user_id);
 
+        this.eventBus.channel.sendToQueue(
+            msg.properties.replyTo,
+            Buffer.from(JSON.stringify({ found: !!employee, employee })),
+            {
+                correlationId: msg.properties.correlationId,
+                persistent: false
+            }
+        );
+    }
+
+    async checkTechnicianAvailable(data, msg) {
+        console.log("Handling CHECK_TECHINICIAN_AVAILABLE");
+        const { employee_id } = data;
+        const employee = await this.employeeService.checkIfTechnicianIsAvailable(employee_id);
+        
         this.eventBus.channel.sendToQueue(
             msg.properties.replyTo,
             Buffer.from(JSON.stringify({ found: !!employee, employee })),

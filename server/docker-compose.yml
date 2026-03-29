@@ -156,6 +156,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  room-service:
+    build: ./room-service
+    container_name: room-service
+    ports:
+      - "3005:3005"
+    environment:
+      DB_URL: ${ROOM_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./room-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -169,4 +186,5 @@ services:
       - customer-service
       - employee-service
       - equipment-service
+      - room-service
 

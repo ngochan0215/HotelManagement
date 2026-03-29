@@ -9,19 +9,16 @@ const controller = new EquipmentInstallController();
 // router.get("/install/smart-suggestions", verifyToken, isManager, getSmartInstallSuggestions);
 router.get("/my-tickets", verifyToken, isEmployee, controller.getMyInstallTickets);
 
-// // tạo phiếu lắp đặt
-// router.post("/install/add", verifyToken, isManager, createInstallTicket);
-// // tạo phiếu tháo dỡ
-// router.post("/install/uninstall", verifyToken, isManager, createUninstallTicket);
+router.post("/add", verifyToken, isManager, controller.createInstallTicket);
+router.post("/uninstall/add", verifyToken, isManager, controller.createUninstallTicket);
 
 router.get("/all", verifyToken, isNotCustomer, controller.getAllEquipmentInstalls);
 router.get("/:id", verifyToken, isNotCustomer, controller.getEquipmentInstallById);
-// router.patch("/install/:id", verifyToken, isManager, updateEquipmentInstall);
-// router.delete("/install/:id", verifyToken, isManager, deleteEquipmentInstall);
+router.patch("/:id", verifyToken, isManager, controller.updateEquipmentInstall);
+router.delete("/:id", verifyToken, isManager, controller.deleteEquipmentInstall);
 
-// // xác nhận trạng thái phiếu
-// router.post("/install/:id/start", verifyToken, isEmployee, startInstallTicket);
-// router.post("/install/:id/complete", verifyToken, isEmployee, completeInstallTicket);
-// router.post("/install/:id/confirm-install", verifyToken, isManager, confirmEquipmentInstall);
+router.post("/:id/start", verifyToken, isEmployee, controller.startInstallTicket);
+router.post("/:id/complete", verifyToken, isEmployee, controller.completeInstallTicket);
+router.post("/:id/confirm-install", verifyToken, isManager, controller.confirmEquipmentInstall);
 
 export default router;

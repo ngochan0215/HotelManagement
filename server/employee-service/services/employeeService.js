@@ -263,6 +263,19 @@ export class EmployeeService {
         }
     };
 
+    checkIfTechnicianIsAvailable = async (employeeId) => {
+        try {
+            return await this.Employee.findOne({
+                _id: employeeId,
+                position: "technician",
+                status: "working"
+            });
+        } catch (error) {
+            console.log("Error in checking if technician is available: ", error.message);
+            throw error;
+        }
+    }
+
     async toggleBanUser (employeeId, isBanned) {
         const employee = await this.Employee.findById(employeeId);
         if (!employee || !employee.user_id) {

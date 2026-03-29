@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ROOM_EVENTS } from "../../shared/events/roomEvents.js";
 
 export class EquipmentService {
     constructor({ Equipment, EquipmentCategory, EquipmentLog, eventBus }) {
@@ -216,6 +217,50 @@ export class EquipmentService {
         }
     };
 
+    populateRoom = async (equipments) => {
+        const isArray = Array.isArray(equipments);
+        const list = isArray ? equipments : [equipments];
+        //console.log("LIST: ", list);
+        const roomIds = [...new Set(
+            list
+                .map(e => e.room_id?.toString())
+                .filter(Boolean)
+        )];
+
+        let roomMap = {};
+
+        if (roomIds.length > 0) {
+            const reply = await this.eventBus.request(
+                ROOM_EVENTS.GET_ROOMS_INFO,
+                { room_ids: roomIds }
+            );
+
+            for (const room of reply.rooms) {
+                roomMap[room._id.toString()] = {
+                    _id: room._id,
+                    room_number: room.room_number,
+                    room_status: room.room_status
+                }
+            }
+        }
+
+        // return equipments.map(equipment => {
+        //     const key = equipment.room_id?.toString();
+
+        //     return {
+        //         ...equipment,
+        //         room_id: key && roomMap[key] ? roomMap[key] : null
+        //     };
+        // });
+
+        const results = list.map(equipment => ({
+            ...equipment,
+            room_info: roomMap[equipment.room_id?.toString()] || null
+        }));
+
+        return isArray ? results : results[0];
+    };
+
     getAllEquipments = async (query = {}) => {
         try {
             const { category_id, status, condition, room_id } = query;
@@ -249,11 +294,13 @@ export class EquipmentService {
 
             const equipments = await this.Equipment.find(filter)
                 .populate("category_id", "name unit price")
-                //.populate("room_id", "room_number room_status")
                 .select("-__v -created_at -updated_at")
-                .sort({ created_at: -1 });
+                .sort({ created_at: -1 })
+                .lean();
 
-            return { count: equipments.length, equipments };
+            const results = await this.populateRoom(equipments);
+
+            return { count: results.length, equipments: results };
 
         } catch (err) {
             console.log("Error in getting all equipments: ", err.message );
@@ -268,13 +315,15 @@ export class EquipmentService {
 
             const equipment = await this.Equipment.findById(equipmentId)
                 .populate("category_id", "name unit price")
-                //.populate("room_id", "room_number room_status")
-                .select("-__v -created_at -updated_at");
+                .select("-__v -created_at -updated_at")
+                .lean();
 
             if (!equipment)
                 throw new Error("Không tìm thấy thiết bị.");
 
-            return equipment;
+            const result = await this.populateRoom(equipment);
+
+            return result;
 
         } catch (err) {
             console.log("Error in getting specific equipment: ", err.message );
@@ -371,10 +420,12 @@ export class EquipmentService {
 
             const updated = await this.Equipment.findById(equipmentId)
                 .populate("category_id", "name unit price")
-                //.populate("room_id", "room_number room_status")
-                .select("-__v -created_at -updated_at");
+                .select("-__v -created_at -updated_at")
+                .lean();
 
-            return updated;
+            const result = await this.populateRoom(updated);
+
+            return result;
 
         } catch (err) {
             console.log("Error in updating equipment: ", err.message );

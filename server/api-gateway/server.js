@@ -42,14 +42,15 @@ app.use(
   "/equipment",
   createProxyMiddleware({
     target: "http://equipment-service:3004",
-    changeOrigin: true,
-    pathRewrite: { "^/equipment": "" },  // 👈 thêm dòng này
-    on: {
-      error: (err, req, res) => {
-        console.error("Proxy error:", err.message);
-        res.status(502).json({ error: "Bad Gateway", detail: err.message });
-      }
-    }
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/room",
+  createProxyMiddleware({
+    target: "http://room-service:3005",
+    changeOrigin: true
   })
 );
 
