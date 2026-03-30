@@ -1,0 +1,22 @@
+import mongoose from "../../../shared/config/mongoose.js";
+
+const roomCategorySchema = new mongoose.Schema(
+    {
+        category_name: { type: String, required: true, unique: true, trim: true },
+        code: { type: String, unique: true, trim: true },
+        description: { type: String, required: true, trim: true },
+        max_adults: { type: Number, required: true, min: 1 },
+        max_children: { type: Number, required: true, min: 0 },
+        price: { type: Number, required: true, min: 0 },
+        images: [ { type: String }],
+    },
+    {
+        timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    }
+);
+
+roomCategorySchema.index({ price: 1 });
+roomCategorySchema.index({ max_adults: 1 });
+
+const RoomCategory = mongoose.models.RoomCategory || mongoose.model("RoomCategory", roomCategorySchema);
+export default RoomCategory;

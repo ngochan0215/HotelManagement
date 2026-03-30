@@ -90,8 +90,8 @@ export class UserController {
 
     adminResetRole = async(req, res) => {
         try {
-            console.log("IM CALLED");
-            console.log("REQ BODY: ", req.body);
+            // console.log("IM CALLED");
+            // console.log("REQ BODY: ", req.body);
             await this.userService.setRole(req.body);
             res.status(200).json({ message: "Admin reset role for user successfully."});
         } catch (error) {

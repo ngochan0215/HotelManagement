@@ -1,13 +1,12 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
+import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
+import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 
 export class UserService {
-    constructor({ User, customerClient, employeeClient, mailService }) {
+    constructor({ User, mailService, eventBus }) {
         this.User = User;
-        this.customerClient = customerClient;
-        this.employeeClient = employeeClient;
         this.mailService = mailService;
+        this.eventBus = eventBus;
     }
 
     getAllUsers = async (query = {}) => {
@@ -34,6 +33,13 @@ export class UserService {
         return user;
     };
 
+    async getUsersByIds (userIds) {
+        const users = await this.User.find({ _id: { $in: userIds } })
+            .select("email system_role avatar isBanned");  
+
+        return users;
+    }
+
     async getUserProfile(userId) {
         try {
             const user = await this.User.findById(userId)
@@ -47,12 +53,25 @@ export class UserService {
             let extraData = {};
 
             if (user.system_role === "employee") {
-                extraData = await this.employeeClient.findEmployeeByUserId(userId);
+                const reply = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                    { employee_user_id: user._id }
+                );
+    
+                if (reply.found)
+                    extraData = reply.employee;
+
             } else {
-                extraData = await this.customerClient.getCustomerByUserId(userId);
+                const reply = await this.eventBus.request(
+                    CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
+                    { customer_user_id: user._id }
+                );
+    
+                if (reply.found)
+                    extraData = reply.customer;
             }
 
-            console.log("EXXTRA DATA: ", extraData);
+            //console.log("EXXTRA DATA: ", extraData);
             return {
                 ...user,
                 ...extraData
@@ -186,4 +205,13 @@ export class UserService {
             throw err;
         }
     };
+
+    // for communication with other services
+    async findUserByEmail(email) {
+        return this.User.findOne({ email });
+    }
+    
+    async updateUser(userId, payload) {
+        return this.User.findByIdAndUpdate(userId, payload, { new: true });
+    }
 }

@@ -3,17 +3,6 @@
 # ports structure: host_port : container_port
 # volumes structure: 
 services:
-
-  # mongodb:
-  #   image: mongo:7
-  #   container_name: mongodb
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #   # creates a named Docker volume inside the container /data/db
-  #   # ensure that db data persists even if container is deleted
-  #     - mongo-data:/data/db
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -27,77 +16,20 @@ services:
       timeout: 5s         # only allowed checking for 5s
       retries: 10         # if 10 check fails then the container is unhealthy
       start_period: 10s   # grace period before health checks start
-
-  # database region
-  # auth-db:
-  #   image: mongo:7
-  #   container_name: auth-db
-  #   ports:
-  #     -"27017:27017"
-  #   volumes:
-  #     - auth-db-data:/data/db
-  #   healthcheck:
-  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 10s
-    
-  # customer-db:
-  #   image: mongo:7
-  #   container_name: customer-db
-  #   ports:
-  #     - "27018:27017"
-  #   volumes:
-  #     - customer-db-data:/data/db
-  #   healthcheck:
-  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 10s
-
-  # employee-db:
-  #   image: mongo:7
-  #   container_name: employee-db
-  #   ports:
-  #     - "27019:27017"
-  #   volumes:
-  #     - employee-db-data:/data/db
-  #   healthcheck:
-  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 10s
-
-  # equipment-db:
-  #   image: mongo:7
-  #   container_name: equipment-db
-  #   ports:
-  #     - "27020:27017"
-  #   volumes:
-  #     - equipment-db-data:/data/db
-  #   healthcheck:
-  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 10s
   
   auth-service:
     # builds this container by using the dockerfile inside folder auth-service
-    build: ./auth-service
+    build: ./main-services/auth-service
     container_name: auth-service
     ports:
       - "3001:3001"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${USER_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       # maps local folder to container folder -> share common code between services
       - ./shared:/shared
-      - ./auth-service:/app
+      - ./main-services/auth-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -106,16 +38,16 @@ services:
         condition: service_healthy
 
   customer-service:
-    build: ./customer-service
+    build: ./main-services/customer-service
     container_name: customer-service
     ports:
       - "3002:3002"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${USER_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./customer-service:/app
+      - ./main-services/customer-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -123,16 +55,16 @@ services:
         condition: service_healthy
 
   employee-service:
-    build: ./employee-service
+    build: ./main-services/employee-service
     container_name: employee-service
     ports:
       - "3003:3003"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${USER_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./employee-service:/app
+      - ./main-services/employee-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -140,7 +72,7 @@ services:
         condition: service_healthy
   
   equipment-service:
-    build: ./equipment-service
+    build: ./main-services/equipment-service
     container_name: equipment-service
     ports:
       - "3004:3004"
@@ -149,7 +81,7 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./equipment-service:/app
+      - ./main-services/equipment-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -157,7 +89,7 @@ services:
         condition: service_healthy
 
   room-service:
-    build: ./room-service
+    build: ./main-services/room-service
     container_name: room-service
     ports:
       - "3005:3005"
@@ -166,7 +98,7 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./room-service:/app
+      - ./main-services/room-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:

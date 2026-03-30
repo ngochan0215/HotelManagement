@@ -1,4 +1,4 @@
-import mongoose from "../../shared/config/mongoose.js";
+import mongoose from "../../../shared/config/mongoose.js";
 
 const userSchema = new mongoose.Schema(
     {

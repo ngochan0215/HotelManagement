@@ -1,3 +1,5 @@
 export const CUSTOMER_EVENTS = {
-    REGISTERED: "CUSTOMER_REGISTERED",
+    REGISTERED: "customer.registered",
+    CHECK_EXISTS: "customer.check_exists",
+    CHECK_EXISTS_USERID: "customer.check_exists_userid",
 };

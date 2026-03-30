@@ -1,7 +1,7 @@
 import express from "express";
 import { UserController } from "../controllers/userController.js";
 import uploadAvatar from "../utils/uploadAvatar.js";
-import { verifyToken, isManager } from "../../shared/middleware/authMiddleware.js";
+import { verifyToken, isManager } from "../../../shared/middleware/authMiddleware.js";
 
 const router = express.Router();
 const userController = new UserController();

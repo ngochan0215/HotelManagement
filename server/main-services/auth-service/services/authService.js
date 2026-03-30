@@ -1,14 +1,12 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { EMPLOYEE_EVENTS } from "../../shared/events/employeeEvents.js";
-import { CUSTOMER_EVENTS } from "../../shared/events/customerEvents.js";
+import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 
 export class AuthService {
-    constructor({ User, customerClient, employeeClient, mailService, defaultAvatars, eventBus }) {
+    constructor({ User, mailService, defaultAvatars, eventBus }) {
         this.User = User;
-        this.customerClient = customerClient;
-        this.employeeClient = employeeClient;
         this.mailService = mailService;
         this.defaultAvatars = defaultAvatars;
         this.eventBus = eventBus;
@@ -80,44 +78,57 @@ export class AuthService {
 
         try {
             if (system_role === "customer") {
-                // await this.eventBus.publish(CUSTOMER_EVENTS.REGISTERED, {
-                //     userId: user._id,
-                //     customer: {
-                //         date_birth, full_name, phone_number, nationality, CCCD
-                //     }
-                // })
-                await this.customerClient.createCustomer({
-                    userId: user._id,
-                    payload: {
-                        date_birth, full_name, phone_number, nationality, CCCD
+                const reply = await this.eventBus.request(
+                    CUSTOMER_EVENTS.REGISTERED, 
+                    {
+                        userId: user._id,
+                        customer: {
+                            date_birth, full_name, phone_number, nationality, CCCD
+                        }
                     }
-                });
+                );
+
+                if (!reply.success) {
+                    await this.User.deleteOne({ _id: user._id }).catch(err => {
+                        console.error("Rollback failed:", err);
+                    });
+
+                    const err = new Error(reply.message || "Tạo khách hàng thất bại.");
+                    err.status = 400;
+                    throw err;
+                }
+
             } else if (system_role === "employee") {
-                // await this.eventBus.publish(EMPLOYEE_EVENTS.REGISTERED, {
-                //     userId: user._id,
-                //     employee: {
-                //         date_birth, full_name, phone_number, position, fixed_salary, CCCD
-                //     }
-                // })
-                await this.employeeClient.createEmployee({
-                    userId: user._id,
-                    payload: {
-                        date_birth, full_name, phone_number, position, fixed_salary, CCCD
+                const reply = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.REGISTERED, 
+                    {
+                        userId: user._id,
+                        employee: {
+                            date_birth, full_name, phone_number, position, fixed_salary, CCCD
+                        }
                     }
-                });
+                );
+
+                if (!reply.success) {
+                    await this.User.deleteOne({ _id: user._id }).catch(err => {
+                        console.error("Rollback failed:", err);
+                    });
+
+                    const err = new Error(reply.message || "Tạo nhân viên thất bại.");
+                    err.status = 400;
+                    throw err;
+                }
             }
         } catch (error) {
             await this.User.deleteOne({ _id: user._id }).catch(rollbackErr => {
                 console.error(`Rollback failed for deleting user ${user._id}:`, rollbackErr);
             });
 
-            // Lấy message thực từ response của service kia
             const message = error.response?.data?.message || error.message;
             const status = error.response?.status || 500;
             
             const err = new Error(message);
             err.status = status;
-
             throw err;
         }
 
@@ -183,15 +194,24 @@ export class AuthService {
         let position = "";
         
         if (user.system_role === "customer") {
-            const customer = await this.customerClient.getCustomerByUserId(user._id);
-            //console.log("CUSTOMER IN LOGIN: ", customer);
-            if (customer) fullName = customer.full_name;
+            const reply = await this.eventBus.request(
+                CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
+                { customer_user_id: user._id }
+            );
+
+            if (reply.found) {
+                fullName = reply.customer.full_name;
+            }
+
         } else {
-            const employee = await this.employeeClient.findEmployeeByUserId(user._id);
-            //console.log("EMPLOYEE IN LOGIN: ", employee);
-            if (employee) {
-                fullName = employee.full_name;
-                position = employee.position;
+            const reply = await this.eventBus.request(
+                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                { employee_user_id: user._id }
+            );
+
+            if (reply.found) {
+                fullName = reply.employee.full_name;
+                position = reply.employee.position;
             }
         }
 
@@ -292,8 +312,8 @@ export class AuthService {
     };
 
     async adminResetPassword ({ userId, newPassword }) {
-        console.log("USERID: ", userId);
-        console.log("NEW PASSWORD: ", newPassword);
+        // console.log("USERID: ", userId);
+        // console.log("NEW PASSWORD: ", newPassword);
 
         const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
         if (!regex.test(newPassword)) {
