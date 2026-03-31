@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 import roomRoute from "./routes/roomRoute.js";
+import roomCategoryRoute from "./routes/roomCategoryRoute.js";
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(roomRoute);
+    app.use("/category", roomCategoryRoute);
 
     const PORT = process.env.PORT || 3005;
 

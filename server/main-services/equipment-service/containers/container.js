@@ -14,7 +14,7 @@ import { EquipmentEventHandler } from "../events/equipmentHandler.js";
 
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
-// import { EMPLOYEE_EVENTS } from "../../shared/events/employeeEvents.js";
+import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 
 class Container {
     constructor() {
@@ -39,19 +39,22 @@ class Container {
             eventBus: this.eventBus
         });
 
-        //this.equipmentEventHandler = new EquipmentEventHandler(this.equipmentService);
+        this.equipmentEventHandler = new EquipmentEventHandler(this.equipmentService, this.eventBus);
     }
 
     async init() {
         await this.eventBus.connect({
             queueName: "equipment-service-queue",
+            bindEvents: [
+                EQUIPMENT_EVENTS.CHECK_EXISTS,
+                EQUIPMENT_EVENTS.GET_CATEGORY_INFO,
+                EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
+            ]
         });
 
-        // // lấy handlers từ class
-        // const handlers = this.equipmentEventHandler.handlers();
-
-        // const consumer = new EventConsumer(this.eventBus, handlers);
-        // await consumer.start();
+        const handlers = this.equipmentEventHandler.handlers();
+        const consumer = new EventConsumer(this.eventBus, handlers);
+        await consumer.start();
     }
 }
 

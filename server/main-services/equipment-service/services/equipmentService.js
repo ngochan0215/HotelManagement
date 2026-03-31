@@ -96,6 +96,23 @@ export class EquipmentService {
         }
     };
 
+    getEquipmentCategoriesByIds = async (categoryIds) => {
+        try {
+            const categories = await this.EquipmentCategory.find({ _id: { $in: categoryIds } })
+                .select("-created_at -updated_at -__v");
+
+            if (categories.length === 0) {
+                throw new Error("Không tìm thấy danh mục thiết bị.");
+            }
+
+            return categories;
+
+        } catch (err) {
+            console.log("Error in getting specific equipment categories: ", err.message);
+            throw err;
+        }
+    };
+
     updateEquipmentCategory = async (categoryId, updateData) => {
         try {
             const category = await this.EquipmentCategory.findById(categoryId);

@@ -1,6 +1,7 @@
 import Room from "../models/Room.js";
 import RoomCategory from "../models/RoomCategory.js";
 import RoomLog from "../models/RoomLog.js";
+import DefaultEquipment from "../models/DefaultEquipment.js";
 
 import { RoomService } from "../services/roomService.js";
 import { RoomEventHandler } from "../events/roomHandler.js";
@@ -15,7 +16,7 @@ class Container {
         this.eventBus = new EventBus();
 
         this.roomService = new RoomService({
-            Room, RoomCategory,RoomLog,
+            Room, RoomCategory,RoomLog, DefaultEquipment,
             eventBus: this.eventBus
         });
 
