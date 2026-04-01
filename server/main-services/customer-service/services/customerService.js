@@ -339,6 +339,17 @@ export class CustomerService {
             .select("-created_at -updated_at -__v -createdAt -updatedAt");
     }
 
+    async findCustomerById (customerId) {
+        const customer = await this.Customer.findById(customerId)
+            .select("-__v -created_at -updated_at -createdAt -updatedAt");
+
+        if (!customer) {
+            throw new Error("Không tìm thấy khách hàng.");
+        }
+
+        return customer;
+    };
+
     async createCustomer(userId, customer) {
         //console.log("USERID IN CUSTOMERSERVICE: ", userId);
         //console.log("CUSTOMER IN CUSTOMERSERVICE: ", customer);

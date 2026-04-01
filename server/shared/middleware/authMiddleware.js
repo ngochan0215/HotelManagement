@@ -17,7 +17,7 @@ export const verifyToken = (req, res, next) => {
         req.user = decoded;
         next();
     } catch (err) {
-        return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn." });
+        return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn hoặc " + err.message });
     }
 };
 

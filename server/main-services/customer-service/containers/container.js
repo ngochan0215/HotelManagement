@@ -26,6 +26,7 @@ class Container {
             queueName: "customer-service-events",
             bindEvents: [
                 CUSTOMER_EVENTS.REGISTERED,
+                CUSTOMER_EVENTS.CHECK_EXISTS    
             ]
         });
 

@@ -105,6 +105,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  discount-service:
+    build: ./main-services/discount-service
+    container_name: discount-service
+    ports:
+      - "3006:3006"
+    environment:
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/discount-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -119,4 +136,5 @@ services:
       - employee-service
       - equipment-service
       - room-service
+      - discount-service
 

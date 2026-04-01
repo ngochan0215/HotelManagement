@@ -54,6 +54,14 @@ app.use(
   })
 );
 
+app.use(
+  "/discount",
+  createProxyMiddleware({
+    target: "http://discount-service:3006",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
