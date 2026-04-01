@@ -14,7 +14,8 @@ export class UserEventHandler {
             [USER_EVENTS.CHECK_EXISTED_EMAIL]: this.findUserByEmail.bind(this),
             [USER_EVENTS.UPDATE_USER]: this.updateUser.bind(this),
             [USER_EVENTS.CREATE_ACCOUNT]: this.createUserAccount.bind(this),
-            [USER_EVENTS.RESET_PASSWORD]: this.adminResetPassword.bind(this)
+            [USER_EVENTS.RESET_PASSWORD]: this.adminResetPassword.bind(this),
+            [USER_EVENTS.GET_ADMINS]: this.getAllAdmins.bind(this)
         }
     }
 
@@ -120,6 +121,32 @@ export class UserEventHandler {
             );  
         } catch (err) {
             console.log("Error in adminResetPassword:", err);
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, error: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );  
+        }
+    }
+
+    async getAllAdmins(data, msg) {
+        try {
+            console.log("Handling GET_ADMINS");
+            const admins = await this.userService.getAllUsers(data);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, admins })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            console.log("Error in getAllAdmins handler:", err);
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: false, error: err.message })),

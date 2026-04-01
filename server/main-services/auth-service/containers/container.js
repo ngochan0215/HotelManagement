@@ -39,7 +39,8 @@ class Container {
                 USER_EVENTS.CHECK_EXISTED_EMAIL,
                 USER_EVENTS.UPDATE_USER,
                 USER_EVENTS.CREATE_ACCOUNT,
-                USER_EVENTS.RESET_PASSWORD
+                USER_EVENTS.RESET_PASSWORD,
+                USER_EVENTS.GET_ADMINS
             ]
         });
 

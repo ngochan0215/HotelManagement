@@ -1,15 +1,19 @@
 import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 
 export class EquipmentInstallService {
-    constructor({ Equipment, EquipmentCategory, EquipmentLog, InstallTicket, InstallDetail, eventBus }) {
+    constructor({ Equipment, EquipmentCategory, EquipmentLog, InstallTicket, 
+        InstallDetail, eventBus, sendNotification, sendNotificationsToUsers }) {
         this.Equipment = Equipment;
         this.EquipmentCategory = EquipmentCategory;
         this.EquipmentLog = EquipmentLog;
         this.InstallTicket = InstallTicket;
         this.InstallDetail = InstallDetail;
         this.eventBus = eventBus;
+        this.sendNotification = sendNotification;
+        this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
 
     // HELPER
@@ -272,6 +276,7 @@ export class EquipmentInstallService {
                 employee = reply.employee;
             }
     
+            let targetRoom = null;
             if (room_id) {
                 const reply = await this.eventBus.request(
                     ROOM_EVENTS.CHECK_EXISTS,
@@ -279,6 +284,7 @@ export class EquipmentInstallService {
                 );
                 if (!reply.found)
                     throw new Error("Không tìm thấy phòng.");
+                targetRoom = reply.room;
             }
                 
             const sourceQuery = {
@@ -358,45 +364,46 @@ export class EquipmentInstallService {
                 handled_by: handled_by || handledByEmployee?._id || null
             });
                 
-            // Gửi thông báo
-            // try {
-            //   // Gửi thông báo cho nhân viên được gán (nếu có)
-            //   if (handledByEmployee && handledByEmployee.user_id) {
-            //     const roomText = ` phòng ${targetRoom.room_number}`;
+            // send notifications 
+            try {
+                // send noti for handled employee
+                if (handledByEmployee && handledByEmployee.user_id) {
+                    const roomText = ` phòng ${targetRoom.room_number}`;
+                    
+                    await this.sendNotification({
+                        userId: handledByEmployee.user_id,
+                        title: "Công việc lắp đặt thiết bị mới",
+                        content: `Bạn được gán phiếu lắp đặt thiết bị${roomText} #${install._id.toString().slice(-6)}`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: install._id,
+                    });
+                }
+        
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
                 
-            //     await pushNotificationToUsers(
-            //       [handledByEmployee.user_id],
-            //       "Công việc mới được gán",
-            //       `Bạn được gán phiếu lắp đặt thiết bị${roomText} #${install._id.toString().slice(-6)}`,
-            //       "equipment",
-            //       "EquipmentInstall",
-            //       install._id,
-            //       "unread"
-            //     );
-            //   }
-    
-            //   // Gửi thông báo cho admin về phiếu lắp đặt mới
-            //   const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            //   }).select("_id");
-            //   const adminUserIds = adminUsers.map(u => u._id);
-              
-            //   if (adminUserIds.length > 0) {
-            //     await pushNotificationToUsers(
-            //       adminUserIds,
-            //       "Phiếu lắp đặt mới",
-            //       `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
-            //       "system",
-            //       "EquipmentInstall",
-            //       install._id,
-            //       "unread"
-            //     );
-            //   }
-            // } catch (notifError) {
-            //   console.error("Error sending notification:", notifError);
-            //   // Không throw error để không ảnh hưởng đến response chính
-            // }
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: "Phiếu lắp đặt mới",
+                            content: `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
+
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
             
             return install;
     
@@ -426,6 +433,7 @@ export class EquipmentInstallService {
                 employee = reply.employee;
             }
 
+            let sourceRoom = null;
             if (from_room_id) {
                 const reply = await this.eventBus.request(
                     ROOM_EVENTS.CHECK_EXISTS,
@@ -433,6 +441,7 @@ export class EquipmentInstallService {
                 );
                 if (!reply.found)
                     throw new Error("Không tìm thấy phòng.");
+                sourceRoom = reply.room;
             }
             
             const sourceQuery = {
@@ -503,43 +512,46 @@ export class EquipmentInstallService {
                 note: "Đang làm thủ tục tháo dỡ thiết bị về kho",
                 handled_by: handled_by || handledByEmployee?._id || null
             });
+
+            try {
+                // send noti for handled employee
+                if (handledByEmployee && handledByEmployee.user_id) {
+                    const roomText = ` phòng ${sourceRoom.room_number}`;
+                    
+                    await this.sendNotification({
+                        userId: handledByEmployee.user_id,
+                        title: "Công việc tháo dỡ thiết bị mới",
+                        content: `Bạn được gán phiếu tháo dỡ thiết bị${roomText} #${install._id.toString().slice(-6)}`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: install._id,
+                    });
+                }
+        
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
                 
-            // Gửi thông báo
-            // try {
-            //   if (handledByEmployee && handledByEmployee.user_id) {
-            //     const roomText = `Phòng ${sourceRoom.room_number}`;
-                
-            //     await pushNotificationToUsers(
-            //       [handledByEmployee.user_id],
-            //       "Công việc mới được gán",
-            //       `Bạn được gán phiếu tháo dỡ thiết bị${roomText} #${install._id.toString().slice(-6)}`,
-            //       "equipment",
-            //       "EquipmentInstall",
-            //       install._id,
-            //       "unread"
-            //     );
-            //   }
-    
-            //   const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            //   }).select("_id");
-            //   const adminUserIds = adminUsers.map(u => u._id);
-              
-            //   if (adminUserIds.length > 0) {
-            //     await pushNotificationToUsers(
-            //       adminUserIds,
-            //       "Phiếu tháo dỡ mới",
-            //       `Có phiếu tháo dỡ thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
-            //       "system",
-            //       "EquipmentInstall",
-            //       install._id,
-            //       "unread"
-            //     );
-            //   }
-            // } catch (notifError) {
-            //   console.error("Error sending notification:", notifError);
-            // }
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: "Phiếu tháo dỡ thiết bị mới",
+                            content: `Có phiếu tháo dỡ thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
+
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
             
             return install;
     
@@ -958,31 +970,44 @@ export class EquipmentInstallService {
                 });
             }
 
-            // try {
-            //     if (handled_by !== undefined && install_ticket.handled_by) {
-            //         const updatedTicket = await EquipmentInstall.findById(install_ticket._id)
-            //             .populate("room_id", "room_number")
-            //             .populate("handled_by", "user_id full_name");
+            try {
+                if (handled_by !== undefined && install_ticket.handled_by) {
+                    const updatedTicket = await this.InstallTicket.findById(install_ticket._id)
 
-            //         const userId = updatedTicket.handled_by?.user_id;
-            //         if (userId) {
-            //             const roomText = updatedTicket.room_id ? ` phòng ${updatedTicket.room_id.room_number}` : "";
-            //             const typeText = install_ticket.type === "uninstall" ? "tháo dỡ" : "lắp đặt";
+                    const replyRoom = await this.eventBus.request(  
+                        ROOM_EVENTS.CHECK_EXISTS,
+                        { room_id: updatedTicket.room_id }
+                    );
+                    if (!replyRoom.found) {
+                        throw new Error("Không tìm thấy phòng.");
+                    }
 
-            //             await pushNotificationToUsers(
-            //                 [userId],
-            //                 "Công việc mới được gán",
-            //                 `Bạn được gán phiếu ${typeText} thiết bị${roomText} #${install_ticket._id.toString().slice(-6)}`,
-            //                 "equipment",
-            //                 "EquipmentInstall",
-            //                 install_ticket._id,
-            //                 "unread"
-            //             );
-            //         }
-            //     }
-            // } catch (notifError) {
-            //     console.error("Error sending notification:", notifError);
-            // }
+                    const replyEmployee = await this.eventBus.request(
+                        EMPLOYEE_EVENTS.CHECK_EXISTS,
+                        { employee_id: updatedTicket.handled_by }
+                    );
+                    if (!replyEmployee.found) {
+                        throw new Error("Không tìm thấy nhân viên.");
+                    }
+
+                    const userId = replyEmployee.employee.user_id;
+                    if (userId) {
+                        const roomText = updatedTicket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                        const typeText = install_ticket.type === "uninstall" ? "tháo dỡ" : "lắp đặt";
+
+                        await sendNotificationToUsers({
+                            userId: userId,
+                            title: "Công việc mới được gán",
+                            content: `Bạn được gán phiếu ${typeText} thiết bị${roomText} #${install_ticket._id.toString().slice(-6)}`,
+                            type: "equipment",
+                            kind: "InstallTicket",
+                            refId: install_ticket._id
+                        });
+                    }
+                }
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
 
             return { data: {
                 install_ticket,
@@ -1002,9 +1027,24 @@ export class EquipmentInstallService {
             }
         
             const installTicket = await this.InstallTicket.findById(ticketId).lean();
-        
             if (!installTicket) {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
+            }
+
+            const replyRoom = await this.eventBus.request(  
+                ROOM_EVENTS.CHECK_EXISTS,
+                { room_id: installTicket.room_id }
+            );
+            if (!replyRoom.found) {
+                throw new Error("Không tìm thấy phòng.");
+            }
+
+            const replyEmployee = await this.eventBus.request(
+                EMPLOYEE_EVENTS.CHECK_EXISTS,
+                { employee_id: installTicket.handled_by }
+            );
+            if (!replyEmployee.found) {
+                throw new Error("Không tìm thấy nhân viên.");
             }
         
             if (!["pending", "assigned", "waiting_confirm"].includes(installTicket.status)) {
@@ -1033,12 +1073,10 @@ export class EquipmentInstallService {
             // }
         
             const equipmentIds = details.map(d => d.equipment_id);
-        
             await this.InstallDetail.deleteMany({ ticket_id: ticketId });
         
             if (equipmentIds.length > 0) {
                 const now = new Date();
-
                 await this.EquipmentLog.updateMany(
                     {
                         equipment_id: { $in: equipmentIds },
@@ -1096,49 +1134,48 @@ export class EquipmentInstallService {
         
             await this.InstallTicket.deleteOne({ _id: ticketId });
         
-            const roomText = installTicket.room_id ? ` phòng ${installTicket.room_id.room_number}` : "";
+            const roomText = installTicket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
             const typeText = installTicket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-            //const ticketId = installTicket._id.toString().slice(-6);
-            const technicianName = installTicket.handled_by?.full_name || null;
-            const technicianUserId = installTicket.handled_by?.user_id || null;
+            const shortTicketId = installTicket._id.toString().slice(-6);
+            const technicianName = replyEmployee.employee.full_name || null;
+            const technicianUserId = replyEmployee.employee.user_id || null;
                 
-            // // Gửi thông báo cho admin và nhân viên (nếu đã gán) sau khi commit transaction
-            // try {
-            // // Gửi thông báo cho nhân viên được gán (nếu có)
-            // if (technicianUserId) {
-            //     await pushNotificationToUsers(
-            //     [technicianUserId],
-            //     "Phiếu đã bị hủy",
-            //     `Phiếu ${typeText} thiết bị${roomText} #${ticketId} đã bị hủy.`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     installTicket._id,
-            //     "unread"
-            //     );
-            // }
-        
-            // // Gửi thông báo cho admin
-            // const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            // }).select("_id");
-            // const adminUserIds = adminUsers.map(u => u._id);
+            try {
+                if (technicianUserId) {
+                    await this.sendNotification({
+                        userId: technicianUserId,
+                        title: `Phiếu ${typeText} thiết bị đã bị hủy`,
+                        content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy.`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: installTicket._id
+                    });
+                }
+
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
+                
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: `Phiếu ${typeText} thiết bị đã bị hủy`,
+                            content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy${technicianName ? ` (đã gán cho ${technicianName})` : ''}.`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
             
-            // if (adminUserIds.length > 0) {
-            //     await pushNotificationToUsers(
-            //     adminUserIds,
-            //     "Phiếu đã bị hủy",
-            //     `Phiếu ${typeText} thiết bị${roomText} #${ticketId} đã bị hủy${technicianName ? ` (đã gán cho ${technicianName})` : ''}.`,
-            //     "system",
-            //     "EquipmentInstall",
-            //     installTicket._id,
-            //     "unread"
-            //     );
-            // }
-            // } catch (notifError) {
-            // console.error("Error sending notification:", notifError);
-            // // Không throw error để không ảnh hưởng đến response chính
-            // }
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
         
             return { success: true };
         
@@ -1165,14 +1202,14 @@ export class EquipmentInstallService {
                 throw new Error("Nhân viên chưa hoàn thành công việc. Không thể xác nhận.");
             }
         
-            // const today = new Date();
-            // today.setHours(0, 0, 0, 0);
-            // const installDate = new Date(ticket.install_date);
-            // installDate.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const installDate = new Date(ticket.install_date);
+            installDate.setHours(0, 0, 0, 0);
         
-            // if (installDate > today) {
-            //     throw new Error("Chưa đến ngày thực hiện, không thể xác nhận.");
-            // }
+            if (installDate > today) {
+                throw new Error("Chưa đến ngày thực hiện, không thể xác nhận.");
+            }
         
             const details = await this.InstallDetail.find({ ticket_id: ticketId });
             const equipmentIds = details.map(d => d.equipment_id);
@@ -1293,54 +1330,63 @@ export class EquipmentInstallService {
         
             ticket.status = "completed";
             await ticket.save();
-                
-            // Gửi thông báo cho nhân viên được gán và admin sau khi commit transaction
-            // try {
-            // // Populate để lấy thông tin phòng và nhân viên
-            // const populatedTicket = await EquipmentInstall.findById(ticket._id)
-            //     .populate("room_id", "room_number")
-            //     .populate("handled_by", "user_id full_name")
-            //     .populate("employee_id", "full_name");
-        
-            // const roomText = populatedTicket.room_id ? ` phòng ${populatedTicket.room_id.room_number}` : "";
-            // const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-        
-            // // Gửi thông báo cho nhân viên được gán
-            // if (populatedTicket.handled_by && populatedTicket.handled_by.user_id) {
-            //     await pushNotificationToUsers(
-            //     [populatedTicket.handled_by.user_id],
-            //     "Công việc đã được xác nhận",
-            //     `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     ticket._id,
-            //     "unread"
-            //     );
-            // }
-        
-            // // Gửi thông báo cho admin (thông báo xác nhận thành công)
-            // const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            // }).select("_id");
-            // const adminUserIds = adminUsers.map(u => u._id);
             
-            // if (adminUserIds.length > 0) {
-            //     const technicianName = populatedTicket.handled_by?.full_name || "Nhân viên";
-            //     await pushNotificationToUsers(
-            //     adminUserIds,
-            //     "Đã xác nhận công việc",
-            //     `Đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} của ${technicianName}.`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     ticket._id,
-            //     "unread"
-            //     );
-            // }
-            // } catch (notifError) {
-            // console.error("Error sending notification:", notifError);
-            // // Không throw error để không ảnh hưởng đến response chính
-            // }
+            // send notifications
+            try {
+                const replyRoom = await this.eventBus.request(  
+                    ROOM_EVENTS.CHECK_EXISTS,
+                    { room_id: ticket.room_id }
+                );
+                if (!replyRoom.found) {
+                    throw new Error("Không tìm thấy phòng.");
+                }
+
+                const replyEmployee = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS,
+                    { employee_id: ticket.handled_by }
+                );
+                if (!replyEmployee.found) {
+                    throw new Error("Không tìm thấy nhân viên.");
+                }
+            
+                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
+                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+
+                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                    await this.sendNotification({
+                        userId: replyEmployee.employee.user_id,
+                        title: "Công việc đã được xác nhận",
+                        content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
+                }
+
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
+                
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: "Đã xác nhận công việc",
+                            content: `Đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} của ${technicianName}.`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
 
             return { install_id: ticket._id, equipment_count: equipmentIds.length };
         
@@ -1394,54 +1440,63 @@ export class EquipmentInstallService {
             ticket.status = "waiting_confirm";
             ticket.started_at = new Date();
             await ticket.save();
-        
-            // Gửi thông báo cho admin và nhân viên được gán
-            // try {
-            // // Populate để lấy thông tin phòng và nhân viên
-            // const populatedTicket = await EquipmentInstall.findById(ticket._id)
-            //     .populate("room_id", "room_number")
-            //     .populate("handled_by", "user_id full_name")
-            //     .populate("employee_id", "full_name");
-        
-            // const roomText = populatedTicket.room_id ? ` phòng ${populatedTicket.room_id.room_number}` : "";
-            // const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-        
-            // // Gửi thông báo cho nhân viên được gán
-            // if (populatedTicket.handled_by && populatedTicket.handled_by.user_id) {
-            //     await pushNotificationToUsers(
-            //     [populatedTicket.handled_by.user_id],
-            //     "Đã bắt đầu công việc",
-            //     `Bạn đã bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     ticket._id,
-            //     "unread"
-            //     );
-            // }
-        
-            // // Gửi thông báo cho admin
-            // const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            // }).select("_id");
-            // const adminUserIds = adminUsers.map(u => u._id);
+
+            // send notifications
+            try {
+                const replyRoom = await this.eventBus.request(  
+                    ROOM_EVENTS.CHECK_EXISTS,
+                    { room_id: ticket.room_id }
+                );
+                if (!replyRoom.found) {
+                    throw new Error("Không tìm thấy phòng.");
+                }
+
+                const replyEmployee = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS,
+                    { employee_id: ticket.handled_by }
+                );
+                if (!replyEmployee.found) {
+                    throw new Error("Không tìm thấy nhân viên.");
+                }
             
-            // if (adminUserIds.length > 0) {
-            //     const technicianName = populatedTicket.handled_by?.full_name || "Nhân viên";
-            //     await pushNotificationToUsers(
-            //     adminUserIds,
-            //     "Nhân viên bắt đầu công việc",
-            //     `${technicianName} đã bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     ticket._id,
-            //     "unread"
-            //     );
-            // }
-            // } catch (notifError) {
-            // console.error("Error sending notification:", notifError);
-            // // Không throw error để không ảnh hưởng đến response chính
-            // }
+                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
+                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+
+                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                    await this.sendNotification({
+                        userId: replyEmployee.employee.user_id,
+                        title: "Đã xác nhận bắt đầu công việc",
+                        content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
+                }
+
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
+                
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: "Nhân viên đã bắt đầu công việc",
+                            content: `${technicianName} đã xác nhận bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
         
             return { data: { install_id: ticket._id, started_at: ticket.started_at } };
 
@@ -1495,49 +1550,62 @@ export class EquipmentInstallService {
             //ticket.status = "completed";
             ticket.completed_at = new Date();
             await ticket.save();
-        
-            // // Gửi thông báo cho nhân viên được gán và admin
-            // try {
-            // const roomText = ticket.room_id ? ` phòng ${ticket.room_id.room_number}` : "";
-            // const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-        
-            // // Gửi thông báo cho nhân viên được gán
-            // if (ticket.handled_by) {
-            //     const technician = await Employee.findById(ticket.handled_by).populate("user_id", "_id");
-            //     if (technician && technician.user_id) {
-            //     await pushNotificationToUsers(
-            //         [technician.user_id._id],
-            //         "Công việc đã hoàn thành",
-            //         `Bạn đã hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Đang chờ admin xác nhận.`,
-            //         "equipment",
-            //         "EquipmentInstall",
-            //         ticket._id,
-            //         "unread"
-            //     );
-            //     }
-            // }
-        
-            // // Gửi thông báo cho admin
-            // const adminUsers = await User.find({ 
-            //     isBanned: { $ne: true },
-            //     system_role: "manager"
-            // }).select("_id");
-            // const adminUserIds = adminUsers.map(u => u._id);
+
+            try {
+                const replyRoom = await this.eventBus.request(  
+                    ROOM_EVENTS.CHECK_EXISTS,
+                    { room_id: ticket.room_id }
+                );
+                if (!replyRoom.found) {
+                    throw new Error("Không tìm thấy phòng.");
+                }
+
+                const replyEmployee = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS,
+                    { employee_id: ticket.handled_by }
+                );
+                if (!replyEmployee.found) {
+                    throw new Error("Không tìm thấy nhân viên.");
+                }
             
-            // if (adminUserIds.length > 0) {
-            //     await pushNotificationToUsers(
-            //     adminUserIds,
-            //     "Công việc hoàn thành",
-            //     `Nhân viên ${employee.full_name} đã hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Vui lòng xác nhận.`,
-            //     "equipment",
-            //     "EquipmentInstall",
-            //     ticket._id,
-            //     "unread"
-            //     );
-            // }
-            // } catch (notifError) {
-            // console.error("Error sending notification:", notifError);
-            // }
+                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
+                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+
+                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                    await this.sendNotification({
+                        userId: replyEmployee.employee.user_id,
+                        title: "Đã xác nhận hoàn thành công việc",
+                        content: `Bạn đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Đang chờ admin xác nhận.`,
+                        type: "equipment",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
+                }
+
+                // send noti for admin
+                const replyAdmin = await this.eventBus.request(
+                    USER_EVENTS.GET_ADMINS,
+                    { system_role: "manager" }
+                );
+                if (replyAdmin.success) {
+                    const adminUsers = replyAdmin.admins;
+                    const adminUserIds = adminUsers.map(u => u._id);
+                
+                    if (adminUserIds.length > 0) {
+                        await this.sendNotificationsToUsers({
+                            userIds: adminUserIds,
+                            title: "Nhân viên đã xác nhận hoàn thành công việc",
+                            content: `${technicianName} đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Vui lòng xác nhận`,
+                            type: "system",
+                            kind: "InstallTicket",
+                            refId: install._id
+                        });
+                    }
+                }
+            } catch (notifError) {
+                console.error("Error sending notification:", notifError);
+            }
 
             return { data: 
                 {

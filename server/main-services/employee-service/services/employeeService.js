@@ -343,11 +343,12 @@ export class EmployeeService {
 
     checkIfTechnicianIsAvailable = async (employeeId) => {
         try {
-            return await this.Employee.findOne({
+            const technicians =  await this.Employee.findOne({
                 _id: employeeId,
                 position: "technician",
                 status: "working"
             });
+            return technicians;
         } catch (error) {
             console.log("Error in checking if technician is available: ", error.message);
             throw error;

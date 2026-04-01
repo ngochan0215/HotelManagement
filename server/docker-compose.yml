@@ -122,6 +122,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  notification-service:
+    build: ./main-services/notification-service
+    container_name: notification-service
+    ports:
+      - "3007:3007"
+    environment:
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/notification-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -137,4 +154,5 @@ services:
       - equipment-service
       - room-service
       - discount-service
+      - notification-service
 

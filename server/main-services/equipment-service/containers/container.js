@@ -6,6 +6,9 @@ import ImportDetail from "../models/ImportDetail.js";
 import InstallDetail from "../models/InstallDetail.js";
 import InstallTicket from "../models/InstallTicket.js";
 
+import { sendNotification, sendNotificationsToUsers 
+} from "../../../shared/messaging/notificationPublisher.js";
+
 import { EquipmentService } from "../services/equipmentService.js";
 import { EquipmentImportService } from "../services/equipmentImportService.js";
 import { EquipmentInstallService } from "../services/equipmentInstallService.js";
@@ -36,7 +39,8 @@ class Container {
         this.equipmentInstallService = new EquipmentInstallService({
             Equipment, EquipmentCategory, EquipmentLog,
             InstallTicket, InstallDetail,
-            eventBus: this.eventBus
+            eventBus: this.eventBus,
+            sendNotification, sendNotificationsToUsers
         });
 
         this.equipmentEventHandler = new EquipmentEventHandler(this.equipmentService, this.eventBus);

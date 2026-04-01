@@ -62,6 +62,14 @@ app.use(
   })
 );
 
+app.use(
+  "/notification",
+  createProxyMiddleware({
+    target: "http://notification-service:3007",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
