@@ -9,8 +9,12 @@ export class EquipmentEventHandler {
     handlers() {
         return {
             [EQUIPMENT_EVENTS.CHECK_EXISTS]: this.checkExists.bind(this),
+            [EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS]: this.checkEquipmentsExists.bind(this),
             [EQUIPMENT_EVENTS.GET_CATEGORY_INFO]: this.getEquipmentCategoryInfo.bind(this),
             [EQUIPMENT_EVENTS.GET_CATEGORIES_INFO]: this.getEquipmentCategoriesInfo.bind(this),
+            [EQUIPMENT_EVENTS.UPDATE_LOG]: this.updateEquipmentLog.bind(this),
+            [EQUIPMENT_EVENTS.CREATE_LOG]: this.createEquipmentLog.bind(this),
+
         }
     }
 
@@ -68,6 +72,134 @@ export class EquipmentEventHandler {
         }
     }
 
+    // check one equipment existence by id
     async checkExists(data, msg) {
+        try {
+            const { equipmentId } = data;
+            const equipment = await this.equipmentService.getEquipmentById(equipmentId);
+            
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!equipment, equipment })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async checkEquipmentsExists(data, msg) {
+        try {
+            const { equipmentIds } = data;
+            const equipments = await this.equipmentService.getEquipmentsByIds(equipmentIds);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!equipments, equipments })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    // update equipment log
+    async updateEquipmentLog(data, msg) {
+        try {
+            const { equipmentId, updateData } = data;
+            const equipmentLog = await this.equipmentService.updateEquipmentLog(equipmentId, updateData);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, equipmentLog })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async createEquipmentLog(data, msg) {
+        try {
+            const equipmentLog = await this.equipmentService.createEquipmentLog(data);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, equipmentLog })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async updateEquipmentInternal(data, msg) {
+        try {
+            const { equipmentId, updateData } = data;
+            const equipment = await this.equipmentService.updateEquipmentInternal(equipmentId, updateData);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, equipment })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 }

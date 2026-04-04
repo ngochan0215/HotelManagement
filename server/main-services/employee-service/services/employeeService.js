@@ -104,6 +104,12 @@ export class EmployeeService {
         return employee;
     };
 
+    async getEmployeesByUserIds (employeeUserIds) {
+        return await this.Employee.find(
+            { user_id: { $in: employeeUserIds } }
+        ).select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
+    };
+
     async getEmployeesById (employeeIds) {
         try {
             return await this.Employee.find(

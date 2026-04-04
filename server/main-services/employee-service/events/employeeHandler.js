@@ -13,6 +13,7 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.CHECK_EXISTS_USERID]: this.employeeCheckExistsByUserId.bind(this),
             [EMPLOYEE_EVENTS.GET_INFO]: this.employeeGetInfo.bind(this),
             [EMPLOYEE_EVENTS.GET_INFO_USERID]: this.employeeGetInfoByUserId.bind(this),
+            [EMPLOYEE_EVENTS.GET_INFOS_USERIDS]: this.employeeGetInfosByUserIds.bind(this),
             [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
         }
     }
@@ -107,6 +108,33 @@ export class EmployeeEventHandler {
                 persistent: false
             }
         );
+    }
+
+    // get many employees information by user_id
+    async employeeGetInfosByUserIds(data, msg) {
+        try {
+            console.log("Handling EMPLOYEE_GET_INFOS_USERIDS");
+            const { employee_user_ids } = data;
+            const employees = await this.employeeService.getEmployeesByUserIds(employee_user_ids);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!employees, employees })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, error: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     async checkTechnicianAvailable(data, msg) {

@@ -472,4 +472,116 @@ export class EquipmentService {
             throw err;
         }
     };
+
+    getEquipmentsByIds = async (equipmentIds) => {
+        try {
+            const invalidIds = equipmentIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+            if (invalidIds.length > 0)
+                throw new Error(`ID thiết bị không hợp lệ: ${invalidIds.join(", ")}`);
+
+            const equipments = await this.Equipment.find({ _id: { $in: equipmentIds } })
+                .populate("category_id", "name unit price")
+                .select("-__v -created_at -updated_at")
+                .lean();
+
+            if (!equipments.length)
+                throw new Error("Không tìm thấy thiết bị nào.");
+
+            //const results = await Promise.all(equipments.map(eq => this.populateRoom(eq)));
+
+            return equipments;
+
+        } catch (err) {
+            console.log("Error in getting equipments by ids: ", err.message);
+            throw err;
+        }
+    };
+
+    // communication
+    async updateEquipmentLog(equipmentId, updateData = {}) {
+        try {
+            const now = new Date();
+
+            const updated = await this.EquipmentLog.findOneAndUpdate(
+                { 
+                    equipment_id: equipmentId, 
+                    end_time: null 
+                },
+                { 
+                    ...updateData, 
+                    end_time: now 
+                },
+                {
+                    new: true
+                }
+            );
+
+            return updated;
+        } catch (err) {
+            console.log("Error updating equipment log:", err.message);
+            throw err;
+        }
+    }
+
+    async createEquipmentLog({ equipment_id, room_id = null, condition, status, note, handled_by }) {
+        try {
+            const now = new Date();
+
+            const log = await this.EquipmentLog.create({
+                equipment_id,
+                room_id,
+                condition,
+                status,
+                start_time: now,
+                end_time: null,
+                note: note || null,
+                handled_by,
+            });
+
+            return log;
+
+        } catch (err) {
+            console.log("Error creating equipment log:", err.message);
+            throw err;
+        }
+    }
+
+    async updateEquipmentInternal (equipmentId, updateData = {}) {
+        try {
+            const { condition, status, note, handled_by } = updateData;
+
+            if (!mongoose.Types.ObjectId.isValid(equipmentId))
+                throw new Error("ID không hợp lệ!");
+
+            const equipment = await this.Equipment.findById(equipmentId);
+            if (!equipment)
+                throw new Error("Không tìm thấy thiết bị.");
+
+            if (condition) equipment.condition = condition;
+            if (status) equipment.status = status;
+            await equipment.save();
+
+            // await this.EquipmentLog.findOneAndUpdate(
+            //     { equipment_id: equipmentId, end_time: null },
+            //     { end_time: new Date() }
+            // );
+
+            // await this.EquipmentLog.create({
+            //     equipment_id: equipmentId,
+            //     room_id: equipment.room_id || null,
+            //     condition: condition || equipment.condition,
+            //     status: status || equipment.status,
+            //     start_time: new Date(),
+            //     end_time: null,
+            //     note: note || `Cập nhật nội bộ`,
+            //     handled_by: handled_by || null,
+            // });
+
+            return equipment;
+
+        } catch (err) {
+            console.log("Error in updateEquipmentInternal:", err.message);
+            throw err;
+        }
+    };
 }

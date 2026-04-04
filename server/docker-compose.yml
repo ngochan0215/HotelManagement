@@ -139,6 +139,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  incident-service:
+    build: ./main-services/incident-service
+    container_name: incident-service
+    ports:
+      - "3008:3008"
+    environment:
+      DB_URL: ${INCIDENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/incident-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -155,4 +172,5 @@ services:
       - room-service
       - discount-service
       - notification-service
+      - incident-service
 

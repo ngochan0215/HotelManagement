@@ -70,6 +70,14 @@ app.use(
   })
 );
 
+app.use(
+  "/incident",
+  createProxyMiddleware({
+    target: "http://incident-service:3008",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

@@ -51,8 +51,12 @@ class Container {
             queueName: "equipment-service-queue",
             bindEvents: [
                 EQUIPMENT_EVENTS.CHECK_EXISTS,
+                EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS,
                 EQUIPMENT_EVENTS.GET_CATEGORY_INFO,
                 EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
+                EQUIPMENT_EVENTS.UPDATE_LOG,
+                EQUIPMENT_EVENTS.CREATE_LOG,
+                EQUIPMENT_EVENTS.UPDATE_INTERNAL
             ]
         });
 
