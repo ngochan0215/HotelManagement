@@ -156,6 +156,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  booking-service:
+    build: ./main-services/booking-service
+    container_name: booking-service
+    ports:
+      - "3009:3009"
+    environment:
+      DB_URL: ${BOOKING_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/booking-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -173,4 +190,5 @@ services:
       - discount-service
       - notification-service
       - incident-service
+      - booking-service
 

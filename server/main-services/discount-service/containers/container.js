@@ -1,9 +1,9 @@
 import Discount from "../models/Discount.js";
-
 import { DiscountService } from "../services/discountService.js";
 import { DiscountEventHandler } from "../events/discountHandler.js";
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
+import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
 
 class Container {
     constructor() {
@@ -19,11 +19,15 @@ class Container {
 
     async init() {
         await this.eventBus.connect({
+            queueName: "discount-service-events",
+            bindEvents: [
+                DISCOUNT_EVENTS.CHECK_EXISTS
+            ]
         });
 
-        // const handlers = this.customerEventHandler.handlers();
-        // const consumer = new EventConsumer(this.eventBus, handlers);
-        // await consumer.start();
+        const handlers = this.discountEventHandler.handlers();
+        const consumer = new EventConsumer(this.eventBus, handlers);
+        await consumer.start();
     }
 }
 

@@ -27,12 +27,13 @@ class Container {
             bindEvents: [
                 CUSTOMER_EVENTS.REGISTERED,
                 CUSTOMER_EVENTS.CHECK_EXISTS,  
-                CUSTOMER_EVENTS.GET_INFOS_USERIDS 
+                CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
+                CUSTOMER_EVENTS.GET_INFOS_USERIDS,
+                CUSTOMER_EVENTS.GET_INFOS_IDS
             ]
         });
 
         const handlers = this.customerEventHandler.handlers();
-
         const consumer = new EventConsumer(this.eventBus, handlers);
         await consumer.start();
     }

@@ -1206,4 +1206,97 @@ export class RoomService {
     //         throw err;
     //     }
     // };
+
+    // Update existing RoomLog entries matching a filter
+    
+    updateRoomLog = async (filter, updateData, options = {}) => {
+        try {
+            const result = await this.RoomLog.updateMany(filter, { $set: updateData }, options);
+            return result;
+        } catch (err) {
+            console.log("Error in updateRoomLog:", err);
+            throw err;
+        }
+    };
+
+    // Insert one or many RoomLog entries
+    // Pass a single object or an array of objects
+    insertRoomLog = async (data, options = {}) => {
+        try {
+            const isArray = Array.isArray(data);
+            const result = isArray
+                ? await this.RoomLog.insertMany(data, options)
+                : await this.RoomLog.create([data], options);
+            return result;
+        } catch (err) {
+            console.log("Error in insertRoomLog:", err);
+            throw err;
+        }
+    };
+
+    // Find RoomLog entries by a given condition
+    // opts: { sort, limit, select, lean }
+    findRoomLogs = async (filter = {}, opts = {}) => {
+        try {
+            const {
+                sort = { start_time: -1 },
+                limit = 0,
+                select = "-__v",
+                lean = false,
+            } = opts;
+
+            let query = this.RoomLog.find(filter).sort(sort).select(select);
+
+            if (limit > 0) query = query.limit(limit);
+            if (lean) query = query.lean();
+
+            return await query;
+        } catch (err) {
+            console.log("Error in findRoomLogs:", err);
+            throw err;
+        }
+    };
+
+    updateRoomInternal = async (filter, updateData, options = {}) => {
+        try {
+            const result = await this.Room.updateMany(filter, { $set: updateData }, options);
+            return result;
+        } catch (err) {
+            console.log("Error in updateRoomInternal:", err);
+            throw err;
+        }
+    };
+
+    // updateRoomInternal = async ({ room_id, status, start_time, end_time, note, handled_by }) => {
+    //     try {
+    //         const now = new Date();
+
+    //         const room = await this.Room.findById(room_id);
+    //         if (!room)
+    //             throw new Error(`Không tìm thấy phòng: ${room_id}`);
+
+    //         await this.updateRoomLog(
+    //             { room_id, end_time: null },
+    //             { end_time: now }
+    //         );
+
+    //         await this.insertRoomLog({
+    //             room_id,
+    //             status,
+    //             start_time: start_time ? new Date(start_time) : now,
+    //             end_time: end_time ? new Date(end_time) : null,
+    //             note: note || "",
+    //             handled_by: handled_by || null,
+    //         });
+
+    //         room.room_status = status;
+    //         await room.save();
+
+    //         return { success: true, room_id, status };
+
+    //     } catch (err) {
+    //         console.log("Error in updateRoomStatusInternal:", err);
+    //         throw err;
+    //     }
+    // };
 }

@@ -78,6 +78,14 @@ app.use(
   })
 );
 
+app.use(
+  "/booking",
+  createProxyMiddleware({
+    target: "http://booking-service:3009",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

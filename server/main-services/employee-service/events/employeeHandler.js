@@ -15,6 +15,7 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.GET_INFO_USERID]: this.employeeGetInfoByUserId.bind(this),
             [EMPLOYEE_EVENTS.GET_INFOS_USERIDS]: this.employeeGetInfosByUserIds.bind(this),
             [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
+            [EMPLOYEE_EVENTS.GET_RECEPTIONISTS]: this.getAllReceptionists.bind(this)
         }
     }
 
@@ -145,6 +146,20 @@ export class EmployeeEventHandler {
         this.eventBus.channel.sendToQueue(
             msg.properties.replyTo,
             Buffer.from(JSON.stringify({ found: !!employee, employee })),
+            {
+                correlationId: msg.properties.correlationId,
+                persistent: false
+            }
+        );
+    }
+
+    async getAllReceptionists(data, msg) {
+        console.log("Handling EMPLOYEE_GET_RECEPTIONISTS");
+        const receptionists = await this.employeeService.getAllEmployees({ position: "receptionist" });
+        
+        this.eventBus.channel.sendToQueue(
+            msg.properties.replyTo,
+            Buffer.from(JSON.stringify({ found: !!receptionists, receptionists })),
             {
                 correlationId: msg.properties.correlationId,
                 persistent: false

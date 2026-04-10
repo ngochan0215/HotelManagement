@@ -29,10 +29,15 @@ class Container {
             bindEvents: [
                 ROOM_EVENTS.CHECK_EXISTS,
                 ROOM_EVENTS.GET_ROOMS_INFO,
+                ROOM_EVENTS.UPDATE_ROOM_INFO,
+                
+                ROOM_EVENTS.FIND_ROOM_LOGS,
+                ROOM_EVENTS.UPDATE_ROOM_LOG,
+                ROOM_EVENTS.INSERT_ROOM_LOG
             ]
         });
+
         const handlers = this.roomEventHandler.handlers();
-        
         const consumer = new EventConsumer(this.eventBus, handlers);
         await consumer.start();
     }

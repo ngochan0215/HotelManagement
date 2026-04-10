@@ -339,6 +339,12 @@ export class CustomerService {
             .select("-created_at -updated_at -__v -createdAt -updatedAt");
     }
 
+    async getCustomersByIds (ids) {
+        return this.Customer.find(
+            { _id: { $in: ids } }
+        ).select("-created_at -updated_at -__v -createdAt -updatedAt");
+    }
+
     async getCustomersByUserIds (customerUserIds) {
         return await this.Customer.find(
             { user_id: { $in: customerUserIds } }

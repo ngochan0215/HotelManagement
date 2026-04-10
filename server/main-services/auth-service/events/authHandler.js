@@ -20,18 +20,29 @@ export class UserEventHandler {
     }
 
     async getUserInfo(data, msg) {
-        console.log("Handling GET_USER_INFO");
-        const { userId } = data;
-        const user = await this.userService.getUserById(userId);
-        
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ found: !!user, user })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        );
+        try {
+            console.log("Handling GET_USER_INFO");
+            const { userId } = data;
+            const user = await this.userService.getUserById(userId);
+            
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!user, user })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     async getUsersInfo(data, msg) {
