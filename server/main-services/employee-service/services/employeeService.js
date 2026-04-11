@@ -155,7 +155,7 @@ export class EmployeeService {
             if (reply.found) {
                 user = reply.user;
             } else {
-                throw new Error("Không tìm thấy user liên kết với employee.");
+                throw new Error(reply.message);
             }
 
             if (email !== user.email) {
@@ -173,7 +173,7 @@ export class EmployeeService {
                 }
             );
             if (!replyUpdate.success) {
-                throw new Error("Cập nhật email thất bại.");
+                throw new Error(reply.message);
             }
         }
 
@@ -234,7 +234,7 @@ export class EmployeeService {
                 }
             );
             if (!reply || !reply.success) {
-                throw new Error("Failed to create account for existing employee in User-Service.");
+                throw new Error(reply.message);
             }
 
             employee.user_id = reply.user._id;
@@ -270,9 +270,8 @@ export class EmployeeService {
                     newPassword: hashedPassword
                 }
             );
-            if (!reply || reply.success === false) {
-                const remoteError = reply?.error || "Unknown Error from User-Service";
-                throw new Error(`Error in reseting password for employee: ${remoteError}`);
+            if (!reply || !reply.success) {
+                throw new Error(reply.message);
             }
 
             return { success: true };
@@ -379,7 +378,7 @@ export class EmployeeService {
         );
 
         if (!reply || !reply.success) {
-            throw new Error("Failed to update user status in User-Service.");
+            throw new Error(reply.message);
         }
 
         return { success: true };
@@ -396,13 +395,13 @@ export class EmployeeService {
 
         let user_info = null;
         const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId });
-        if (reply.found) {
-            user_info = {
-                email: reply.user.email,
-                system_role: reply.user.system_role,
-                avatar: reply.user.avatar,
-                isBanned: reply.user.isBanned,
-            }
+        if(!reply.success)
+            throw new Error(reply.message);
+        user_info = {
+            email: reply.user.email,
+            system_role: reply.user.system_role,
+            avatar: reply.user.avatar,
+            isBanned: reply.user.isBanned,
         }
 
         const profile = {

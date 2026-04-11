@@ -32,14 +32,18 @@ export class CustomerService {
             }
 
             const customers = await this.Customer
-            .find(filter)
-            .select("-updated_at -created_at -__v")
-            .lean();
+                .find(filter)
+                .select("-updated_at -created_at -__v")
+                .lean();
 
             if (!customers.length) return { total: 0, customers: [] };
 
             const userIds = customers.map(c => c.user_id);
+
             const reply = await this.eventBus.request(USER_EVENTS.GET_USERS_INFO, { userIds });
+            if (!reply.success) {
+                throw new Error(reply.message);
+            }
 
             const userMap = new Map(
                 reply.users.map(u => [u._id.toString(), u])
@@ -73,8 +77,9 @@ export class CustomerService {
         }
 
         const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
-
-        if (reply.found) {  
+        if (!reply.success) {
+            throw new Error(reply.message);
+        } else {  
             customer.user = {
                 email: reply.user.email,
                 system_role: reply.user.system_role,
@@ -113,7 +118,7 @@ export class CustomerService {
                 if (reply.found) {
                     user = reply.user;
                 } else {
-                    throw new Error("Không tìm thấy user liên kết với customer.");
+                    throw new Error(reply.message);
                 }
 
                 if (email !== user.email) {
@@ -131,7 +136,7 @@ export class CustomerService {
                     }
                 );
                 if (!replyUpdate.success) {
-                    throw new Error("Cập nhật email thất bại.");
+                    throw new Error(replyUpdate.message);
                 }
             }
 
@@ -210,7 +215,7 @@ export class CustomerService {
                 }
             );
             if (!reply.success) {
-                throw new Error("Cập nhật trạng thái user thất bại.");
+                throw new Error(reply.message);
             }
 
             return { success: true };
@@ -250,7 +255,7 @@ export class CustomerService {
                 }
             );
             if (!reply.success) {
-                throw new Error("Cập nhật trạng thái user thất bại.");
+                throw new Error(reply.message);
             }
 
             return { success: true };

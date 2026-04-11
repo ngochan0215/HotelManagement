@@ -46,59 +46,91 @@ export class UserEventHandler {
     }
 
     async getUsersInfo(data, msg) {
-        console.log("Handling GET_USERS_INFO");
-        const { userIds } = data;
-        const users = await this.userService.getUsersByIds(userIds);
+        try {
+            console.log("Handling GET_USERS_INFO");
+            const { userIds } = data;
+            const users = await this.userService.getUsersByIds(userIds);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ users })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        );
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, users })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     async findUserByEmail(data, msg) {
-        console.log("Handling CHECK_EXISTED_EMAIL");
-        const { email } = data;
-        const user = await this.userService.findUserByEmail(email);
+        try {
+            console.log("Handling CHECK_EXISTED_EMAIL");
+            const { email } = data;
+            const user = await this.userService.findUserByEmail(email);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ found: !!user, user })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        );
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!user, user })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     async updateUser(data, msg) {
-        console.log("Handling UPDATE_USER");
-        const { userId, payload } = data;
-        const updatedUser = await this.userService.updateUser(userId, payload);
+        try {
+            console.log("Handling UPDATE_USER");
+            const { userId, payload } = data;
+            const updatedUser = await this.userService.updateUser(userId, payload);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ success: !!updatedUser, user: updatedUser })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        );  
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!updatedUser, user: updatedUser })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );  
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );  
+        }
     }
 
     async createUserAccount(data, msg) {
-        console.log("Handling CREATE_ACCOUNT");
-
         try {
+            console.log("Handling CREATE_ACCOUNT");
             const newUser = await this.authService.createUserAccount(data);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: !!newUser, user: newUser })),
+                Buffer.from(JSON.stringify({ success: true, found: !!newUser, user: newUser })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
@@ -107,7 +139,7 @@ export class UserEventHandler {
         } catch (err) {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: false, error: err.message })),
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
@@ -117,9 +149,8 @@ export class UserEventHandler {
     }
 
     async adminResetPassword(data, msg) {
-        console.log("Handling ADMIN_RESET_PASSWORD");
         try {
-            console.log("Data received for adminResetPassword:", data);
+            console.log("Handling ADMIN_RESET_PASSWORD");
             const success = await this.authService.adminResetPassword(data);
 
             this.eventBus.channel.sendToQueue(
@@ -131,10 +162,9 @@ export class UserEventHandler {
                 }
             );  
         } catch (err) {
-            console.log("Error in adminResetPassword:", err);
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: false, error: err.message })),
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
@@ -160,7 +190,7 @@ export class UserEventHandler {
             console.log("Error in getAllAdmins handler:", err);
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: false, error: err.message })),
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

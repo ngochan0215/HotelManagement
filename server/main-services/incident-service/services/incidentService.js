@@ -15,6 +15,182 @@ export class IncidentService {
         this.eventBus = eventBus;
     }
 
+    // helper
+
+    getEmployeeByUserId = async (employeeUserId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+            { employee_user_id: employeeUserId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy nhân viên.");
+        
+        return reply.employee;
+    };
+ 
+    getEmployeeById = async (employeeId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_EXISTS,
+            { employee_id: employeeId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy nhân viên.");
+        
+        return reply.employee;
+    };
+
+    getUserById = async (userId) => {
+        const replyUser = await this.eventBus.request(
+            USER_EVENTS.GET_USER_INFO,
+            { userId }
+        );
+        if (!replyUser.success) 
+            throw new Error(replyUser.message || "Không tìm thấy người dùng.");
+        
+        return replyUser.user;
+    };
+
+    populateReporterAndCauser = async (incidents) => {
+        const isArray = Array.isArray(incidents);
+        const list = isArray ? incidents : [incidents];
+
+        const allUserIds = [...new Set(
+            list.flatMap(i => [
+                i.reporter_id?.toString(),
+                i.causer_id?.toString()
+            ]).filter(Boolean)
+        )];
+
+        if (allUserIds.length === 0)
+            return isArray ? list : list[0];
+
+        const replyUsers = await this.eventBus.request(
+            USER_EVENTS.GET_USERS_INFO,
+            { userIds: allUserIds }
+        );
+
+        const roleMap = {};
+        for (const user of replyUsers.users) {
+            roleMap[user._id.toString()] = user.system_role;
+        }
+
+        const employeeIds = allUserIds.filter(id => ["employee", "manager"].includes(roleMap[id]));
+        const customerIds = allUserIds.filter(id => roleMap[id] === "customer");
+
+        const [employeeMap, customerMap] = await Promise.all([
+            // Employee
+            (async () => {
+                const map = {};
+                if (employeeIds.length === 0) return map;
+                const reply = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
+                    { employee_user_ids: employeeIds }
+                );
+                if (!reply.success) 
+                    throw new Error(reply.message);
+
+                for (const emp of reply.employees) {
+                    const key = emp.user_id?.toString();
+                    map[key] = {
+                        full_name: emp.full_name, 
+                        phone_number: emp.phone_number
+                    };
+                }
+                return map;
+            })(),
+
+            // Customer
+            (async () => {
+                const map = {};
+                if (customerIds.length === 0) return map;
+                const reply = await this.eventBus.request(
+                    CUSTOMER_EVENTS.GET_INFOS_USERIDS,
+                    { customerUserIds: customerIds }
+                );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
+                for (const cus of reply.customers) {
+                    const key = cus.user_id?.toString();
+                    map[key] = {
+                        full_name: cus.full_name,
+                        phone_number: cus.phone_number
+                    };
+                }
+                return map;
+            })(),
+        ]);
+
+        // console.log("employeeMap keys:", Object.keys(employeeMap));
+        // console.log("customerMap keys:", Object.keys(customerMap));
+
+        const getProfile = (userId) => {
+            if (!userId) 
+                return null;
+
+            const id = userId.toString();
+            const role = roleMap[id];
+
+            if (role === "employee" || role === "manager") {
+                return { ...employeeMap[id], system_role: role } || null;
+            }
+            if (role === "customer") {
+                return { ...customerMap[id], system_role: role } || null;
+            }
+
+            return null;
+        };
+
+        const results = list.map(incident => ({
+            ...incident,
+            reporter_info: getProfile(incident.reporter_id),
+            causer_info: getProfile(incident.causer_id),
+        }));
+
+        return isArray ? results : results[0];
+    };
+
+    populateRoom = async (incidents) => {
+        const isArray = Array.isArray(incidents);
+        const list = isArray ? incidents : [incidents];
+
+        const roomIds = [...new Set(
+            list
+                .map(e => e.room_id?.toString())
+                .filter(Boolean)
+        )];
+
+        let roomMap = {};
+
+        if (roomIds.length > 0) {
+            const reply = await this.eventBus.request(
+                ROOM_EVENTS.GET_ROOMS_INFO,
+                { room_ids: roomIds }
+            );
+            if (!reply.success)
+                throw new Error(reply.message);
+
+            for (const room of reply.rooms) {
+                roomMap[room._id.toString()] = {
+                    _id: room._id,
+                    room_number: room.room_number,
+                    room_status: room.room_status
+                }
+            }
+        }
+
+        const results = list.map(incident => ({
+            ...incident,
+            room_info: roomMap[incident.room_id?.toString()] || null
+        }));
+
+        return isArray ? results : results[0];
+    };
+
+    // main business logic
+
     async createIncident(reporterId, data) {
         try {
             const { room_id, booking_id, causer_id, caused_by, description, 
@@ -30,7 +206,8 @@ export class IncidentService {
                     ROOM_EVENTS.CHECK_EXISTS,
                     { room_id }
                 );
-                if (!reply.found) throw new Error("Phòng không tồn tại.");
+                if (!reply.success) 
+                    throw new Error(reply.message || "Phòng không tồn tại.");
             }
 
             if (equipment_ids && Array.isArray(equipment_ids) && equipment_ids.length > 0) {
@@ -39,8 +216,8 @@ export class IncidentService {
                     { equipmentIds: equipment_ids }
                 );
 
-                if (!reply.found) {
-                    throw new Error("Thiết bị bị sự cố không hợp lệ.");
+                if (!reply.success) {
+                    throw new Error(reply.message || "Thiết bị bị sự cố không hợp lệ.");
                 }
             }
 
@@ -82,13 +259,7 @@ export class IncidentService {
             if (incident.status === "closed") 
                 throw new Error("Không thể cập nhật sự cố đã đóng.");
 
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: actorId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thực hiện không tồn tại.");
-            const actor = replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(actorId);
 
             if (updates.processing_note !== undefined) {
                 incident.processing_note = updates.processing_note;
@@ -106,15 +277,7 @@ export class IncidentService {
             // Cho phép update status và assignee khi không phải "new"
             if (updates.status) incident.status = updates.status;
                 if (updates.assignee && updates.department) {
-
-                    const replyEmployee = await this.eventBus.request(
-                        EMPLOYEE_EVENTS.CHECK_EXISTS,
-                        { employee_id: updates.assignee }
-                    );
-                    if (!replyEmployee.found)
-                        throw new Error("Error in checking employee exists in updateIncident");
-
-                    const assignee = replyEmployee.employee;
+                    const assignee = await this.getEmployeeById(updates.assignee);
                     if (assignee) {
                         incident.assignee_info = {
                             assignee_id: assignee._id,
@@ -161,24 +324,10 @@ export class IncidentService {
                 throw new Error("Không thể phân công sự cố đã xử lý xong");
             }
 
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS,
-                { employee_id: assigneeId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Không tìm thấy nhân viên được gán.");
-            const assignee = replyEmployee.employee;
-
-            const _replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: actorId }
-            );
-            if (!_replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = _replyEmployee.employee;
+            const assignee = await this.getEmployeeById(assigneeId);
+            const actor = await this.getEmployeeByUserId(actorId);
 
             const prevStatus = incident.status;
-
             incident.assignee_info = {
                 assignee_id: assignee._id, 
                 assignee_name: assignee.full_name, 
@@ -213,21 +362,9 @@ export class IncidentService {
     async resolveIncident(userId, incidentId, data) {
         try {
             const { note } = data;
-            const replyUser = await this.eventBus.request(
-                USER_EVENTS.GET_USER_INFO,
-                { userId }
-            );
-            if (!replyUser.found) 
-                throw new Error("Không tìm thấy người dùng.");
-            const user = replyUser.user;
+            const user = await this.getUserById(userId);
 
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(userId);
 
             if (!note) throw new Error("Thiếu ghi chú xử lý.");
 
@@ -275,14 +412,7 @@ export class IncidentService {
     async closedIncident(userId, incidentId, data) {
         try {
             const { note } = data;
-
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(userId);
 
             if (!note) throw new Error("Thiếu ghi chú xử lý.");
 
@@ -331,21 +461,8 @@ export class IncidentService {
         try {
             const { status, severity, compensation_status, room_id, type, caused_by } = query;
             
-            const replyUser = await this.eventBus.request(
-                USER_EVENTS.GET_USER_INFO,
-                { userId }
-            );
-            if (!replyUser.found) 
-                throw new Error("Không tìm thấy người dùng.");
-            const user = replyUser.user;
-
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const employee = replyEmployee.employee;
+            const user = await this.getUserById(userId);
+            const employee = await this.getEmployeeByUserId(userId);
 
             const filter = {};
             if (user.system_role !== 'manager' && user.system_role !== 'admin') {
@@ -446,135 +563,5 @@ export class IncidentService {
             console.log("Error in deleting incident: ", error.message);
             throw error;
         }
-    };
-
-    // helper
-    populateReporterAndCauser = async (incidents) => {
-        const isArray = Array.isArray(incidents);
-        const list = isArray ? incidents : [incidents];
-
-        const allUserIds = [...new Set(
-            list.flatMap(i => [
-                i.reporter_id?.toString(),
-                i.causer_id?.toString()
-            ]).filter(Boolean)
-        )];
-
-        if (allUserIds.length === 0)
-            return isArray ? list : list[0];
-
-        const replyUsers = await this.eventBus.request(
-            USER_EVENTS.GET_USERS_INFO,
-            { userIds: allUserIds }
-        );
-
-        const roleMap = {};
-        for (const user of replyUsers.users) {
-            roleMap[user._id.toString()] = user.system_role;
-        }
-
-        const employeeIds = allUserIds.filter(id => ["employee", "manager"].includes(roleMap[id]));
-        const customerIds = allUserIds.filter(id => roleMap[id] === "customer");
-
-        const [employeeMap, customerMap] = await Promise.all([
-            // Employee
-            (async () => {
-                const map = {};
-                if (employeeIds.length === 0) return map;
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
-                    { employee_user_ids: employeeIds }
-                );
-                for (const emp of reply.employees) {
-                    const key = emp.user_id?.toString();
-                    map[key] = {
-                        full_name: emp.full_name, 
-                        phone_number: emp.phone_number
-                    };
-                }
-                return map;
-            })(),
-
-            // Customer
-            (async () => {
-                const map = {};
-                if (customerIds.length === 0) return map;
-                const reply = await this.eventBus.request(
-                    CUSTOMER_EVENTS.GET_INFOS_USERIDS,
-                    { customerUserIds: customerIds }
-                );
-                for (const cus of reply.customers) {
-                    const key = cus.user_id?.toString();
-                    map[key] = {
-                        full_name: cus.full_name,
-                        phone_number: cus.phone_number
-                    };
-                }
-                return map;
-            })(),
-        ]);
-
-        // console.log("employeeMap keys:", Object.keys(employeeMap));
-        // console.log("customerMap keys:", Object.keys(customerMap));
-
-        const getProfile = (userId) => {
-            if (!userId) 
-                return null;
-
-            const id = userId.toString();
-            const role = roleMap[id];
-
-            if (role === "employee" || role === "manager") {
-                return { ...employeeMap[id], system_role: role } || null;
-            }
-            if (role === "customer") {
-                return { ...customerMap[id], system_role: role } || null;
-            }
-
-            return null;
-        };
-
-        const results = list.map(incident => ({
-            ...incident,
-            reporter_info: getProfile(incident.reporter_id),
-            causer_info: getProfile(incident.causer_id),
-        }));
-
-        return isArray ? results : results[0];
-    };
-
-    populateRoom = async (incidents) => {
-        const isArray = Array.isArray(incidents);
-        const list = isArray ? incidents : [incidents];
-
-        const roomIds = [...new Set(
-            list
-                .map(e => e.room_id?.toString())
-                .filter(Boolean)
-        )];
-
-        let roomMap = {};
-
-        if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
-                ROOM_EVENTS.GET_ROOMS_INFO,
-                { room_ids: roomIds }
-            );
-
-            for (const room of reply.rooms) {
-                roomMap[room._id.toString()] = {
-                    _id: room._id,
-                    room_number: room.room_number,
-                    room_status: room.room_status
-                }
-            }
-        }
-
-        const results = list.map(incident => ({
-            ...incident,
-            room_info: roomMap[incident.room_id?.toString()] || null
-        }));
-
-        return isArray ? results : results[0];
     };
 }

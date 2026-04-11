@@ -251,6 +251,8 @@ export class EquipmentService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
+            if(!reply.success)
+                throw new Error(reply.message);
 
             for (const room of reply.rooms) {
                 roomMap[room._id.toString()] = {

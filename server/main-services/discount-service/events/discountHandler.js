@@ -14,17 +14,28 @@ export class DiscountEventHandler {
 
     // get discount info (check exists) by discount_id
     async getDiscountById(data, msg) {
-        console.log("Handling DISCOUNT_CHECK_EXISTS");
-        const { discountId } = data;
-        const discount = await this.discountService.getDiscountById(discountId);
+        try {
+            console.log("Handling DISCOUNT_CHECK_EXISTS");
+            const { discountId } = data;
+            const discount = await this.discountService.getDiscountById(discountId);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ found: !!discount, discount })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        )
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!discount, discount })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        }
     }
 };

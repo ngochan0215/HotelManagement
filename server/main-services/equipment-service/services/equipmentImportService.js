@@ -76,8 +76,8 @@ export class EquipmentImportService {
                     { employee_user_id: employeeUserId }
                 );
 
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
+                if (!reply.success)
+                    throw new Error(reply.message || "Không tìm thấy nhân viên.");
 
                 employee = reply.employee;
             }
@@ -132,8 +132,8 @@ export class EquipmentImportService {
                     { employee_id }
                 );
 
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
+                if (!reply.success)
+                    throw new Error(reply.message || "Không tìm thấy nhân viên.");
 
                 filter.employee_id = employee_id;
             }
@@ -164,6 +164,9 @@ export class EquipmentImportService {
                     EMPLOYEE_EVENTS.GET_INFO,
                     { employee_ids: employeeIds }
                 );
+                if (!reply.success) 
+                    throw new Error(reply.message);
+
                 for (const emp of reply.employees) {
                     employeeMap[emp._id.toString()] = emp;
                 }
@@ -407,9 +410,8 @@ export class EquipmentImportService {
                     EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                     { employee_user_id: employeeUserId }
                 );
-
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
+                if (!reply.success)
+                    throw new Error(reply.message || "Không tìm thấy nhân viên.");
             
                 employee = reply.employee;
             }

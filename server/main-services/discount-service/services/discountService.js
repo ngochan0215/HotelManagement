@@ -305,7 +305,7 @@ export class DiscountService {
                 { customerId }
             );
             if (!reply.success) {
-                throw new Error("Không tìm thấy thông tin khách hàng");
+                throw new Error(reply.message);
             }
 
             const customer = reply.customer;

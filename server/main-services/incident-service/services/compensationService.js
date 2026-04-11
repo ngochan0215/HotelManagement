@@ -15,17 +15,39 @@ export class CompensateService {
         this.eventBus = eventBus;
     }
 
+    // helper
+
+    getEmployeeByUserId = async (employeeUserId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+            { employee_user_id: employeeUserId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy nhân viên.");
+        
+        return reply.employee;
+    };
+
+    getEquipmentById = async (equipmentId) => {
+        const reply = await this.eventBus.request(
+            EQUIPMENT_EVENTS.CHECK_EXISTS,
+            { equipmentId }
+        );
+
+        if (!reply.success) 
+            throw new Error(reply.message || "Không tìm thấy thiết bị.");
+        
+        return reply.equipment;
+    };
+
+    // main business logic
+
     async createCompensateTicket (userId, incidentId, data) {
         try {
             const { payer_type, payer_id, compensation_details, note } = data;
             
-            const _replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!_replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = _replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(userId);
         
             if ( !payer_type || !compensation_details ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin (người bồi thường, chi tiết đền bù).");
@@ -117,13 +139,7 @@ export class CompensateService {
         try {
             const { payer_type, payer_id, total_fee, note } = data;
 
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(userId);
     
             if ( !payer_type || !total_fee ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin.");
@@ -398,14 +414,7 @@ export class CompensateService {
     
     async confirmCompensationPaid (userId, ticketId, note) { 
         try {
-
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!replyEmployee.found)
-                throw new Error("Người thao tác phiếu sự cố không tồn tại.");
-            const actor = replyEmployee.employee;
+            const actor = await this.getEmployeeByUserId(userId);
         
             const ticket = await this.CompensateTicket.findById(ticketId).populate("incident_id");
             if (!ticket) 
@@ -455,13 +464,7 @@ export class CompensateService {
             const room_id = incident.room_id;
         
             for (const item of detailsInput) {
-                const equipmentReply = await this.eventBus.request(
-                    EQUIPMENT_EVENTS.CHECK_EXISTS,
-                    { equipmentId: item.equipment_id }
-                );
-                if (!equipmentReply.success) 
-                    throw new Error(equipmentReply.message);
-                const equipment = equipmentReply.equipment;
+                const equipment = await this.getEquipmentById(item.equipment_id);
 
                 if (equipment.room_id.toString() !== room_id.toString()) {
                     throw new Error("Đây không phải thiết bị của phòng!");
@@ -496,13 +499,7 @@ export class CompensateService {
 
     async calculatePenaltyFee ({ equipment_id, broken_state, resolution }) {
         try {
-            const equipmentReply = await this.eventBus.request(
-                EQUIPMENT_EVENTS.CHECK_EXISTS,
-                { equipmentId: equipment_id }
-            );
-            if (!equipmentReply.success) 
-                throw new Error(equipmentReply.message);
-            const equipment = equipmentReply.equipment;
+            const equipment = await this.getEquipmentById(equipment_id);
 
             const categoryReply = await this.eventBus.request(
                 EQUIPMENT_EVENTS.GET_CATEGORY_INFO,
@@ -536,13 +533,7 @@ export class CompensateService {
     
     async updateEquipmentByResolution ({ equipment_id, resolution, handled_by = null, note = "" }) {
         try {
-            const equipmentReply = await this.eventBus.request(
-                EQUIPMENT_EVENTS.CHECK_EXISTS,
-                { equipmentId: equipment_id }
-            );
-            if (!equipmentReply.success) 
-                throw new Error(equipmentReply.message);
-            const equipment = equipmentReply.equipment;
+            const equipment = await this.getEquipmentById(equipment_id);
             
             let newCondition, newStatus;
             switch (resolution) {
@@ -576,7 +567,7 @@ export class CompensateService {
                     handled_by,
                 }
             );
-            if (!replyCreate.success) throw replyCreate.message;
+            if (!replyCreate.success) throw new Error(replyCreate.message);
             
             const reply = await this.eventBus.request(
                 EQUIPMENT_EVENTS.UPDATE_INTERNAL,
@@ -645,6 +636,9 @@ export class CompensateService {
                     EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
                     { employee_user_ids: employeeIds }
                 );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
                 for (const emp of reply.employees) {
                     const key = emp.user_id?.toString();
                     map[key] = {
@@ -663,6 +657,9 @@ export class CompensateService {
                     CUSTOMER_EVENTS.GET_INFOS_USERIDS,
                     { customerUserIds: customerIds }
                 );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
                 for (const cus of reply.customers) {
                     const key = cus.user_id?.toString();
                     map[key] = {
@@ -720,6 +717,8 @@ export class CompensateService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
+            if (!reply.success)
+                throw new Error(reply.message);
 
             for (const room of reply.rooms) {
                 roomMap[room._id.toString()] = {

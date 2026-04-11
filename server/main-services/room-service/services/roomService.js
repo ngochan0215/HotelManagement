@@ -176,6 +176,8 @@ export class RoomService {
                 EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                 { categoryIds: equipmentCategoryIds }
             );
+            if (!reply.success)
+                throw new Error(reply.message);
 
             const equipmentCategoryMap = {};
             for (const ec of reply.categories) {
@@ -238,6 +240,9 @@ export class RoomService {
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
+                if (!reply.success) 
+                    throw new Error(reply.message);
+
                 for (const ec of reply.categories) {
                     equipmentCategoryMap[ec._id.toString()] = {
                         _id: ec._id,
@@ -292,6 +297,9 @@ export class RoomService {
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
                 for (const ec of reply.categories) {
                     equipmentCategoryMap[ec._id.toString()] = {
                         _id: ec._id,
@@ -659,8 +667,8 @@ export class RoomService {
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                 { employee_user_id: userId }
             );
-            if (!reply.found) {
-                throw new Error("Không tìm thấy nhân viên tương ứng với user ID!");
+            if (!reply.success) {
+                throw new Error(reply.message || "Không tìm thấy nhân viên tương ứng với user ID!");
             }
             const employee = reply.employee;
         

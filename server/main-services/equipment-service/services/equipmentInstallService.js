@@ -186,6 +186,9 @@ export class EquipmentInstallService {
                 EMPLOYEE_EVENTS.GET_INFO,
                 { employee_ids: employeeIds }
             );
+            if(!reply.success)
+                throw new Error(reply.message);
+
             for (const emp of reply.employees) {
                 employeeMap[emp._id.toString()] = emp;
             }
@@ -196,6 +199,9 @@ export class EquipmentInstallService {
                 EMPLOYEE_EVENTS.GET_INFO,
                 { employee_ids: handlerIds }
             );
+            if(!reply.success)
+                throw new Error(reply.message);
+
             for (const emp of reply.employees) {
                 handlerMap[emp._id.toString()] = emp;
             }
@@ -228,6 +234,8 @@ export class EquipmentInstallService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
+            if(!reply.success)
+                throw new Error(reply.message);
 
             for (const room of reply.rooms) {
                 roomMap[room._id.toString()] = {
@@ -255,6 +263,65 @@ export class EquipmentInstallService {
         return isArray ? results : results[0];
     };
 
+    getEmployeeByUserId = async (employeeUserId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+            { employee_user_id: employeeUserId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy nhân viên.");
+        
+        return reply.employee;
+    };
+ 
+    getEmployeeById = async (employeeId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_EXISTS,
+            { employee_id: employeeId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy nhân viên.");
+        
+        return reply.employee;
+    };
+ 
+    getTechnicianAvailable = async (employeeId) => {
+        const reply = await this.eventBus.request(
+            EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE,
+            { employee_id: employeeId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Nhân viên kỹ thuật không hợp lệ hoặc không tồn tại.");
+        
+        return reply.employee;
+    };
+ 
+    getRoomById = async (roomId) => {
+        const reply = await this.eventBus.request(
+            ROOM_EVENTS.CHECK_EXISTS,
+            { room_id: roomId }
+        );
+
+        if (!reply.success)
+            throw new Error(reply.message || "Không tìm thấy phòng.");
+        
+        return reply.room;
+    };
+ 
+    getAdminUserIds = async () => {
+        const reply = await this.eventBus.request(
+            USER_EVENTS.GET_ADMINS,
+            { system_role: "manager" }
+        );
+        
+        if (!reply.success) return [];
+        
+        return reply.admins.map(u => u._id);
+    };
+
     // MAIN FUNCTIONS    
     createInstallTicket = async (employeeUserId, data) => {
         try {
@@ -264,28 +331,8 @@ export class EquipmentInstallService {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: room_id, install_date.");
             }
     
-            let employee =  null;
-            if (employeeUserId) {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                    { employee_user_id: employeeUserId }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
-                
-                employee = reply.employee;
-            }
-    
-            let targetRoom = null;
-            if (room_id) {
-                const reply = await this.eventBus.request(
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy phòng.");
-                targetRoom = reply.room;
-            }
+            const employee = await this.getEmployeeByUserId(employeeUserId);
+            const targetRoom = await this.getRoomById(room_id);
                 
             const sourceQuery = {
                 status: "in-stock",
@@ -314,20 +361,8 @@ export class EquipmentInstallService {
     
             let handledByEmployee = null;
             if (handled_by) {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id: handled_by }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
-
-                const replyy = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE,
-                    { employee_id: handled_by }
-                );
-                if (!replyy.found) {
-                    throw new Error("Nhân viên kỹ thuật không hợp lệ hoặc không tồn tại.");
-                }
+                await this.getEmployeeById(handled_by);
+                handledByEmployee = await this.getTechnicianAvailable(handled_by);
     
                 const activeTicket = await this.InstallTicket.findOne({
                     handled_by: handled_by,
@@ -336,8 +371,6 @@ export class EquipmentInstallService {
                 if (activeTicket) {
                     throw new Error("Nhân viên này đang có phiếu đang xử lý, không thể gán thêm.");
                 }
-
-                handledByEmployee = replyy.employee;
             }
     
             const install = await this.InstallTicket.create({
@@ -381,24 +414,16 @@ export class EquipmentInstallService {
                 }
         
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: "Phiếu lắp đặt mới",
-                            content: `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
+                    await this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: "Phiếu lắp đặt mới",
+                        content: `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: install._id
+                    });
                 }
 
             } catch (notifError) {
@@ -421,28 +446,8 @@ export class EquipmentInstallService {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: from_room_id, install_date.");
             }
 
-            let employee = null;
-            if (employeeUserId) {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                    { employee_user_id: employeeUserId }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
-                
-                employee = reply.employee;
-            }
-
-            let sourceRoom = null;
-            if (from_room_id) {
-                const reply = await this.eventBus.request(
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id: from_room_id }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy phòng.");
-                sourceRoom = reply.room;
-            }
+            const employee = await this.getEmployeeByUserId(employeeUserId);
+            const sourceRoom = await this.getRoomById(from_room_id);
             
             const sourceQuery = {
                 status: "in-use",
@@ -464,20 +469,8 @@ export class EquipmentInstallService {
     
             let handledByEmployee = null;
             if (handled_by) {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id: handled_by }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
-
-                const replyy = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE,
-                    { employee_id: handled_by }
-                );
-                if (!replyy.found) {
-                    throw new Error("Nhân viên kỹ thuật không hợp lệ hoặc không tồn tại.");
-                }
+                await this.getEmployeeById(handled_by);
+                handledByEmployee = await this.getTechnicianAvailable(handled_by);
     
                 const activeTicket = await this.InstallTicket.findOne({
                     handled_by: handled_by,
@@ -486,8 +479,6 @@ export class EquipmentInstallService {
                 if (activeTicket) {
                     throw new Error("Nhân viên này đang có phiếu đang xử lý, không thể gán thêm.");
                 }
-
-                handledByEmployee = replyy.employee;
             }
 
             const install = await this.InstallTicket.create({
@@ -529,15 +520,8 @@ export class EquipmentInstallService {
                 }
         
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
                         await this.sendNotificationsToUsers({
                             userIds: adminUserIds,
                             title: "Phiếu tháo dỡ thiết bị mới",
@@ -547,7 +531,6 @@ export class EquipmentInstallService {
                             refId: install._id
                         });
                     }
-                }
 
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
@@ -567,25 +550,12 @@ export class EquipmentInstallService {
             let filter = {};
         
             if (employee_id) {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id }
-                );
-
-                if (!reply.found)
-                    throw new Error("Không tìm thấy nhân viên.");
-
+                await this.getEmployeeById(employee_id);
                 filter.employee_id = employee_id;
             }
         
             if (room_id) {
-                const reply = await this.eventBus.request(
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id }
-                );
-                if (!reply.found)
-                    throw new Error("Không tìm thấy phòng.");
-        
+                await this.getRoomById(room_id);
                 filter.room_id = room_id;
             }
         
@@ -733,17 +703,9 @@ export class EquipmentInstallService {
     getMyInstallTickets = async (employeeUserId, query = {}) => {
         try {
             const { status, isAssigned, isCreated } = query;
-
-            const reply = await this.eventBus.request(
-                EMPLOYEE_EVENTS.GET_INFO_USERID,
-                { employee_user_id: employeeUserId }
-            );
-            if (!reply.found)
-                throw new Error("Không tìm thấy nhân viên.");
-
-            const employee = reply.employee;
-
             let filter = {};
+
+            const employee = await this.getEmployeeByUserId(employeeUserId);
 
             const assigned = isAssigned === true || isAssigned === "true";
             const created = isCreated === true || isCreated === "true";
@@ -864,14 +826,7 @@ export class EquipmentInstallService {
             }
 
             if (room_id) {
-                const reply = await this.eventBus.request(  
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id }
-                );
-
-                if (!reply.found) {
-                    throw new Error("Không tìm thấy phòng.");
-                }
+                await this.getRoomById(room_id);
                 install_ticket.room_id = room_id;
             }
 
@@ -879,14 +834,7 @@ export class EquipmentInstallService {
                 if (!handled_by) {
                     install_ticket.handled_by = null;
                 } else {
-                    const reply = await this.eventBus.request(
-                        EMPLOYEE_EVENTS.CHECK_AVAILABLE_TECHNICIAN,
-                        { employee_id: handled_by }
-                    );
-
-                    if (!reply.found) {
-                        throw new Error("Không tìm thấy nhân viên kỹ thuật.");
-                    }
+                    const technician = await this.getTechnicianAvailable(handled_by);
 
                     const technicianChanged = !install_ticket.handled_by
                         || install_ticket.handled_by.toString() !== handled_by;
@@ -903,7 +851,7 @@ export class EquipmentInstallService {
                         }
                     }
 
-                    install_ticket.handled_by = reply.employee._id;
+                    install_ticket.handled_by = technician._id;
                 }
             }
 
@@ -974,25 +922,11 @@ export class EquipmentInstallService {
                 if (handled_by !== undefined && install_ticket.handled_by) {
                     const updatedTicket = await this.InstallTicket.findById(install_ticket._id)
 
-                    const replyRoom = await this.eventBus.request(  
-                        ROOM_EVENTS.CHECK_EXISTS,
-                        { room_id: updatedTicket.room_id }
-                    );
-                    if (!replyRoom.found) {
-                        throw new Error("Không tìm thấy phòng.");
-                    }
+                    const room = await this.getRoomById(install_ticket.room_id);
+                    const employee = await this.getEmployeeById(install_ticket.handled_by);
 
-                    const replyEmployee = await this.eventBus.request(
-                        EMPLOYEE_EVENTS.CHECK_EXISTS,
-                        { employee_id: updatedTicket.handled_by }
-                    );
-                    if (!replyEmployee.found) {
-                        throw new Error("Không tìm thấy nhân viên.");
-                    }
-
-                    const userId = replyEmployee.employee.user_id;
-                    if (userId) {
-                        const roomText = updatedTicket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                    if (employee.user_id) {
+                        const roomText = updatedTicket.room_id ? ` phòng ${room.room_number}` : "";
                         const typeText = install_ticket.type === "uninstall" ? "tháo dỡ" : "lắp đặt";
 
                         await sendNotificationToUsers({
@@ -1031,21 +965,8 @@ export class EquipmentInstallService {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
 
-            const replyRoom = await this.eventBus.request(  
-                ROOM_EVENTS.CHECK_EXISTS,
-                { room_id: installTicket.room_id }
-            );
-            if (!replyRoom.found) {
-                throw new Error("Không tìm thấy phòng.");
-            }
-
-            const replyEmployee = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS,
-                { employee_id: installTicket.handled_by }
-            );
-            if (!replyEmployee.found) {
-                throw new Error("Không tìm thấy nhân viên.");
-            }
+            const room = await this.getRoomById(installTicket.room_id);
+            const employee = await this._getEmployeeById(installTicket.handled_by);
         
             if (!["pending", "assigned", "waiting_confirm"].includes(installTicket.status)) {
                 throw new Error("Chỉ được xóa phiếu lắp đặt ở trạng thái pending, assigned hoặc waiting_confirm.");
@@ -1134,11 +1055,11 @@ export class EquipmentInstallService {
         
             await this.InstallTicket.deleteOne({ _id: ticketId });
         
-            const roomText = installTicket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+            const roomText = installTicket.room_id ? ` phòng ${room.room_number}` : "";
             const typeText = installTicket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
             const shortTicketId = installTicket._id.toString().slice(-6);
-            const technicianName = replyEmployee.employee.full_name || null;
-            const technicianUserId = replyEmployee.employee.user_id || null;
+            const technicianName = employee.full_name || null;
+            const technicianUserId = employee.user_id || null;
                 
             try {
                 if (technicianUserId) {
@@ -1153,24 +1074,16 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: `Phiếu ${typeText} thiết bị đã bị hủy`,
-                            content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy${technicianName ? ` (đã gán cho ${technicianName})` : ''}.`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
+                    await this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: `Phiếu ${typeText} thiết bị đã bị hủy`,
+                        content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy${technicianName ? ` (đã gán cho ${technicianName})` : ''}.`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: installTicket._id
+                    });
                 }
             
             } catch (notifError) {
@@ -1333,29 +1246,16 @@ export class EquipmentInstallService {
             
             // send notifications
             try {
-                const replyRoom = await this.eventBus.request(  
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id: ticket.room_id }
-                );
-                if (!replyRoom.found) {
-                    throw new Error("Không tìm thấy phòng.");
-                }
-
-                const replyEmployee = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id: ticket.handled_by }
-                );
-                if (!replyEmployee.found) {
-                    throw new Error("Không tìm thấy nhân viên.");
-                }
-            
-                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const room = await this.getRoomById(ticket.room_id);
+                const employee = await this.getEmployeeById(ticket.handled_by);
+        
+                const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+                const technicianName = employee.full_name || "Nhân viên";
 
-                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                if (employee.user_id) {
                     await this.sendNotification({
-                        userId: replyEmployee.employee.user_id,
+                        userId: employee.user_id,
                         title: "Công việc đã được xác nhận",
                         content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
                         type: "equipment",
@@ -1365,25 +1265,18 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: "Đã xác nhận công việc",
-                            content: `Đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} của ${technicianName}.`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
+                    await this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: "Đã xác nhận công việc",
+                        content: `Đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} của ${technicianName}.`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
                 }
+                
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
@@ -1402,16 +1295,9 @@ export class EquipmentInstallService {
                 throw new Error("ID phiếu lắp đặt không hợp lệ.");
             }
 
-            const reply = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!reply.found)
-                throw new Error("Không tìm thấy nhân viên.");
-            const employee = reply.employee;
+            const employee = await this.getEmployeeByUserId(userId);
         
             const ticket = await this.InstallTicket.findById(ticketId);
-        
             if (!ticket) {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
@@ -1443,29 +1329,16 @@ export class EquipmentInstallService {
 
             // send notifications
             try {
-                const replyRoom = await this.eventBus.request(  
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id: ticket.room_id }
-                );
-                if (!replyRoom.found) {
-                    throw new Error("Không tìm thấy phòng.");
-                }
-
-                const replyEmployee = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id: ticket.handled_by }
-                );
-                if (!replyEmployee.found) {
-                    throw new Error("Không tìm thấy nhân viên.");
-                }
+                const room = await this.getRoomById(ticket.room_id);
+                const employee = await this.getEmployeeById(ticket.handled_by);
             
-                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+                const technicianName = employee.full_name || "Nhân viên";
 
-                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                if (employee.user_id) {
                     await this.sendNotification({
-                        userId: replyEmployee.employee.user_id,
+                        userId: employee.user_id,
                         title: "Đã xác nhận bắt đầu công việc",
                         content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
                         type: "equipment",
@@ -1475,25 +1348,18 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: "Nhân viên đã bắt đầu công việc",
-                            content: `${technicianName} đã xác nhận bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
+                    await this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: "Nhân viên đã bắt đầu công việc",
+                        content: `${technicianName} đã xác nhận bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
                 }
+
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
@@ -1512,16 +1378,9 @@ export class EquipmentInstallService {
                 throw new Error("ID phiếu lắp đặt không hợp lệ.");
             }
 
-            const reply = await this.eventBus.request(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
-            if (!reply.found)
-                throw new Error("Không tìm thấy nhân viên.");
-            const employee = reply.employee;
-        
+            const employee = await this.getEmployeeByUserId(userId);
+
             const ticket = await this.InstallTicket.findById(ticketId);
-        
             if (!ticket) {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
@@ -1552,29 +1411,16 @@ export class EquipmentInstallService {
             await ticket.save();
 
             try {
-                const replyRoom = await this.eventBus.request(  
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id: ticket.room_id }
-                );
-                if (!replyRoom.found) {
-                    throw new Error("Không tìm thấy phòng.");
-                }
-
-                const replyEmployee = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS,
-                    { employee_id: ticket.handled_by }
-                );
-                if (!replyEmployee.found) {
-                    throw new Error("Không tìm thấy nhân viên.");
-                }
+                const room = await this.getRoomById(ticket.room_id);
+                const employee = await this.getEmployeeById(ticket.handled_by);
             
-                const roomText = ticket.room_id ? ` phòng ${replyRoom.room.room_number}` : "";
+                const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = replyEmployee.employee.full_name || "Nhân viên";
+                const technicianName = employee.full_name || "Nhân viên";
 
-                if (populatedTicket.handled_by && replyEmployee.employee.user_id) {
+                if (employee.user_id) {
                     await this.sendNotification({
-                        userId: replyEmployee.employee.user_id,
+                        userId: employee.user_id,
                         title: "Đã xác nhận hoàn thành công việc",
                         content: `Bạn đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Đang chờ admin xác nhận.`,
                         type: "equipment",
@@ -1584,25 +1430,18 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const replyAdmin = await this.eventBus.request(
-                    USER_EVENTS.GET_ADMINS,
-                    { system_role: "manager" }
-                );
-                if (replyAdmin.success) {
-                    const adminUsers = replyAdmin.admins;
-                    const adminUserIds = adminUsers.map(u => u._id);
-                
-                    if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: "Nhân viên đã xác nhận hoàn thành công việc",
-                            content: `${technicianName} đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Vui lòng xác nhận`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
+                const adminUserIds = await this.getAdminUserIds();
+                if (adminUserIds.length > 0) {
+                    await this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: "Nhân viên đã xác nhận hoàn thành công việc",
+                        content: `${technicianName} đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Vui lòng xác nhận`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: ticket._id
+                    });
                 }
+
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }

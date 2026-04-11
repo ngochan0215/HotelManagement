@@ -20,34 +20,58 @@ export class RoomEventHandler {
 
     // check room existence using room_id
     async roomCheckExists(data, msg) {
-        console.log("Handling ROOM_CHECK_EXISTS");
-        const { room_id } = data;
-        const room = await this.roomService.getRoomById(room_id);
+        try {
+            console.log("Handling ROOM_CHECK_EXISTS");
+            const { room_id } = data;
+            const room = await this.roomService.getRoomById(room_id);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ found: !!room, room })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        )
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!room, room })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     // get various rooms info (for population)
     async getRoomsInfo(data, msg) {
-        console.log("Handling GET_ROOMS_INFO");
-        const { room_ids } = data;
-        const rooms = await this.roomService.getRoomsByIds(room_ids);
+        try {
+            console.log("Handling GET_ROOMS_INFO");
+            const { room_ids } = data;
+            const rooms = await this.roomService.getRoomsByIds(room_ids);
 
-        this.eventBus.channel.sendToQueue(
-            msg.properties.replyTo,
-            Buffer.from(JSON.stringify({ found: !!rooms, rooms })),
-            {
-                correlationId: msg.properties.correlationId,
-                persistent: false
-            }
-        )
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!rooms, rooms })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
     }
 
     async updateRoomLog(data, msg) {
