@@ -12,14 +12,14 @@
 // const OldImportTicket = oldConn.model(
 //   "OldEquipmentLog",
 //   new mongoose.Schema({}, { strict: false }),
-//   "roomcancellations"
+//   "receipts"
 // );
 
 // // model cho DB mới
 // const NewImportTicket = newConn.model(
 //   "NewEquipmentLog",
 //   new mongoose.Schema({}, { strict: false }),
-//   "bookingcancellations"
+//   "receipts"
 // );
 
 // // lấy data
@@ -28,14 +28,24 @@
 // const newData = data.map(x => ({
 //     _id: x._id,
 //     booking_id: x.booking_id,
-//     room_id: x.room_id,
-//     cancelled_by: x.cancelled_by,
-//     cancelled_by_user: x.cancelled_by_user,
-//     booking_status: x.booking_status,
-//     reason: x.reason,
+//     transaction_id: x.transaction_id,
+//     discount_id: x.discount_id,
+//     discount_snapshot: x.discount_snapshot,
+//     employee_id: x.employee_id,
+//     service_usage_id: x.service_usage_id,
+//     compensate_ticket_id: x.compensate_ticket_id,
+//     base_room_fee: x.base_room_fee,
+//     total_fee: x.total_fee,
+//     service_fee: x.service_fee,
+//     compensate_fee: x.compensate_fee,
+//     deposit_amount: x.deposit_amount,
+//     final_amount: x.final_amount,
+//     amount_due: x.amount_due,
+//     payment: x.payment,
+//     status: x.status,
+//     paid_at: x.paid_at,
 //     cancelled_at: x.cancelled_at,
-//     penalty_fee: x.penalty_fee,
-//     refund_amount: x.refund_amount,
+//     note: x.note,
 //     created_at: x.created_at,
 //     updated_at: x.updated_at
 // }));

@@ -114,7 +114,7 @@ export class EmployeeService {
         try {
             return await this.Employee.find(
                 { _id: { $in: employeeIds } },
-                { full_name: 1, phone_number: 1 } 
+                { full_name: 1, phone_number: 1, user_id: 1, position: 1, CCCD: 1 }
             ).lean();
 
         } catch (error) {

@@ -86,6 +86,14 @@ app.use(
   })
 );
 
+app.use(
+  "/payment",
+  createProxyMiddleware({
+    target: "http://payment-service:3010",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

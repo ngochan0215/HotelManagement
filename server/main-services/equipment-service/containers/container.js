@@ -6,8 +6,7 @@ import ImportDetail from "../models/ImportDetail.js";
 import InstallDetail from "../models/InstallDetail.js";
 import InstallTicket from "../models/InstallTicket.js";
 
-import { sendNotification, sendNotificationsToUsers 
-} from "../../../shared/messaging/notificationPublisher.js";
+import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
 
 import { EquipmentService } from "../services/equipmentService.js";
 import { EquipmentImportService } from "../services/equipmentImportService.js";
@@ -48,7 +47,7 @@ class Container {
 
     async init() {
         await this.eventBus.connect({
-            queueName: "equipment-service-queue",
+            queueName: "equipment-service-events",
             bindEvents: [
                 EQUIPMENT_EVENTS.CHECK_EXISTS,
                 EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS,

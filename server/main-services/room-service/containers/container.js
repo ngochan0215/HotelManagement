@@ -25,7 +25,7 @@ class Container {
 
     async init() {
         await this.eventBus.connect({
-            queueName: "room-service-queue",
+            queueName: "room-service-events",
             bindEvents: [
                 ROOM_EVENTS.CHECK_EXISTS,
                 ROOM_EVENTS.GET_ROOMS_INFO,

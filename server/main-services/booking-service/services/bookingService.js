@@ -1735,7 +1735,6 @@ export class BookingService {
         }
     };
 
-    // thống kê lý do hủy phòng
     getCancellationReasonStats = async (query = {}) => {
         try {
             const { fromDate, toDate, cancelledBy } = query;
@@ -1789,4 +1788,21 @@ export class BookingService {
             throw error;
         }
     };
+
+    // communication
+
+    findBookingById = async (bookingId) => {
+        const booking = await this.Booking.findById(bookingId);
+        return booking;
+    }
+
+    findBookingsByIds = async (bookingIds) => {
+        if (!bookingIds?.length) return [];
+        return this.Booking.find({ _id: { $in: bookingIds } }).lean();
+    }
+
+    findBookingDetailsByBookingId = async (bookingId) => {
+        const details = await this.BookingDetail.find({ booking_id: bookingId });
+        return details;
+    }
 }

@@ -173,6 +173,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  payment-service:
+    build: ./main-services/payment-service
+    container_name: payment-service
+    ports:
+      - "3010:3010"
+    environment:
+      DB_URL: ${PAYMENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/payment-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -191,4 +208,5 @@ services:
       - notification-service
       - incident-service
       - booking-service
+      - payment-service
 

@@ -4,10 +4,12 @@ import BookingStatusLog from "../models/BookingStatusLog.js";
 import BookingCancellation from "../models/BookingCancellation.js";
 
 import { BookingService } from "../services/bookingService.js";
+import { BookingEventHandler } from "../events/bookingHandler.js";
 
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
+import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 
 class Container {
     constructor() {
@@ -18,18 +20,24 @@ class Container {
             eventBus: this.eventBus,
             sendNotification, sendNotificationsToUsers
         });
+
+        this.bookingEventHandler = new BookingEventHandler(this.bookingService, this.eventBus);
     }
 
      async init() {
         await this.eventBus.connect({
-            // queueName: "booking-service-events",
-            // bindEvents: [
-            // ]
+            queueName: "booking-service-events",
+            bindEvents: [
+                BOOKING_EVENTS.CHECK_EXISTS_ID,
+                BOOKING_EVENTS.GET_DETAILS_BOOKING_ID,
+                BOOKING_EVENTS.GET_BOOKINGS_BY_IDS,
+                BOOKING_EVENTS.CONFIRM_FROM_PAYMENT,
+            ]
         });
 
-        // const handlers = this.userEventHandler.handlers();
-        // const consumer = new EventConsumer(this.eventBus, handlers);
-        // await consumer.start();
+        const handlers = this.bookingEventHandler.handlers();
+        const consumer = new EventConsumer(this.eventBus, handlers);
+        await consumer.start();
     }
 }
 

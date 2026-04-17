@@ -41,6 +41,143 @@ export class CompensateService {
         return reply.equipment;
     };
 
+    populateReporterAndCauser = async (incidents) => {
+        const isArray = Array.isArray(incidents);
+        const list = isArray ? incidents : [incidents];
+
+        const allUserIds = [...new Set(
+            list.flatMap(i => [
+                i.reporter_id?.toString(),
+                i.causer_id?.toString()
+            ]).filter(Boolean)
+        )];
+
+        if (allUserIds.length === 0)
+            return isArray ? list : list[0];
+
+        const replyUsers = await this.eventBus.request(
+            USER_EVENTS.GET_USERS_INFO,
+            { userIds: allUserIds }
+        );
+
+        const roleMap = {};
+        for (const user of replyUsers.users) {
+            roleMap[user._id.toString()] = user.system_role;
+        }
+
+        const employeeIds = allUserIds.filter(id => ["employee", "manager"].includes(roleMap[id]));
+        const customerIds = allUserIds.filter(id => roleMap[id] === "customer");
+
+        const [employeeMap, customerMap] = await Promise.all([
+            // Employee
+            (async () => {
+                const map = {};
+                if (employeeIds.length === 0) return map;
+                const reply = await this.eventBus.request(
+                    EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
+                    { employee_user_ids: employeeIds }
+                );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
+                for (const emp of reply.employees) {
+                    const key = emp.user_id?.toString();
+                    map[key] = {
+                        full_name: emp.full_name, 
+                        phone_number: emp.phone_number
+                    };
+                }
+                return map;
+            })(),
+
+            // Customer
+            (async () => {
+                const map = {};
+                if (customerIds.length === 0) return map;
+                const reply = await this.eventBus.request(
+                    CUSTOMER_EVENTS.GET_INFOS_USERIDS,
+                    { customerUserIds: customerIds }
+                );
+                if (!reply.success)
+                    throw new Error(reply.message);
+
+                for (const cus of reply.customers) {
+                    const key = cus.user_id?.toString();
+                    map[key] = {
+                        full_name: cus.full_name,
+                        phone_number: cus.phone_number
+                    };
+                }
+                return map;
+            })(),
+        ]);
+
+        // console.log("employeeMap keys:", Object.keys(employeeMap));
+        // console.log("customerMap keys:", Object.keys(customerMap));
+
+        const getProfile = (userId) => {
+            if (!userId) 
+                return null;
+
+            const id = userId.toString();
+            const role = roleMap[id];
+
+            if (role === "employee" || role === "manager") {
+                return { ...employeeMap[id], system_role: role } || null;
+            }
+            if (role === "customer") {
+                return { ...customerMap[id], system_role: role } || null;
+            }
+
+            return null;
+        };
+
+        const results = list.map(incident => ({
+            ...incident,
+            reporter_info: getProfile(incident.reporter_id),
+            causer_info: getProfile(incident.causer_id),
+        }));
+
+        return isArray ? results : results[0];
+    };
+
+    populateRoom = async (incidents) => {
+        const isArray = Array.isArray(incidents);
+        const list = isArray ? incidents : [incidents];
+
+        const roomIds = [...new Set(
+            list
+                .map(e => e.room_id?.toString())
+                .filter(Boolean)
+        )];
+
+        let roomMap = {};
+
+        if (roomIds.length > 0) {
+            const reply = await this.eventBus.request(
+                ROOM_EVENTS.GET_ROOMS_INFO,
+                { room_ids: roomIds }
+            );
+            if (!reply.success)
+                throw new Error(reply.message);
+
+            for (const room of reply.rooms) {
+                roomMap[room._id.toString()] = {
+                    _id: room._id,
+                    room_number: room.room_number,
+                    room_status: room.room_status
+                }
+            }
+        }
+
+        const results = list.map(incident => ({
+            ...incident,
+            room_info: roomMap[incident.room_id?.toString()] || null
+        }));
+
+        return isArray ? results : results[0];
+    };
+
     // main business logic
 
     async createCompensateTicket (userId, incidentId, data) {
@@ -599,141 +736,17 @@ export class CompensateService {
         }
     };
 
-    // helper
-    populateReporterAndCauser = async (incidents) => {
-        const isArray = Array.isArray(incidents);
-        const list = isArray ? incidents : [incidents];
+    // communication
 
-        const allUserIds = [...new Set(
-            list.flatMap(i => [
-                i.reporter_id?.toString(),
-                i.causer_id?.toString()
-            ]).filter(Boolean)
-        )];
-
-        if (allUserIds.length === 0)
-            return isArray ? list : list[0];
-
-        const replyUsers = await this.eventBus.request(
-            USER_EVENTS.GET_USERS_INFO,
-            { userIds: allUserIds }
-        );
-
-        const roleMap = {};
-        for (const user of replyUsers.users) {
-            roleMap[user._id.toString()] = user.system_role;
+    async findPendingCompensationTicket (bookingId) {
+        try {
+            return await this.CompensateTicket.find({
+                booking_id: bookingId,
+                status: "pending"
+            });
+        } catch (error) {
+            console.log("Error in finding pending compensation ticket: ", error.message);
+            throw error;
         }
-
-        const employeeIds = allUserIds.filter(id => ["employee", "manager"].includes(roleMap[id]));
-        const customerIds = allUserIds.filter(id => roleMap[id] === "customer");
-
-        const [employeeMap, customerMap] = await Promise.all([
-            // Employee
-            (async () => {
-                const map = {};
-                if (employeeIds.length === 0) return map;
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
-                    { employee_user_ids: employeeIds }
-                );
-                if (!reply.success)
-                    throw new Error(reply.message);
-
-                for (const emp of reply.employees) {
-                    const key = emp.user_id?.toString();
-                    map[key] = {
-                        full_name: emp.full_name, 
-                        phone_number: emp.phone_number
-                    };
-                }
-                return map;
-            })(),
-
-            // Customer
-            (async () => {
-                const map = {};
-                if (customerIds.length === 0) return map;
-                const reply = await this.eventBus.request(
-                    CUSTOMER_EVENTS.GET_INFOS_USERIDS,
-                    { customerUserIds: customerIds }
-                );
-                if (!reply.success)
-                    throw new Error(reply.message);
-
-                for (const cus of reply.customers) {
-                    const key = cus.user_id?.toString();
-                    map[key] = {
-                        full_name: cus.full_name,
-                        phone_number: cus.phone_number
-                    };
-                }
-                return map;
-            })(),
-        ]);
-
-        // console.log("employeeMap keys:", Object.keys(employeeMap));
-        // console.log("customerMap keys:", Object.keys(customerMap));
-
-        const getProfile = (userId) => {
-            if (!userId) 
-                return null;
-
-            const id = userId.toString();
-            const role = roleMap[id];
-
-            if (role === "employee" || role === "manager") {
-                return { ...employeeMap[id], system_role: role } || null;
-            }
-            if (role === "customer") {
-                return { ...customerMap[id], system_role: role } || null;
-            }
-
-            return null;
-        };
-
-        const results = list.map(incident => ({
-            ...incident,
-            reporter_info: getProfile(incident.reporter_id),
-            causer_info: getProfile(incident.causer_id),
-        }));
-
-        return isArray ? results : results[0];
-    };
-
-    populateRoom = async (incidents) => {
-        const isArray = Array.isArray(incidents);
-        const list = isArray ? incidents : [incidents];
-
-        const roomIds = [...new Set(
-            list
-                .map(e => e.room_id?.toString())
-                .filter(Boolean)
-        )];
-
-        let roomMap = {};
-
-        if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
-                ROOM_EVENTS.GET_ROOMS_INFO,
-                { room_ids: roomIds }
-            );
-            if (!reply.success)
-                throw new Error(reply.message);
-
-            for (const room of reply.rooms) {
-                roomMap[room._id.toString()] = {
-                    _id: room._id,
-                    room_number: room.room_number,
-                    room_status: room.room_status
-                }
-            }
-        }
-
-        const results = list.map(incident => ({
-            ...incident,
-            room_info: roomMap[incident.room_id?.toString()] || null
-        }));
-
-        return isArray ? results : results[0];
-    };
+    }
 }
