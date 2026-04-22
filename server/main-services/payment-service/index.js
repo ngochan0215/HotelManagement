@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 import paymentRoute from "./routes/paymentRoute.js";
+import { startReceiptSyncJob } from "./jobs/receiptJob.js";
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ const startServer = async () => {
 
     await connectDB(process.env.DB_URL);
     await container.init();
+    startReceiptSyncJob();
 
     app.use(paymentRoute);
 

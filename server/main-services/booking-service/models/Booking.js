@@ -61,5 +61,10 @@ const bookingSchema = new mongoose.Schema(
     }
 );
 
+bookingSchema.index({ created_at: 1 });
+bookingSchema.index({ expected_checkin: 1 });
+bookingSchema.index({ expected_checkout: 1 });
+bookingSchema.index({ status: 1 });
+
 const Booking = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);
 export default Booking;

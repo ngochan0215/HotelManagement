@@ -5,6 +5,7 @@ import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 import roomRoute from "./routes/roomRoute.js";
 import roomCategoryRoute from "./routes/roomCategoryRoute.js";
+import { startFixRoomLogsJob, startSyncRoomStatusJob } from "./jobs/roomJob.js";
 
 dotenv.config();
 
@@ -24,6 +25,8 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
+    startSyncRoomStatusJob();
+    startFixRoomLogsJob();
 
     app.use(roomRoute);
     app.use("/category", roomCategoryRoute);

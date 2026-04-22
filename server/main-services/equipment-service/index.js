@@ -6,6 +6,7 @@ import { container } from "./containers/container.js";
 import equipmentRoute from "./routes/equipmentRoute.js";
 import equipmentImportRoute from "./routes/equipmentImportRoute.js";
 import equipmentInstallRoute from "./routes/equipmentInstallRoute.js";
+import { startImportTicketJob, startInstallTicketJob } from "./jobs/ticketJob.js";
 
 dotenv.config();
 
@@ -25,6 +26,8 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
+    startImportTicketJob();
+    startInstallTicketJob();
 
     app.use(equipmentRoute);
     app.use("/import", equipmentImportRoute);

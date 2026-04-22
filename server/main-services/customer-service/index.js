@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import customerRoutes from "./routes/customerRoute.js";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
+import { startCustomerTierJob } from "./jobs/customerTierJob.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
+    startCustomerTierJob();
 
     app.use(customerRoutes);
 
