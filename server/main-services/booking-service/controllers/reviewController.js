@@ -1,0 +1,138 @@
+import { container } from "../containers/container.js";
+
+export class ReviewController {
+    constructor() {
+        this.reviewService = container.reviewService;
+    }
+
+    addReview = async (req, res) => {
+        try {
+            const customerId = req.user.customerId;
+            const bookingId = req.params.bookingId;
+
+            const review = await this.reviewService.addReview(bookingId, customerId, req.body);
+
+            return res.status(201).json({
+                message: "Đánh giá thành công",
+                data: review
+            });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({
+                message: "SERVER ERROR: ",
+                error: error.message
+            });
+        }
+    };
+
+    getMyReviews = async (req, res) => {
+        try {
+            const customerId = req.user.customerId;
+            console.log("req.user:", req.user);
+            console.log("Getting reviews for customerId:", customerId);
+            const { total, data } = await this.reviewService.getMyReviews(customerId);
+
+            return res.status(200).json({ total, data });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+        }
+    };
+
+    getReviewByBooking = async (req, res) => {
+        try {
+            const customerId = req.user.customerId;
+            const bookingId = req.params.bookingId;
+
+            const { can_review, review } = await this.reviewService.getReviewByBooking(bookingId, customerId);
+
+            return res.status(200).json({ can_review: false, data: review });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ message: "Lỗi server" });
+        }
+    };
+
+    editReview = async (req, res) => {
+        try {
+            const customerId = req.user.customerId;
+            const reviewId = req.params.id;
+
+            const review = await this.reviewService.editReview(reviewId, customerId, req.body);
+
+            return res.status(200).json({ message: "Edit review successfully!", data: review });
+            
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+        }
+    };
+
+    updateReviewStatus = async (req, res) => {
+        try {
+            const reviewId = req.params.id;
+
+            const review = await this.reviewService.updateReviewStatus(reviewId, req.body);
+
+            return res.status(200).json({ message: "Update review status successfully!", data: review });
+        
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+        }
+    };
+
+    getAllReviews = async (req, res) => {
+        try {
+            const { reviews, pagination } = await this.reviewService.getAllReviews(req.query);
+            
+            return res.status(200).json({
+                success: true,
+                reviews, pagination,
+            });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+        }
+    };
+
+    getReviewStatistics = async (req, res) => {
+        try {
+            const { total, visible, hidden, averageRating, ratingDistribution, 
+                recent } = await this.reviewService.getReviewStatistics();
+
+            return res.status(200).json({
+                success: true,
+                statistics: {
+                    total, visible, hidden, averageRating, ratingDistribution, recent
+                },
+            });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({
+                success: false,
+                message: "SERVER ERROR: " + error.message,
+            });
+        }
+    };
+
+    getReviewById = async (req, res) => {
+        try {
+            const review = await this.reviewService.getReviewById(req.params.id);
+            
+            return res.status(200).json({ success: true, review });
+            
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({
+                success: false,
+                message: "SERVER ERROR: " + error.message,
+            });
+        }
+    };
+}

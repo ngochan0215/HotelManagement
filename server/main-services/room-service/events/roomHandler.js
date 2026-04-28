@@ -14,7 +14,10 @@ export class RoomEventHandler {
  
             [ROOM_EVENTS.FIND_ROOM_LOGS]: this.findRoomLogs.bind(this),
             [ROOM_EVENTS.UPDATE_ROOM_LOG]: this.updateRoomLog.bind(this),
-            [ROOM_EVENTS.INSERT_ROOM_LOG]: this.insertRoomLog.bind(this)
+            [ROOM_EVENTS.INSERT_ROOM_LOG]: this.insertRoomLog.bind(this),
+
+            [ROOM_EVENTS.GET_CATEGORY_IDS]: this.getCategoryIdsByRoomIds.bind(this),
+            [ROOM_EVENTS.UPDATE_CATEGORY_RATING]: this.updateRoomCategoryRating.bind(this),
         }
     }
 
@@ -162,6 +165,58 @@ export class RoomEventHandler {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, found: !!room, room })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        }
+    }
+
+    async updateRoomCategoryRating(data, msg) {
+        try {
+            console.log("Handling UPDATE_CATEGORY_RATING");
+            const { categoryId, updateData } = data;
+            const updatedReview = await this.roomService.updateRoomCategoryRating(categoryId, updateData);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, updatedReview })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        }
+    }
+
+    async getCategoryIdsByRoomIds(data, msg) {
+        try {
+            console.log("Handling GET_CATEGORY_IDS");
+            const { roomIds } = data;
+            const categoryIds = await this.roomService.getCategoryIdsByRoomIds(roomIds);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, categoryIds })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

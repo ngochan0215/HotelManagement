@@ -25,8 +25,8 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
-    startSyncRoomStatusJob();
-    startFixRoomLogsJob();
+    // startSyncRoomStatusJob();
+    // startFixRoomLogsJob();
 
     app.use(roomRoute);
     app.use("/category", roomCategoryRoute);

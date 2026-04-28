@@ -33,7 +33,10 @@ class Container {
                 
                 ROOM_EVENTS.FIND_ROOM_LOGS,
                 ROOM_EVENTS.UPDATE_ROOM_LOG,
-                ROOM_EVENTS.INSERT_ROOM_LOG
+                ROOM_EVENTS.INSERT_ROOM_LOG,
+
+                ROOM_EVENTS.GET_CATEGORY_IDS,
+                ROOM_EVENTS.UPDATE_CATEGORY_RATING,
             ]
         });
 

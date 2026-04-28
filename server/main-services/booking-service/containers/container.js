@@ -2,8 +2,10 @@ import Booking from "../models/Booking.js";
 import BookingDetail from "../models/BookingDetail.js";
 import BookingStatusLog from "../models/BookingStatusLog.js";
 import BookingCancellation from "../models/BookingCancellation.js";
+import Review from "../models/Review.js";
 
 import { BookingService } from "../services/bookingService.js";
+import { ReviewService } from "../services/reviewService.js";
 import { BookingEventHandler } from "../events/bookingHandler.js";
 
 import { EventBus } from "../../../shared/messaging/eventBus.js";
@@ -19,6 +21,11 @@ class Container {
             Booking, BookingDetail, BookingStatusLog, BookingCancellation,
             eventBus: this.eventBus,
             sendNotification, sendNotificationsToUsers
+        });
+
+        this.reviewService = new ReviewService({
+            Review, Booking, BookingDetail,
+            eventBus: this.eventBus
         });
 
         this.bookingEventHandler = new BookingEventHandler(this.bookingService, this.eventBus);

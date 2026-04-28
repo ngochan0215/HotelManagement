@@ -6,5 +6,8 @@ export const ROOM_EVENTS = {
 
     UPDATE_ROOM_LOG: "room.update_log",
     FIND_ROOM_LOGS: "room.find_logs",
-    INSERT_ROOM_LOG: "room.insert_room_log"
+    INSERT_ROOM_LOG: "room.insert_room_log",
+
+    GET_CATEGORY_IDS: "room.get_category_ids",
+    UPDATE_CATEGORY_RATING: "room.update_category_rating",
 }

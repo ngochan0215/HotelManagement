@@ -32,7 +32,8 @@ export class RoomService {
         
     createRoomCategoryService = async (data, files) => {
         try {
-            const { category_name, description, max_adults, max_children, default_equipments, price } = data;
+            const { category_name, description, max_adults, max_children, 
+                default_equipments, price } = data;
     
             if (!category_name || !description || !max_adults || !price) {
                 throw new Error("Vui lòng nhập đầy đủ thông tin bắt buộc!");
@@ -1307,4 +1308,38 @@ export class RoomService {
     //         throw err;
     //     }
     // };
+
+    // communication
+    async getCategoryIdsByRoomIds (roomIds) {
+        const rooms = await this.Room.find(
+            { _id: { $in: roomIds } },
+            { category_id: 1 }
+        );
+
+        const categoryIds = [
+            ...new Set(rooms.map((r) => r.category_id.toString()))
+        ];
+
+        return categoryIds;
+    }
+
+    async updateRoomCategoryRating(categoryId, updateData) {
+        try {
+            const { average_rating, review_count } = updateData;
+
+            const updated = await this.RoomCategory.findByIdAndUpdate(categoryId, 
+                {
+                    average_rating: Math.round(average_rating * 10) / 10,
+                    review_count: review_count,
+                },
+                { new: true, runValidators: true }
+            );
+
+            return updated;
+
+        } catch (error) {
+            throw error;
+        }
+    }
+
 }

@@ -24,7 +24,7 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
-    startCustomerTierJob();
+    //startCustomerTierJob();
 
     app.use(customerRoutes);
 

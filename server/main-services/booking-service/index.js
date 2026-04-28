@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 import bookingRoute from "./routes/bookingRoute.js";
+import reviewRoute from "./routes/reviewRoute.js";
 import {
     startCancelPendingBookingJob,
     startCancelCheckinLateBookingJob,
@@ -29,14 +30,15 @@ const startServer = async () => {
     await connectDB(process.env.DB_URL);
     await container.init();
     
-    startCancelPendingBookingJob();
-    startCancelCheckinLateBookingJob();
-    startCheckinReminderJob();
-    startCheckoutReminderJob();
-    startDepositDeadlineReminderJob();
-    startCheckinTimeReminderJob();
+    // startCancelPendingBookingJob();
+    // startCancelCheckinLateBookingJob();
+    // startCheckinReminderJob();
+    // startCheckoutReminderJob();
+    // startDepositDeadlineReminderJob();
+    // startCheckinTimeReminderJob();
 
     app.use(bookingRoute);
+    app.use("/review", reviewRoute);
 
     const PORT = process.env.PORT || 3009;
     app.listen(PORT, () => {

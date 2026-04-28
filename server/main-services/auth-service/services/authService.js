@@ -192,6 +192,8 @@ export class AuthService {
     async buildTokenPayLoad(user) {
         let fullName = "Người dùng";
         let position = "";
+        let employeeId = null;
+        let customerId = null;
         
         if (user.system_role === "customer") {
             const reply = await this.eventBus.request(
@@ -200,9 +202,10 @@ export class AuthService {
             );
 
             if (reply.found) {
+                console.log("Customer found for userId:", reply.customer);
                 fullName = reply.customer.full_name;
+                customerId = reply.customer._id;
             }
-
         } else {
             const reply = await this.eventBus.request(
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
@@ -210,19 +213,21 @@ export class AuthService {
             );
 
             if (reply.found) {
+                console.log("Employee found for userId:", reply.employee);
                 fullName = reply.employee.full_name;
                 position = reply.employee.position;
+                employeeId = reply.employee._id;
             }
         }
 
-        const payload = {
+        let payload = {
             userId: user._id,
             role: user.system_role
         };
 
-        if (position) {
-            payload.position = position;
-        }
+        if (position) payload.position = position;
+        if (employeeId) payload.employeeId = employeeId;
+        if (customerId) payload.customerId = customerId;
 
         return { payload, fullName };
     }

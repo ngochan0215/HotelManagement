@@ -9,6 +9,9 @@ const roomCategorySchema = new mongoose.Schema(
         max_children: { type: Number, required: true, min: 0 },
         price: { type: Number, required: true, min: 0 },
         images: [ { type: String }],
+
+        average_rating: { type: Number, default: 0, min: 0, max: 5 },
+        review_count: { type: Number, default: 0 },
     },
     {
         timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

@@ -26,8 +26,8 @@ const startServer = async () => {
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
-    startImportTicketJob();
-    startInstallTicketJob();
+    // startImportTicketJob();
+    // startInstallTicketJob();
 
     app.use(equipmentRoute);
     app.use("/import", equipmentImportRoute);

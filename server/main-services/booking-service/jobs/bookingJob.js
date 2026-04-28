@@ -331,46 +331,44 @@ const notifyCheckinTimeReminder = async () => {
 };
 
 
-export class BookingJob {
-  startCancelPendingBookingJob = () =>
+export const startCancelPendingBookingJob = () =>
     startCronJob({
       name: "cancel pending bookings (late deposit)",
       schedule: "*/5 * * * *",
       handler: cancelExpiredDepositBookings,
     });
 
-  startCancelCheckinLateBookingJob = () =>
+export const startCancelCheckinLateBookingJob = () =>
     startCronJob({
       name: "cancel checkin late bookings",
       schedule: "*/5 * * * *",
       handler: cancelCheckinLateBookings,
     });
 
-  startCheckinReminderJob = () =>
+export const startCheckinReminderJob = () =>
     startCronJob({
       name: "check-in reminder",
       schedule: "*/5 * * * *",
       handler: notifyCheckinReminder,
     });
 
-  startCheckoutReminderJob = () =>
+export const startCheckoutReminderJob = () =>
     startCronJob({
       name: "check-out reminder",
       schedule: "*/5 * * * *",
       handler: notifyCheckoutReminder,
     });
 
-  startDepositDeadlineReminderJob = () =>
+export const startDepositDeadlineReminderJob = () =>
     startCronJob({
       name: "deposit deadline reminder",
       schedule: "*/5 * * * *",
       handler: notifyDepositDeadlineReminder,
     });
 
-  startCheckinTimeReminderJob = () =>
+export const startCheckinTimeReminderJob = () =>
     startCronJob({
       name: "check-in time reminder",
       schedule: "*/5 * * * *",
       handler: notifyCheckinTimeReminder,
     });
-}
