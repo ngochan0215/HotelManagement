@@ -10,7 +10,7 @@ const notificationSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["booking", "discount", "system", "equipment", "other", "room"],
+      enum: ["booking", "discount", "system", "equipment", "other", "room", "schedule"],
       default: "other",
     },
 
@@ -19,7 +19,7 @@ const notificationSchema = new mongoose.Schema(
         type: String,
         enum: [
           "Order", "Discount", "Booking", "User", "InstallTicket", "InstallDetail", 
-          "CleaningTask",
+          "CleaningTask", "Schedule", "ScheduleContract"
         ],
       },
       refId: {

@@ -2,10 +2,13 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import employeeRoute from "./routes/employeeRoute.js";
+import scheduleRoute from "./routes/scheduleRoute.js";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 
 dotenv.config();
+
+console.log("Starting Employee-Service...");
 
 const startServer = async () => {
     const app = express();
@@ -25,6 +28,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(employeeRoute);
+    app.use("/schedule", scheduleRoute);
 
     const PORT = process.env.PORT || 3003;
 

@@ -1,9 +1,11 @@
 import { EmployeeController } from "../controllers/employeeController.js";
+import { ScheduleController } from "../controllers/scheduleController.js";
 import { verifyToken, isManager, isEmployee } from "../../../shared/middleware/authMiddleware.js";
 import express from "express";
 
 const router = express.Router();
 const controller = new EmployeeController();
+const scheduleController = new ScheduleController();
 
 router.get("/profile/me", verifyToken, controller.getMyProfile);
 router.get("/available/technicians", verifyToken, isManager, controller.getAvailableTechnicians);
@@ -17,20 +19,17 @@ router.post("/:id/create-account", verifyToken, isManager, controller.createAcco
 router.patch("/reset-password/:id", verifyToken, isManager, controller.resetPasswordForEmployee);
 router.patch("/toggle-ban/:id", verifyToken, isManager, controller.toggleBanUser);
 
-// for communication between services
-router.get("/find-by-userId/:id", controller.findEmployeeByUserId);
-router.post("/create-employee/:userId", controller.createEmployee);
+
+// shifts
+router.post("/shifts/add", verifyToken, isManager, scheduleController.createShift);
+router.get("/shifts/all", verifyToken, isManager, scheduleController.getAllShifts);
+router.get("/shifts/:id", verifyToken, isManager, scheduleController.getShiftById);
+router.patch("/shifts/:id", verifyToken, isManager, scheduleController.updateShift);
+router.delete("/shifts/:id", verifyToken, isManager, scheduleController.deleteShift);
 
 // ATTENDANCE
 // router.post("/attendance/checkin", verifyToken, isEmployee, controller.checkInShift);
 // router.post("/attendance/checkout", verifyToken, isEmployee, controller.checkOutShift);
-
-// router.post("/schedules/register", verifyToken, isEmployee, registerSchedule);
-// router.get("/schedules/my", verifyToken, isEmployee, viewMySchedule);
-// router.patch("/schedules/:id", verifyToken, isEmployee, updateSchedule);
-// router.delete("/schedules/:id", verifyToken, isEmployee, deleteSchedule);
-// router.get("/schedules/all", verifyToken, isManager, getAllSchedules);
-// router.get("/schedules/:id", verifyToken, isNotCustomer, getScheduleById);
 
 // CASH OUT
 // router.put("/cashOut", verifyToken, isEmployee, cashOut);

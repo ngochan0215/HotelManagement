@@ -202,7 +202,6 @@ export class AuthService {
             );
 
             if (reply.found) {
-                console.log("Customer found for userId:", reply.customer);
                 fullName = reply.customer.full_name;
                 customerId = reply.customer._id;
             }
@@ -213,7 +212,6 @@ export class AuthService {
             );
 
             if (reply.found) {
-                console.log("Employee found for userId:", reply.employee);
                 fullName = reply.employee.full_name;
                 position = reply.employee.position;
                 employeeId = reply.employee._id;

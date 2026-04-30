@@ -1,11 +1,18 @@
 import Employee from "../models/Employee.js";
+import Shift from "../models/Shifts.js";
+import Schedule from "../models/Schedule.js";
+import Attendance from "../models/Attendance.js";
+import ScheduleContract from "../models/ScheduleContract.js";
 
 import { EmployeeService } from "../services/employeeService.js";
+import { ScheduleService } from "../services/scheduleService.js";
 import { EmployeeEventHandler } from "../events/employeeHandler.js";
 
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+
+import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
 
 class Container {
     constructor() {
@@ -14,6 +21,12 @@ class Container {
         this.employeeService = new EmployeeService({
             Employee,
             eventBus: this.eventBus
+        });
+
+        this.scheduleService = new ScheduleService({
+            Schedule, Attendance, Shift, Employee, ScheduleContract,
+            eventBus: this.eventBus,
+            sendNotification, sendNotificationsToUsers
         });
 
         this.employeeEventHandler = new EmployeeEventHandler(this.employeeService, this.eventBus);
