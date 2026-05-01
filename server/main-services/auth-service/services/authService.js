@@ -327,21 +327,9 @@ export class AuthService {
         user.password = newPassword;
 
         await user.save();
-    }
-
-    async getUserById(userId) {
-        return this.User.findById(userId).select("email system_role avatar isBanned");
-    }
-
-    async getUserByEmail(email) {
-        return this.User.findOne({ email });
-    }
-
-    async updateUser(userId, payload) {
-        return this.User.findByIdAndUpdate(userId, payload, { new: true });
-    }
+    };
 
     async deleteUser(userId) {
         return this.User.findByIdAndDelete(userId);
-    }
+    };
 }

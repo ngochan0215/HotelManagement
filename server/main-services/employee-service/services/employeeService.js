@@ -105,12 +105,18 @@ export class EmployeeService {
     };
 
     async getEmployeesByUserIds (employeeUserIds) {
-        return await this.Employee.find(
-            { user_id: { $in: employeeUserIds } }
-        ).select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
+        try {
+                return await this.Employee.find(
+                { user_id: { $in: employeeUserIds } }
+            ).select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
+
+        } catch (error) {
+            console.log("Error in getting employees by user ids: ", error.message);
+            throw error; 
+        }
     };
 
-    async getEmployeesById (employeeIds) {
+    async getEmployeesByIds (employeeIds) {
         try {
             return await this.Employee.find(
                 { _id: { $in: employeeIds } },
@@ -346,7 +352,7 @@ export class EmployeeService {
         }
     };
 
-    checkIfTechnicianIsAvailable = async (employeeId) => {
+    async checkIfTechnicianIsAvailable (employeeId) {
         try {
             const technicians =  await this.Employee.findOne({
                 _id: employeeId,
@@ -411,16 +417,6 @@ export class EmployeeService {
 
         return profile;
     };
-
-    async findEmployeeById (employeeId) {
-        return this.Employee.findById(employeeId)
-            .select("-created_at -updated_at -__v -createdAt -updatedAt");
-    }
-
-    async findEmployeeByUserId (user_id) {
-        return this.Employee.findOne({ user_id })
-            .select("-created_at -updated_at -__v -createdAt -updatedAt");
-    }
 }
 
     // async checkInShift (employeeId) {

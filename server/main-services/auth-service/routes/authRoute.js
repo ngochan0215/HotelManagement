@@ -15,9 +15,6 @@ router.post("/reset-password", authController.resetPassword);
 router.patch("/admin-reset-pass", authController.adminResetPassword);
 
 // for communication between services
-router.get("/get-user/:id", authController.getUserById);
-router.get("/get-email/:email", authController.getUserByEmail);
-router.patch("/update-user/:id", authController.updateUser);
 router.delete("/delete-user/:id", authController.deleteUser);
 
 export default router;

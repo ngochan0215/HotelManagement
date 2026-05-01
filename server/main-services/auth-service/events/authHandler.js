@@ -19,6 +19,7 @@ export class UserEventHandler {
         }
     }
 
+    // check exists / get user information by user_id
     async getUserInfo(data, msg) {
         try {
             console.log("Handling GET_USER_INFO");
@@ -45,6 +46,7 @@ export class UserEventHandler {
         }
     }
 
+    // check exists / get many users information by user_ids
     async getUsersInfo(data, msg) {
         try {
             console.log("Handling GET_USERS_INFO");

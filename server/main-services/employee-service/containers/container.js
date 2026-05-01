@@ -38,7 +38,6 @@ class Container {
             bindEvents: [
                 EMPLOYEE_EVENTS.REGISTERED,
                 EMPLOYEE_EVENTS.GET_INFO,
-                EMPLOYEE_EVENTS.GET_INFO_USERID,
                 EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
                 EMPLOYEE_EVENTS.CHECK_EXISTS,
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,

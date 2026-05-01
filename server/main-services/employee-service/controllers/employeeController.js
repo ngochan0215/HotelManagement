@@ -7,12 +7,14 @@ export class EmployeeController {
 
     createEmployee = async (req, res) => {
         try {
-            const result = await this.employeeService.createEmployee(req.body);
-            return res.status(201).json(result);
+            const employee = await this.employeeService.createEmployee(req.params.userId, req.body);
+
+            return res.status(200).json({employee});
+            
         } catch (err) {
             return res.status(400).json({ message: err.message });
         }
-    };
+    }
 
     getAllEmployees = async (req, res) => {
         try {
@@ -27,18 +29,6 @@ export class EmployeeController {
         try {
             const employee = await this.employeeService.getEmployeeById(req.params.id);
             return res.status(200).json(employee);
-        } catch (err) {
-            return res.status(400).json({ message: err.message });
-        }
-    };
-
-    getEmployeesById = async (req, res) => {
-        try {
-            const { employeeIds } = req.body;
-            const employees = await this.employeeService.getEmployeesById(employeeIds);
-
-            return res.status(200).json(employees);
-            
         } catch (err) {
             return res.status(400).json({ message: err.message });
         }
@@ -106,24 +96,6 @@ export class EmployeeController {
             return res.status(400).json({ message: err.message });
         }
     };
-
-    findEmployeeByUserId = async (req, res) => {
-        try {
-            const employee = await this.employeeService.findEmployeeByUserId(req.params.id);
-            return res.status(200).json({employee});
-        } catch (err) {
-            return res.status(400).json({ message: err.message });
-        }
-    }
-
-    createEmployee = async (req, res) => {
-        try {
-            const employee = await this.employeeService.createEmployee(req.params.userId, req.body);
-            return res.status(200).json({employee});
-        } catch (err) {
-            return res.status(400).json({ message: err.message });
-        }
-    }
 
     // checkInShift = async (req, res) => {
     //     try {

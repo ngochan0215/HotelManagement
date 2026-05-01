@@ -78,29 +78,12 @@ export class CustomerController {
         }
     };
 
-    getCustomerByUserId = async (req, res) => {
-        try {
-            const customer = await this.customerService.getCustomerByUserId(req.params.userId);
-            res.status(200).json(customer);
-        } catch (error) {
-            res.status(error.status || 500).json({ message: error.message });
-        }
-    };
-
-    findCustomerByPhone = async (req, res) => {
-        const customer = await this.customerService.findCustomerByPhone(req.params.phone);
-        res.json(customer);
-    };
-
-    findCustomerByCCCD = async (req, res) => {
-        const customer = await this.customerService.findCustomerByPhone(req.params.cccd);
-        res.json(customer);
-    };
-
     createCustomer = async (req, res) => {
         try {
             const customer = await this.customerService.createCustomer(req.params.userId, req.body);
+            
             res.status(201).json(customer);
+
         } catch (error) {
             res.status(error.status || 500).json({ message: error.message });
         }

@@ -47,7 +47,7 @@ export class CustomerEventHandler {
     async customerCheckExists(data, msg) {
         try {
             const { customerId } = data;
-            const exists = await this.customerService.findCustomerById(customerId);
+            const exists = await this.customerService.getCustomerById(customerId);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
@@ -74,7 +74,7 @@ export class CustomerEventHandler {
     async checkExistsByUserId(data, msg) {
         try {
             const { customer_user_id } = data;
-            const exists = await this.customerService.getCustomerByUserId(customer_user_id);
+            const exists = await this.customerService.findCustomerByUserId(customer_user_id);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
@@ -97,6 +97,7 @@ export class CustomerEventHandler {
         }
     }
 
+    // get multiple customers information by user_ids
     async getInfosByUserIds(data, msg) {
         try {
             const { customerUserIds } = data;
@@ -123,6 +124,7 @@ export class CustomerEventHandler {
         }
     }
 
+    // get multiple customers information by customer_ids
     async getInfosByIds(data, msg) {
         try {
             const { customerIds } = data;

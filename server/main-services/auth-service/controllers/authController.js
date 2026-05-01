@@ -68,21 +68,6 @@ export class AuthController {
         }
     };
 
-    getUserById = async (req, res) => {
-        const user = await this.authService.getUserById(req.params.id);
-        res.json(user);
-    };
-
-    getUserByEmail = async (req, res) => {
-        const user = await this.authService.getUserByEmail(req.params.email);
-        res.json(user);
-    };
-
-    updateUser = async (req, res) => {
-        const user = await this.authService.updateUser(req.params.id, req.body);
-        res.json(user);
-    };
-
     createAccount = async (req, res) => {
         try {
             const user = await this.authService.createUserAccount(req.body);

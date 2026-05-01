@@ -22,24 +22,6 @@ export class UserService {
         return users;
     }
 
-    async getUserById (userId) {
-        const user = await this.User.findById(userId)
-            .select("email system_role avatar isBanned")
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        
-        return user;
-    };
-
-    async getUsersByIds (userIds) {
-        const users = await this.User.find({ _id: { $in: userIds } })
-            .select("email system_role avatar isBanned");  
-
-        return users;
-    }
-
     async getUserProfile(userId) {
         try {
             const user = await this.User.findById(userId)
@@ -213,5 +195,23 @@ export class UserService {
     
     async updateUser(userId, payload) {
         return this.User.findByIdAndUpdate(userId, payload, { new: true });
+    }
+
+    async getUserById (userId) {
+        const user = await this.User.findById(userId)
+            .select("email system_role avatar isBanned")
+
+        if (!user) {
+            throw new Error("User not found.");
+        }
+        
+        return user;
+    };
+
+    async getUsersByIds (userIds) {
+        const users = await this.User.find({ _id: { $in: userIds } })
+            .select("email system_role avatar isBanned");  
+
+        return users;
     }
 }

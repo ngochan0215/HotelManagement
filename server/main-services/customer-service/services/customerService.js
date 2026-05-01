@@ -67,7 +67,7 @@ export class CustomerService {
         }
     };
 
-    async getCustomerById (customerId) {
+    getCustomerById = async (customerId) => {
         const customer = await this.Customer.findById(customerId)
             .select("-__v -created_at -updated_at -createdAt -updatedAt")
             .lean();
@@ -330,14 +330,6 @@ export class CustomerService {
 
         return newTier;
     };
-
-    async findCustomerByPhone (phone_number) {
-        return this.Customer.findOne({ phone_number });
-    }
-
-    async findCustomerByCCCD (CCCD) {
-        return this.Customer.findOne({ CCCD });
-    }
 
     async getCustomerByUserId (user_id) {
         return this.Customer.findOne({ user_id })

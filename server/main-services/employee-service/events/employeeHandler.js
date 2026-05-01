@@ -12,7 +12,6 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.CHECK_EXISTS]: this.employeeCheckExists.bind(this),
             [EMPLOYEE_EVENTS.CHECK_EXISTS_USERID]: this.employeeCheckExistsByUserId.bind(this),
             [EMPLOYEE_EVENTS.GET_INFO]: this.employeeGetInfo.bind(this),
-            [EMPLOYEE_EVENTS.GET_INFO_USERID]: this.employeeGetInfoByUserId.bind(this),
             [EMPLOYEE_EVENTS.GET_INFOS_USERIDS]: this.employeeGetInfosByUserIds.bind(this),
             [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
             [EMPLOYEE_EVENTS.GET_RECEPTIONISTS]: this.getAllReceptionists.bind(this)
@@ -45,13 +44,12 @@ export class EmployeeEventHandler {
         }
     }
 
-    // check employee existence as well as his information (using employee_id)
-    // only return employee information without user information 
+    // check exists / get employee information by employee_id
     async employeeCheckExists(data, msg) {
         try {
             console.log("Handling EMPLOYEE_CHECK_EXISTS");
             const { employee_id } = data;
-            const employee = await this.employeeService.findEmployeeById(employee_id);
+            const employee = await this.employeeService.getEmployeeById(employee_id);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
@@ -73,13 +71,12 @@ export class EmployeeEventHandler {
         }
     }
 
-    // check employee existence as well as his information (using employee_user_id)
-    // only return employee information without user information 
+    // check exists / get employee information by user_id
     async employeeCheckExistsByUserId(data, msg) {
         try {
             console.log("Handling EMPLOYEE_CHECK_EXISTS_USERID");
             const { employee_user_id } = data;
-            const employee = await this.employeeService.findEmployeeByUserId(employee_user_id);
+            const employee = await this.employeeService.getEmployeeByUserId(employee_user_id);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
@@ -106,38 +103,11 @@ export class EmployeeEventHandler {
         try {
             console.log("Handling EMPLOYEE_GET_INFO");
             const { employee_ids } = data;
-            const employees = await this.employeeService.getEmployeesById(employee_ids);
+            const employees = await this.employeeService.getEmployeesByIds(employee_ids);
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, found: !!employees, employees })),
-                {
-                    correlationId: msg.properties.correlationId,
-                    persistent: false
-                }
-            );
-        } catch (error) {
-            this.eventBus.channel.sendToQueue(
-                msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: false, message: error.message })),
-                {
-                    correlationId: msg.properties.correlationId,
-                    persistent: false
-                }
-            );
-        }
-    }
-
-    // get one employee information by user_id
-    async employeeGetInfoByUserId(data, msg) {
-        try {
-            console.log("Handling EMPLOYEE_GET_INFO_USERID");
-            const { employee_user_id } = data;
-            const employee = await this.employeeService.getEmployeeByUserId(employee_user_id);
-
-            this.eventBus.channel.sendToQueue(
-                msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: true, found: !!employee, employee })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
