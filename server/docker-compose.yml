@@ -82,6 +82,23 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  cleaning-service:
+    image: cleaning-service
+    container_name: cleaning-service
+    ports:
+      - "3004:3004"
+    environment:
+      DB_URL: ${DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./cleaning-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -94,3 +111,4 @@ services:
       - auth-service
       - customer-service
       - employee-service
+      - cleaning-service
