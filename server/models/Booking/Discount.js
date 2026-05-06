@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// discount: áp dụng cho toàn hệ thống, system tự apply
 const discountSchema = new mongoose.Schema(
   {
     code: { type: String, required: true, unique: true, uppercase: true },

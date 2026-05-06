@@ -9,16 +9,11 @@ export class DiscountService {
 
     async createDiscount(data) {
         try {
-            const { code, name, description, discount,
+            const { name, description, discount,
             conditions, begin_date, end_date, priority } = data;
 
-            if (!code || !name || !discount || !discount.type || discount.value == null) {
-                throw new Error("Thiếu thông tin bắt buộc (mã, tên, thể lệ khuyến mãi)");
-            }
-
-            const existing = await this.Discount.findOne({ code: code.toUpperCase() });
-            if (existing) {
-                throw new Error("Mã khuyến mãi đã tồn tại.");
+            if (!name || !discount || !discount.type || discount.value == null) {
+                throw new Error("Thiếu thông tin bắt buộc (tên, thể lệ khuyến mãi)");
             }
 
             const existingName = await this.Discount.findOne({ name });
@@ -37,10 +32,11 @@ export class DiscountService {
             if (now >= begin && now <= end) {
                 is_active = true;
                 status = "ongoing";
-            } else if (now > end) status = "finished";
+            } else if (now > end) {
+                status = "finished";
+            }
 
             const newDiscount = await this.Discount.create({
-                code: code.toUpperCase(),
                 name,
                 description,
                 discount,
@@ -62,14 +58,13 @@ export class DiscountService {
 
     async getAllDiscounts(query = {}) {
         try {
-            const { status, type, code, name, min_order_value, 
-                customer_tier, date, day, hour, page = 1, limit = 10 } = query;
+            const { status, type, name, min_order_value, date, day, hour, 
+                page = 1, limit = 10 } = query;
 
             const filter = {};
 
             if (status) filter.status = status;
             if (type) filter["discount.type"] = type;
-            if (code) filter.code = code;
             if (name) filter.name = name;
 
             // date filter
@@ -82,10 +77,6 @@ export class DiscountService {
             // condition filters
             if (min_order_value) {
                 filter["conditions.min_order_value"] = { $lte: Number(min_order_value) };
-            }
-
-            if (customer_tier) {
-                filter["conditions.customer_tiers"] = customer_tier;
             }
 
             if (day !== undefined) {
@@ -198,17 +189,6 @@ export class DiscountService {
         //   }
         // }
 
-            if (payload.code) {
-                const exist = await this.Discount.findOne({
-                    code: payload.code.toUpperCase(),
-                    _id: { $ne: discountId }
-                });
-                if (exist) {
-                    throw new Error("Mã khuyến mãi đã tồn tại.");
-                }
-                discount.code = payload.code.toUpperCase();
-            }
-
             if (payload.name) {
                 const exist = await this.Discount.findOne({
                     name: payload.name,
@@ -271,87 +251,157 @@ export class DiscountService {
         }
     };
 
-    async checkDiscountAvailability(discount, customerId, orderValue) {
-        const now = new Date();
+    // async checkDiscountAvailability(discount, customerId, orderValue) {
+    //     const now = new Date();
         
-        if (!discount.is_active) 
-            return { available: false, reason: "Khuyến mãi chưa được kích hoạt" };
-        if (now < discount.begin_date) 
-            return { available: false, reason: "Khuyến mãi chưa bắt đầu" };
-        if (now > discount.end_date) 
-            return { available: false, reason: "Khuyến mãi đã kết thúc" };
+    //     if (!discount.is_active) 
+    //         return { available: false, reason: "Khuyến mãi chưa được kích hoạt" };
+    //     if (now < discount.begin_date) 
+    //         return { available: false, reason: "Khuyến mãi chưa bắt đầu" };
+    //     if (now > discount.end_date) 
+    //         return { available: false, reason: "Khuyến mãi đã kết thúc" };
         
-        const conditions = discount.conditions || {};
+    //     const conditions = discount.conditions || {};
         
-        // if (conditions.rule_type === "FIRST_BOOKING") {
-        //     const hasPreviousBooking = await this.Booking.exists({
-        //         customer_id: customerId,
-        //         status: { $in: ["confirmed", "in_progress", "completed"] }
-        //     });
-        //     if (hasPreviousBooking) {
-        //         throw new Error("Chỉ áp dụng cho khách hàng chưa có đơn hàng nào trước đây");
-        //     }
-        // }
+    //     // if (conditions.rule_type === "FIRST_BOOKING") {
+    //     //     const hasPreviousBooking = await this.Booking.exists({
+    //     //         customer_id: customerId,
+    //     //         status: { $in: ["confirmed", "in_progress", "completed"] }
+    //     //     });
+    //     //     if (hasPreviousBooking) {
+    //     //         throw new Error("Chỉ áp dụng cho khách hàng chưa có đơn hàng nào trước đây");
+    //     //     }
+    //     // }
         
-        if (conditions.rule_type === "MIN_ORDER_VALUE" && conditions.min_order_value) {
-            if (orderValue < conditions.min_order_value) {
-                throw new Error(`Chỉ áp dụng cho đơn hàng có giá trị tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`);
-            }
-        }
+    //     if (conditions.rule_type === "MIN_ORDER_VALUE" && conditions.min_order_value) {
+    //         if (orderValue < conditions.min_order_value) {
+    //             throw new Error(`Chỉ áp dụng cho đơn hàng có giá trị tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`);
+    //         }
+    //     }
         
-        if (conditions.customer_tiers && conditions.customer_tiers.length > 0) {
-            const reply = await this.eventBus.request(
-                CUSTOMER_EVENTS.CHECK_EXISTS,
-                { customerId }
-            );
-            if (!reply.success) {
-                throw new Error(reply.message);
-            }
+    //     if (conditions.customer_tiers && conditions.customer_tiers.length > 0) {
+    //         const reply = await this.eventBus.request(
+    //             CUSTOMER_EVENTS.CHECK_EXISTS,
+    //             { customerId }
+    //         );
+    //         if (!reply.success) {
+    //             throw new Error(reply.message);
+    //         }
 
-            const customer = reply.customer;
-            const customerTier = this.mapLoyaltyToTier(customer.loyalty || "bronze", customer.booking_count || 0);
+    //         const customer = reply.customer;
+    //         const customerTier = this.mapLoyaltyToTier(customer.loyalty || "bronze", customer.booking_count || 0);
 
-            if (!conditions.customer_tiers.includes(customerTier)) {
-                const tierNames = { NEW: "Mới", LOYAL: "Thân thiết", VIP: "VIP" };
-                const allowedTiers = conditions.customer_tiers.map(t => tierNames[t] || t).join(", ");
-                throw new Error(`Chỉ áp dụng cho khách hàng hạng: ${allowedTiers}`);
-            }
-        }
+    //         if (!conditions.customer_tiers.includes(customerTier)) {
+    //             const tierNames = { NEW: "Mới", LOYAL: "Thân thiết", VIP: "VIP" };
+    //             const allowedTiers = conditions.customer_tiers.map(t => tierNames[t] || t).join(", ");
+    //             throw new Error(`Chỉ áp dụng cho khách hàng hạng: ${allowedTiers}`);
+    //         }
+    //     }
         
-        if (conditions.days_of_week && conditions.days_of_week.length > 0) {
-            const dayOfWeek = now.getDay();
-            if (!conditions.days_of_week.includes(dayOfWeek)) {
-                const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
-                const validDays = conditions.days_of_week.map(d => dayNames[d]).join(", ");
-                throw new Error(`Chỉ áp dụng vào các ngày: ${validDays}`);
-            }
-        }
+    //     if (conditions.days_of_week && conditions.days_of_week.length > 0) {
+    //         const dayOfWeek = now.getDay();
+    //         if (!conditions.days_of_week.includes(dayOfWeek)) {
+    //             const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+    //             const validDays = conditions.days_of_week.map(d => dayNames[d]).join(", ");
+    //             throw new Error(`Chỉ áp dụng vào các ngày: ${validDays}`);
+    //         }
+    //     }
         
-        if (conditions.hours_range) {
-            const { from, to } = conditions.hours_range;
-            const hour = now.getHours();
-            if (hour < from || hour > to) {
-                throw new Error(`Chỉ áp dụng vào khung giờ: ${from}:00 - ${to}:00`);
-            }
-        }
+    //     if (conditions.hours_range) {
+    //         const { from, to } = conditions.hours_range;
+    //         const hour = now.getHours();
+    //         if (hour < from || hour > to) {
+    //             throw new Error(`Chỉ áp dụng vào khung giờ: ${from}:00 - ${to}:00`);
+    //         }
+    //     }
         
-        // Kiểm tra task_ids (nếu có, có thể bỏ qua hoặc check sau)
-        // task_ids thường dùng cho SEASONAL, có thể check sau nếu cần
+    //     // Kiểm tra task_ids (nếu có, có thể bỏ qua hoặc check sau)
+    //     // task_ids thường dùng cho SEASONAL, có thể check sau nếu cần
         
-        return { available: true };
-    };
+    //     return { available: true };
+    // };
 
-    async getAvailableDiscounts(query = {}) {
+    // async getAvailableDiscounts(query = {}) {
+    //     try {
+    //         const { customer_id, order_value } = query;
+            
+    //         if (!customer_id) {
+    //             throw new Error("Thiếu customer_id");
+    //         }
+            
+    //         const orderValue = order_value ? parseFloat(order_value) : 0;
+    //         const now = new Date();
+            
+    //         const discounts = await this.Discount.find({
+    //             is_active: true,
+    //             begin_date: { $lte: now },
+    //             end_date: { $gte: now }
+    //         })
+    //             .select("-__v")
+    //             .sort({ priority: -1, created_at: -1 })
+    //             .lean();
+            
+    //         const discountsWithAvailability = await Promise.all(
+    //             discounts.map(async (discount) => {
+    //                 const availability = await this.checkDiscountAvailability( discount, customer_id, orderValue );
+                
+    //                 // calculate discount amount for display
+    //                 let discountAmount = 0;
+    //                 let discountText = "";
+                    
+    //                 if (availability.available && orderValue > 0) {
+    //                     if (discount.discount.type === "PERCENT") {
+    //                         discountAmount = Math.round(orderValue * discount.discount.value / 100);
+    //                         if (discount.discount.max_discount && discountAmount > discount.discount.max_discount) {
+    //                             discountAmount = discount.discount.max_discount;
+    //                         }
+    //                         discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
+    //                     } else {
+    //                         discountAmount = discount.discount.value;
+    //                         discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
+    //                     }
+    //                 } else {
+    //                     if (discount.discount.type === "PERCENT") {
+    //                         discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
+    //                     } else {
+    //                         discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
+    //                     }
+    //                 }
+                    
+    //                 return {
+    //                     id: discount._id.toString(),
+    //                     code: discount.code,
+    //                     name: discount.name,
+    //                     description: discount.description || "",
+    //                     discount_type: discount.discount.type,
+    //                     discount_value: discount.discount.value,
+    //                     max_discount: discount.discount.max_discount,
+    //                     discount_text: discountText,
+    //                     discount_amount: discountAmount,
+    //                     priority: discount.priority || 1,
+    //                     begin_date: discount.begin_date,
+    //                     end_date: discount.end_date,
+    //                     conditions: discount.conditions || {},
+    //                     is_available: availability.available,
+    //                     availability_reason: availability.reason || null
+    //                 };
+    //             })
+    //         );
+            
+    //         return discountsWithAvailability;
+            
+    //     } catch (err) {
+    //         console.error("Error getting available discounts:", err);
+    //         throw err;
+    //     }
+    // };
+
+    // called by booking service — returns top 2 discounts ranked by priority then savings
+    
+    async getApplicableDiscounts(orderValue = 0) {
         try {
-            const { customer_id, order_value } = query;
-            
-            if (!customer_id) {
-                throw new Error("Thiếu customer_id");
-            }
-            
-            const orderValue = order_value ? parseFloat(order_value) : 0;
             const now = new Date();
-            
+
             const discounts = await this.Discount.find({
                 is_active: true,
                 begin_date: { $lte: now },
@@ -360,70 +410,92 @@ export class DiscountService {
                 .select("-__v")
                 .sort({ priority: -1, created_at: -1 })
                 .lean();
-            
-            const discountsWithAvailability = await Promise.all(
-                discounts.map(async (discount) => {
-                    const availability = await this.checkDiscountAvailability( discount, customer_id, orderValue );
-                
-                    // calculate discount amount for display
-                    let discountAmount = 0;
-                    let discountText = "";
-                    
-                    if (availability.available && orderValue > 0) {
-                        if (discount.discount.type === "PERCENT") {
-                            discountAmount = Math.round(orderValue * discount.discount.value / 100);
-                            if (discount.discount.max_discount && discountAmount > discount.discount.max_discount) {
-                                discountAmount = discount.discount.max_discount;
-                            }
-                            discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
-                        } else {
-                            discountAmount = discount.discount.value;
-                            discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
-                        }
-                    } else {
-                        if (discount.discount.type === "PERCENT") {
-                            discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
-                        } else {
-                            discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
-                        }
-                    }
-                    
-                    return {
-                        id: discount._id.toString(),
-                        code: discount.code,
-                        name: discount.name,
-                        description: discount.description || "",
-                        discount_type: discount.discount.type,
-                        discount_value: discount.discount.value,
-                        max_discount: discount.discount.max_discount,
-                        discount_text: discountText,
-                        discount_amount: discountAmount,
-                        priority: discount.priority || 1,
-                        begin_date: discount.begin_date,
-                        end_date: discount.end_date,
-                        conditions: discount.conditions || {},
-                        is_available: availability.available,
-                        availability_reason: availability.reason || null
-                    };
-                })
+
+            // filter by conditions, then calculate savings
+            const eligible = discounts
+                .filter(d => this.checkDiscountConditions(d, orderValue))
+                .map(d => ({
+                    ...d,
+                    savings: this.calculateSavings(d.discount, orderValue)
+                }));
+
+            // sort: priority desc, then savings desc as tiebreaker
+            eligible.sort((a, b) =>
+                b.priority !== a.priority
+                    ? b.priority - a.priority
+                    : b.savings - a.savings
             );
-            
-            return discountsWithAvailability;
-            
+
+            // pick top 2
+            return eligible.slice(0, 2).map(d => ({
+                id: d._id.toString(),
+                name: d.name,
+                description: d.description || "",
+                discount_type: d.discount.type,
+                discount_value: d.discount.value,
+                max_discount: d.discount.max_discount,
+                discount_text: this.formatDiscountText(d.discount),
+                savings: d.savings,
+                priority: d.priority,
+                begin_date: d.begin_date,
+                end_date: d.end_date,
+                conditions: d.conditions || {}
+            }));
+
         } catch (err) {
-            console.error("Error getting available discounts:", err);
+            console.error("Error getting applicable discounts:", err);
             throw err;
         }
-    };
+    }
 
     // helper
+
+    checkDiscountConditions(discount, orderValue) {
+        const conditions = discount.conditions || {};
+
+        if (conditions.min_order_value && orderValue < conditions.min_order_value) {
+            return false;
+        }
+
+        const now = new Date();
+
+        if (conditions.days_of_week && conditions.days_of_week.length > 0) {
+            if (!conditions.days_of_week.includes(now.getDay())) return false;
+        }
+
+        if (conditions.hours_range) {
+            const { from, to } = conditions.hours_range;
+            const hour = now.getHours();
+            if (hour < from || hour > to) return false;
+        }
+
+        // room_category_ids / service_category_ids are checked at booking level
+        // since this service doesn't have access to booking details
+
+        return true;
+    }
+
+    calculateSavings(discount, orderValue) {
+        if (discount.type === "FIXED") {
+            return discount.value;
+        }
+        const raw = Math.round(orderValue * discount.value / 100);
+        return discount.max_discount ? Math.min(raw, discount.max_discount) : raw;
+    }
+
+    formatDiscountText(discount) {
+        if (discount.type === "PERCENT") {
+            return `Giảm ${discount.value}%${discount.max_discount ? ` (tối đa ${discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
+        }
+        return `Giảm ${discount.value.toLocaleString("vi-VN")}đ`;
+    }
     
-    mapLoyaltyToTier(loyalty, bookingCount) {
-        if (bookingCount === 0) return "NEW";
-        if (loyalty === "platinum") return "VIP";
-        if (["silver", "gold"].includes(loyalty)) return "LOYAL";
-        return "NEW";
-    };
+    // mapLoyaltyToTier(loyalty, bookingCount) {
+    //     if (bookingCount === 0) return "NEW";
+    //     if (loyalty === "platinum") return "VIP";
+    //     if (["silver", "gold"].includes(loyalty)) return "LOYAL";
+    //     return "NEW";
+    // };
 
     validateDiscount(discount) {
         if (!discount || !discount.type || discount.value == null) {
@@ -460,11 +532,11 @@ export class DiscountService {
     validateConditions(conditions) {
         if (!conditions) return;
 
-        const { rule_type, min_order_value, days_of_week, hours_range, customer_tiers, room_category_ids } = conditions;
+        const { min_order_value, days_of_week, hours_range, service_category_ids , room_category_ids } = conditions;
 
-        if (rule_type && !["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"].includes(rule_type)) {
-            throw new Error("Điều kiện áp dụng voucher không hợp lệ.");
-        }
+        // if (rule_type && !["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"].includes(rule_type)) {
+        //     throw new Error("Điều kiện áp dụng voucher không hợp lệ.");
+        // }
 
         if (min_order_value != null && min_order_value < 0) {
             throw new Error("Tiền đơn hàng tối thiểu không được âm");
@@ -488,16 +560,14 @@ export class DiscountService {
             }
         }
 
-        if (customer_tiers) {
-            if (!Array.isArray(customer_tiers)) {
-                throw new Error("customer_tiers phải là mảng");
-            }
-
-            const validTiers = ["bronze", "silver", "gold", "platinum"];
-            if (customer_tiers.some(tier => !validTiers.includes(tier))) {
-                throw new Error("Hạng khách hàng không hợp lệ");
-            }
+        if (room_category_ids) {
+            if (!Array.isArray(room_category_ids))
+                throw new Error("room_category_ids phải là mảng");
+            
+            if (room_category_ids.some(id => !mongoose.isValidObjectId(id)))
+                throw new Error("room_category_ids chứa ID không hợp lệ");
         }
+
 
         if (room_category_ids) {
             if (!Array.isArray(room_category_ids)) {

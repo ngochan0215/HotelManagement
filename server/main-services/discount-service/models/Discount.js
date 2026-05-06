@@ -1,10 +1,10 @@
 import mongoose from "../../../shared/config/mongoose.js";
 
-// discount: áp dụng cho toàn hệ thống, system tự apply
+// Discount: system auto-applies, no code required
 const discountSchema = new mongoose.Schema(
   {
-    code: { type: String, required: true, unique: true, uppercase: true },
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
+    
     description: { type: String },
 
     discount: {
@@ -13,51 +13,55 @@ const discountSchema = new mongoose.Schema(
         enum: ["PERCENT", "FIXED"],
         required: true
       },
-      value: {
-        type: Number,
-        required: true
-      },
+
+      value: { type: Number, required: true },
+      
       max_discount: Number
     },
 
     conditions: {
-        rule_type: {
-            type: String,
-            enum: ["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"],
-            default: "NONE"
-        },
-        min_order_value: Number,
-        room_category_ids: [ { type: mongoose.Schema.Types.ObjectId, default: null } ],
-        days_of_week: [Number], // 0-6
-        hours_range: {
-            from: Number, // 0-23
-            to: Number
-        },
-        customer_tiers: [String],
+      rule_type: {
+        type: String,
+        enum: ["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"],
+        default: "NONE"
+      },
+
+      min_order_value: { type: Number, default: 0 },
+
+      room_category_ids: [{ type: mongoose.Schema.Types.ObjectId }],
+
+      service_category_ids: [{ type: mongoose.Schema.Types.ObjectId }],
+
+      days_of_week: [{ type: Number, min: 0, max: 6 }],
+
+      hours_range: {
+        from: { type: Number, min: 0, max: 23 },
+        to:   { type: Number, min: 0, max: 23 }
+      }
     },
 
-    begin_date: Date,
-    end_date: Date,
+    begin_date: { type: Date, required: true },
+    
+    end_date:   { type: Date, required: true },
 
-    priority: {
-      type: Number,
-      default: 1 // số càng cao càng ưu tiên
-    },
+    priority: { type: Number, default: 1 }, // higher = picked first
 
-    is_active: {
-      type: Boolean,
-      default: true
-    },
-
-    status: { type: String, enum: ["upcoming", "ongoing", "finished"], default: "upcoming" }
-  }, 
-  { 
+    is_active: { type: Boolean, default: false },
+    
+    status: {
+      type: String,
+      enum: ["upcoming", "ongoing", "finished"],
+      default: "upcoming"
+    }
+  },
+  {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
   }
 );
 
+discountSchema.index({ status: 1, is_active: 1 });
 discountSchema.index({ begin_date: 1, end_date: 1 });
-discountSchema.index({ code: 1, name: 1 });
+discountSchema.index({ priority: -1 });
 
 const Discount = mongoose.models.Discount || mongoose.model("Discount", discountSchema);
 export default Discount;

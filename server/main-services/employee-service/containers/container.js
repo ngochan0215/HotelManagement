@@ -3,6 +3,8 @@ import Shift from "../models/Shifts.js";
 import Schedule from "../models/Schedule.js";
 import Attendance from "../models/Attendance.js";
 import ScheduleContract from "../models/ScheduleContract.js";
+import EmployeeEarning from "../models/EmployeeEarning.js";
+import EmployeePayout from "../models/EmployeePayout.js";
 
 import { EmployeeService } from "../services/employeeService.js";
 import { ScheduleService } from "../services/scheduleService.js";
@@ -19,7 +21,7 @@ class Container {
         this.eventBus = new EventBus();
 
         this.employeeService = new EmployeeService({
-            Employee,
+            Employee, Attendance, Shift, Schedule, ScheduleContract, EmployeeEarning, EmployeePayout,
             eventBus: this.eventBus
         });
 

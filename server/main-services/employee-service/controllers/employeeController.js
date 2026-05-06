@@ -97,21 +97,61 @@ export class EmployeeController {
         }
     };
 
-    // checkInShift = async (req, res) => {
-    //     try {
-    //         await this.employeeService.checkInShift(req.params.id);
-    //         return res.status(200).json({ message: "Check-in chấm công thành công." });
-    //     } catch (err) {
-    //         return res.status(400).json({ message: err.message });
-    //     }
-    // };
+    checkInShift = async (req, res) => {
+        try {
+            const attendance = await this.employeeService.checkInShift(req.user.userId, req.params.scheduleId);
 
-    // checkOutShift = async (req, res) => {
-    //     try {
-    //         await this.employeeService.checkOutShift(req.params.id);
-    //         return res.status(200).json({ message: "Check-out chấm công thành công." });
-    //     } catch (err) {
-    //         return res.status(400).json({ message: err.message });
-    //     }
-    // };
+            return res.status(200).json({ message: "Check-in shift successfully.", attendance });
+
+        } catch (err) {
+            return res.status(400).json({ message: err.message });
+        }
+    };
+
+    checkOutShift = async (req, res) => {
+        try {
+            const { attendance, earning, next_shift } = await this.employeeService.checkOutShift(req.user.userId);
+
+            return res.status(200).json({ message: "Check-out shift successfully.", attendance, earning, next_shift });
+
+        } catch (err) {
+            return res.status(400).json({ message: err.message });
+        }
+    };
+
+    // manager views employee earnings
+    getEmployeeEarningById = async (req, res) => {
+        try {
+            const employeeId = req.params.employeeId;
+            const result = await this.employeeService.getEmployeeEarningById(employeeId, req.query);
+
+            res.status(200).json({ success: true, data: result });
+
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    };
+
+    getAllEmployeesEarnings = async (req, res) => {
+        try {
+            const result = await this.employeeService.getAllEmployeesEarnings(req.query);
+
+            res.status(200).json({ success: true, data: result });
+
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    };
+
+    // employee views own earnings
+    getMyEarnings = async (req, res) => {
+        try {
+            const result = await this.employeeService.getMyEarnings(req.user.userId, req.query);
+
+            res.status(200).json({ success: true, data: result });
+
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    };
 }

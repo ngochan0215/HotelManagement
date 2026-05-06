@@ -14,6 +14,17 @@ const attendanceSchema = new mongoose.Schema(
             required: true,
         },
 
+        shift_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Shift",
+            required: true,
+        },
+
+        work_date: {
+            type: Date,
+            required: true,
+        },
+
         check_in: {
             type: Date,
             default: null,
@@ -26,7 +37,7 @@ const attendanceSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["present", "late", "absent", "on_leave"],
+            enum: ["present", "late", "absent", "on_leave", "early_leave"],
             required: true,
             default: "absent",
         },
@@ -52,6 +63,8 @@ attendanceSchema.index(
   { employee_id: 1, schedule_id: 1 },
   { unique: true }
 );
+attendanceSchema.index({ employee_id: 1, work_date: 1 });
+attendanceSchema.index({ work_date: 1 });
 
 const Attendance = mongoose.models.Attendance || mongoose.model("Attendance", attendanceSchema);
 export default Attendance;

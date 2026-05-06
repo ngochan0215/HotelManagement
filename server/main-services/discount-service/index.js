@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import discountRoute from "./routes/discountRoute.js";
+import voucherRoute from "./routes/voucherRoute.js";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
 
@@ -25,6 +26,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(discountRoute);
+    app.use("/voucher", voucherRoute);
 
     const PORT = process.env.PORT || 3006;
 

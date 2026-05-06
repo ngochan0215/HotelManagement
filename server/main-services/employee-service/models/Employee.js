@@ -2,10 +2,14 @@ import mongoose from "../../../shared/config/mongoose.js";
 
 const employeeSchema = new mongoose.Schema(
     {
-        user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false, unique: true },
+        user_id: { type: mongoose.Schema.Types.ObjectId, required: false, unique: true },
+        
         full_name: { type: String, required: true, trim: true },
+        
         date_birth: { type: Date },
+        
         phone_number: { type: String, required: true, unique: true, trim: true },
+        
         CCCD: { type: String, unique: true, required: true },
         
         position: { 
@@ -15,11 +19,15 @@ const employeeSchema = new mongoose.Schema(
         },
         
         status: { type: String, enum: ["working", "resign"], default: "working" },
-        fixed_salary: { type: Number },
+        
+        fixed_salary: { type: Number }, // per hour
+        
         working_year: { type: Number, default: 0 },
 
         BIN: {type: String }, //6 số đầu của thẻ ngân hàng
+        
         account_number: {type: String }, //số tài khoản ngân hàng (không phải số thẻ nhé)
+       
         bank_shortName: {type: String }, //mã ngân hàng (key từ API bankcodes)  
     }, 
     { 

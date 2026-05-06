@@ -18,7 +18,6 @@ router.post("/:id/create-account", verifyToken, isManager, controller.createAcco
 router.patch("/reset-password/:id", verifyToken, isManager, controller.resetPasswordForEmployee);
 router.patch("/toggle-ban/:id", verifyToken, isManager, controller.toggleBanUser);
 
-
 // shifts
 router.post("/shifts/add", verifyToken, isManager, scheduleController.createShift);
 router.get("/shifts/all", verifyToken, isManager, scheduleController.getAllShifts);
@@ -26,20 +25,17 @@ router.get("/shifts/:id", verifyToken, isManager, scheduleController.getShiftByI
 router.patch("/shifts/:id", verifyToken, isManager, scheduleController.updateShift);
 router.delete("/shifts/:id", verifyToken, isManager, scheduleController.deleteShift);
 
-// ATTENDANCE
-// router.post("/attendance/checkin", verifyToken, isEmployee, controller.checkInShift);
-// router.post("/attendance/checkout", verifyToken, isEmployee, controller.checkOutShift);
+// attendance and earnings
+router.get("/earnings/my", verifyToken, isEmployee, controller.getMyEarnings);
+router.get("/earnings/all", verifyToken, isManager, controller.getAllEmployeesEarnings);
+router.get("/earnings/:employeeId", verifyToken, isManager, controller.getEmployeeEarningById);
+
+router.post("/attendance/checkin/:scheduleId", verifyToken, isEmployee, controller.checkInShift);
+router.post("/attendance/checkout", verifyToken, isEmployee, controller.checkOutShift);
 
 // CASH OUT
 // router.put("/cashOut", verifyToken, isEmployee, cashOut);
 // router.get("/cashOut", verifyToken, isEmployee, amountCashout);
 // router.get("/cashOut/available", verifyToken, isEmployee, availableCashoutAmount);
-
-// // EARNINGS & PAYOUTS
-// router.get("/earnings", verifyToken, isEmployee, getEarningsHistory);
-// router.get("/payouts", verifyToken, isEmployee, getPayoutHistory);
-
-// // SALARY CALCULATION (Manager only)
-// router.post("/salary/calculate", verifyToken, isManager, calculateEmployeeSalary);
 
 export default router;

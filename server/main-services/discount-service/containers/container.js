@@ -1,6 +1,11 @@
 import Discount from "../models/Discount.js";
+import Voucher from "../models/Voucher.js";
+
 import { DiscountService } from "../services/discountService.js";
+import { VoucherService } from "../services/voucherService.js";
+
 import { DiscountEventHandler } from "../events/discountHandler.js";
+
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
@@ -11,6 +16,11 @@ class Container {
 
         this.discountService = new DiscountService({
             Discount,
+            eventBus: this.eventBus
+        });
+
+        this.voucherService = new VoucherService({
+            Voucher,
             eventBus: this.eventBus
         });
 

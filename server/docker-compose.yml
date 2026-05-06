@@ -60,7 +60,7 @@ services:
     ports:
       - "3003:3003"
     environment:
-      DB_URL: ${USER_DB_URL}
+      DB_URL: ${EMPLOYEE_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
