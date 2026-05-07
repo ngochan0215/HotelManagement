@@ -106,17 +106,30 @@ export class VoucherController {
 
     getAvailableVouchers = async (req, res) => {
         try {
-            const availableVouchers = await this.voucherService.getAvailableVouchers(req.user.customerId, req.body);
+            const { order_value } = req.query;
+            const customerId = req.user.customerId;
+
+            const orderValue = order_value ? parseFloat(order_value) : 0;
+
+            if (isNaN(orderValue) || orderValue < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Giá trị đơn hàng không hợp lệ"
+                });
+            }
+
+            const vouchers = await this.voucherService.getAvailableVouchers(customerId, orderValue);
 
             return res.status(200).json({
                 success: true,
-                data: availableVouchers
+                data: vouchers
             });
-        
+
         } catch (err) {
+            console.error("Error getting available vouchers:", err);
             return res.status(500).json({
                 success: false,
-                message: "SERVER ERROR: " + err.message
+                message: err.message
             });
         }
     };

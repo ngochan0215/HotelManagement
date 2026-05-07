@@ -9,7 +9,8 @@ export class VoucherService {
 
     async createVoucher(data) {
         try {
-            const { code, name, description, discount, conditions, begin_date, end_date, priority, max_uses } = data;
+            const { code, name, description, discount, conditions, 
+                begin_date, end_date, priority, max_uses } = data;
 
             if (!code || !name || !discount || !discount.type || discount.value == null) {
                 throw new Error("Thiếu thông tin bắt buộc (mã, tên, thể lệ voucher)");
@@ -66,7 +67,8 @@ export class VoucherService {
 
     async getAllVouchers(query = {}) {
         try {
-            const { status, type, code, name, min_order_value, customer_tier, date, day, hour } = query;
+            const { status, type, code, name, min_order_value, 
+                customer_tier, date, day, hour } = query;
 
             const filter = {};
 
@@ -159,8 +161,9 @@ export class VoucherService {
                 if (payload.max_uses < 1) 
                     throw new Error("Số lượt sử dụng tối đa phải >= 1");
                 
-                if (payload.max_uses < voucher.used_count) {
-                    throw new Error(`Số lượt tối đa không thể nhỏ hơn số lượt đã dùng (${voucher.used_count})`);
+                const effectiveUsed = voucher.used_count + voucher.pending_use.length;
+                if (payload.max_uses < effectiveUsed) {
+                    throw new Error(`Số lượt tối đa không thể nhỏ hơn số lượt đã dùng và đang chờ (${effectiveUsed})`);
                 }
 
                 voucher.max_uses = payload.max_uses;
@@ -262,8 +265,7 @@ export class VoucherService {
                 status: "ongoing",
                 $expr: { $lt: ["$used_count", "$max_uses"] } // not exhausted
             })
-                .select("-__v -used_by")
-                .sort({ priority: -1, created_at: -1 })
+                .select("-__v -used_by -pending_use")
                 .lean();
 
             // fetch customer once for tier check
@@ -495,55 +497,81 @@ export class VoucherService {
     }
 
     // helpers 
-    
+
     async checkVoucherConditions(voucher, customerId, orderValue, customer = null) {
         const now = new Date();
 
         if (!voucher.is_active)
             return { available: false, reason: "Voucher chưa được kích hoạt" };
-        
+
         if (now < voucher.begin_date)
             return { available: false, reason: "Voucher chưa bắt đầu" };
         
         if (now > voucher.end_date)
             return { available: false, reason: "Voucher đã kết thúc" };
         
-        if (voucher.used_count >= voucher.max_uses)
+        const effectiveUsed = voucher.used_count + (voucher.pending_use?.length || 0);
+        if (effectiveUsed >= voucher.max_uses)
             return { available: false, reason: "Voucher đã hết lượt sử dụng" };
 
         const conditions = voucher.conditions || {};
+        const rule_type = conditions.rule_type || "NONE";
 
-        if (conditions.min_order_value && orderValue < conditions.min_order_value) {
-            return {
-                available: false,
-                reason: `Đơn hàng tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`
-            };
+        const needsCustomer = rule_type === "FIRST_BOOKING" ||
+            (conditions.customer_tiers && conditions.customer_tiers.length > 0);
+        const c = needsCustomer ? (customer || await this.getCustomerById(customerId)) : null;
+
+        if (rule_type === "FIRST_BOOKING") {
+            if (c.booking_count > 0) {
+                return { available: false, reason: "Chỉ áp dụng cho khách hàng chưa có đơn đặt phòng" };
+            }
+        }
+
+        if (rule_type === "MIN_BOOKING_VALUE") {
+            if (orderValue < conditions.min_order_value) {
+                return {
+                    available: false,
+                    reason: `Đơn hàng tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`
+                };
+            }
+        }
+
+        if (rule_type === "SEASONAL") {
+            if (conditions.days_of_week && conditions.days_of_week.length > 0) {
+                if (!conditions.days_of_week.includes(now.getDay())) {
+                    const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+                    const valid = conditions.days_of_week.map(d => dayNames[d]).join(", ");
+                    
+                    return { available: false, reason: `Chỉ áp dụng vào: ${valid}` };
+                }
+            }
+
+            if (conditions.hours_range) {
+                const { from, to } = conditions.hours_range;
+                const hour = now.getHours();
+                if (hour < from || hour > to) {
+                    return { available: false, reason: `Chỉ áp dụng vào khung giờ ${from}:00 - ${to}:00` };
+                }
+            }
+        }
+
+        if (rule_type !== "MIN_BOOKING_VALUE" && conditions.min_order_value > 0) {
+            if (orderValue < conditions.min_order_value) {
+                return {
+                    available: false,
+                    reason: `Đơn hàng tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`
+                };
+            }
         }
 
         if (conditions.customer_tiers && conditions.customer_tiers.length > 0) {
-            const c = customer || await this.getCustomerById(customerId);
             const tier = this.mapLoyaltyToTier(c.loyalty || "bronze", c.booking_count || 0);
 
             if (!conditions.customer_tiers.includes(tier)) {
                 const tierNames = { NEW: "Mới", LOYAL: "Thân thiết", VIP: "VIP" };
                 const allowed = conditions.customer_tiers.map(t => tierNames[t] || t).join(", ");
+
                 return { available: false, reason: `Chỉ áp dụng cho khách hàng hạng: ${allowed}` };
-            }
-        }
-
-        if (conditions.days_of_week && conditions.days_of_week.length > 0) {
-            if (!conditions.days_of_week.includes(now.getDay())) {
-                const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
-                const valid = conditions.days_of_week.map(d => dayNames[d]).join(", ");
-                return { available: false, reason: `Chỉ áp dụng vào: ${valid}` };
-            }
-        }
-
-        if (conditions.hours_range) {
-            const { from, to } = conditions.hours_range;
-            const hour = now.getHours();
-            if (hour < from || hour > to) {
-                return { available: false, reason: `Chỉ áp dụng vào khung giờ ${from}:00 - ${to}:00` };
             }
         }
 
@@ -644,15 +672,41 @@ export class VoucherService {
     validateConditions(conditions) {
         if (!conditions) return;
 
-        const { min_order_value, days_of_week, hours_range, customer_tiers, room_category_ids, service_category_ids } = conditions;
+        const {
+            rule_type, min_order_value, days_of_week, hours_range,
+            customer_tiers, room_category_ids, service_category_ids
+        } = conditions;
 
-        if (min_order_value != null && min_order_value < 0)
+        const validRuleTypes = ["NONE", "FIRST_BOOKING", "MIN_BOOKING_VALUE", "SEASONAL", "HOLIDAY"];
+        if (rule_type && !validRuleTypes.includes(rule_type)) {
+            throw new Error("Loại điều kiện voucher không hợp lệ");
+        }
+
+        if (rule_type === "MIN_BOOKING_VALUE") {
+            if (min_order_value == null || min_order_value <= 0) {
+                throw new Error("MIN_BOOKING_VALUE yêu cầu min_order_value > 0");
+            }
+        }
+
+        if (rule_type === "SEASONAL") {
+            if (!days_of_week || days_of_week.length === 0) {
+                throw new Error("SEASONAL yêu cầu ít nhất một ngày trong tuần (days_of_week)");
+            }
+        }
+
+        if (rule_type === "FIRST_BOOKING") {
+            if (customer_tiers && customer_tiers.length > 0) {
+                throw new Error("FIRST_BOOKING không thể kết hợp với điều kiện hạng khách hàng");
+            }
+        }
+
+        if (min_order_value != null && min_order_value < 0) {
             throw new Error("Tiền đơn hàng tối thiểu không được âm");
+        }
 
         if (days_of_week) {
             if (!Array.isArray(days_of_week))
                 throw new Error("days_of_week phải là mảng");
-            
             if (days_of_week.some(d => typeof d !== "number" || d < 0 || d > 6))
                 throw new Error("Ngày trong tuần chỉ nhận giá trị từ 0 đến 6.");
         }
@@ -666,7 +720,6 @@ export class VoucherService {
         if (customer_tiers) {
             if (!Array.isArray(customer_tiers))
                 throw new Error("customer_tiers phải là mảng");
-            
             const validTiers = ["NEW", "LOYAL", "VIP"];
             if (customer_tiers.some(t => !validTiers.includes(t)))
                 throw new Error("Hạng khách hàng không hợp lệ (NEW, LOYAL, VIP)");
@@ -675,7 +728,6 @@ export class VoucherService {
         if (room_category_ids) {
             if (!Array.isArray(room_category_ids))
                 throw new Error("room_category_ids phải là mảng");
-            
             if (room_category_ids.some(id => !mongoose.isValidObjectId(id)))
                 throw new Error("room_category_ids chứa ID không hợp lệ");
         }
@@ -683,7 +735,6 @@ export class VoucherService {
         if (service_category_ids) {
             if (!Array.isArray(service_category_ids))
                 throw new Error("service_category_ids phải là mảng");
-            
             if (service_category_ids.some(id => !mongoose.isValidObjectId(id)))
                 throw new Error("service_category_ids chứa ID không hợp lệ");
         }

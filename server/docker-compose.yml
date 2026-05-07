@@ -111,7 +111,7 @@ services:
     ports:
       - "3006:3006"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${DISCOUNT_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared

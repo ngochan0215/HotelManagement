@@ -20,7 +20,7 @@ const startServer = async () => {
     });
 
     // connect database first
-    await connectDB(process.env.DB_URL_);
+    await connectDB(process.env.DB_URL);
 
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();

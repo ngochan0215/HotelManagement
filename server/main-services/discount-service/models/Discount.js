@@ -22,7 +22,7 @@ const discountSchema = new mongoose.Schema(
     conditions: {
       rule_type: {
         type: String,
-        enum: ["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"],
+        enum: ["NONE", "MIN_BOOKING_VALUE", "SEASONAL", "HOLIDAY"],
         default: "NONE"
       },
 

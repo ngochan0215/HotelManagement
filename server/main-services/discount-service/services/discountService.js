@@ -89,13 +89,12 @@ export class DiscountService {
             }
 
             // const skip = (page - 1) * limit;
-
             // const [data, total] = await Promise.all([
-            //   Discount.find(filter)
-            //     .sort({ priority: -1, created_at: -1 })
-            //     .skip(skip)
-            //     .limit(Number(limit)),
-            //   Discount.countDocuments(filter)
+            //     this.Discount.find(filter)
+            //         .sort({ priority: -1, created_at: -1 })
+            //         .skip(skip)
+            //         .limit(Number(limit)),
+            //     this.Discount.countDocuments(filter)
             // ]);
 
             const discounts = await this.Discount
@@ -174,20 +173,19 @@ export class DiscountService {
                 throw new Error("Không tìm thấy khuyến mãi");
 
             const now = new Date();
-            const isRunning = discount.is_active && now >= discount.begin_date && now <= discount.end_date;
-
-        // Chặn update một số trường quan trọng khi đang chạy (tùy chọn - có thể bỏ nếu muốn cho phép update)
-        // if (isRunning) {
-        //   const blockedFields = ["begin_date", "discount", "conditions"];
-        //   for (const field of blockedFields) {
-        //     if (payload[field] !== undefined) {
-        //       return res.status(400).json({
-        //         success: false,
-        //         message: "Không thể chỉnh sửa khuyến mãi đang hoạt động."
-        //       });
-        //     }
-        //   }
-        // }
+            // const isRunning = discount.is_active && now >= discount.begin_date && now <= discount.end_date;
+            // Chặn update một số trường quan trọng khi đang chạy (tùy chọn - có thể bỏ nếu muốn cho phép update)
+            // if (isRunning) {
+            //   const blockedFields = ["begin_date", "discount", "conditions"];
+            //   for (const field of blockedFields) {
+            //     if (payload[field] !== undefined) {
+            //       return res.status(400).json({
+            //         success: false,
+            //         message: "Không thể chỉnh sửa khuyến mãi đang hoạt động."
+            //       });
+            //     }
+            //   }
+            // }
 
             if (payload.name) {
                 const exist = await this.Discount.findOne({
@@ -240,6 +238,7 @@ export class DiscountService {
 
             if (payload.conditions !== undefined) {
                 this.validateConditions(payload.conditions);
+                discount.conditions = payload.conditions;
             }
 
             await discount.save();
@@ -452,25 +451,26 @@ export class DiscountService {
 
     checkDiscountConditions(discount, orderValue) {
         const conditions = discount.conditions || {};
-
-        if (conditions.min_order_value && orderValue < conditions.min_order_value) {
-            return false;
-        }
-
+        const rule_type = conditions.rule_type || "NONE";
         const now = new Date();
 
-        if (conditions.days_of_week && conditions.days_of_week.length > 0) {
-            if (!conditions.days_of_week.includes(now.getDay())) return false;
+        if (rule_type === "MIN_BOOKING_VALUE") {
+            if (orderValue < (conditions.min_order_value || 0)) return false;
         }
 
-        if (conditions.hours_range) {
-            const { from, to } = conditions.hours_range;
-            const hour = now.getHours();
-            if (hour < from || hour > to) return false;
+        if (rule_type === "SEASONAL") {
+            if (conditions.days_of_week?.length > 0) {
+                if (!conditions.days_of_week.includes(now.getDay())) return false;
+            }
+            if (conditions.hours_range) {
+                const hour = now.getHours();
+                if (hour < conditions.hours_range.from || hour > conditions.hours_range.to) return false;
+            }
         }
 
-        // room_category_ids / service_category_ids are checked at booking level
-        // since this service doesn't have access to booking details
+        if (rule_type !== "MIN_BOOKING_VALUE" && conditions.min_order_value > 0) {
+            if (orderValue < conditions.min_order_value) return false;
+        }
 
         return true;
     }
@@ -490,13 +490,6 @@ export class DiscountService {
         return `Giảm ${discount.value.toLocaleString("vi-VN")}đ`;
     }
     
-    // mapLoyaltyToTier(loyalty, bookingCount) {
-    //     if (bookingCount === 0) return "NEW";
-    //     if (loyalty === "platinum") return "VIP";
-    //     if (["silver", "gold"].includes(loyalty)) return "LOYAL";
-    //     return "NEW";
-    // };
-
     validateDiscount(discount) {
         if (!discount || !discount.type || discount.value == null) {
             throw new Error("Thiếu thông tin giảm giá.");
@@ -532,51 +525,57 @@ export class DiscountService {
     validateConditions(conditions) {
         if (!conditions) return;
 
-        const { min_order_value, days_of_week, hours_range, service_category_ids , room_category_ids } = conditions;
+        const {
+            rule_type, min_order_value, days_of_week, hours_range,
+            customer_tiers, room_category_ids, service_category_ids
+        } = conditions;
 
-        // if (rule_type && !["NONE", "MIN_BOOKING_VALUE", "FIRST_BOOKING", "SEASONAL", "HOLIDAY"].includes(rule_type)) {
-        //     throw new Error("Điều kiện áp dụng voucher không hợp lệ.");
-        // }
+        const validRuleTypes = ["NONE", "MIN_BOOKING_VALUE", "SEASONAL", "HOLIDAY"];
+        if (rule_type && !validRuleTypes.includes(rule_type)) {
+            throw new Error("Loại điều kiện voucher không hợp lệ");
+        }
+
+        if (rule_type === "MIN_BOOKING_VALUE") {
+            if (min_order_value == null || min_order_value <= 0) {
+                throw new Error("MIN_BOOKING_VALUE yêu cầu min_order_value > 0");
+            }
+        }
+
+        if (rule_type === "SEASONAL") {
+            if (!days_of_week || days_of_week.length === 0) {
+                throw new Error("SEASONAL yêu cầu ít nhất một ngày trong tuần (days_of_week)");
+            }
+        }
 
         if (min_order_value != null && min_order_value < 0) {
             throw new Error("Tiền đơn hàng tối thiểu không được âm");
         }
 
         if (days_of_week) {
-            if (!Array.isArray(days_of_week)) {
+            if (!Array.isArray(days_of_week))
                 throw new Error("days_of_week phải là mảng");
-            }
-
-            const invalidDay = days_of_week.some(d => typeof d !== "number" || d < 0 || d > 6);
-            if (invalidDay) {
+            if (days_of_week.some(d => typeof d !== "number" || d < 0 || d > 6))
                 throw new Error("Ngày trong tuần chỉ nhận giá trị từ 0 đến 6.");
-            }
         }
 
         if (hours_range) {
             const { from, to } = hours_range;
-            if (from == null || to == null || from < 0 || from > 23 || to < 0 || to > 23 || from > to) {
+            if (from == null || to == null || from < 0 || from > 23 || to < 0 || to > 23 || from > to)
                 throw new Error("Khung giờ khuyến mãi không hợp lệ");
-            }
         }
 
         if (room_category_ids) {
             if (!Array.isArray(room_category_ids))
                 throw new Error("room_category_ids phải là mảng");
-            
             if (room_category_ids.some(id => !mongoose.isValidObjectId(id)))
                 throw new Error("room_category_ids chứa ID không hợp lệ");
         }
 
-
-        if (room_category_ids) {
-            if (!Array.isArray(room_category_ids)) {
-                throw new Error("room_category_ids phải là mảng");
-            }
-
-            if (room_category_ids.some(id => !mongoose.isValidObjectId(id))) {
-                throw new Error("room_category_ids chứa ID không hợp lệ");
-            }
+        if (service_category_ids) {
+            if (!Array.isArray(service_category_ids))
+                throw new Error("service_category_ids phải là mảng");
+            if (service_category_ids.some(id => !mongoose.isValidObjectId(id)))
+                throw new Error("service_category_ids chứa ID không hợp lệ");
         }
     }
 
