@@ -7,13 +7,13 @@ const controller = new ReviewController();
 
 router.get("/my", verifyToken, controller.getMyReviews);
 router.get("/statistics", verifyToken, isManager, controller.getReviewStatistics);
-router.get("/all", verifyToken, isManager, controller.getAllReviews);
+router.get("/", verifyToken, isManager, controller.getAllReviews);
 
-router.get("/:bookingId", verifyToken, controller.getReviewByBooking);
+router.get("/booking/:bookingId", verifyToken, controller.getReviewByBooking);
 router.get("/:id", verifyToken, controller.getReviewById);
 
-router.post("/:bookingId/add", verifyToken, controller.addReview);
+router.post("/:bookingId", verifyToken, controller.addReview);
 router.patch("/:id", verifyToken, controller.editReview);
-router.patch("/:id/update", verifyToken, isManager, controller.updateReviewStatus);
+router.patch("/update-status/:id", verifyToken, isManager, controller.updateReviewStatus);
 
 export default router;

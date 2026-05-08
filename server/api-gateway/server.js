@@ -23,7 +23,7 @@ app.use(
 );
 
 app.use(
-  "/customer",
+  "/customers",
   createProxyMiddleware({
     target: "http://customer-service:3002",
     changeOrigin: true
@@ -31,7 +31,7 @@ app.use(
 );
 
 app.use(
-  "/employee",
+  "/employees",
   createProxyMiddleware({
     target: "http://employee-service:3003",
     changeOrigin: true
@@ -39,7 +39,7 @@ app.use(
 );
 
 app.use(
-  "/equipment",
+  "/equipments",
   createProxyMiddleware({
     target: "http://equipment-service:3004",
     changeOrigin: true
@@ -47,7 +47,7 @@ app.use(
 );
 
 app.use(
-  "/room",
+  "/rooms",
   createProxyMiddleware({
     target: "http://room-service:3005",
     changeOrigin: true
@@ -55,7 +55,7 @@ app.use(
 );
 
 app.use(
-  "/discount",
+  "/discounts",
   createProxyMiddleware({
     target: "http://discount-service:3006",
     changeOrigin: true
@@ -63,7 +63,7 @@ app.use(
 );
 
 app.use(
-  "/notification",
+  "/notifications",
   createProxyMiddleware({
     target: "http://notification-service:3007",
     changeOrigin: true
@@ -71,7 +71,7 @@ app.use(
 );
 
 app.use(
-  "/incident",
+  "/incidents",
   createProxyMiddleware({
     target: "http://incident-service:3008",
     changeOrigin: true
@@ -79,7 +79,7 @@ app.use(
 );
 
 app.use(
-  "/booking",
+  "/bookings",
   createProxyMiddleware({
     target: "http://booking-service:3009",
     changeOrigin: true
@@ -87,7 +87,7 @@ app.use(
 );
 
 app.use(
-  "/payment",
+  "/payments",
   createProxyMiddleware({
     target: "http://payment-service:3010",
     changeOrigin: true

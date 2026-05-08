@@ -38,7 +38,7 @@ const startServer = async () => {
     // startCheckinTimeReminderJob();
 
     app.use(bookingRoute);
-    app.use("/review", reviewRoute);
+    app.use("/reviews", reviewRoute);
 
     const PORT = process.env.PORT || 3009;
     app.listen(PORT, () => {

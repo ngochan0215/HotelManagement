@@ -9,6 +9,8 @@ export class EquipmentService {
         this.eventBus = eventBus;
     }   
 
+    // category
+
     createEquipmentCategory = async (data) => {
         try {
             const { warehouse, type, name, description, unit, price } = data;
@@ -53,7 +55,10 @@ export class EquipmentService {
 
     getAllEquipmentCategories = async (query = {}) => {
         try {
-            const { min_price, max_price, min_storage, max_storage } = query;
+            const { min_price, max_price, min_storage, max_storage, 
+                page = 1, limit = 10, sort_by = "created_at", order = "desc"
+            } = query;
+
             let filter = {};
 
             if (min_price || max_price) {
@@ -68,10 +73,41 @@ export class EquipmentService {
                 if (max_storage) filter.storage_quantity.$lte = Number(max_storage);
             }
 
+            const currentPage = Math.max(Number(page), 1);
+            const pageSize = Math.max(Number(limit), 1);
+            const skip = (currentPage - 1) * pageSize;
+            const sort = {
+                [sort_by]: order === "asc" ? 1 : -1
+            };
+
             const categories = await this.EquipmentCategory.find(filter)
                 .sort({ createdAt: -1 }).select("-created_at -updated_at -__v");
 
             return { total: categories.length, categories };
+
+            const [categories, total] = await Promise.all([
+                this.EquipmentCategory.find(filter)
+                    .select("-__v -created_at -updated_at")
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(pageSize)
+                    .lean(),
+
+                this.EquipmentCategory.countDocuments(filter)
+            ]);
+
+            return {
+                total, 
+                categories,
+                pagination: {
+                    total,
+                    page: currentPage,
+                    limit: pageSize,
+                    total_pages: Math.ceil(total / pageSize),
+                    has_next: currentPage * pageSize < total,
+                    has_prev: currentPage > 1
+                }
+            };
 
         } catch (err) {
             console.log("Error in getting all equipment categories: ", err.message);
@@ -234,6 +270,20 @@ export class EquipmentService {
         }
     };
 
+    getOutOfStockCategories = async () => {
+        try {
+            const outOfStockCategories = await this.EquipmentCategory.find({ storage_quantity: { $lte: 10 } })
+                .select("_id name description unit price storage_quantity");
+
+            return { categories: outOfStockCategories, count: outOfStockCategories.length };
+    
+        } catch (err) {
+            console.log("Error in getting low-stock equipments: ", err.message);
+            throw err;
+        }
+    };
+
+    // helper
     populateRoom = async (equipments) => {
         const isArray = Array.isArray(equipments);
         const list = isArray ? equipments : [equipments];
@@ -280,9 +330,13 @@ export class EquipmentService {
         return isArray ? results : results[0];
     };
 
+    // equipment
+
     getAllEquipments = async (query = {}) => {
         try {
-            const { category_id, status, condition, room_id } = query;
+            const { category_id, status, condition, room_id, 
+                page = 1, limit = 10, sort_by = "created_at", order = "desc"
+            } = query;
             const filter = {};
 
             if (category_id) {
@@ -311,15 +365,37 @@ export class EquipmentService {
                 filter.condition = condition;
             }
 
-            const equipments = await this.Equipment.find(filter)
-                .populate("category_id", "name unit price")
-                .select("-__v -created_at -updated_at")
-                .sort({ created_at: -1 })
-                .lean();
+            const currentPage = Math.max(Number(page), 1);
+            const pageSize = Math.max(Number(limit), 1);
+            const skip = (currentPage - 1) * pageSize;
+            const sort = {
+                [sort_by]: order === "asc" ? 1 : -1
+            };
+
+            const [equipments, total] = await Promise.all([
+                this.Equipment.find(filter)
+                    .populate("category_id", "name unit price")
+                    .select("-__v -created_at -updated_at")
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(pageSize)
+                    .lean(),
+
+                this.Equipment.countDocuments(filter)
+            ]);
 
             const results = await this.populateRoom(equipments);
-
-            return { count: results.length, equipments: results };
+            return {
+                data: results,
+                pagination: {
+                    total,
+                    page: currentPage,
+                    limit: pageSize,
+                    total_pages: Math.ceil(total / pageSize),
+                    has_next: currentPage * pageSize < total,
+                    has_prev: currentPage > 1
+                }
+            };
 
         } catch (err) {
             console.log("Error in getting all equipments: ", err.message );

@@ -16,10 +16,7 @@ export class VoucherController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -34,10 +31,7 @@ export class VoucherController {
             });
 
         } catch (err) {
-            res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -51,10 +45,7 @@ export class VoucherController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -79,10 +70,7 @@ export class VoucherController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -97,10 +85,7 @@ export class VoucherController {
             });
 
         } catch (err) { 
-            return res.status(500).json({ 
-                success: false, 
-                message: "SERVER ERROR: " + err.message 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -126,11 +111,7 @@ export class VoucherController {
             });
 
         } catch (err) {
-            console.error("Error getting available vouchers:", err);
-            return res.status(500).json({
-                success: false,
-                message: err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

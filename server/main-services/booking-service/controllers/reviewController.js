@@ -29,15 +29,12 @@ export class ReviewController {
     getMyReviews = async (req, res) => {
         try {
             const customerId = req.user.customerId;
-            console.log("req.user:", req.user);
-            console.log("Getting reviews for customerId:", customerId);
             const { total, data } = await this.reviewService.getMyReviews(customerId);
 
             return res.status(200).json({ total, data });
 
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -66,8 +63,7 @@ export class ReviewController {
             return res.status(200).json({ message: "Edit review successfully!", data: review });
             
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -80,8 +76,7 @@ export class ReviewController {
             return res.status(200).json({ message: "Update review status successfully!", data: review });
         
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -95,8 +90,7 @@ export class ReviewController {
             });
 
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "SERVER ERROR: " + error.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -113,11 +107,7 @@ export class ReviewController {
             });
 
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + error.message,
-            });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -128,11 +118,7 @@ export class ReviewController {
             return res.status(200).json({ success: true, review });
             
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + error.message,
-            });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: Customer Service API
+  version: 1.0.0
+  description: API documentation for customer profile and account status management.
+servers:
+  - url: http://localhost:3002
+    description: Local development server
+tags:
+  - name: Customers
+    description: Customer management APIs
+
+paths:
+  /:
+    get:
+      tags: [Customers]
+      summary: Get all customers
+      description: Returns customer list with optional filters. Requires employee role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: loyalty
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [bronze, silver, gold, platinum]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive, banned]
+        - name: min_points
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: max_points
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: min_booking_count
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: max_booking_count
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customers fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  total:
+                    type: integer
+                    example: 2
+                  customers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomerWithUserInfo"
+                required: [success, total, customers]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /{id}:
+    get:
+      tags: [Customers]
+      summary: Get customer by id
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerIdParam"
+      responses:
+        "200":
+          description: Customer fetched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerWithUserInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    patch:
+      tags: [Customers]
+      summary: Update customer information
+      description: Manager-only endpoint to update customer profile fields.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Cập nhật thông tin khách hàng thành công.
+                  data:
+                    $ref: "#/components/schemas/Customer"
+                required: [success, message, data]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /{id}/ban:
+    patch:
+      tags: [Customers]
+      summary: Ban customer account
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerIdParam"
+      responses:
+        "200":
+          description: Customer banned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /{id}/unban:
+    patch:
+      tags: [Customers]
+      summary: Unban customer account
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerIdParam"
+      responses:
+        "200":
+          description: Customer unbanned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /create-customer/{userId}:
+    post:
+      tags: [Customers]
+      summary: Create customer profile for a user
+      description: Internal endpoint used for service-to-service communication.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    CustomerIdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Customer identifier
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: User does not have required role/permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    SuccessMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+      required: [success, message]
+
+    UserInfo:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        system_role:
+          type: string
+        avatar:
+          type: string
+          nullable: true
+        isBanned:
+          type: boolean
+      additionalProperties: true
+
+    Customer:
+      type: object
+      properties:
+        _id:
+          type: string
+        user_id:
+          type: string
+        full_name:
+          type: string
+        date_birth:
+          type: string
+          format: date-time
+        phone_number:
+          type: string
+        nationality:
+          type: string
+          example: vietnam
+        CCCD:
+          type: string
+          description: 12-digit national ID
+        booking_count:
+          type: integer
+          minimum: 0
+        points:
+          type: integer
+        loyalty:
+          type: string
+          enum: [bronze, silver, gold, platinum]
+        status:
+          type: string
+          enum: [active, inactive, banned]
+      additionalProperties: true
+
+    CustomerWithUserInfo:
+      allOf:
+        - $ref: "#/components/schemas/Customer"
+        - type: object
+          properties:
+            user:
+              oneOf:
+                - $ref: "#/components/schemas/UserInfo"
+                - type: "null"
+
+    CreateCustomerRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+        date_birth:
+          type: string
+          format: date-time
+        phone_number:
+          type: string
+        nationality:
+          type: string
+        CCCD:
+          type: string
+      required: [full_name, date_birth, phone_number, CCCD]
+      additionalProperties: true
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        date_birth:
+          type: string
+          format: date-time
+        phone_number:
+          type: string
+        nationality:
+          type: string
+        CCCD:
+          type: string
+      additionalProperties: false

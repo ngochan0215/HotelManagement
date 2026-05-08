@@ -8,81 +8,104 @@ export class AuthController {
     register = async (req, res) => {
         try {
             const user = await this.authService.register(req.body);
+            
             res.status(201).json({
-                message: "Đăng ký thành công.",
+                message: "Sign up successfully!",
                 userID: user._id
             });
+
         } catch (err) {
             res.status(err.status || 400).json({ message: err.message });
+
         }
     };
 
     verifyEmail = async (req, res) => {
         try {
             await this.authService.verifyEmail(req.user.userId, req.body.otp);
-            res.json({ message: "Xác thực email thành công." });
+            
+            res.status(200).json({ message: "Verify email successfully!" });
+
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
     login = async (req, res) => {
         try {
             const result = await this.authService.login(req.body.email, req.body.password);
-            res.json({ message: "Đăng nhập thành công", ...result });
+            
+            res.status(200).json({ message: "Login successfully!", ...result });
+        
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
+
         }
     };
 
     loginGoogle = async (req, res) => {
         try {
             const { googleToken } = req.body;
+
             const result = await this.authService.loginGoogle(googleToken);
-            res.json({ message: "Đăng nhập bằng google thành công", ...result });
+
+            res.status(200).json({ message: "Login with google successfully!", ...result });
+
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
+
         }
     };
 
     Logout = (req, res) => {
-        res.json({ message: "Đăng xuất thành công" });
+        res.json({ message: "Logout successfully!" });
     };
 
     forgotPassword = async (req, res) => {
         try {
             await this.authService.forgotPassword(req.body.email);
-            res.json({ message: "Đã gửi email đặt lại mật khẩu." });
+            
+            res.status(200).json({ message: "Reset password email is sent!" });
+
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
+
         }
     };
 
     resetPassword = async (req, res) => {
         try {
             const { email, otp, newPassword } = req.body;
+            
             await this.authService.resetPassword(email, otp, newPassword);
-            res.json({ message: "Đặt lại mật khẩu thành công." });
+            
+            res.status(200).json({ message: "Reset password successfully!" });
+
         } catch (err) {
-            res.status(400).json({ message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
+
         }
     };
 
     createAccount = async (req, res) => {
         try {
             const user = await this.authService.createUserAccount(req.body);
+            
             res.status(201).json({ message: "Create user account successfully.", user });
+
         } catch (error) {
-            res.status(error.status || 400).json({ message: error.message });
+            res.status(400).json({ message: error.message });
         }
     };
 
     adminResetPassword = async(req, res) => {
         try {
             await this.authService.adminResetPassword(req.body);
+            
             res.status(200).json({ message: "Admin reset password for employee successfully."});
+
         } catch (error) {
-            res.status(error.status || 400).json({ message: error.message });
+            res.status(400).json({ message: error.message });
         }
     }
 

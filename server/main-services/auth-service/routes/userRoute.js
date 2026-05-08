@@ -6,7 +6,7 @@ import { verifyToken, isManager } from "../../../shared/middleware/authMiddlewar
 const router = express.Router();
 const userController = new UserController();
 
-router.get("/all", verifyToken, isManager, userController.getAllUsers);
+router.get("/", verifyToken, isManager, userController.getAllUsers);
 router.get("/:id", verifyToken, userController.getUserById);
 router.get("/profile/:id", verifyToken, userController.getUserProfile);
 router.patch("/admin-reset-role", verifyToken, isManager, userController.adminResetRole);

@@ -15,7 +15,6 @@ export const verifyToken = (req, res, next) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         // hợp lệ thì lưu vào req.user
         req.user = decoded;
-        console.log("hello im in middleware: ", req.user);
         next();
     } catch (err) {
         return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn hoặc " + err.message });

@@ -30,8 +30,8 @@ const startServer = async () => {
     // startInstallTicketJob();
 
     app.use(equipmentRoute);
-    app.use("/import", equipmentImportRoute);
-    app.use("/install", equipmentInstallRoute);
+    app.use("/tickets", equipmentImportRoute);
+    app.use("/tickets", equipmentInstallRoute);
 
     const PORT = process.env.PORT || 3004;
 

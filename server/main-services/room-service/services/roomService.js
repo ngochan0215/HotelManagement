@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
+import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 
 export class RoomService {
     constructor({ Room, RoomCategory, RoomLog, DefaultEquipment, eventBus }) {
@@ -158,13 +159,66 @@ export class RoomService {
         }
     };
     
-    getAllRoomCategoriesService = async () => {
+    getAllRoomCategoriesService = async (query = {}) => {
         try {
-            const categories = await this.RoomCategory.find()
-                .select("-__v -created_at -updated_at");;
-            const allEquipments = await this.DefaultEquipment.find()
-                .select("-__v -created_at -updated_at").lean();
-            
+            const { page = 1, limit = 10, keyword, sort_by = "created_at", order = "dsc",
+                min_price, max_price, max_adults, max_children } = query;
+
+            const filter = {};
+
+            if (min_price || max_price) {
+                filter.price = {};
+                if (min_price)
+                    filter.price.$gte = Number(min_price);
+                if (max_price)
+                    filter.price.$lte = Number(max_price);
+            }
+
+            if (max_adults) {
+                filter.max_adults = {
+                    $gte: Number(max_adults)
+                };
+            }
+            if (max_children) {
+                filter.max_children = {
+                    $gte: Number(max_children)
+                };
+            }
+
+            if (keyword) {
+                filter.category_name = {
+                    $regex: keyword,
+                    $options: "i"
+                };
+            }
+
+            const currentPage = Math.max(Number(page), 1);
+            const pageSize = Math.max(Number(limit), 1);
+            const skip = (currentPage - 1) * pageSize;
+
+            const sort = {
+                [sort_by]: order === "asc" ? 1 : -1
+            };
+
+            const [categories, total] = await Promise.all([
+                this.RoomCategory.find(filter)
+                    .select("-__v -created_at -updated_at")
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(pageSize)
+                    .lean(),
+
+                this.RoomCategory.countDocuments(filter)
+            ]);
+
+            const categoryIds = categories.map(c => c._id);
+
+            const allEquipments = await this.DefaultEquipment.find({
+                category_id: { $in: categoryIds }
+            })
+            .select("-__v -created_at -updated_at")
+            .lean();
+
             const equipmentCategoryIds = [
                 ...new Set(
                     allEquipments
@@ -177,40 +231,54 @@ export class RoomService {
                 EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                 { categoryIds: equipmentCategoryIds }
             );
+
             if (!reply.success)
                 throw new Error(reply.message);
 
             const equipmentCategoryMap = {};
             for (const ec of reply.categories) {
                 equipmentCategoryMap[ec._id.toString()] = {
-                        _id: ec._id,
-                        name: ec.name,
-                        unit: ec.unit,
-                        price: ec.price
-                    };
+                    _id: ec._id,
+                    name: ec.name,
+                    unit: ec.unit,
+                    price: ec.price
+                };
             }
 
-            const result = categories.map(cat => {
-                const equipments = allEquipments
-                    .filter(e => e.category_id.toString() === cat._id.toString())
-                    .map(eq => {
-                        const key = eq.equipment_category_id?.toString();
+            const equipmentMap = {};
+            for (const eq of allEquipments) {
+                const categoryId = eq.category_id.toString();
 
-                        return {
-                            ...eq,
-                            equipment_category: key
-                                ? equipmentCategoryMap[key] || null
-                                : null
-                        };
-                    });
+                if (!equipmentMap[categoryId]) {
+                    equipmentMap[categoryId] = [];
+                }
 
-                return {
-                    ...cat.toObject(),
-                    default_equipments: equipments
-                };
-            });
+                const key = eq.equipment_category_id?.toString();
+                equipmentMap[categoryId].push({
+                    ...eq,
+                    equipment_category: key
+                        ? equipmentCategoryMap[key] || null
+                        : null
+                });
+            }
 
-            return result;
+            const result = categories.map(cat => ({
+                ...cat,
+                default_equipments: equipmentMap[cat._id.toString()] || []
+            }));
+
+            return {
+                data: result,
+                pagination: {
+                    total,
+                    page: currentPage,
+                    limit: pageSize,
+                    total_pages: Math.ceil(total / pageSize),
+                    has_next: currentPage * pageSize < total,
+                    has_prev: currentPage > 1
+                }
+            };
+
         } catch (err) {
             console.log("Error in getAllRoomCategoriesService:", err);
             throw err;
@@ -325,207 +393,144 @@ export class RoomService {
     };
     
     // return list of available room categories with available rooms based on search criteria
-    // getAvailableRoomCategoriesService = async (query) => {
-    //     const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
+    getAvailableRoomCategoriesService = async (query = {}) => {
+        const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
     
-    //     if (!checkin || !checkout) {
-    //         throw new Error("Phải điền thời gian nhận và trả phòng.");
-    //     }
-    
-    //     const start = new Date(checkin);
-    //     const end = new Date(checkout);
-    
-    //     if (start >= end) {
-    //         throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
-    //     }
-    
-    //     if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
-    //         throw new Error("Số lượng người lớn không hợp lệ.");
-    //     }
-    
-    //     if (children && (isNaN(Number(children)) || Number(children) < 0)) {
-    //         throw new Error("Số lượng trẻ em không hợp lệ.");
-    //     }
-    
-    //     // get active bookings 
-    //     const activeBookings = await Booking.find({
-    //         status: { $in: ["pending", "confirmed", "in_progress"] },
-    //     }).select("_id");
-    
-    //     const activeBookingIds = activeBookings.map((b) => b._id);
-    
-    //     // get busy rooms from both bookings and room logs
-    //     const busyBookingDetails = await BookingDetail.find({
-    //         booking_id: { $in: activeBookingIds },
-    //         status: { $ne: "cancelled" },
-    //         expected_checkin: { $lt: end },
-    //         expected_checkout: { $gt: start },
-    //     }).select("room_id");
-    
-    //     const busyRoomIdsFromBookings = [
-    //         ...new Set(busyBookingDetails.map((b) => b.room_id.toString())),
-    //     ];
-    
-    //     const busyRoomLogs = await RoomLog.find({
-    //         status: { $in: ["booked", "occupied", "reserved"] },
-    //         start_time: { $lt: end },
-    //         $or: [{ end_time: { $gt: start } }, { end_time: null }],
-    //     }).select("room_id");
-    
-    //     const busyRoomIdsFromLogs = [
-    //         ...new Set(busyRoomLogs.map((log) => log.room_id.toString())),
-    //     ];
-    
-    //     const allBusyRoomIds = [
-    //         ...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs]),
-    //     ];
-    
-    //     // get all rooms that are not in busyRoomIds and not in maintenance/new status
-    //     const allRooms = await Room.find({
-    //         _id: { $nin: allBusyRoomIds },
-    //     }).select("_id category_id room_number room_status");
-    
-    //     const availableRooms = [];
-    
-    //     for (const room of allRooms) {
-    //         const conflictingLog = await RoomLog.findOne({
-    //         room_id: room._id,
-    //         status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
-    //         start_time: { $lt: end },
-    //         $or: [{ end_time: { $gt: start } }, { end_time: null }],
-    //         });
-    
-    //         if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
-    //         if (room.room_status === "cleaning") {
-    //             const cleaningLog = await RoomLog.findOne({
-    //             room_id: room._id,
-    //             status: "cleaning",
-    //             start_time: { $lte: start },
-    //             $or: [
-    //                 { end_time: { $lte: start } }, 
-    //                 { end_time: null }
-    //             ],
-    //             }).sort({ start_time: -1 });
-    
-    //             // Nếu có log cleaning và sẽ kết thúc trước check-in, phòng có thể sử dụng
-    //             if (
-    //             !cleaningLog ||
-    //             (cleaningLog.end_time && cleaningLog.end_time <= start)
-    //             ) {
-    //             availableRooms.push(room);
-    //             }
-    //         } else {
-    //             availableRooms.push(room);
-    //         }
-    //         }
-    //     }
-    
-    //     const roomsByCategory = {};
-    
-    //     for (const room of availableRooms) {
-    //         const categoryId = room.category_id.toString();
-    
-    //         if (!roomsByCategory[categoryId]) {
-    //         roomsByCategory[categoryId] = [];
-    //         }
-    
-    //         roomsByCategory[categoryId].push({
-    //         room_id: room._id,
-    //         room_number: room.room_number,
-    //         });
-    //     }
-    
-    //     const categoryIds = Object.keys(roomsByCategory);
-    //     const categories = await RoomCategory.find({
-    //         _id: { $in: categoryIds },
-    //     });
-    
-    //     let result = categories
-    //         .filter((cat) => {
-    //             if (adults && cat.max_adults < Number(adults)) return false;
-    //             if (children && cat.max_children < Number(children)) return false;
-    //             if (minPrice && cat.price < Number(minPrice)) return false;
-    //             if (maxPrice && cat.price > Number(maxPrice)) return false;
-    //             return true;
-    //         })
-    //         .map((cat) => ({
-    //             category_id: cat._id,
-    //             name: cat.category_name,
-    //             price: cat.price,
-    //             adults: cat.max_adults,
-    //             children: cat.max_children,
-    //             description: cat.description,
-    //             availableRooms:
-    //                 roomsByCategory[cat._id.toString()]?.length || 0,
-    //             rooms: roomsByCategory[cat._id.toString()] || [],
-    //         }))
-    //         .filter((item) => item.availableRooms > 0)
-    //         .sort((a, b) => a.price - b.price);
-    
-    //     return result;
-    // };
-
-    // ROOM
-    // only get one room by id
-    getRoomById = async (id) => {
-        if (!mongoose.Types.ObjectId.isValid(id))
-            throw new Error("ID không hợp lệ!");
-    
-        const now = new Date();
-    
-        const room = await this.Room.findById(id)
-            .populate("category_id", "category_name description max_adults max_children price")
-            .populate({
-                path: "roomStatusLog",
-                match: {
-                    start_time: { $lte: now },
-                    $or: [
-                        { end_time: { $gte: now } },
-                        { end_time: null }
-                    ],
-                },
-                select: "status start_time end_time note",
-            })
-            .select("-__v")
-    
-        if (!room)
-            throw new Error("Không tìm thấy phòng!")
-    
-        return room;
-    };
-
-    // get many rooms by ids (but not all)
-    getRoomsByIds = async (ids) => {
-        if (!Array.isArray(ids) || ids.length === 0)
-            throw new Error("Danh sách ID không hợp lệ!");
-    
-        const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
-        if (validIds.length === 0) {
-            throw new Error("Không có ID hợp lệ!");
+        if (!checkin || !checkout) {
+            throw new Error("Phải điền thời gian nhận và trả phòng.");
         }
+    
+        const start = new Date(checkin);
+        const end = new Date(checkout);
+    
+        if (start >= end) {
+            throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
+        }
+    
+        if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
+            throw new Error("Số lượng người lớn không hợp lệ.");
+        }
+    
+        if (children && (isNaN(Number(children)) || Number(children) < 0)) {
+            throw new Error("Số lượng trẻ em không hợp lệ.");
+        }
+    
+        // get active bookings 
+        const replyActiveBookings = await this.eventBus.request(
+            BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
+            {}
+        );
+        if (!replyActiveBookings.success) throw new Error(reply.message);
 
-        const now = new Date();
+        const activeBookings = replyActiveBookings.activeBookings;
+        const activeBookingIds = activeBookings.map((b) => b._id);
     
-        const rooms = await this.Room.find({ _id: { $in: validIds } })
-            .populate("category_id", "category_name description max_adults max_children price")
-            .populate({
-                path: "roomStatusLog",
-                match: {
-                    start_time: { $lte: now },
-                    $or: [
-                        { end_time: { $gte: now } },
-                        { end_time: null }
-                    ],
-                },
-                select: "status start_time end_time note",
+        // get busy rooms from both bookings and room logs
+        const replyDetails = await this.eventBus.request(
+            BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
+            { bookingIds: activeBookingIds }
+        );
+        if (!replyDetails.success) throw new Error(reply.message);
+
+        const busyBookingDetails = replyDetails.details;
+        const busyRoomIdsFromBookings = [
+            ...new Set(busyBookingDetails.map((b) => b.room_id.toString())),
+        ];
+    
+        const busyRoomLogs = await this.RoomLog.find({
+            status: { $in: ["booked", "occupied", "reserved"] },
+            start_time: { $lt: end },
+            $or: [{ end_time: { $gt: start } }, { end_time: null }],
+        }).select("room_id");
+    
+        const busyRoomIdsFromLogs = [
+            ...new Set(busyRoomLogs.map((log) => log.room_id.toString())),
+        ];
+    
+        const allBusyRoomIds = [
+            ...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs]),
+        ];
+    
+        // get all rooms that are not in busyRoomIds and not in maintenance/new status
+        const allRooms = await this.Room.find({
+            _id: { $nin: allBusyRoomIds },
+        }).select("_id category_id room_number room_status");
+    
+        const availableRooms = [];
+    
+        for (const room of allRooms) {
+            const conflictingLog = await this.RoomLog.findOne({
+                room_id: room._id,
+                status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
+                start_time: { $lt: end },
+                $or: [{ end_time: { $gt: start } }, { end_time: null }],
+            });
+    
+            if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
+                if (room.room_status === "cleaning") {
+                    const cleaningLog = await this.RoomLog.findOne({
+                        room_id: room._id,
+                        status: "cleaning",
+                        start_time: { $lte: start },
+                        $or: [
+                            { end_time: { $lte: start } }, 
+                            { end_time: null }
+                        ],
+                    }).sort({ start_time: -1 });
+        
+                    if (!cleaningLog || (cleaningLog.end_time && cleaningLog.end_time <= start)) {
+                        availableRooms.push(room);
+                    }
+
+                } else {
+                    availableRooms.push(room);
+                }
+            }
+        }
+    
+        const roomsByCategory = {};
+    
+        for (const room of availableRooms) {
+            const categoryId = room.category_id.toString();
+    
+            if (!roomsByCategory[categoryId]) {
+                roomsByCategory[categoryId] = [];
+            }
+    
+            roomsByCategory[categoryId].push({
+                room_id: room._id,
+                room_number: room.room_number,
+            });
+        }
+    
+        const categoryIds = Object.keys(roomsByCategory);
+        const categories = await this.RoomCategory.find({
+            _id: { $in: categoryIds },
+        });
+    
+        let result = categories
+            .filter((cat) => {
+                if (adults && cat.max_adults < Number(adults)) return false;
+                if (children && cat.max_children < Number(children)) return false;
+                if (minPrice && cat.price < Number(minPrice)) return false;
+                if (maxPrice && cat.price > Number(maxPrice)) return false;
+                return true;
             })
-            .select("-__v")
-            .lean();
+            .map((cat) => ({
+                category_id: cat._id,
+                name: cat.category_name,
+                price: cat.price,
+                adults: cat.max_adults,
+                children: cat.max_children,
+                description: cat.description,
+                availableRooms:
+                    roomsByCategory[cat._id.toString()]?.length || 0,
+                rooms: roomsByCategory[cat._id.toString()] || [],
+            }))
+            .filter((item) => item.availableRooms > 0)
+            .sort((a, b) => a.price - b.price);
     
-        if (!rooms)
-            throw new Error("Không tìm thấy phòng!")
-    
-        return rooms;
+        return result;
     };
 
     // ROOM
@@ -568,9 +573,13 @@ export class RoomService {
     
     getAllRooms = async (query = {}) => {
         try {
-            const { category_id, room_status, room_number } = query;
+            const { category_id, room_status, room_number,
+                page = 1, limit = 10, sort_by = "room_number", order = "asc"
+             } = query;
+
             const filter = {};
-        
+            const now = new Date();
+
             if (category_id) {
                 if (!mongoose.Types.ObjectId.isValid(category_id))
                     throw new Error("ID loại phòng không hợp lệ!");
@@ -585,37 +594,70 @@ export class RoomService {
             }
         
             if (room_number) {
-                filter.room_number = parseInt(room_number);
+                filter.room_number = {
+                    $regex: room_number,
+                    $options: "i"
+                };
             }
-        
-            const now = new Date();
-        
-            const rooms = await this.Room.find(filter)
-                .populate("category_id", "category_name description max_adults max_children price")
-                .populate({
+
+            const currentPage = Math.max(Number(page), 1);
+            const pageSize = Math.max(Number(limit), 1);
+            const skip = (currentPage - 1) * pageSize;
+
+            const sort = {
+                [sort_by]: order === "asc" ? 1 : -1
+            };
+    
+            const [rooms, total] = await Promise.all([
+                this.Room.find(filter)
+                    .populate(
+                        "category_id",
+                        "category_name description max_adults max_children price"
+                    )
+                    .populate({
                         path: "roomStatusLog",
+
                         match: {
                             start_time: { $lte: now },
                             end_time: { $gte: now },
                         },
-                    //options: { sort: { start_time: -1 }, limit: 1 },
-                    select: "status start_time end_time note",
-                })
-                .select("-__v -created_at -updated_at")
-                .sort({ room_number: 1 });
-        
+
+                        select: "status start_time end_time note",
+                    })
+                    .select("-__v -created_at -updated_at")
+                    .sort(sort)
+                    .skip(skip)
+                    .limit(pageSize),
+
+                this.Room.countDocuments(filter)
+            ]);
+
             for (const room of rooms) {
-                if (!room.roomStatusLog) {
-                    const latestLog = await this.RoomLog.findOne({ room_id: room._id })
-                        .sort({ start_time: -1 })
-                        .select("status start_time end_time note");
-                    if (latestLog) {
-                        room.roomStatusLog = latestLog;
-                    }
+                if (!room.roomStatusLog || room.roomStatusLog.length === 0) {
+                    const latestLog = await this.RoomLog.findOne({
+                        room_id: room._id
+                    })
+                    .sort({ start_time: -1 })
+                    .select("status start_time end_time note");
+
+                    room.roomStatusLog = latestLog
+                        ? [latestLog]
+                        : [];
                 }
             }
-        
-            return { count: rooms.length, rooms };
+
+            return {
+                data: rooms,
+
+                pagination: {
+                    total,
+                    page: currentPage,
+                    limit: pageSize,
+                    total_pages: Math.ceil(total / pageSize),
+                    has_next: currentPage * pageSize < total,
+                    has_prev: currentPage > 1
+                }
+            };
 
         } catch (err) {
             console.log("Error in getAllRoomsService:", err);
@@ -654,6 +696,40 @@ export class RoomService {
             console.log("Error in getRoomByIdService:", err);
             throw err;
         }
+    };
+
+    // get many rooms by ids (but not all)
+    getRoomsByIds = async (ids) => {
+        if (!Array.isArray(ids) || ids.length === 0)
+            throw new Error("Danh sách ID không hợp lệ!");
+    
+        const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) {
+            throw new Error("Không có ID hợp lệ!");
+        }
+
+        const now = new Date();
+    
+        const rooms = await this.Room.find({ _id: { $in: validIds } })
+            .populate("category_id", "category_name description max_adults max_children price")
+            .populate({
+                path: "roomStatusLog",
+                match: {
+                    start_time: { $lte: now },
+                    $or: [
+                        { end_time: { $gte: now } },
+                        { end_time: null }
+                    ],
+                },
+                select: "status start_time end_time note",
+            })
+            .select("-__v")
+            .lean();
+    
+        if (!rooms)
+            throw new Error("Không tìm thấy phòng!")
+    
+        return rooms;
     };
     
     updateRoom = async (data, roomId, userId) => {
@@ -1021,257 +1097,38 @@ export class RoomService {
         }
     };
     
-    // return summary count of rooms in each status and total
-    getRoomStatusSummary = async () => {
+    reevaluateRoomStatus = async (room_id) => {
         try {
-            const result = await this.Room.aggregate([
-                {
-                    $group: {
-                    _id: "$room_status",
-                    count: { $sum: 1 },
-                    },
-                },
-            ]);
-        
-            const summary = {
-                new: 0,
-                available: 0,
-                booked: 0,
-                occupied: 0,
-                cleaning: 0,
-                maintenance: 0,
-                reserved: 0,
-                total: 0,
-            };
-        
-            result.forEach(item => {
-                summary[item._id] = item.count;
-                summary.total += item.count;
+            if (!room_id) return;
+    
+            const equipments = await this.Equipment.find({ room_id })
+                .populate("category_id", "is_critical");
+            
+            const hasCriticalProblem = equipments.some((eq) => {
+                if (!eq.category_id?.is_critical) return false;
+            
+                return (
+                ["maintenance", "broken"].includes(eq.condition) ||
+                ["maintenance", "disposed", "lost"].includes(eq.status)
+                );
             });
-        
-            return { summary };
-        
-        } catch (error) {
-            console.log("Error in getRoomStatusSummary:", error);
-            throw error;
-        }
-    };
-    
-    // getTopBookedRoomCategories = async (query = {}) => {
-    //     try {
-    //         const limit = parseInt(query.limit, 10) || 5;
-        
-    //         const result = await BookingDetail.aggregate([
-    //         // join sang Room
-    //         {
-    //             $lookup: {
-    //             from: "rooms",
-    //             localField: "room_id",
-    //             foreignField: "_id",
-    //             as: "room",
-    //             },
-    //         },
-    //         { $unwind: "$room" },
-        
-    //         // group theo category
-    //         {
-    //             $group: {
-    //             _id: "$room.category_id",
-    //             totalBooked: { $sum: 1 },
-    //             },
-    //         },
-        
-    //         // sort giảm dần
-    //         { $sort: { totalBooked: -1 } },
-        
-    //         // limit
-    //         { $limit: limit },
-        
-    //         // join sang RoomCategory
-    //         {
-    //             $lookup: {
-    //             from: "roomcategories",
-    //             localField: "_id",
-    //             foreignField: "_id",
-    //             as: "category",
-    //             },
-    //         },
-    //         { $unwind: "$category" },
-        
-    //         // kết quả trả về cúi cùm
-    //         {
-    //             $project: {
-    //             _id: 0,
-    //             category_id: "$_id",
-    //             name: "$category.category_name",
-    //             price: "$category.price",
-    //             totalBooked: 1,
-    //             },
-    //         },
-    //         ]);
-        
-    //         return { result };
-        
-    //     } catch (error) {
-    //         console.log(error);
-    //         throw error;
-    //     }
-    // };
-    
-    getLatestStatusOfAllRooms = async () => {
-        return await this.RoomLog.aggregate([
-            {
-            $sort: {
-                room_id: 1,
-                start_time: -1,
-            },
-            },
-        
-            // gom theo phòng, lấy bản ghi đầu tiên
-            {
-            $group: {
-                _id: "$room_id",
-                latestStatus: { $first: "$$ROOT" },
-            },
-            },
-        
-            // trả về document gốc
-            {
-            $replaceRoot: { newRoot: "$latestStatus" },
-            },
-        
-            // populate phòng
-            {
-            $lookup: {
-                from: "rooms",
-                localField: "room_id",
-                foreignField: "_id",
-                as: "room",
-            },
-            },
-            {
-            $unwind: {
-                path: "$room",
-                preserveNullAndEmptyArrays: true,
-            },
-            },
-        ]);
-    };
-    
-    // getRoomEquipments = async (roomId) => {
-    //     try {
-    //         const equipments = await Equipment.find({
-    //         room_id: roomId,
-    //         status: { $in: ["in-use", "maintenance"] }
-    //         })
-    //         .populate({
-    //             path: "category_id",
-    //             select: "name price"
-    //         })
-    //         .select("category_id condition status note");
-        
-    //         return { equipments };
-        
-    //     } catch (err) {
-    //         console.error(err);
-    //         throw err;
-    //     }
-    // };
-    
-    // update tình trạng phòng dựa trên status+condition của thiết bị
-    
-    // reevaluateRoomStatus = async (room_id) => {
-    //     try {
-    //         if (!room_id) return;
-    
-    //         const equipments = await this.Equipment.find({ room_id })
-    //             .populate("category_id", "is_critical");
             
-    //         const hasCriticalProblem = equipments.some((eq) => {
-    //             if (!eq.category_id?.is_critical) return false;
+            const status = hasCriticalProblem ? "maintenance" : "available";
+            await this.Room.findByIdAndUpdate(room_id, { status });
             
-    //             return (
-    //             ["maintenance", "broken"].includes(eq.condition) ||
-    //             ["maintenance", "disposed", "lost"].includes(eq.status)
-    //             );
-    //         });
+            await this.RoomLog.create({
+                room_id: room_id,
+                status,
+                start_time: new Date(),
+                end_time: null,
+                note: "Update status phòng theo sự cố + phiếu đền bù",
+                handled_by: null,
+            });
             
-    //         const status = hasCriticalProblem ? "maintenance" : "available";
-    //         await this.Room.findByIdAndUpdate(room_id, { status });
-            
-    //         await this.RoomLog.create({
-    //             room_id: room_id,
-    //             status,
-    //             start_time: new Date(),
-    //             end_time: null,
-    //             note: "Update status phòng theo sự cố + phiếu đền bù",
-    //             handled_by: null,
-    //         });
-            
-    //         return { success: true };
+            return { success: true };
 
-    //     } catch (err) {
-    //         console.log("Error in reevaluateRoomStatus:", err);
-    //         throw err;
-    //     }
-    // };
-
-    // Update existing RoomLog entries matching a filter
-    
-    updateRoomLog = async (filter, updateData, options = {}) => {
-        try {
-            const result = await this.RoomLog.updateMany(filter, { $set: updateData }, options);
-            return result;
         } catch (err) {
-            console.log("Error in updateRoomLog:", err);
-            throw err;
-        }
-    };
-
-    // Insert one or many RoomLog entries
-    // Pass a single object or an array of objects
-    insertRoomLog = async (data, options = {}) => {
-        try {
-            const isArray = Array.isArray(data);
-            const result = isArray
-                ? await this.RoomLog.insertMany(data, options)
-                : await this.RoomLog.create([data], options);
-            return result;
-        } catch (err) {
-            console.log("Error in insertRoomLog:", err);
-            throw err;
-        }
-    };
-
-    // Find RoomLog entries by a given condition
-    // opts: { sort, limit, select, lean }
-    findRoomLogs = async (filter = {}, opts = {}) => {
-        try {
-            const {
-                sort = { start_time: -1 },
-                limit = 0,
-                select = "-__v",
-                lean = false,
-            } = opts;
-
-            let query = this.RoomLog.find(filter).sort(sort).select(select);
-
-            if (limit > 0) query = query.limit(limit);
-            if (lean) query = query.lean();
-
-            return await query;
-        } catch (err) {
-            console.log("Error in findRoomLogs:", err);
-            throw err;
-        }
-    };
-
-    updateRoomInternal = async (filter, updateData, options = {}) => {
-        try {
-            const result = await this.Room.updateMany(filter, { $set: updateData }, options);
-            return result;
-        } catch (err) {
-            console.log("Error in updateRoomInternal:", err);
+            console.log("Error in reevaluateRoomStatus:", err);
             throw err;
         }
     };
@@ -1308,8 +1165,9 @@ export class RoomService {
     //         throw err;
     //     }
     // };
-
+    
     // communication
+    
     async getCategoryIdsByRoomIds (roomIds) {
         const rooms = await this.Room.find(
             { _id: { $in: roomIds } },
@@ -1341,5 +1199,59 @@ export class RoomService {
             throw error;
         }
     }
+
+    updateRoomLog = async (filter, updateData, options = {}) => {
+        try {
+            const result = await this.RoomLog.updateMany(filter, { $set: updateData }, options);
+            return result;
+        } catch (err) {
+            console.log("Error in updateRoomLog:", err);
+            throw err;
+        }
+    };
+
+    insertRoomLog = async (data, options = {}) => {
+        try {
+            const isArray = Array.isArray(data);
+            const result = isArray
+                ? await this.RoomLog.insertMany(data, options)
+                : await this.RoomLog.create([data], options);
+            return result;
+        } catch (err) {
+            console.log("Error in insertRoomLog:", err);
+            throw err;
+        }
+    };
+
+    findRoomLogs = async (filter = {}, opts = {}) => {
+        try {
+            const {
+                sort = { start_time: -1 },
+                limit = 0,
+                select = "-__v",
+                lean = false,
+            } = opts;
+
+            let query = this.RoomLog.find(filter).sort(sort).select(select);
+
+            if (limit > 0) query = query.limit(limit);
+            if (lean) query = query.lean();
+
+            return await query;
+        } catch (err) {
+            console.log("Error in findRoomLogs:", err);
+            throw err;
+        }
+    };
+
+    updateRoomInternal = async (filter, updateData, options = {}) => {
+        try {
+            const result = await this.Room.updateMany(filter, { $set: updateData }, options);
+            return result;
+        } catch (err) {
+            console.log("Error in updateRoomInternal:", err);
+            throw err;
+        }
+    };
 
 }

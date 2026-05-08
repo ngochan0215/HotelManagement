@@ -1,0 +1,797 @@
+openapi: 3.0.3
+info:
+  title: Room Service API
+  version: 1.0.0
+  description: API documentation for rooms, room categories, and room statistics.
+servers:
+  - url: http://localhost:3005
+    description: Local development server
+tags:
+  - name: Rooms
+  - name: Room Categories
+  - name: Room Statistics
+
+paths:
+  /:
+    get:
+      tags: [Rooms]
+      summary: Get all rooms
+      parameters:
+        - in: query
+          name: room_status
+          schema:
+            type: string
+            enum: [available, reserved, booked, occupied, cleaning, maintenance, new]
+        - in: query
+          name: category_id
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Rooms fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Room" }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                required: [success, data]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags: [Rooms]
+      summary: Create room
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomRequest"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  room: { $ref: "#/components/schemas/Room" }
+                required: [success, message, room]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /by-category:
+    get:
+      tags: [Rooms]
+      summary: Get rooms grouped by category
+      parameters:
+        - in: query
+          name: room_status
+          schema:
+            type: string
+            enum: [available, reserved, booked, occupied, cleaning, maintenance, new]
+      responses:
+        "200":
+          description: Grouped rooms fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  category_count: { type: integer }
+                  categories:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CategoryWithRooms"
+                required: [success, category_count, categories]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /{id}:
+    get:
+      tags: [Rooms]
+      summary: Get room by id
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Room detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room:
+                    $ref: "#/components/schemas/Room"
+                required: [room]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    patch:
+      tags: [Rooms]
+      summary: Update room
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoomRequest"
+      responses:
+        "200":
+          description: Room updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  room: { $ref: "#/components/schemas/Room" }
+                required: [success, message, room]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags: [Rooms]
+      summary: Delete room
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Room deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /{roomId}/cleaning/complete:
+    post:
+      tags: [Rooms]
+      summary: Complete room cleaning
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cleaning completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /{roomId}/maintenance/complete:
+    post:
+      tags: [Rooms]
+      summary: Complete room maintenance
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Maintenance completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /categories/available-by:
+    get:
+      tags: [Room Categories]
+      summary: Get available room categories by criteria
+      parameters:
+        - in: query
+          name: check_in
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: check_out
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: adults
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: children
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Available categories
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: { $ref: "#/components/schemas/RoomCategory" }
+                  - $ref: "#/components/schemas/GenericObject"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /categories:
+    get:
+      tags: [Room Categories]
+      summary: Get all room categories
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: max_adults
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: max_children
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: min_price
+          schema:
+            type: number
+            minimum: 0
+        - in: query
+          name: max_price
+          schema:
+            type: number
+            minimum: 0
+      responses:
+        "200":
+          description: Categories fetched
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items: { $ref: "#/components/schemas/RoomCategory" }
+                  - $ref: "#/components/schemas/GenericObject"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Room Categories]
+      summary: Create room category
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateRoomCategoryRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /categories/{id}:
+    get:
+      tags: [Room Categories]
+      summary: Get room category by id
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Category detail
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RoomCategory"
+                  - $ref: "#/components/schemas/GenericObject"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    patch:
+      tags: [Room Categories]
+      summary: Update room category
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UpdateRoomCategoryRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  category: { $ref: "#/components/schemas/RoomCategory" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags: [Room Categories]
+      summary: Delete room category
+      description: Use `force=true` to force deletion when service allows it.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: query
+          name: force
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Category still has rooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: CATEGORY_HAS_ROOMS
+                  roomCount:
+                    type: integer
+                required: [code, roomCount]
+
+  /categories/default-equipments/{id}:
+    get:
+      tags: [Room Categories]
+      summary: Get default equipments by category
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Default equipments fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: integer }
+                  default_equipments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DefaultEquipment"
+                required: [success, count, default_equipments]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /statistics/status-summary:
+    get:
+      tags: [Room Statistics]
+      summary: Get room status summary
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Status summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  summary:
+                    $ref: "#/components/schemas/GenericObject"
+                required: [success, summary]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /statistics/top-booked:
+    get:
+      tags: [Room Statistics]
+      summary: Get top booked room categories
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Top booked categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  result:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GenericObject"
+                required: [success, result]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /statistics/latest-status:
+    get:
+      tags: [Room Statistics]
+      summary: Get latest status of all rooms
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Latest room statuses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GenericObject"
+                required: [success, data]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or business validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: User does not have required role/permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        error:
+          type: string
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    SuccessMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+      required: [success, message]
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+      additionalProperties: true
+
+    GenericObject:
+      type: object
+      additionalProperties: true
+
+    RoomCategory:
+      type: object
+      properties:
+        _id:
+          type: string
+        category_name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        max_adults:
+          type: integer
+          minimum: 1
+        max_children:
+          type: integer
+          minimum: 0
+        price:
+          type: number
+          minimum: 0
+        images:
+          type: array
+          items:
+            type: string
+        average_rating:
+          type: number
+          minimum: 0
+          maximum: 5
+        review_count:
+          type: integer
+      additionalProperties: true
+
+    Room:
+      type: object
+      properties:
+        _id:
+          type: string
+        category_id:
+          type: string
+        room_number:
+          type: string
+        room_status:
+          type: string
+          enum: [available, reserved, booked, occupied, cleaning, maintenance, new]
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: true
+
+    CategoryWithRooms:
+      type: object
+      properties:
+        category:
+          $ref: "#/components/schemas/RoomCategory"
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/Room"
+      additionalProperties: true
+
+    DefaultEquipment:
+      type: object
+      properties:
+        _id:
+          type: string
+        category_id:
+          type: string
+        equipment_category_id:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+      additionalProperties: true
+
+    CreateRoomRequest:
+      type: object
+      properties:
+        category_id:
+          type: string
+        room_number:
+          type: string
+        room_status:
+          type: string
+          enum: [available, reserved, booked, occupied, cleaning, maintenance, new]
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+      required: [category_id, room_number]
+      additionalProperties: false
+
+    UpdateRoomRequest:
+      type: object
+      properties:
+        category_id:
+          type: string
+        room_number:
+          type: string
+        room_status:
+          type: string
+          enum: [available, reserved, booked, occupied, cleaning, maintenance, new]
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+
+    CreateRoomCategoryRequest:
+      type: object
+      properties:
+        category_name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        max_adults:
+          type: integer
+          minimum: 1
+        max_children:
+          type: integer
+          minimum: 0
+        price:
+          type: number
+          minimum: 0
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+      required: [category_name, description, max_adults, max_children, price]
+      additionalProperties: true
+
+    UpdateRoomCategoryRequest:
+      type: object
+      properties:
+        category_name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        max_adults:
+          type: integer
+          minimum: 1
+        max_children:
+          type: integer
+          minimum: 0
+        price:
+          type: number
+          minimum: 0
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+      additionalProperties: true

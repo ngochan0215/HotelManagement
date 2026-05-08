@@ -12,7 +12,7 @@ export class EmployeeController {
             return res.status(200).json({employee});
             
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
 
@@ -21,7 +21,7 @@ export class EmployeeController {
             const { count, employees } = await this.employeeService.getAllEmployees(req.query);
             return res.status(200).json({ count, employees });
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -30,7 +30,7 @@ export class EmployeeController {
             const employee = await this.employeeService.getEmployeeById(req.params.id);
             return res.status(200).json(employee);
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -39,7 +39,7 @@ export class EmployeeController {
             const employee = await this.employeeService.updateEmployee(req.params.id, req.body);
             return res.status(200).json(employee);
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -57,7 +57,7 @@ export class EmployeeController {
             await this.employeeService.resetPasswordForEmployee(req.params.id, req.body.newPassword);
             return res.status(200).json({ message: "Mật khẩu đã được đặt lại thành công." });
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -71,11 +71,7 @@ export class EmployeeController {
             });
 
         } catch (error) {
-            res.status(500).json({ 
-                success: false, 
-                message: "Lỗi server", 
-                error: error.message 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -84,7 +80,7 @@ export class EmployeeController {
             await this.employeeService.toggleBanUser(req.params.id, req.body.isBanned);
             return res.status(200).json({ message: "Tài khoản đã bị ban/mở ban thành công." });
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -93,7 +89,7 @@ export class EmployeeController {
             const employee = await this.employeeService.getMyProfile(req.user.userId);
             return res.status(200).json(employee);
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -104,7 +100,7 @@ export class EmployeeController {
             return res.status(200).json({ message: "Check-in shift successfully.", attendance });
 
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -115,7 +111,7 @@ export class EmployeeController {
             return res.status(200).json({ message: "Check-out shift successfully.", attendance, earning, next_shift });
 
         } catch (err) {
-            return res.status(400).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -125,10 +121,10 @@ export class EmployeeController {
             const employeeId = req.params.employeeId;
             const result = await this.employeeService.getEmployeeEarningById(employeeId, req.query);
 
-            res.status(200).json({ success: true, data: result });
+            return res.status(200).json({ success: true, data: result });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -136,10 +132,10 @@ export class EmployeeController {
         try {
             const result = await this.employeeService.getAllEmployeesEarnings(req.query);
 
-            res.status(200).json({ success: true, data: result });
+            return res.status(200).json({ success: true, data: result });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -148,10 +144,10 @@ export class EmployeeController {
         try {
             const result = await this.employeeService.getMyEarnings(req.user.userId, req.query);
 
-            res.status(200).json({ success: true, data: result });
+            return res.status(200).json({ success: true, data: result });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

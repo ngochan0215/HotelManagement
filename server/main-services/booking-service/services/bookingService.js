@@ -1106,7 +1106,7 @@ export class BookingService {
         }
     };
 
-    // checkin 1 phòng trong booking
+    // checkin one room (one booking detail) of booking
     checkinBookingDetail = async (userId, bookingId, detailId) => {
         try {
             const now = new Date();
@@ -1805,4 +1805,53 @@ export class BookingService {
         const details = await this.BookingDetail.find({ booking_id: bookingId });
         return details;
     }
+
+    findBookingDetailsByBookingIds = async (activeBookingIds) => {
+        const busyBookingDetails = await this.BookingDetail.find({
+            booking_id: { $in: activeBookingIds },
+            status: { $ne: "cancelled" },
+            expected_checkin: { $lt: end },
+            expected_checkout: { $gt: start },
+        }).select("room_id");
+
+        return busyBookingDetails;
+    }
+
+    getActiveBookings = async () => {
+        const activeBookings = await this.Booking.find({
+            status: { $in: ["pending", "confirmed", "in_progress"] },
+        }).select("_id");
+
+        return activeBookings;
+    }
+
+    getCalendarData = async (roomIds, startOfDay, endOfDay) => {
+        try {
+            const bookingDetails = await this.BookingDetail.find({
+                room_id: { $in: roomIds },
+                $or: [
+                    { expected_checkin: { $lte: endOfDay }, expected_checkout: { $gte: startOfDay } },
+                    { actual_checkin: { $lte: endOfDay }, actual_checkout: { $gte: startOfDay } }
+                ]
+            }).lean();
+
+            const bookingIds = [...new Set(bookingDetails.map(d => d.booking_id?.toString()).filter(Boolean))];
+
+            const bookings = await this.Booking.find({
+                _id: { $in: bookingIds },
+                status: { $nin: ["cancelled", "expired"] }
+            })
+                .populate("customer_id", "full_name phone_number CCCD")
+                .lean();
+
+            return {
+                bookingDetails,
+                bookings
+            };
+
+        } catch (err) {
+            console.error("Error handling GET_CALENDAR_DATA:", err);
+            throw error;
+        }
+    };
 }

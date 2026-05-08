@@ -18,10 +18,7 @@ export class TransactionController {
             });
         }
         catch (error) {
-            res.status(500).json({ 
-                success: false,
-                error: 'Lỗi khi tạo liên kết thanh toán ' + error.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -51,10 +48,7 @@ export class TransactionController {
             });
         }
         catch (error) {
-            res.status(500).json({ 
-                success: false,
-                error: 'Lỗi khi lấy chi tiết thanh toán' 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
     
@@ -67,7 +61,7 @@ export class TransactionController {
             res.status(200).json({ message: 'Payout initiated successfully' });
         }
         catch (error) {
-            res.status(500).json({ error: 'Lỗi khi thực hiện payout' });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -89,10 +83,7 @@ export class TransactionController {
             });
         }
         catch (error) {
-            res.status(500).json({ 
-                success: false,
-                error: 'Lỗi khi lấy chi tiết giao dịch' 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
     
@@ -108,10 +99,7 @@ export class TransactionController {
             });
         }
         catch (error) {
-            res.status(500).json({ 
-                success: false,
-                error: error.message || 'Lỗi khi cập nhật giao dịch thành công' 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
     
@@ -127,11 +115,7 @@ export class TransactionController {
             });
         }
         catch (error) {
-            console.error('Lỗi khi cập nhật giao dịch thất bại:', error);
-            res.status(500).json({ 
-                success: false,
-                error: error.message || 'Lỗi khi cập nhật giao dịch thất bại' 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
     

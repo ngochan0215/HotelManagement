@@ -5,8 +5,8 @@ import { verifyToken } from "../../../shared/middleware/authMiddleware.js";
 const router = express.Router();
 const controller = new NotificationController();
 
-router.get("/all", verifyToken, controller.getMyNotifications);
-router.patch("/read-all", verifyToken, controller.markAsReadAll);
+router.get("/", verifyToken, controller.getMyNotifications);
+router.patch("/", verifyToken, controller.markAsReadAll);
 router.patch("/:id", verifyToken, controller.markAsRead);
 router.delete("/:id", verifyToken, controller.markAsDeleted);
 

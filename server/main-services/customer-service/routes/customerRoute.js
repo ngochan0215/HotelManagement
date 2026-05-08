@@ -6,7 +6,7 @@ const router = express.Router();
 const customerController = new CustomerController();
 
 // manager and customer 
-router.get("/all", verifyToken, isEmployee, customerController.getAllCustomers);
+router.get("", verifyToken, isEmployee, customerController.getAllCustomers);
 router.patch("/:id", verifyToken, isManager, customerController.updateCustomer);
 router.get("/:id", verifyToken, isManager, customerController.getCustomerById);
 router.patch("/:id/ban", verifyToken, isManager, customerController.banCustomer);

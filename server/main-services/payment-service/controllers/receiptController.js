@@ -10,14 +10,12 @@ export class ReceiptController {
             const receipt = await this.receiptService.createReceipt(req.user.userId, req.body);
             
             return res.status(201).json({
-                message: "Tạo hóa đơn thành công.",
+                message: "Create receipt successfully!",
                 receipt: receipt,
             });
 
         } catch (err) {
-            return res.status(500).json({
-                message: err.message || "Không thể tạo hóa đơn.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -28,9 +26,7 @@ export class ReceiptController {
             return res.status(200).json({ receipt });
 
         } catch (err) {
-            return res.status(500).json({
-                message: err.message || "Không thể lấy thông tin hóa đơn.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -41,9 +37,7 @@ export class ReceiptController {
             return res.status(200).json({ total, receipts });
 
         } catch (err) {
-            return res.status(500).json({
-                message: err.message || "Không thể lấy danh sách hóa đơn.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -57,10 +51,7 @@ export class ReceiptController {
             });
 
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -69,14 +60,12 @@ export class ReceiptController {
             const receipt = await this.receiptService.refreshReceiptAfterCheckout(req.params.id);
             
             return res.status(200).json({
-                message: "Cập nhật hóa đơn thành công.",
+                message: "Update receipt successfully!",
                 receipt
             });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể cập nhật hóa đơn."
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -85,14 +74,12 @@ export class ReceiptController {
             const receipt = await this.receiptService.markReceiptAsPaid(req.user.userId, req.params.id, req.body.payment);
         
             return res.status(200).json({
-                message: "Thanh toán hóa đơn thành công.",
+                message: "Receipt paid successfully!",
                 receipt
             });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể thanh toán hóa đơn."
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 };

@@ -12,7 +12,7 @@ export class EquipmentInstallController {
             return res.status(201).json({ success: true, message: "Tạo phiếu lắp đặt thiết bị thành công.", data: { install } });
     
         } catch (error) {
-            res.status(500).json({ success: false, message: "SERVER ERROR: " + error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -23,7 +23,7 @@ export class EquipmentInstallController {
             return res.status(201).json({ success: true, message: "Tạo phiếu tháo dỡ thiết bị thành công.", data: { install } });
     
         } catch (error) {
-            res.status(500).json({ success: false, message: "SERVER ERROR: " + error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -34,7 +34,7 @@ export class EquipmentInstallController {
         res.status(200).json({ success: true, counts, installs });
     
       } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
     
@@ -174,11 +174,7 @@ export class EquipmentInstallController {
         });
 
       } catch (error) {
-        res.status(500).json({ 
-          success: false, 
-          message: "Lỗi server", 
-          error: error.message 
-        });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
     
@@ -189,7 +185,7 @@ export class EquipmentInstallController {
           res.status(200).json({ success: true, install });
       
         } catch (error) {
-          res.status(500).json({ success: false, message: error.message });
+          return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -207,7 +203,7 @@ export class EquipmentInstallController {
             });
     
         } catch (error) {
-            res.status(500).json({ success: false, message: "SERVER ERROR: " + error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -221,10 +217,7 @@ export class EquipmentInstallController {
         });
     
       } catch (error) {
-        return res.status(500).json({
-          success: false,
-          message: "SERVER ERROR: " + error.message,
-        });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
 
@@ -239,10 +232,7 @@ export class EquipmentInstallController {
         });
     
       } catch (error) {
-        return res.status(500).json({
-          success: false,
-          message: "SERVER ERROR: " + error.message,
-        });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
     
@@ -257,10 +247,7 @@ export class EquipmentInstallController {
         });
 
       } catch (error) {
-        res.status(500).json({
-          success: false,
-          message: "SERVER ERROR: " + error.message,
-        });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
     
@@ -275,10 +262,7 @@ export class EquipmentInstallController {
         });
 
       } catch (error) {
-        res.status(500).json({
-          success: false,
-          message: "SERVER ERROR: " + error.message,
-        });
+          return res.status(err.status || 400).json({ message: err.message });
       }
     };
 }

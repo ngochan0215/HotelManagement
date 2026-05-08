@@ -15,7 +15,7 @@ export class CustomerController {
                 customers
             });
         } catch (error) {
-            res.status(500).json({ message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -38,10 +38,7 @@ export class CustomerController {
                 data: customer,
             });
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -55,10 +52,7 @@ export class CustomerController {
             });
 
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -71,10 +65,7 @@ export class CustomerController {
                 message: "Đã mở khóa tài khoản khách hàng.",
             });
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -85,7 +76,7 @@ export class CustomerController {
             res.status(201).json(customer);
 
         } catch (error) {
-            res.status(error.status || 500).json({ message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

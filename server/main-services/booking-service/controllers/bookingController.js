@@ -15,9 +15,7 @@ export class BookingController {
             });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể đặt phòng.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -31,9 +29,7 @@ export class BookingController {
             });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể xác nhận đặt phòng.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -44,9 +40,7 @@ export class BookingController {
             return res.status(200).json({ booking, rooms });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể lấy thông tin booking.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -57,9 +51,7 @@ export class BookingController {
             return res.status(200).json({ total, bookings });
 
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể lấy danh sách booking."
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -67,10 +59,10 @@ export class BookingController {
         try {
             await this.bookingService.addRoomsToBooking(req.params.id, req.body);
 
-            res.status(200).json({ message: "Thêm phòng thành công." });
+            return res.status(200).json({ message: "Thêm phòng thành công." });
 
         } catch (err) {
-            res.status(500).json({ message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -83,9 +75,7 @@ export class BookingController {
             });
         
         } catch (error) {
-            return res.status(500).json({
-                message: error.message || "Không thể cập nhật trạng thái booking.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -98,9 +88,7 @@ export class BookingController {
             return res.status(200).json({ message: "Check-in phòng thành công." });
 
         } catch (error) {
-            return res.status(400).json({
-                message: error.message || "Không thể check-in phòng.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -110,16 +98,14 @@ export class BookingController {
 
             const result = await this.bookingService.checkoutBookingDetail(req.user.userId, bookingId, detailId);
 
-            return res.json({
+            return res.status(200).json({
                 success: true,
                 message: "Checkout thành công. Vui lòng gán nhân viên dọn dẹp.",
                 data: result
             });
 
         } catch (error) {
-            return res.status(400).json({
-                message: error.message || "Không thể checkout phòng.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -135,9 +121,7 @@ export class BookingController {
             return res.status(200).json({ message: "Đã hủy phòng khỏi booking thành công." });
 
         } catch (error) {
-            return res.status(400).json({
-                message: error.message || "Không thể hủy phòng.",
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -150,10 +134,10 @@ export class BookingController {
 
             await this.bookingService.cancelBooking(userId, id, reason, userRole);
             
-            res.status(200).json({ message: "Đã hủy toàn bộ booking." });
+            return res.status(200).json({ message: "Đã hủy toàn bộ booking." });
 
         } catch (err) {
-            res.status(500).json({ messsage: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -163,50 +147,50 @@ export class BookingController {
             const match = {};
 
             if (fromDate && isNaN(new Date(fromDate))) {
-            return res.status(400).json({ message: "fromDate không hợp lệ" });
+                return res.status(400).json({ message: "fromDate không hợp lệ" });
             }
             if (toDate && isNaN(new Date(toDate))) {
-            return res.status(400).json({ message: "toDate không hợp lệ" });
+                return res.status(400).json({ message: "toDate không hợp lệ" });
             }
 
             if (fromDate || toDate) {
-            match.cancelled_at = {};
-            if (fromDate) match.cancelled_at.$gte = new Date(fromDate);
-            if (toDate) match.cancelled_at.$lte = new Date(toDate);
+                match.cancelled_at = {};
+                if (fromDate) match.cancelled_at.$gte = new Date(fromDate);
+                if (toDate) match.cancelled_at.$lte = new Date(toDate);
             }
 
             const ALLOWED_CANCELLED_BY = ["user", "system", "admin"];
             if (cancelledBy && !ALLOWED_CANCELLED_BY.includes(cancelledBy)) {
-            return res.status(400).json({ message: "cancelledBy không hợp lệ" });
+                return res.status(400).json({ message: "cancelledBy không hợp lệ" });
             }
 
             if (cancelledBy) {
-            match.cancelled_by = cancelledBy;
+                match.cancelled_by = cancelledBy;
             }
 
             const stats = await RoomCancellation.aggregate([
-            { $match: match },
-            {
-                $group: {
-                _id: "$reason",
-                total: { $sum: 1 },
+                { $match: match },
+                {
+                    $group: {
+                    _id: "$reason",
+                    total: { $sum: 1 },
+                    },
                 },
-            },
             ]);
 
             const result = Object.keys(CANCELLATION_REASON_LABELS).map(code => {
-            const found = stats.find(s => s._id === code);
-            return {
-                reason_code: code,
-                reason_label: CANCELLATION_REASON_LABELS[code],
-                total: found ? found.total : 0,
-            };
+                const found = stats.find(s => s._id === code);
+                return {
+                    reason_code: code,
+                    reason_label: CANCELLATION_REASON_LABELS[code],
+                    total: found ? found.total : 0,
+                };
             });
 
             res.status(200).json({ success: true, data: result });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

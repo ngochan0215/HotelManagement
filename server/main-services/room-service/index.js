@@ -3,9 +3,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
+import { startFixRoomLogsJob, startSyncRoomStatusJob } from "./jobs/roomJob.js";
+
 import roomRoute from "./routes/roomRoute.js";
 import roomCategoryRoute from "./routes/roomCategoryRoute.js";
-import { startFixRoomLogsJob, startSyncRoomStatusJob } from "./jobs/roomJob.js";
+import roomStatisticRoute from "./routes/roomStatisticRoute.js";
 
 dotenv.config();
 
@@ -29,8 +31,9 @@ const startServer = async () => {
     // startFixRoomLogsJob();
 
     app.use(roomRoute);
-    app.use("/category", roomCategoryRoute);
-
+    app.use("/categories", roomCategoryRoute);
+    app.use("/statistics", roomStatisticRoute);
+    
     const PORT = process.env.PORT || 3005;
 
     app.listen(PORT, () => {

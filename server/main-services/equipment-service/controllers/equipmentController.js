@@ -11,17 +11,18 @@ export class EquipmentController {
             return res.status(201).json({ success: true, message: "Thêm danh mục thiết bị mới thành công", category });
     
         } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
     
     getAllEquipmentCategories = async (req, res) => {
         try {
-            const {total, categories } = await this.equipmentService.getAllEquipmentCategories(req.query);
-            return res.status(200).json({ success: true, total, categories });
+            const {total, categories, pagination } = await this.equipmentService.getAllEquipmentCategories(req.query);
+            
+            return res.status(200).json({ success: true, total, categories, pagination });
     
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -35,7 +36,7 @@ export class EquipmentController {
             res.status(200).json({ success: true, category });
     
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -45,7 +46,7 @@ export class EquipmentController {
             return res.status(200).json({ success: true, message: "Cập nhật thành công!", category: updated });
             
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -58,7 +59,7 @@ export class EquipmentController {
             return res.status(200).json({ success: true, message: "Xóa danh mục thiết bị thành công!" });
     
         } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -75,10 +76,22 @@ export class EquipmentController {
             });
         
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + error.message,
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    getOutOfStockCategories = async (req, res) => {
+        try {
+            const { categories, count } = await this.equipmentService.getOutOfStockCategories();
+    
+            return res.status(200).json({
+                success: true,
+                categories, 
+                count 
             });
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -89,11 +102,12 @@ export class EquipmentController {
     
     getAllEquipments = async (req, res) => {
         try {
-            const { count, equipments } = await this.equipmentService.getAllEquipments(req.query);
-            return res.status(200).json({ success: true, count, equipments });
-    
+            const { data, pagination } = await this.equipmentService.getAllEquipments(req.query);
+            
+            return res.status(200).json({ success: true, data, pagination });
+
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -103,7 +117,7 @@ export class EquipmentController {
             return res.status(200).json({ success: true, equipment });
     
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -118,10 +132,7 @@ export class EquipmentController {
             });
     
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -132,7 +143,7 @@ export class EquipmentController {
             return res.status(200).json({ success: true, message: "Xóa thiết bị thành công!" });
     
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

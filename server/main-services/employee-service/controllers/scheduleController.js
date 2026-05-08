@@ -17,7 +17,7 @@ export class ScheduleController {
             });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -28,7 +28,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, data: schedule });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -39,7 +39,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, data: { contract, employee, recurring_shifts, total_weeks, total_schedules, by_week } });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -54,7 +54,7 @@ export class ScheduleController {
             });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -67,7 +67,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Created shift successfully.", data: shift });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -78,7 +78,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Fetched all shifts successfully.", data: result });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -89,7 +89,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Fetched shift successfully.", data: shift });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -100,7 +100,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Updated shift successfully.", data: shift });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -111,7 +111,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Deleted shift successfully.", data: result });
         
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -124,7 +124,7 @@ export class ScheduleController {
             return res.status(200).json({ success: true, message: "Register schedule(s) successfully.", data: schedules });
         
         } catch (err) {
-            return res.status(500).json({ success: false, message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -141,7 +141,7 @@ export class ScheduleController {
             });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -152,7 +152,7 @@ export class ScheduleController {
             res.status(200).json({ success: true, message: "Update schedule successfully.", data: schedule });
 
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
@@ -166,7 +166,7 @@ export class ScheduleController {
             });
         
         } catch (err) {
-            return res.status(500).json({ success: false, message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -181,7 +181,7 @@ export class ScheduleController {
             });
         
         } catch (err) {
-            return res.status(500).json({ success: false, message: err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -192,7 +192,7 @@ export class ScheduleController {
             return res.status(200).json({ success: true, data: result });
 
         } catch (error) {
-            return res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -203,7 +203,7 @@ export class ScheduleController {
             return res.status(200).json({ success: true, count, requests });
 
         } catch (error) {
-            return res.status(500).json({ success: false, message: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

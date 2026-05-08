@@ -28,7 +28,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(employeeRoute);
-    app.use("/schedule", scheduleRoute);
+    app.use("/schedules", scheduleRoute);
 
     const PORT = process.env.PORT || 3003;
 

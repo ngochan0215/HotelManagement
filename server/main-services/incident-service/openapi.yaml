@@ -1,0 +1,723 @@
+openapi: 3.0.3
+info:
+  title: Incident Service API
+  version: 1.0.0
+  description: API documentation for incidents and compensation tickets.
+servers:
+  - url: http://localhost:3008
+    description: Local development server
+tags:
+  - name: Incidents
+  - name: Compensation Tickets
+
+paths:
+  /:
+    get:
+      tags: [Incidents]
+      summary: Get all incidents
+      description: Employee-facing listing endpoint with query filters.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [new, in_progress, resolved, closed]
+        - in: query
+          name: severity
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [equipment, technical, facility, service, safety, other]
+        - in: query
+          name: compensation_status
+          schema:
+            type: string
+            enum: [none, pending, done]
+      responses:
+        "200":
+          description: Incidents fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - type: array
+                        items: { $ref: "#/components/schemas/Incident" }
+                      - $ref: "#/components/schemas/GenericObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    post:
+      tags: [Incidents]
+      summary: Create incident
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIncidentRequest"
+      responses:
+        "201":
+          description: Incident created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /{id}:
+    get:
+      tags: [Incidents]
+      summary: Get incident by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incident:
+                    $ref: "#/components/schemas/Incident"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    patch:
+      tags: [Incidents]
+      summary: Update incident
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIncidentRequest"
+      responses:
+        "200":
+          description: Incident updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    delete:
+      tags: [Incidents]
+      summary: Delete incident
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Incident deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /mark-assigned/{id}:
+    patch:
+      tags: [Incidents]
+      summary: Assign incident to an assignee
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignIncidentRequest"
+      responses:
+        "200":
+          description: Incident assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /mark-resolved/{id}:
+    patch:
+      tags: [Incidents]
+      summary: Mark incident resolved
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                processing_note:
+                  type: string
+                note:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Incident resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /mark-closed/{id}:
+    patch:
+      tags: [Incidents]
+      summary: Close incident
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Incident closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessageResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /compensation-tickets:
+    get:
+      tags: [Compensation Tickets]
+      summary: Get all compensation tickets
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, paid, cancelled]
+        - in: query
+          name: payer_type
+          schema:
+            type: string
+            enum: [customer, employee, hotel]
+      responses:
+        "200":
+          description: Compensation tickets fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompensationTicket"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /compensation-tickets/{id}:
+    get:
+      tags: [Compensation Tickets]
+      summary: Get compensation ticket by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket:
+                    $ref: "#/components/schemas/CompensationTicket"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    patch:
+      tags: [Compensation Tickets]
+      summary: Update compensation ticket
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompensationTicketRequest"
+      responses:
+        "200":
+          description: Ticket updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /compensation-tickets/confirm-done/{id}:
+    post:
+      tags: [Compensation Tickets]
+      summary: Confirm compensation paid
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: Compensation confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /{incident_id}/compensation-tickets:
+    post:
+      tags: [Compensation Tickets]
+      summary: Create compensation ticket for incident
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: incident_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompensationTicketRequest"
+      responses:
+        "201":
+          description: Compensation ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /{incident_id}/compensation-tickets/others:
+    post:
+      tags: [Compensation Tickets]
+      summary: Create compensation ticket (custom/other mode)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: incident_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompensationTicketOtherRequest"
+      responses:
+        "201":
+          description: Compensation ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDataResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: User does not have required role/permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    MessageDataResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          oneOf:
+            - $ref: "#/components/schemas/GenericObject"
+            - type: array
+              items:
+                $ref: "#/components/schemas/GenericObject"
+      required: [message]
+
+    SuccessMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+      required: [success, message]
+
+    SuccessMessageDataResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          oneOf:
+            - $ref: "#/components/schemas/GenericObject"
+            - type: array
+              items:
+                $ref: "#/components/schemas/GenericObject"
+      required: [success, message]
+
+    GenericObject:
+      type: object
+      additionalProperties: true
+
+    AssigneeInfo:
+      type: object
+      properties:
+        assignee_id:
+          type: string
+          nullable: true
+        assignee_name:
+          type: string
+        assignee_department:
+          type: string
+        assigned_at:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: true
+
+    Incident:
+      type: object
+      properties:
+        _id:
+          type: string
+        room_id:
+          type: string
+          nullable: true
+        reporter_id:
+          type: string
+        causer_id:
+          type: string
+          nullable: true
+        booking_id:
+          type: string
+          nullable: true
+        equipment_ids:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [equipment, technical, facility, service, safety, other]
+        caused_by:
+          type: string
+          enum: [employee, customer, other]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [new, in_progress, resolved, closed]
+        compensation_status:
+          type: string
+          enum: [none, pending, done]
+        occured_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+        assignee_info:
+          $ref: "#/components/schemas/AssigneeInfo"
+        processing_note:
+          type: string
+      additionalProperties: true
+
+    CompensationDetail:
+      type: object
+      properties:
+        equipment_id:
+          type: string
+          nullable: true
+        broken_state:
+          type: string
+          enum: [scratched, cracked, broken, lost, unusable]
+        resolution:
+          type: string
+          enum: [repair, discard]
+        penalty_fee:
+          type: number
+      required: [broken_state, resolution]
+      additionalProperties: true
+
+    CompensationTicket:
+      type: object
+      properties:
+        _id:
+          type: string
+        incident_id:
+          type: string
+        booking_id:
+          type: string
+          nullable: true
+        payer_type:
+          type: string
+          enum: [customer, employee, hotel]
+        payer_id:
+          type: string
+          nullable: true
+        compensation_details:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompensationDetail"
+        total_fee:
+          type: number
+        status:
+          type: string
+          enum: [pending, paid, cancelled]
+        note:
+          type: string
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: true
+
+    CreateIncidentRequest:
+      type: object
+      properties:
+        room_id:
+          type: string
+          nullable: true
+        causer_id:
+          type: string
+          nullable: true
+        booking_id:
+          type: string
+          nullable: true
+        equipment_ids:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [equipment, technical, facility, service, safety, other]
+        caused_by:
+          type: string
+          enum: [employee, customer, other]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        occured_at:
+          type: string
+          format: date-time
+      required: [description, type, caused_by, severity, occured_at]
+      additionalProperties: true
+
+    UpdateIncidentRequest:
+      type: object
+      properties:
+        room_id:
+          type: string
+          nullable: true
+        causer_id:
+          type: string
+          nullable: true
+        booking_id:
+          type: string
+          nullable: true
+        equipment_ids:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [equipment, technical, facility, service, safety, other]
+        caused_by:
+          type: string
+          enum: [employee, customer, other]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        processing_note:
+          type: string
+      additionalProperties: true
+
+    AssignIncidentRequest:
+      type: object
+      properties:
+        assignee_id:
+          type: string
+        note:
+          type: string
+      required: [assignee_id]
+      additionalProperties: false
+
+    CreateCompensationTicketRequest:
+      type: object
+      properties:
+        payer_type:
+          type: string
+          enum: [customer, employee, hotel]
+        payer_id:
+          type: string
+          nullable: true
+        booking_id:
+          type: string
+          nullable: true
+        compensation_details:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompensationDetail"
+        note:
+          type: string
+      required: [payer_type, compensation_details]
+      additionalProperties: true
+
+    CreateCompensationTicketOtherRequest:
+      type: object
+      properties:
+        payer_type:
+          type: string
+          enum: [customer, employee, hotel]
+        payer_id:
+          type: string
+          nullable: true
+        booking_id:
+          type: string
+          nullable: true
+        compensation_details:
+          type: array
+          description: Can include arbitrary item details in "others" mode.
+          items:
+            type: object
+            additionalProperties: true
+        total_fee:
+          type: number
+        note:
+          type: string
+      required: [payer_type]
+      additionalProperties: true
+
+    UpdateCompensationTicketRequest:
+      type: object
+      properties:
+        payer_type:
+          type: string
+          enum: [customer, employee, hotel]
+        payer_id:
+          type: string
+          nullable: true
+        compensation_details:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompensationDetail"
+        total_fee:
+          type: number
+        status:
+          type: string
+          enum: [pending, paid, cancelled]
+        note:
+          type: string
+      additionalProperties: true

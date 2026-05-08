@@ -6,15 +6,17 @@ const router = express.Router();
 const controller = new EquipmentController();
 
 //----EQUIPMENT CATEGORY----//
-router.post("/category/add", verifyToken, isManager, controller.createEquipmentCategory);
-router.get("/category/all", verifyToken, controller.getAllEquipmentCategories);
-router.patch("/category/:id", verifyToken, isManager, controller.updateEquipmentCategory);
-router.delete("/category/:id", verifyToken, isManager, controller.deleteEquipmentCategory);
-router.get("/category/:id", verifyToken, controller.getEquipmentCategoryById);
-router.post("/category/sync-quantities", verifyToken, isManager, controller.syncEquipmentCategoryQuantities);
+router.get("/categories/out-of-stock", verifyToken, isManager, controller.getOutOfStockCategories);
+router.get("/categories", verifyToken, controller.getAllEquipmentCategories);
+router.get("/categories/:id", verifyToken, controller.getEquipmentCategoryById);
+
+router.post("/categories", verifyToken, isManager, controller.createEquipmentCategory);
+router.patch("/categories/:id", verifyToken, isManager, controller.updateEquipmentCategory);
+router.delete("/categories/:id", verifyToken, isManager, controller.deleteEquipmentCategory);
+router.post("/categories/sync-quantities", verifyToken, isManager, controller.syncEquipmentCategoryQuantities);
 
 //----EQUIPMENT----//
-router.get("/all", verifyToken, isNotCustomer, controller.getAllEquipments);
+router.get("/", verifyToken, isNotCustomer, controller.getAllEquipments);
 router.patch("/:id", verifyToken, isNotCustomer, controller.updateEquipment);
 router.delete("/:id", verifyToken, isManager, controller.deleteEquipment);
 router.get("/:id", verifyToken, isNotCustomer, controller.getEquipmentById);

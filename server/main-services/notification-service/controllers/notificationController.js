@@ -15,7 +15,7 @@ export class NotificationController {
             });
 
         } catch (error) {
-            res.status(500).json({ message: "Failed to mark read notification: ", error: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -29,7 +29,7 @@ export class NotificationController {
             });
 
         } catch (error) {
-            res.status(500).json({ message: "Failed to mark deleted notification: ", error: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -43,7 +43,7 @@ export class NotificationController {
             });
 
         } catch (error) {
-            res.status(500).json({ message: "Failed to mark read all notifications: ", error: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -55,7 +55,7 @@ export class NotificationController {
                 notifications
             });
         } catch (error) {
-            res.status(500).json({ message: "Failed to get all notifications: ", error: error.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 

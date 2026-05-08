@@ -16,10 +16,7 @@ export class DiscountController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -34,10 +31,7 @@ export class DiscountController {
             });
 
         } catch (err) {
-            res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -51,10 +45,7 @@ export class DiscountController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -64,7 +55,7 @@ export class DiscountController {
             return res.status(200).json({ success: true, message: "Xóa khuyến mãi thành công!"});
 
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -78,10 +69,7 @@ export class DiscountController {
             });
 
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -96,10 +84,7 @@ export class DiscountController {
             });
 
         } catch (err) { 
-            return res.status(500).json({ 
-                success: false, 
-                message: "SERVER ERROR: " + err.message 
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -115,10 +100,7 @@ export class DiscountController {
             });
         
         } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "SERVER ERROR: " + err.message
-            });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

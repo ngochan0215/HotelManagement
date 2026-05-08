@@ -280,6 +280,40 @@ export class AuthService {
         }
     };
 
+    // async logout(token) {
+    //     try {
+    //         if (!token) throw new Error("Không tìm thấy token");
+
+    //         // decode without verifying to get expiry
+    //         const decoded = jwt.decode(token);
+    //         if (!decoded || !decoded.exp) throw new Error("Token không hợp lệ");
+
+    //         const now = Math.floor(Date.now() / 1000);
+    //         const ttl = decoded.exp - now;
+
+    //         // only blacklist if token hasn't already expired
+    //         if (ttl > 0) {
+    //             await this.redis.set(
+    //                 `blacklist:${token}`,
+    //                 "1",
+    //                 "EX",
+    //                 ttl
+    //             );
+    //         }
+
+    //         return { success: true };
+
+    //     } catch (err) {
+    //         console.error("Error logging out:", err);
+    //         throw err;
+    //     }
+    // }
+
+    // async isTokenBlacklisted(token) {
+    //     const result = await this.redis.get(`blacklist:${token}`);
+    //     return result !== null;
+    // }
+
     async forgotPassword (email) {
         const user = await this.User.findOne({ email });
         if (!user) 

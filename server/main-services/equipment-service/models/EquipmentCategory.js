@@ -15,7 +15,6 @@ const equipmentCategorySchema = new mongoose.Schema(
             required: true
         },
 
-
         name: { type: String, required: true, trim: true },
 
         description: { type: String, required: true, trim: true },

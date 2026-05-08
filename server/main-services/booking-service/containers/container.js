@@ -39,6 +39,8 @@ class Container {
                 BOOKING_EVENTS.GET_DETAILS_BOOKING_ID,
                 BOOKING_EVENTS.GET_BOOKINGS_BY_IDS,
                 BOOKING_EVENTS.CONFIRM_FROM_PAYMENT,
+                BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
+                BOOKING_EVENTS. GET_CALENDAR_DATA,
             ]
         });
 

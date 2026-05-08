@@ -1,0 +1,726 @@
+openapi: 3.0.3
+info:
+  title: Booking Service API
+  version: 1.0.0
+  description: API documentation for booking lifecycle and reviews.
+servers:
+  - url: http://localhost:3009
+    description: Local development server
+tags:
+  - name: Bookings
+  - name: Reviews
+
+paths:
+  /:
+    get:
+      tags: [Bookings]
+      summary: Get all bookings
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, confirmed, in_progress, completed, cancelled, expired]
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+        - in: query
+          name: from_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to_date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Booking list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  bookings:
+                    type: array
+                    items: { $ref: "#/components/schemas/Booking" }
+                required: [total, bookings]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Bookings]
+      summary: Create booking
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  booking_id: { type: string }
+                required: [message, booking_id]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /{id}:
+    get:
+      tags: [Bookings]
+      summary: Get booking detail by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Booking detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/Booking" }
+                  rooms:
+                    type: array
+                    items: { $ref: "#/components/schemas/BookingDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [Bookings]
+      summary: Add rooms to booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddRoomsToBookingRequest"
+      responses:
+        "200":
+          description: Rooms added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /update-status/{id}:
+    patch:
+      tags: [Bookings]
+      summary: Update booking status
+      description: Status value is read from query params by controller/service.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: query
+          name: status
+          required: true
+          schema:
+            type: string
+            enum: [pending, confirmed, in_progress, completed, cancelled, expired]
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /confirm-deposited/{id}:
+    patch:
+      tags: [Bookings]
+      summary: Confirm booking deposit
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  booking: { $ref: "#/components/schemas/Booking" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cancel-booking/{id}:
+    patch:
+      tags: [Bookings]
+      summary: Cancel entire booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelReasonRequest"
+      responses:
+        "200":
+          description: Booking cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /{bookingId}/details/{detailId}/checkin:
+    post:
+      tags: [Bookings]
+      summary: Check in one booking detail (room)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: detailId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Check-in successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /{bookingId}/details/{detailId}/checkout:
+    post:
+      tags: [Bookings]
+      summary: Check out one booking detail (room)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: detailId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Checkout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/GenericObject" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /{bookingId}/details/{detailId}/cancel:
+    patch:
+      tags: [Bookings]
+      summary: Cancel one room from booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: detailId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelReasonRequest"
+      responses:
+        "200":
+          description: Booking detail cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /reviews/my:
+    get:
+      tags: [Reviews]
+      summary: Get my reviews
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Reviews fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /reviews/statistics:
+    get:
+      tags: [Reviews]
+      summary: Get review statistics (manager)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Statistics fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  statistics: { $ref: "#/components/schemas/GenericObject" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /reviews:
+    get:
+      tags: [Reviews]
+      summary: Get all reviews (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: is_visible
+          schema: { type: boolean }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Reviews fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  reviews:
+                    type: array
+                    items: { $ref: "#/components/schemas/Review" }
+                  pagination: { $ref: "#/components/schemas/GenericObject" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /reviews/booking/{bookingId}:
+    get:
+      tags: [Reviews]
+      summary: Get review by booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Review for booking
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  can_review: { type: boolean }
+                  data:
+                    oneOf:
+                      - $ref: "#/components/schemas/Review"
+                      - type: "null"
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /reviews/{id}:
+    get:
+      tags: [Reviews]
+      summary: Get review by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Review detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  review: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [Reviews]
+      summary: Edit review
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditReviewRequest"
+      responses:
+        "200":
+          description: Review updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /reviews/{bookingId}:
+    post:
+      tags: [Reviews]
+      summary: Add review for booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddReviewRequest"
+      responses:
+        "201":
+          description: Review created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Review" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /reviews/update-status/{id}:
+    patch:
+      tags: [Reviews]
+      summary: Update review visibility/status (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_visible: { type: boolean }
+                note: { type: string }
+              additionalProperties: true
+      responses:
+        "200":
+          description: Review status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or business validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: User does not have required role/permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message: { type: string }
+        error: { type: string }
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+
+    GenericObject:
+      type: object
+      additionalProperties: true
+
+    Booking:
+      type: object
+      properties:
+        _id: { type: string }
+        customer_id: { type: string }
+        handled_by:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, in_progress, completed, cancelled, expired]
+        expected_checkin:
+          type: string
+          format: date-time
+        expected_checkout:
+          type: string
+          format: date-time
+        adults:
+          type: integer
+          minimum: 1
+        children:
+          type: integer
+          minimum: 0
+        total_fee:
+          type: number
+          minimum: 0
+        deposit:
+          type: number
+          minimum: 0
+        isScheduled:
+          type: boolean
+        isLateCheckin:
+          type: boolean
+      additionalProperties: true
+
+    BookingDetail:
+      type: object
+      properties:
+        _id: { type: string }
+        booking_id: { type: string }
+        room_id: { type: string }
+        base_fee:
+          type: number
+        extra_fee:
+          type: number
+        expected_checkin:
+          type: string
+          format: date-time
+        expected_checkout:
+          type: string
+          format: date-time
+        actual_checkin:
+          type: string
+          format: date-time
+          nullable: true
+        actual_checkout:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [reserved, confirmed, checked_in, checked_out, cancelled]
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancellation_reason:
+          type: string
+          enum: [change_plan, price_issue, find_better_option, personal_reason, no_show, overbooking, force_majeure, early_checkout, other]
+        note:
+          type: string
+      additionalProperties: true
+
+    ReviewCategoryItem:
+      type: object
+      properties:
+        category_id:
+          type: string
+        ratings:
+          type: object
+          properties:
+            room_quality: { type: number, minimum: 1, maximum: 5 }
+            cleanliness: { type: number, minimum: 1, maximum: 5 }
+            service: { type: number, minimum: 1, maximum: 5 }
+            value: { type: number, minimum: 1, maximum: 5 }
+          additionalProperties: false
+        overall_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+      additionalProperties: true
+
+    Review:
+      type: object
+      properties:
+        _id: { type: string }
+        booking_id: { type: string }
+        customer_id: { type: string }
+        category_reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewCategoryItem"
+        general_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        general_comment:
+          type: string
+          maxLength: 1000
+        is_visible:
+          type: boolean
+        note:
+          type: string
+      additionalProperties: true
+
+    CreateBookingRequest:
+      type: object
+      properties:
+        expected_checkin:
+          type: string
+          format: date-time
+        expected_checkout:
+          type: string
+          format: date-time
+        adults:
+          type: integer
+          minimum: 1
+        children:
+          type: integer
+          minimum: 0
+        rooms:
+          type: array
+          items:
+            type: object
+            properties:
+              room_id: { type: string }
+              base_fee: { type: number }
+              extra_fee: { type: number }
+            required: [room_id]
+      required: [expected_checkin, expected_checkout, adults, children]
+      additionalProperties: true
+
+    AddRoomsToBookingRequest:
+      type: object
+      properties:
+        rooms:
+          type: array
+          items:
+            type: object
+            properties:
+              room_id: { type: string }
+              expected_checkin: { type: string, format: date-time }
+              expected_checkout: { type: string, format: date-time }
+            required: [room_id]
+      required: [rooms]
+      additionalProperties: true
+
+    CancelReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [change_plan, price_issue, find_better_option, personal_reason, no_show, overbooking, force_majeure, early_checkout, other]
+      required: [reason]
+      additionalProperties: false
+
+    AddReviewRequest:
+      type: object
+      properties:
+        category_reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewCategoryItem"
+        general_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        general_comment:
+          type: string
+          maxLength: 1000
+      required: [general_rating]
+      additionalProperties: true
+
+    EditReviewRequest:
+      type: object
+      properties:
+        category_reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewCategoryItem"
+        general_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        general_comment:
+          type: string
+          maxLength: 1000
+      additionalProperties: true
