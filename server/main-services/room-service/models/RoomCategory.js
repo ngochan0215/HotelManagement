@@ -3,14 +3,21 @@ import mongoose from "../../../shared/config/mongoose.js";
 const roomCategorySchema = new mongoose.Schema(
     {
         category_name: { type: String, required: true, unique: true, trim: true },
+        
         code: { type: String, unique: true, trim: true },
+        
         description: { type: String, required: true, trim: true },
+        
         max_adults: { type: Number, required: true, min: 1 },
+        
         max_children: { type: Number, required: true, min: 0 },
+        
         price: { type: Number, required: true, min: 0 },
+        
         images: [ { type: String }],
 
         average_rating: { type: Number, default: 0, min: 0, max: 5 },
+        
         review_count: { type: Number, default: 0 },
     },
     {

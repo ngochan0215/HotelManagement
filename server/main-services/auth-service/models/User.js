@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema(
     {
         email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
         password: { type: String, required: true },
-        system_role: { type: String, enum: ["customer", "employee", "manager"], default: "customer", required: true },
+        system_role: { type: String, enum: ["customer", "employee", "manager", "admin"], default: "customer", required: true },
         avatar: { type: String },
 
         emailVerified: { type: Boolean, default: false },
@@ -28,8 +28,6 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ system_role: 1 });
+
 const User = mongoose.models.User || mongoose.model("User", userSchema);
-
 export default User;
-
-console.log("User model mongoose state:", mongoose.connection.readyState);
