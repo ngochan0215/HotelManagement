@@ -12,7 +12,7 @@ import mongoose from "../config/mongoose.js";
 // }
 
 export const connectDB = async (url) => {
-    try {
+    try {        
         if (!url) 
             throw new Error("DATABASE CONNECTION ERROR: URI VARIABLE IS NOT FOUND.");
 

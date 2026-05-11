@@ -1,0 +1,875 @@
+openapi: 3.0.3
+info:
+  title: Employee Service API
+  version: 1.0.0
+  description: API documentation for employee management, schedules, shifts, attendance, and earnings.
+servers:
+  - url: http://localhost:3003
+    description: Local development server
+tags:
+  - name: Employees
+  - name: Shifts
+  - name: Schedules
+  - name: Attendance
+  - name: Earnings
+
+paths:
+  /my-profile:
+    get:
+      tags: [Employees]
+      summary: Get current employee profile
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Employee profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeProfile"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /available-technicians:
+    get:
+      tags: [Employees]
+      summary: Get available technicians (manager only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Available technicians
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  count: { type: integer }
+                  technicians:
+                    type: array
+                    items: { $ref: "#/components/schemas/TechnicianSummary" }
+                required: [success, count, technicians]
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /:
+    post:
+      tags: [Employees]
+      summary: Create employee
+      description: Manager creates an employee record.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeRequest"
+      responses:
+        "200":
+          description: Employee created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  employee: { $ref: "#/components/schemas/Employee" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      tags: [Employees]
+      summary: Get all employees
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: position
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: min_salary
+          schema: { type: number }
+        - in: query
+          name: max_salary
+          schema: { type: number }
+        - in: query
+          name: min_year
+          schema: { type: integer }
+        - in: query
+          name: max_year
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Employee list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  employees:
+                    type: array
+                    items: { $ref: "#/components/schemas/Employee" }
+                required: [count, employees]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /{id}:
+    get:
+      tags: [Employees]
+      summary: Get employee by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [Employees]
+      summary: Update employee
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeRequest"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /create-account/{id}:
+    post:
+      tags: [Employees]
+      summary: Create auth account for existing employee
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+              required: [email, password]
+      responses:
+        "200":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /reset-password/{id}:
+    patch:
+      tags: [Employees]
+      summary: Reset password for employee account
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword: { type: string, format: password }
+              required: [newPassword]
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /toggle-ban/{id}:
+    patch:
+      tags: [Employees]
+      summary: Toggle user ban status for employee
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isBanned: { type: boolean }
+              required: [isBanned]
+      responses:
+        "200":
+          description: Ban status changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /shifts:
+    post:
+      tags: [Shifts]
+      summary: Create shift
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShiftUpsertRequest" }
+      responses:
+        "200":
+          description: Shift created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    get:
+      tags: [Shifts]
+      summary: Get all shifts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: work_day
+          schema: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        - in: query
+          name: shift_type
+          schema: { type: string, enum: [morning, afternoon, night] }
+      responses:
+        "200":
+          description: Shift list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /shifts/{id}:
+    get:
+      tags: [Shifts]
+      summary: Get shift by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Shift
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    patch:
+      tags: [Shifts]
+      summary: Update shift
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShiftUpsertRequest" }
+      responses:
+        "200":
+          description: Shift updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    delete:
+      tags: [Shifts]
+      summary: Delete shift
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Shift deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /earnings/my:
+    get:
+      tags: [Earnings]
+      summary: Get current employee earnings
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/EarningsStatusParam"
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+        - $ref: "#/components/parameters/PeriodDateParam"
+      responses:
+        "200":
+          description: Earnings summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /earnings/all:
+    get:
+      tags: [Earnings]
+      summary: Get earnings for all employees
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/EarningsStatusParam"
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+        - $ref: "#/components/parameters/PeriodDateParam"
+        - in: query
+          name: role
+          schema: { type: string }
+      responses:
+        "200":
+          description: Earnings summary all employees
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /earnings/{employeeId}:
+    get:
+      tags: [Earnings]
+      summary: Get earnings by employee id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: employeeId
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/EarningsStatusParam"
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+        - $ref: "#/components/parameters/PeriodDateParam"
+      responses:
+        "200":
+          description: Employee earnings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /attendances/check-in/{scheduleId}:
+    post:
+      tags: [Attendance]
+      summary: Check in to shift
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: scheduleId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Check-in success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  attendance: { $ref: "#/components/schemas/GenericObject" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /attendances/check-out:
+    post:
+      tags: [Attendance]
+      summary: Check out active shift
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Check-out success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  attendance: { $ref: "#/components/schemas/GenericObject" }
+                  earning: { $ref: "#/components/schemas/GenericObject" }
+                  next_shift:
+                    oneOf:
+                      - $ref: "#/components/schemas/GenericObject"
+                      - type: "null"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /schedules:
+    get:
+      tags: [Schedules]
+      summary: Get all schedules (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: employee_id
+          schema: { type: string }
+        - in: query
+          name: work_date
+          schema: { type: string, format: date }
+        - in: query
+          name: work_day
+          schema: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        - in: query
+          name: shift_type
+          schema: { type: string, enum: [morning, afternoon, night] }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: contract_status
+          schema: { type: string }
+        - in: query
+          name: raw
+          schema: { type: string, enum: ["true", "false"] }
+      responses:
+        "200":
+          description: Schedules fetched
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    post:
+      tags: [Schedules]
+      summary: Register schedule(s) for employee
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterScheduleRequest"
+      responses:
+        "200":
+          description: Register schedule success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/pending-requests:
+    get:
+      tags: [Schedules]
+      summary: Get pending schedule requests (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: role
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pending requests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessListResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/my:
+    get:
+      tags: [Schedules]
+      summary: View my schedule (employee)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: work_date
+          schema: { type: string, format: date }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: shift_type
+          schema: { type: string, enum: [morning, afternoon, night] }
+      responses:
+        "200":
+          description: Personal schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/available-shifts:
+    get:
+      tags: [Schedules]
+      summary: Get available shifts for scheduling
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: work_date
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Available shifts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/{id}:
+    get:
+      tags: [Schedules]
+      summary: Get schedule by id (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Schedule detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    patch:
+      tags: [Schedules]
+      summary: Update schedule (employee)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shift_id: { type: string }
+                work_date: { type: string, format: date }
+      responses:
+        "200":
+          description: Schedule updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    delete:
+      tags: [Schedules]
+      summary: Delete/cancel schedule (employee)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Schedule deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessageResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/contracts/{id}:
+    get:
+      tags: [Schedules]
+      summary: Get contract detail by id (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: work_date
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Contract detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    patch:
+      tags: [Schedules]
+      summary: Approve/reject schedule contract (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+                note:
+                  type: string
+              required: [status]
+      responses:
+        "200":
+          description: Contract status updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /schedules/cancel-contract/{id}:
+    post:
+      tags: [Schedules]
+      summary: Cancel schedule contract (employee)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keep_approved_schedules:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Contract cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessDataResponse" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    EarningsStatusParam:
+      in: query
+      name: status
+      required: false
+      schema:
+        type: string
+        enum: [available, pending, paid]
+    StartDateParam:
+      in: query
+      name: start_date
+      required: false
+      schema: { type: string, format: date }
+    EndDateParam:
+      in: query
+      name: end_date
+      required: false
+      schema: { type: string, format: date }
+    PeriodDateParam:
+      in: query
+      name: period_date
+      required: false
+      schema: { type: string, format: date }
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Missing/invalid auth token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Missing required role/permission
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    InternalServerError:
+      description: Server error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+
+    SuccessMessageResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+      required: [success, message]
+
+    SuccessDataResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          oneOf:
+            - $ref: "#/components/schemas/GenericObject"
+            - type: array
+              items: { $ref: "#/components/schemas/GenericObject" }
+      additionalProperties: true
+
+    SuccessListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        count: { type: integer }
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/GenericObject" }
+      additionalProperties: true
+
+    GenericObject:
+      type: object
+      additionalProperties: true
+
+    Employee:
+      type: object
+      properties:
+        _id: { type: string }
+        user_id: { type: string, nullable: true }
+        full_name: { type: string }
+        date_birth: { type: string, format: date-time }
+        status: { type: string, enum: [working, resign] }
+        position: { type: string }
+        fixed_salary: { type: number }
+        phone_number: { type: string }
+        CCCD: { type: string, description: 12-digit national ID }
+        working_year: { type: integer }
+      additionalProperties: true
+
+    EmployeeProfile:
+      allOf:
+        - $ref: "#/components/schemas/Employee"
+        - type: object
+          properties:
+            user_info:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                system_role: { type: string }
+                avatar: { type: string, nullable: true }
+                isBanned: { type: boolean }
+              additionalProperties: true
+
+    TechnicianSummary:
+      type: object
+      properties:
+        _id: { type: string }
+        employee_id: { type: string }
+        full_name: { type: string }
+        phone_number: { type: string }
+        user_id: { type: string }
+      additionalProperties: true
+
+    CreateEmployeeRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: Optional if account already exists or integration passes user id differently.
+        full_name: { type: string }
+        date_birth: { type: string, format: date-time }
+        position: { type: string }
+        fixed_salary: { type: number }
+        phone_number: { type: string }
+        CCCD: { type: string }
+        working_year: { type: integer }
+      required: [full_name, date_birth, position, fixed_salary, phone_number, CCCD]
+      additionalProperties: true
+
+    UpdateEmployeeRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        full_name: { type: string }
+        date_birth: { type: string, format: date-time }
+        status: { type: string, enum: [working, resign] }
+        position: { type: string }
+        fixed_salary: { type: number }
+        phone_number: { type: string }
+        CCCD: { type: string }
+      additionalProperties: false
+
+    ShiftUpsertRequest:
+      type: object
+      properties:
+        work_day:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        shift_type:
+          type: string
+          enum: [morning, afternoon, night]
+        begin_time:
+          type: string
+          pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$"
+          example: "08:00"
+        end_time:
+          type: string
+          pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$"
+          example: "12:00"
+        required_staff:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+      additionalProperties: false
+
+    RegisterScheduleRequest:
+      type: object
+      properties:
+        shifts:
+          type: array
+          items:
+            type: object
+            properties:
+              shift_id: { type: string }
+              work_date: { type: string, format: date }
+            required: [shift_id, work_date]
+        repeat:
+          type: boolean
+          default: true
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: string
+          format: date
+      required: [shifts]
+      additionalProperties: false

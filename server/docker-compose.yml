@@ -3,17 +3,6 @@
 # ports structure: host_port : container_port
 # volumes structure: 
 services:
-
-  # mongodb:
-  #   image: mongo:7
-  #   container_name: mongodb
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #   # creates a named Docker volume inside the container /data/db
-  #   # ensure that db data persists even if container is deleted
-  #     - mongo-data:/data/db
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -27,20 +16,20 @@ services:
       timeout: 5s         # only allowed checking for 5s
       retries: 10         # if 10 check fails then the container is unhealthy
       start_period: 10s   # grace period before health checks start
-
+  
   auth-service:
     # builds this container by using the dockerfile inside folder auth-service
-    build: ./auth-service
+    build: ./main-services/auth-service
     container_name: auth-service
     ports:
       - "3001:3001"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${USER_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       # maps local folder to container folder -> share common code between services
       - ./shared:/shared
-      - ./auth-service:/app
+      - ./main-services/auth-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -49,16 +38,16 @@ services:
         condition: service_healthy
 
   customer-service:
-    build: ./customer-service
+    build: ./main-services/customer-service
     container_name: customer-service
     ports:
       - "3002:3002"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${USER_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./customer-service:/app
+      - ./main-services/customer-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -66,16 +55,135 @@ services:
         condition: service_healthy
 
   employee-service:
-    build: ./employee-service
+    build: ./main-services/employee-service
     container_name: employee-service
     ports:
       - "3003:3003"
+    environment:
+      DB_URL: ${EMPLOYEE_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/employee-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+  
+  equipment-service:
+    build: ./main-services/equipment-service
+    container_name: equipment-service
+    ports:
+      - "3004:3004"
+    environment:
+      DB_URL: ${EQUIPMENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/equipment-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  room-service:
+    build: ./main-services/room-service
+    container_name: room-service
+    ports:
+      - "3005:3005"
+    environment:
+      DB_URL: ${ROOM_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/room-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  discount-service:
+    build: ./main-services/discount-service
+    container_name: discount-service
+    ports:
+      - "3006:3006"
+    environment:
+      DB_URL: ${DISCOUNT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/discount-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build: ./main-services/notification-service
+    container_name: notification-service
+    ports:
+      - "3007:3007"
     environment:
       DB_URL: ${DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./employee-service:/app
+      - ./main-services/notification-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  incident-service:
+    build: ./main-services/incident-service
+    container_name: incident-service
+    ports:
+      - "3008:3008"
+    environment:
+      DB_URL: ${INCIDENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/incident-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  booking-service:
+    build: ./main-services/booking-service
+    container_name: booking-service
+    ports:
+      - "3009:3009"
+    environment:
+      DB_URL: ${BOOKING_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/booking-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  payment-service:
+    build: ./main-services/payment-service
+    container_name: payment-service
+    ports:
+      - "3010:3010"
+    environment:
+      DB_URL: ${PAYMENT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/payment-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -86,13 +194,13 @@ services:
     image: cleaning-service
     container_name: cleaning-service
     ports:
-      - "3004:3004"
+      - "3011:3011"
     environment:
       DB_URL: ${DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
-      - ./cleaning-service:/app
+      - ./main-services/cleaning-service:/app
       - /app/node_modules
     command: npm run dev
     depends_on:
@@ -111,4 +219,11 @@ services:
       - auth-service
       - customer-service
       - employee-service
+      - equipment-service
+      - room-service
+      - discount-service
+      - notification-service
+      - incident-service
+      - booking-service
+      - payment-service
       - cleaning-service

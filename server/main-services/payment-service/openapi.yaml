@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  version: 1.0.0
+  description: API documentation for payment links, payout transactions, and receipts.
+servers:
+  - url: http://localhost:3010
+    description: Local development server
+tags:
+  - name: Transactions
+  - name: Receipts
+
+paths:
+  /paymentLink/{userId}:
+    post:
+      tags: [Transactions]
+      summary: Create payment link
+      description: Creates a payment transaction and returns PayOS payment link data.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentLinkRequest"
+      responses:
+        "200":
+          description: Payment link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/GenericObject"
+                required: [success, data]
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /payout/{userId}:
+    post:
+      tags: [Transactions]
+      summary: Initiate payout
+      description: Initiates payout transaction (employee salary payout flow).
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiatePayoutRequest"
+      responses:
+        "200":
+          description: Payout initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /paymentLink/{paymentId}:
+    get:
+      tags: [Transactions]
+      summary: Get payment link detail
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment link detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/PaymentLinkDetail"
+                required: [success, data]
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /transaction/{bookingId}:
+    get:
+      tags: [Transactions]
+      summary: Get transaction detail by booking id
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/GenericObject"
+                required: [success, data]
+        "404":
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /transaction/{bookingId}/success:
+    patch:
+      tags: [Transactions]
+      summary: Mark transaction success
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction updated as successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/GenericObject"
+                required: [success, message]
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /transaction/{bookingId}/failed:
+    patch:
+      tags: [Transactions]
+      summary: Mark transaction failed
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction updated as failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/GenericObject"
+                required: [success, message]
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /receipts:
+    post:
+      tags: [Receipts]
+      summary: Create receipt
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceiptRequest"
+      responses:
+        "201":
+          description: Receipt created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  receipt:
+                    $ref: "#/components/schemas/Receipt"
+                required: [message, receipt]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Receipts]
+      summary: Get all receipts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, paid, half-paid, refunded, cancelled]
+        - in: query
+          name: booking_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Receipt list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  receipts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Receipt"
+                required: [total, receipts]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /receipts/{id}:
+    get:
+      tags: [Receipts]
+      summary: Get receipt by id
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptIdParam"
+      responses:
+        "200":
+          description: Receipt detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receipt:
+                    $ref: "#/components/schemas/Receipt"
+                required: [receipt]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      tags: [Receipts]
+      summary: Update receipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReceiptRequest"
+      responses:
+        "200":
+          description: Receipt updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Receipt"
+                required: [success, data]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /receipts/refreshing/{id}:
+    patch:
+      tags: [Receipts]
+      summary: Refresh receipt after checkout
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptIdParam"
+      responses:
+        "200":
+          description: Receipt refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  receipt:
+                    $ref: "#/components/schemas/Receipt"
+                required: [message, receipt]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /receipts/mark-paid/{id}:
+    patch:
+      tags: [Receipts]
+      summary: Mark receipt as paid
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment:
+                  type: string
+                  enum: [cash, bank, unknown]
+              required: [payment]
+      responses:
+        "200":
+          description: Receipt marked as paid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  receipt:
+                    $ref: "#/components/schemas/Receipt"
+                required: [message, receipt]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ReceiptIdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Receipt identifier
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or business validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: User does not have required role/permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        error:
+          type: string
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    GenericObject:
+      type: object
+      additionalProperties: true
+
+    Transaction:
+      type: object
+      properties:
+        _id:
+          type: string
+        user_id:
+          type: string
+        booking_id:
+          type: string
+          nullable: true
+        receipt_id:
+          type: string
+          nullable: true
+        booking_code:
+          type: integer
+        payos_payment_id:
+          type: string
+          nullable: true
+        reference_id:
+          type: string
+          nullable: true
+        description:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        type:
+          type: string
+          enum: [payment, payout]
+        raw_response:
+          $ref: "#/components/schemas/GenericObject"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        failed_reason:
+          type: string
+          nullable: true
+      additionalProperties: true
+
+    DiscountSnapshot:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        discount_amount:
+          type: number
+      additionalProperties: false
+
+    Receipt:
+      type: object
+      properties:
+        _id:
+          type: string
+        booking_id:
+          type: string
+        transaction_id:
+          type: string
+          nullable: true
+        discount_id:
+          type: string
+          nullable: true
+        discount_snapshot:
+          $ref: "#/components/schemas/DiscountSnapshot"
+        employee_id:
+          type: string
+        service_usage_id:
+          type: string
+          nullable: true
+        compensate_ticket_id:
+          type: string
+          nullable: true
+        base_room_fee:
+          type: number
+        total_fee:
+          type: number
+        service_fee:
+          type: number
+        compensate_fee:
+          type: number
+        deposit_amount:
+          type: number
+        final_amount:
+          type: number
+        amount_due:
+          type: number
+        payment:
+          type: string
+          enum: [cash, bank, unknown]
+        status:
+          type: string
+          enum: [pending, paid, half-paid, refunded, cancelled]
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        note:
+          type: string
+      additionalProperties: true
+
+    PaymentLinkDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        orderCode:
+          type: integer
+          nullable: true
+        amount:
+          type: number
+        amountPaid:
+          type: number
+        amountRemaining:
+          type: number
+        status:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          nullable: true
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenericObject"
+      additionalProperties: false
+
+    CreatePaymentLinkRequest:
+      type: object
+      description: Transaction payload used to generate payment link.
+      properties:
+        booking_id:
+          type: string
+        receipt_id:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        booking_code:
+          type: integer
+      required: [amount]
+      additionalProperties: true
+
+    InitiatePayoutRequest:
+      type: object
+      description: Payout payload forwarded to transaction service.
+      properties:
+        amount:
+          type: number
+        description:
+          type: string
+        reference_id:
+          type: string
+      required: [amount]
+      additionalProperties: true
+
+    CreateReceiptRequest:
+      type: object
+      properties:
+        booking_id:
+          type: string
+        employee_id:
+          type: string
+        base_room_fee:
+          type: number
+        total_fee:
+          type: number
+        service_fee:
+          type: number
+        compensate_fee:
+          type: number
+        deposit_amount:
+          type: number
+        final_amount:
+          type: number
+        amount_due:
+          type: number
+        payment:
+          type: string
+          enum: [cash, bank, unknown]
+        discount_id:
+          type: string
+        discount_snapshot:
+          $ref: "#/components/schemas/DiscountSnapshot"
+        service_usage_id:
+          type: string
+        compensate_ticket_id:
+          type: string
+        note:
+          type: string
+      required:
+        - booking_id
+        - employee_id
+        - base_room_fee
+        - total_fee
+        - deposit_amount
+        - final_amount
+        - amount_due
+        - payment
+      additionalProperties: true
+
+    UpdateReceiptRequest:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          nullable: true
+        discount_id:
+          type: string
+          nullable: true
+        discount_snapshot:
+          $ref: "#/components/schemas/DiscountSnapshot"
+        service_usage_id:
+          type: string
+          nullable: true
+        compensate_ticket_id:
+          type: string
+          nullable: true
+        base_room_fee:
+          type: number
+        total_fee:
+          type: number
+        service_fee:
+          type: number
+        compensate_fee:
+          type: number
+        deposit_amount:
+          type: number
+        final_amount:
+          type: number
+        amount_due:
+          type: number
+        payment:
+          type: string
+          enum: [cash, bank, unknown]
+        status:
+          type: string
+          enum: [pending, paid, half-paid, refunded, cancelled]
+        note:
+          type: string
+      additionalProperties: true

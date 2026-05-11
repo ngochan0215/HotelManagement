@@ -14,21 +14,93 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use("/auth", createProxyMiddleware({ target: "http://auth-service:3001", changeOrigin: true }));
-app.use("/customer", createProxyMiddleware({ target: "http://customer-service:3002", changeOrigin: true }));
-app.use("/employee", createProxyMiddleware({ target: "http://employee-service:3003", changeOrigin: true }));
+app.use(
+  "/auth",
+  createProxyMiddleware({
+    target: "http://auth-service:3001",
+    changeOrigin: true
+  })
+);
 
-const oldServerTarget = "http://host.docker.internal:5000";
+app.use(
+  "/customers",
+  createProxyMiddleware({
+    target: "http://customer-service:3002",
+    changeOrigin: true
+  })
+);
 
-const oldRoutes = [
-  "/manager", "/user", "/receipt", "/statistics", "/service",
-  "/discount", "/room", "/room-category", "/equipment",
-  "/booking", "/incident", "/qr", "/notification"
-];
+app.use(
+  "/employees",
+  createProxyMiddleware({
+    target: "http://employee-service:3003",
+    changeOrigin: true
+  })
+);
 
-oldRoutes.forEach((route) => {
-  app.use(route, createProxyMiddleware({ target: oldServerTarget, changeOrigin: true }));
-});
+app.use(
+  "/equipments",
+  createProxyMiddleware({
+    target: "http://equipment-service:3004",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/rooms",
+  createProxyMiddleware({
+    target: "http://room-service:3005",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/discounts",
+  createProxyMiddleware({
+    target: "http://discount-service:3006",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/notifications",
+  createProxyMiddleware({
+    target: "http://notification-service:3007",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/incidents",
+  createProxyMiddleware({
+    target: "http://incident-service:3008",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/bookings",
+  createProxyMiddleware({
+    target: "http://booking-service:3009",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/payments",
+  createProxyMiddleware({
+    target: "http://payment-service:3010",
+    changeOrigin: true
+  })
+);
+
+app.use(
+  "/cleaning-tasks",
+  createProxyMiddleware({
+    target: "http://cleaning-service:3011",
+    changeOrigin: true
+  })
+);
 
 const PORT = process.env.PORT || 3000;
 
