@@ -54,20 +54,27 @@ export default function EquipmentCategoryTab() {
         equipmentApi.getAllEquipments()
       ]);
 
+      console.log("catRes: ", catRes);
+      console.log("eqRes: ", eqRes);
+
       const cats = (catRes && Array.isArray(catRes.categories)) ? catRes.categories : [];
-      const eqs = (eqRes && Array.isArray(eqRes.equipments)) ? eqRes.equipments : [];
+      const eqs = (eqRes && Array.isArray(eqRes.data)) ? eqRes.data : [];
+
+      console.log("cats: ", cats);
+      console.log("eqs: ", eqs);
 
       const processedCategories = cats.map(cat => {
-        if (cat.total_count !== undefined) return cat;
-        const items = eqs.filter(e => e.category_id?._id === cat._id || e.category_id === cat._id);
+        if (cat.total_quantity !== undefined) return cat;
 
+        const items = eqs.filter(e => e.category_id?._id === cat._id || e.category_id === cat._id);
         return {
-            ...cat,
-            total_count: items.length,
-            in_stock_count: items.filter(e => e.status === 'in-stock').length,
-            in_use_count: items.filter(e => e.status === 'in-use').length,
-            broken_count: items.filter(e => ['maintenance', 'disposed', 'lost'].includes(e.status) || e.condition === 'broken').length
+          ...cat,
+          total_count: items.length,
+          in_stock_count: items.filter(e => e.status === 'in-stock').length,
+          in_use_count: items.filter(e => e.status === 'in-use').length,
+          broken_count: items.filter(e => ['maintenance', 'disposed', 'lost'].includes(e.status) || e.condition === 'broken').length
         };
+
       });
 
       setCategories(processedCategories);

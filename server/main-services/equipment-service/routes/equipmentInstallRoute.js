@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyToken, isManager, isEmployee, isNotCustomer } from "../../../shared/middleware/authMiddleware.js";
+import { verifyToken, isManager, isEmployee, isAdmin } from "../../../shared/middleware/authMiddleware.js";
 import { EquipmentInstallController } from "../controllers/equipmentInstallController.js";
 
 const router = express.Router();
@@ -12,8 +12,8 @@ router.get("/install/my", verifyToken, isEmployee, controller.getMyInstallTicket
 router.post("/install", verifyToken, isManager, controller.createInstallTicket);
 router.post("/uninstall", verifyToken, isManager, controller.createUninstallTicket);
 
-router.get("/install", verifyToken, isNotCustomer, controller.getAllEquipmentInstalls);
-router.get("/install/:id", verifyToken, isNotCustomer, controller.getEquipmentInstallById);
+router.get("/install", verifyToken, isManager, controller.getAllEquipmentInstalls);
+router.get("/install/:id", verifyToken, isEmployee, controller.getEquipmentInstallById);
 router.patch("/install/:id", verifyToken, isManager, controller.updateEquipmentInstall);
 router.delete("/install/:id", verifyToken, isManager, controller.deleteEquipmentInstall);
 

@@ -10,12 +10,11 @@ import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
 
 const getManagerIds = async () => {
-  const reply = await container.eventBus.request(USER_EVENTS.GET_ADMINS, {
-    system_role: "manager",
-  });
+  const reply = await container.eventBus.request(USER_EVENTS.GET_MANAGERS);
 
-  if (!reply?.success || !Array.isArray(reply.admins)) return [];
-  return reply.admins.map((u) => u._id).filter(Boolean);
+  if (!reply?.success || !Array.isArray(reply.managers)) return [];
+
+  return reply.managers.map((u) => u._id).filter(Boolean);
 };
 
 const startCronJob = ({ name, schedule, handler }) => {

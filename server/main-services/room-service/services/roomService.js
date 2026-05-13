@@ -1238,6 +1238,7 @@ export class RoomService {
             if (lean) query = query.lean();
 
             return await query;
+            
         } catch (err) {
             console.log("Error in findRoomLogs:", err);
             throw err;
@@ -1253,5 +1254,13 @@ export class RoomService {
             throw err;
         }
     };
+
+    getDefaultEquipmentsByRoomCategory = async (categoryId) => {
+        const defaultEquipments = await this.DefaultEquipment.find({
+            category_id: categoryId
+        }).select("-created_at -updated_at -__v");
+
+        return defaultEquipments;
+    }
 
 }

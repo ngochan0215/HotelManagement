@@ -38,20 +38,18 @@ export async function findEmployeeById(eventBus, employeeId) {
     return replyEmployee.employee;
 }
 
-export async function findAdminsByIds(eventBus) {
-    const replyAdmin = await eventBus.request(
-        USER_EVENTS.GET_ADMINS,
-        { system_role: "manager" }
+export async function findManagersByIds(eventBus) {
+    const reply = await eventBus.request(
+        USER_EVENTS.GET_MANAGERS
     );
 
-    let adminUsers;
-    let adminUserIds;
+    let managerUsers, managerUserIds;
     if (replyAdmin.success) {
-        adminUsers = replyAdmin.admins;
-        adminUserIds = adminUsers.map(u => u._id);
+        managerUsers = reply.managers;
+        managerUserIds = managerUsers.map(u => u._id);
     }
 
-    return { adminUsers, adminUserIds };
+    return { managerUsers, managerUserIds };
 }
 
 export async function findPendingCompensationTickets(eventBus, bookingId) {

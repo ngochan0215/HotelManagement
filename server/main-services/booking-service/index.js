@@ -3,8 +3,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "../../shared/config/database.js";
 import { container } from "./containers/container.js";
+
 import bookingRoute from "./routes/bookingRoute.js";
 import reviewRoute from "./routes/reviewRoute.js";
+import statisticRoute from "./routes/statisticRoute.js";
+
 import {
     startCancelPendingBookingJob,
     startCancelCheckinLateBookingJob,
@@ -39,6 +42,7 @@ const startServer = async () => {
 
     app.use(bookingRoute);
     app.use("/reviews", reviewRoute);
+    app.use("/statistics", statisticRoute);
 
     const PORT = process.env.PORT || 3009;
     app.listen(PORT, () => {

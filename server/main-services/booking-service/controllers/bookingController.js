@@ -14,7 +14,7 @@ export class BookingController {
                 booking_id: booking._id,
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -28,7 +28,7 @@ export class BookingController {
                 booking,
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -39,7 +39,7 @@ export class BookingController {
             
             return res.status(200).json({ booking, rooms });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -50,7 +50,7 @@ export class BookingController {
     
             return res.status(200).json({ total, bookings });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -74,7 +74,7 @@ export class BookingController {
                 message: `Cập nhật trạng thái booking thành công.`,
             });
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -87,7 +87,7 @@ export class BookingController {
 
             return res.status(200).json({ message: "Check-in phòng thành công." });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -104,7 +104,7 @@ export class BookingController {
                 data: result
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -120,7 +120,7 @@ export class BookingController {
 
             return res.status(200).json({ message: "Đã hủy phòng khỏi booking thành công." });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -137,59 +137,6 @@ export class BookingController {
             return res.status(200).json({ message: "Đã hủy toàn bộ booking." });
 
         } catch (err) {
-            return res.status(err.status || 400).json({ message: err.message });
-        }
-    };
-
-    getCancellationReasonStats = async (req, res) => {
-        try {
-            const { fromDate, toDate, cancelledBy } = req.query;
-            const match = {};
-
-            if (fromDate && isNaN(new Date(fromDate))) {
-                return res.status(400).json({ message: "fromDate không hợp lệ" });
-            }
-            if (toDate && isNaN(new Date(toDate))) {
-                return res.status(400).json({ message: "toDate không hợp lệ" });
-            }
-
-            if (fromDate || toDate) {
-                match.cancelled_at = {};
-                if (fromDate) match.cancelled_at.$gte = new Date(fromDate);
-                if (toDate) match.cancelled_at.$lte = new Date(toDate);
-            }
-
-            const ALLOWED_CANCELLED_BY = ["user", "system", "admin"];
-            if (cancelledBy && !ALLOWED_CANCELLED_BY.includes(cancelledBy)) {
-                return res.status(400).json({ message: "cancelledBy không hợp lệ" });
-            }
-
-            if (cancelledBy) {
-                match.cancelled_by = cancelledBy;
-            }
-
-            const stats = await RoomCancellation.aggregate([
-                { $match: match },
-                {
-                    $group: {
-                    _id: "$reason",
-                    total: { $sum: 1 },
-                    },
-                },
-            ]);
-
-            const result = Object.keys(CANCELLATION_REASON_LABELS).map(code => {
-                const found = stats.find(s => s._id === code);
-                return {
-                    reason_code: code,
-                    reason_label: CANCELLATION_REASON_LABELS[code],
-                    total: found ? found.total : 0,
-                };
-            });
-
-            res.status(200).json({ success: true, data: result });
-
-        } catch (error) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

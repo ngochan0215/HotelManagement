@@ -80,11 +80,6 @@ export class EquipmentService {
                 [sort_by]: order === "asc" ? 1 : -1
             };
 
-            const categories = await this.EquipmentCategory.find(filter)
-                .sort({ createdAt: -1 }).select("-created_at -updated_at -__v");
-
-            return { total: categories.length, categories };
-
             const [categories, total] = await Promise.all([
                 this.EquipmentCategory.find(filter)
                     .select("-__v -created_at -updated_at")

@@ -1,17 +1,17 @@
 import { EmployeeController } from "../controllers/employeeController.js";
 import { ScheduleController } from "../controllers/scheduleController.js";
-import { verifyToken, isManager, isEmployee } from "../../../shared/middleware/authMiddleware.js";
+import { verifyToken, isManager, isEmployee, isAdmin } from "../../../shared/middleware/authMiddleware.js";
 import express from "express";
 
 const router = express.Router();
 const controller = new EmployeeController();
 const scheduleController = new ScheduleController();
 
-router.get("/my-profile", verifyToken, controller.getMyProfile);
+router.get("/my-profile", verifyToken, isEmployee, controller.getMyProfile);
 router.get("/available-technicians", verifyToken, isManager, controller.getAvailableTechnicians);
 
 router.post("/", verifyToken, isManager, controller.createEmployee);
-router.get("/", verifyToken, isEmployee, controller.getAllEmployees);
+router.get("/", verifyToken, isManager, controller.getAllEmployees);
 router.get("/:id", verifyToken, isManager, controller.getEmployeeById);
 router.patch("/:id", verifyToken, isManager, controller.updateEmployee);
 
@@ -20,11 +20,11 @@ router.patch("/reset-password/:id", verifyToken, isManager, controller.resetPass
 router.patch("/toggle-ban/:id", verifyToken, isManager, controller.toggleBanUser);
 
 // shifts
-router.post("/shifts", verifyToken, isManager, scheduleController.createShift);
-router.get("/shifts", verifyToken, isManager, scheduleController.getAllShifts);
-router.get("/shifts/:id", verifyToken, isManager, scheduleController.getShiftById);
-router.patch("/shifts/:id", verifyToken, isManager, scheduleController.updateShift);
-router.delete("/shifts/:id", verifyToken, isManager, scheduleController.deleteShift);
+router.post("/shifts", verifyToken, isAdmin, scheduleController.createShift);
+router.get("/shifts", verifyToken, isEmployee, scheduleController.getAllShifts);
+router.get("/shifts/:id", verifyToken, isEmployee, scheduleController.getShiftById);
+router.patch("/shifts/:id", verifyToken, isAdmin, scheduleController.updateShift);
+router.delete("/shifts/:id", verifyToken, isAdmin, scheduleController.deleteShift);
 
 // attendance and earnings
 router.get("/earnings/my", verifyToken, isEmployee, controller.getMyEarnings);

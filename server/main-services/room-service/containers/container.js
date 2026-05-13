@@ -43,6 +43,7 @@ class Container {
 
                 ROOM_EVENTS.GET_CATEGORY_IDS,
                 ROOM_EVENTS.UPDATE_CATEGORY_RATING,
+                ROOM_EVENTS.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY
             ]
         });
 

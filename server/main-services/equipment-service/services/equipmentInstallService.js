@@ -311,15 +311,14 @@ export class EquipmentInstallService {
         return reply.room;
     };
  
-    getAdminUserIds = async () => {
+    getManagersUserIds = async () => {
         const reply = await this.eventBus.request(
-            USER_EVENTS.GET_ADMINS,
-            { system_role: "manager" }
+            USER_EVENTS.GET_MANAGERS
         );
         
         if (!reply.success) return [];
         
-        return reply.admins.map(u => u._id);
+        return reply.managers.map(u => u._id);
     };
 
     // MAIN FUNCTIONS    
@@ -583,122 +582,117 @@ export class EquipmentInstallService {
         }
     };
     
-    // getSmartInstallSuggestions = async (roomId) => {
-    //     try {    
-    //         if (!roomId) {
-    //             throw new Error("Vui lòng cung cấp room_id");
-    //         }
+    getSmartInstallSuggestions = async (roomId) => {
+        try {    
+            if (!roomId) {
+                throw new Error("Vui lòng cung cấp room_id");
+            }
 
-    //         let room = null;
-    //         if (roomId) {
-    //             const reply = await this.eventBus.request(
-    //                 ROOM_EVENTS.CHECK_EXISTS,
-    //                 { room_id: roomId }
-    //             );
+            let room = null;
+            if (roomId) {
+                const reply = await this.eventBus.request(
+                    ROOM_EVENTS.CHECK_EXISTS,
+                    { room_id: roomId }
+                );
 
-    //             if (!reply.found)
-    //                 throw new Error("Không tìm thấy phòng.");
+                if (!reply.found)
+                    throw new Error("Không tìm thấy phòng.");
 
-    //             if (reply.room.category_id == null) {
-    //                 throw new Error("Phòng này chưa có loại phòng, không thể đưa ra gợi ý thiết bị.");
-    //             }
+                if (reply.room.category_id == null) {
+                    throw new Error("Phòng này chưa có loại phòng, không thể đưa ra gợi ý thiết bị.");
+                }
 
-    //             room = reply.room;
-    //         }
+                room = reply.room;
+            }
         
-    //         // const defaultEquipments = await DefaultEquipment.find({
-    //         // category_id: room.category_id._id
-    //         // }).populate("equipment_category_id", "name description unit");
+            const replyDefaultEquipments = await this.eventBus.request(
+                ROOM_EVENTS.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY,
+                { categoryId: room.category_id }
+            );
+            if (!replyDefaultEquipments.success) throw new Error(replyDefaultEquipments.message);
+
+            const defaultEquipments = replyDefaultEquipments.defaultEquipments;
+            if (defaultEquipments.length === 0) {
+                throw new Error("Loại phòng này không có thiết bị mặc định");
+            }
         
-    //         // if (defaultEquipments.length === 0) {
-    //         // return res.status(200).json({
-    //         //     success: true,
-    //         //     suggestions: [],
-    //         //     message: "Loại phòng này không có thiết bị mặc định"
-    //         // });
-    //         // }
+            const currentEquipments = await this.Equipment.find({
+                room_id: roomId,
+                status: "in-use"
+            }).populate("category_id", "_id name");
         
-    //         // Lấy danh sách thiết bị hiện có trong phòng (status = "in-use")
-    //         const currentEquipments = await this.Equipment.find({
-    //             room_id: roomId,
-    //             status: "in-use"
-    //         }).populate("category_id", "_id name");
+            const currentEquipmentCount = {};
+            currentEquipments.forEach(eq => {
+                const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
+                if (catId) {
+                    currentEquipmentCount[catId] = (currentEquipmentCount[catId] || 0) + 1;
+                }
+            });
         
-    //         // Đếm số lượng từng loại thiết bị hiện có trong phòng
-    //         const currentEquipmentCount = {};
-    //         currentEquipments.forEach(eq => {
-    //             const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
-    //             if (catId) {
-    //                 currentEquipmentCount[catId] = (currentEquipmentCount[catId] || 0) + 1;
-    //             }
-    //         });
-        
-    //         // Kiểm tra số lượng thiết bị có sẵn trong kho (status = "in-stock")
-    //         const stockEquipmentCount = {};
-    //         const stockEquipments = await this.Equipment.find({
-    //             status: "in-stock",
-    //             room_id: null,
-    //             condition: { $in: ["new", "good"] }
-    //         }).populate("category_id", "_id name");
+            const stockEquipmentCount = {};
+            const stockEquipments = await this.Equipment.find({
+                status: "in-stock",
+                room_id: null,
+                condition: { $in: ["new", "good"] }
+            }).populate("category_id", "_id name");
             
-    //         stockEquipments.forEach(eq => {
-    //             const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
-    //             if (catId) {
-    //                 stockEquipmentCount[catId] = (stockEquipmentCount[catId] || 0) + 1;
-    //             }
-    //         });
+            stockEquipments.forEach(eq => {
+                const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
+                if (catId) {
+                    stockEquipmentCount[catId] = (stockEquipmentCount[catId] || 0) + 1;
+                }
+            });
         
-    //         // So sánh với thiết bị mặc định và tạo danh sách gợi ý
-    //         const suggestions = [];
-    //         for (const defaultEq of defaultEquipments) {
-    //             const equipmentCategoryId = defaultEq.equipment_category_id?._id?.toString() || defaultEq.equipment_category_id?.toString();
-    //             const requiredQuantity = defaultEq.quantity || 0;
-    //             const currentQuantity = currentEquipmentCount[equipmentCategoryId] || 0;
-    //             const neededQuantity = requiredQuantity - currentQuantity;
-    //             const availableInStock = stockEquipmentCount[equipmentCategoryId] || 0;
+            const suggestions = [];
+            for (const defaultEq of defaultEquipments) {
+                const equipmentCategoryId = defaultEq.equipment_category_id?._id?.toString() || defaultEq.equipment_category_id?.toString();
+                const requiredQuantity = defaultEq.quantity || 0;
+                const currentQuantity = currentEquipmentCount[equipmentCategoryId] || 0;
+                const neededQuantity = requiredQuantity - currentQuantity;
+                const availableInStock = stockEquipmentCount[equipmentCategoryId] || 0;
             
-    //         // Chỉ gợi ý nếu thiếu thiết bị (neededQuantity > 0) và có sẵn trong kho
-    //         if (neededQuantity > 0 && availableInStock > 0) {
-    //             // Số lượng gợi ý = min(neededQuantity, availableInStock)
-    //             const suggestedQuantity = Math.min(neededQuantity, availableInStock);
+            // Chỉ gợi ý nếu thiếu thiết bị (neededQuantity > 0) và có sẵn trong kho
+            if (neededQuantity > 0 && availableInStock > 0) {
+                // Số lượng gợi ý = min(neededQuantity, availableInStock)
+                const suggestedQuantity = Math.min(neededQuantity, availableInStock);
                 
-    //             suggestions.push({
-    //                 category_id: equipmentCategoryId,
-    //                 category_name: defaultEq.equipment_category_id?.name || "Unknown",
-    //                 category_description: defaultEq.equipment_category_id?.description || "",
-    //                 category_unit: defaultEq.equipment_category_id?.unit || "item",
-    //                 required_quantity: requiredQuantity,
-    //                 current_quantity: currentQuantity,
-    //                 needed_quantity: neededQuantity,
-    //                 available_in_stock: availableInStock,
-    //                 suggested_quantity: suggestedQuantity,
-    //                 reason: currentQuantity === 0 
-    //                     ? `Thiết bị chưa có trong phòng (cần ${requiredQuantity}, có ${availableInStock} trong kho)` 
-    //                     : `Thiếu ${neededQuantity} ${defaultEq.equipment_category_id?.unit || "cái"} (hiện có ${currentQuantity}/${requiredQuantity}, có ${availableInStock} trong kho)`
-    //                 });
-    //             }
-    //         }
+                suggestions.push({
+                    category_id: equipmentCategoryId,
+                    category_name: defaultEq.equipment_category_id?.name || "Unknown",
+                    category_description: defaultEq.equipment_category_id?.description || "",
+                    category_unit: defaultEq.equipment_category_id?.unit || "item",
+                    required_quantity: requiredQuantity,
+                    current_quantity: currentQuantity,
+                    needed_quantity: neededQuantity,
+                    available_in_stock: availableInStock,
+                    suggested_quantity: suggestedQuantity,
+                    reason: currentQuantity === 0 
+                        ? `Thiết bị chưa có trong phòng (cần ${requiredQuantity}, có ${availableInStock} trong kho)` 
+                        : `Thiếu ${neededQuantity} ${defaultEq.equipment_category_id?.unit || "cái"} (hiện có ${currentQuantity}/${requiredQuantity}, có ${availableInStock} trong kho)`
+                    });
+                }
+            }
         
-    //         // Sắp xếp theo thứ tự ưu tiên: thiết bị chưa có trước, sau đó là thiết bị thiếu
-    //         suggestions.sort((a, b) => {
-    //             if (a.current_quantity === 0 && b.current_quantity > 0) return -1;
-    //             if (a.current_quantity > 0 && b.current_quantity === 0) return 1;
-    //             return b.needed_quantity - a.needed_quantity;
-    //         });
+            // Sắp xếp theo thứ tự ưu tiên: thiết bị chưa có trước, sau đó là thiết bị thiếu
+            suggestions.sort((a, b) => {
+                if (a.current_quantity === 0 && b.current_quantity > 0) return -1;
+                if (a.current_quantity > 0 && b.current_quantity === 0) return 1;
+                return b.needed_quantity - a.needed_quantity;
+            });
 
-    //         return { 
-    //             room_id: roomId, 
-    //             room_number: room ? room.room_number : null, 
-    //             room_category: room ? room.category_id.category_name : null, 
-    //             suggestions, 
-    //             total_suggestions: suggestions.length 
-    //         };
+            return { 
+                room_id: roomId, 
+                room_number: room ? room.room_number : null, 
+                room_category: room ? room.category_id.category_name : null, 
+                suggestions, 
+                total_suggestions: suggestions.length 
+            };
         
-    //     } catch (error) {
-    //         console.error("Error in getSmartInstallSuggestions:", error);
-    //         throw error;
-    //     }
-    // };
+        } catch (error) {
+            console.error("Error in getSmartInstallSuggestions:", error);
+            throw error;
+        }
+    };
     
     getMyInstallTickets = async (employeeUserId, query = {}) => {
         try {

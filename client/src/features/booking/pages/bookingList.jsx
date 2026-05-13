@@ -457,30 +457,31 @@ export default function BookingList() {
     try {
       const randomPassword = "Khach@" + Math.floor(1000 + Math.random() * 9000);
       let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
+      const dateBirth = newCustomer.date_birth?.trim() || "2000-01-01";
 
-      const resCust = await customerApi.createCustomer({ 
-        ...newCustomer, 
-        email: emailToUse, 
-        password: randomPassword 
+      const reg = await customerApi.registerCustomer({
+        email: emailToUse,
+        password: randomPassword,
+        date_birth: dateBirth,
+        full_name: newCustomer.full_name,
+        phone_number: newCustomer.phone_number,
+        nationality: newCustomer.nationality || "Vietnam",
+        CCCD: newCustomer.CCCD,
       });
 
-      //console.log("New customer created:", resCust);
-      
-      if (resCust && resCust.customerId) {
-        // Refresh danh sách khách hàng
+      if (reg?.userID) {
         const custRes = await customerApi.getAllCustomers();
         setCustomersList(custRes.customers || []);
 
-        // Tìm khách hàng vừa tạo
         const createdCustomer = (custRes.customers || []).find(
-          c => c._id === resCust.customerId || c.user_id === resCust.customerId
+          (c) => String(c.user_id) === String(reg.userID)
         );
 
         if (createdCustomer) {
           // Chuyển sang mode existing và chọn khách hàng vừa tạo
           setCustomerMode("existing");
           selectCustomer(createdCustomer);
-          setFormData(prev => ({ ...prev, customer_id: createdCustomer._id || resCust.customerId }));
+          setFormData(prev => ({ ...prev, customer_id: createdCustomer._id }));
           
           // Reset form khách hàng mới
           setNewCustomer({ 
@@ -497,7 +498,7 @@ export default function BookingList() {
           alert("Lưu khách hàng thành công! Vui lòng chọn khách hàng từ danh sách.");
         }
       } else {
-        throw new Error("Không nhận được customerId từ server");
+        throw new Error("Không nhận được userID từ server");
       }
     } catch (error) {
       console.error("Error saving customer:", error);
@@ -539,12 +540,24 @@ export default function BookingList() {
       if (customerMode === "new") {
           const randomPassword = "Khach@" + Math.floor(1000 + Math.random() * 9000);
           let emailToUse = newCustomer.email || `${newCustomer.phone_number}@guest.local`;
+          const dateBirth = newCustomer.date_birth?.trim() || "2000-01-01";
 
-          const resCust = await customerApi.createCustomer({ ...newCustomer, email: emailToUse, password: randomPassword });
-          //console.log("New customer created:", resCust);
-          if (resCust && resCust.customerId) 
-            finalCustomerId = resCust.customerId;
-          else throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
+          const reg = await customerApi.registerCustomer({
+            email: emailToUse,
+            password: randomPassword,
+            date_birth: dateBirth,
+            full_name: newCustomer.full_name,
+            phone_number: newCustomer.phone_number,
+            nationality: newCustomer.nationality || "Vietnam",
+            CCCD: newCustomer.CCCD,
+          });
+          if (!reg?.userID) throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
+          const custRes = await customerApi.getAllCustomers();
+          const created = (custRes.customers || []).find(
+            (c) => String(c.user_id) === String(reg.userID)
+          );
+          if (!created?._id) throw new Error("Lỗi khi tạo hồ sơ khách hàng mới.");
+          finalCustomerId = created._id;
       }
       if (!finalCustomerId) return alert("Vui lòng chọn khách hàng!");
 

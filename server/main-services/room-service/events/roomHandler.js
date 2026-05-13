@@ -18,6 +18,7 @@ export class RoomEventHandler {
 
             [ROOM_EVENTS.GET_CATEGORY_IDS]: this.getCategoryIdsByRoomIds.bind(this),
             [ROOM_EVENTS.UPDATE_CATEGORY_RATING]: this.updateRoomCategoryRating.bind(this),
+            [ROOM_EVENTS.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY]: this.getDefaultEquipmentsByRoomCategory.bind(this)
         }
     }
 
@@ -217,6 +218,33 @@ export class RoomEventHandler {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, categoryIds })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            )
+        }
+    }
+
+    async getDefaultEquipmentsByRoomCategory(data, msg) {
+        try {
+            console.log("Handling ROOM.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY");
+            const { categoryId } = data;
+            
+            const defaultEquipments = await this.roomService.getDefaultEquipmentsByRoomCategory(categoryId);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, defaultEquipments })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

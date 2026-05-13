@@ -78,13 +78,32 @@ export class EmployeeService {
         }
 
         let employees = await this.Employee.find(filter)
-            .select("-__v -created_at -updated_at -createdAt -updatedAt")
-            // .populate({
-            //     path: "user_id",
-            //     select: "email system_role avatar _id"
-            // });
+            .select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
 
-        return { count: employees.length, employees };
+        if (!employees.length) return { total: 0, customers: [] };
+
+        const userIds = customers.map(c => c.user_id);
+
+        const reply = await this.eventBus.request(USER_EVENTS.GET_USERS_INFO, { userIds });
+        if (!reply.success) {
+            throw new Error(reply.message);
+        }
+
+        const userMap = new Map(
+            reply.users.map(u => [u._id.toString(), u])
+        );
+
+        const result = employees.map(employee => {
+            const user = userMap.get(employee.user_id.toString());
+            return {
+                ...employee,
+                user: user
+                    ? { email: user.email, system_role: user.system_role, avatar: user.avatar, isBanned: user.isBanned }
+                    : null,
+            };
+        });
+
+        return { count: result.length, employees: result };
     };
 
     async getEmployeeById (employeeId) {
@@ -370,6 +389,21 @@ export class EmployeeService {
         }
     };
 
+    async getAvailableHousekeepers () {
+        try {
+            const housekeepers = await this.Employee.find({ 
+                position: "housekeeper",
+                status: "working"
+            }).select("-created_at -updated_at -__v");
+    
+            return housekeepers;
+    
+        } catch (error) {
+            console.log("Error in getting available housekeepers: ", error.message);
+            throw error; 
+        }
+    };
+
     async checkIfTechnicianIsAvailable (employeeId) {
         try {
             const technicians =  await this.Employee.findOne({
@@ -451,7 +485,6 @@ export class EmployeeService {
         if (isNight && minutes < beginMinutes) return minutes + 1440;
         return minutes;
     };
-
     
     calculatePenalty = (minutes, hourlyRate, penaltyRate = 1.5) => {
         return Number(((minutes * (hourlyRate / 60)) * penaltyRate).toFixed(0));

@@ -16,7 +16,11 @@ export class BookingEventHandler {
             [BOOKING_EVENTS.CONFIRM_FROM_PAYMENT]: this.confirmBookingFromPayment.bind(this),
             [BOOKING_EVENTS.GET_ACTIVE_BOOKINGS]: this.getActiveBookings.bind(this),
 
-            [BOOKING_EVENTS.GET_CALENDAR_DATA]: this.getCalendarData.bind(this)
+            [BOOKING_EVENTS.GET_CALENDAR_DATA]: this.getCalendarData.bind(this),
+            [BOOKING_EVENTS.GET_LOGS_CUSTOMER_REPORT]: this.getLogsForCustomerReport.bind(this),
+            [BOOKING_EVENTS.GET_BOOKINGS_CUSTOMER_REPORT]: this.getBookingsForCustomerReport.bind(this),
+
+            [BOOKING_EVENTS.GET_TOP_BOOKED_ROOM_CATEGORIES]: this.getTopBookedRoomCategories.bind(this)
         }
     }
 
@@ -170,6 +174,56 @@ export class BookingEventHandler {
         }
     }
 
+    async getLogsForCustomerReport(data, msg) {
+        try {
+            const { bookingIds } = data;
+            const logs = await this.bookingService.getLogsForCustomerReport(bookingIds);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, logs })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async getBookingsForCustomerReport(data, msg) {
+        try {
+            const { start, end } = data;
+            const bookings = await this.bookingService.getBookingsForCustomerReport(start, end);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, bookings })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
     async getCalendarData(data, msg) {
         try {
             const { roomIds, startOfDay, endOfDay } = data;
@@ -178,6 +232,30 @@ export class BookingEventHandler {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, bookingDetails, bookings })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async getTopBookedRoomCategories(data, msg) {
+        try {
+            const { result } = await this.bookingService.getTopBookedRoomCategories(data);
+            
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, result })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

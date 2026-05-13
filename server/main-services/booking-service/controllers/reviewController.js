@@ -17,12 +17,8 @@ export class ReviewController {
                 data: review
             });
 
-        } catch (error) {
-            console.error(error);
-            return res.status(500).json({
-                message: "SERVER ERROR: ",
-                error: error.message
-            });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -33,8 +29,8 @@ export class ReviewController {
 
             return res.status(200).json({ total, data });
 
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -47,9 +43,8 @@ export class ReviewController {
 
             return res.status(200).json({ can_review: false, data: review });
 
-        } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "Lỗi server" });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -62,8 +57,8 @@ export class ReviewController {
 
             return res.status(200).json({ message: "Edit review successfully!", data: review });
             
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -75,8 +70,8 @@ export class ReviewController {
 
             return res.status(200).json({ message: "Update review status successfully!", data: review });
         
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -89,8 +84,8 @@ export class ReviewController {
                 reviews, pagination,
             });
 
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -106,8 +101,8 @@ export class ReviewController {
                 },
             });
 
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -117,8 +112,8 @@ export class ReviewController {
             
             return res.status(200).json({ success: true, review });
             
-        } catch (error) {
-            res.status(err.status || 400).json({ message: err.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 }

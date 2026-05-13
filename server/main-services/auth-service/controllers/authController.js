@@ -93,8 +93,8 @@ export class AuthController {
             
             res.status(201).json({ message: "Create user account successfully.", user });
 
-        } catch (error) {
-            res.status(400).json({ message: error.message });
+        } catch (err) {
+            res.status(err.status || 400).json({ message: err.message });
         }
     };
 
@@ -104,8 +104,8 @@ export class AuthController {
             
             res.status(200).json({ message: "Admin reset password for employee successfully."});
 
-        } catch (error) {
-            res.status(400).json({ message: error.message });
+        } catch (err) {
+            res.status(err.status || 400).json({ message: err.message });
         }
     }
 

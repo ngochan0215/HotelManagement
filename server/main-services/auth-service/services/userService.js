@@ -3,10 +3,12 @@ import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 
 export class UserService {
-    constructor({ User, mailService, eventBus }) {
+    constructor({ User, mailService, eventBus, sendNotification }) {
         this.User = User;
         this.mailService = mailService;
         this.eventBus = eventBus;
+        this.sendNotification = sendNotification;
+        
     }
 
     getAllUsers = async (query = {}) => {
@@ -171,17 +173,17 @@ export class UserService {
             user.system_role = newRole;
             await user.save();
 
+            await this.sendNotification({
+                userId,
+                title: "Quyền hệ thống đã thay đổi",
+                content: `Admin đã thay đổi quyền hệ thống của bạn thanhf ${newRole}. Vui lòng đăng nhập lại.`,
+                type: "system",
+                kind: "User",
+                refId: userId
+            });
+
             return { success: true };
     
-            // const notification = await Notification.create({
-            //     user_id: user._id,
-            //     title: "Thay đổi quyền",
-            //     content: `Quyền hệ thống của bạn đã được đổi thành ${newRole}.`
-            // });
-    
-            // emitToUser(req.app.get("io"), user._id.toString(), "user:role_updated", {
-            //     notification,
-            // });
         } catch (err) {
             console.log("Admin setting new role failed for error: " + err.message);
             throw err;

@@ -23,6 +23,14 @@ app.use(
 );
 
 app.use(
+  "/users",
+  createProxyMiddleware({
+    target: "http://auth-service:3001",
+    changeOrigin: true
+  })
+);
+
+app.use(
   "/customers",
   createProxyMiddleware({
     target: "http://customer-service:3002",

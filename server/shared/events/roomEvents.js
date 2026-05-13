@@ -10,4 +10,5 @@ export const ROOM_EVENTS = {
 
     GET_CATEGORY_IDS: "room.get_category_ids",
     UPDATE_CATEGORY_RATING: "room.update_category_rating",
+    GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY: "room.get_default_equipments_room_category"
 }

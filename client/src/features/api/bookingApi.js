@@ -6,8 +6,8 @@ const getAuthHeader = () => {
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
-const BASE_URL = `${API_BASE_URL}/booking`;
-const BASE_URL_ = API_BASE_URL;
+const BASE_URL = `${API_BASE_URL}/bookings`;
+const CLEANING_BASE = `${API_BASE_URL}/cleaning-tasks`;
 
 export const bookingApi = {
     getCancellationReasonStats: async (params = {}) => {
@@ -17,22 +17,32 @@ export const bookingApi = {
                 params,
             },
         );
-        return res.data.data;
-    },
-
-    createBooking: async(data) => {
-        const res = await axios.post(`${BASE_URL}/add/general`, data, getAuthHeader());
         return res.data;
     },
 
-    previewBooking: async(data) => {
-        const res = await axios.post(`${BASE_URL}/preview/general`, data, getAuthHeader());
+    getWeeklyRevenue: async () => {
+        const res = await axios.get(`${BASE_URL}/statistics/revenue-week`, getAuthHeader());
+        return res.data;
+    },
+
+    getWeeklyBookings: async () => {
+        const res = await axios.get(`${BASE_URL}/statistics/bookings-week`, getAuthHeader());
+        return res.data;
+    },
+    
+    getMonthlyBookings: async () => {
+        const res = await axios.get(`${BASE_URL}/statistics/bookings-month`, getAuthHeader());
+        return res.data;
+    },
+
+    createBooking: async (data) => {
+        const res = await axios.post(`${BASE_URL}/`, data, getAuthHeader());
         return res.data;
     },
 
     updateBookingStatus: async (bookingId, status) => {
-        const res = await axios.put(
-            `${BASE_URL}/${bookingId}/update`,
+        const res = await axios.patch(
+            `${BASE_URL}/update-status/${bookingId}`,
             null,
             {
                 ...getAuthHeader(),
@@ -42,24 +52,14 @@ export const bookingApi = {
         return res.data;
     },
 
-    getRoomsCalendar: async (date = new Date()) => {
-        const response = await axios.get(
-            `${BASE_URL}/calendar/rooms`,
-        {
-            ...getAuthHeader(),
-            params: { date },
-        }
-        );
-        return response.data;
-    },
-
     getAllBookings: async () => {
-        const res = await axios.get(`${BASE_URL}/all`, getAuthHeader());
-        return res.data;
+        const res = await axios.get(`${BASE_URL}/`, getAuthHeader());
+        const d = res.data;
+        return { ...d, result: d.bookings ?? d.result };
     },
 
     confirmBooking: async (bookingId) => {
-        const res = await axios.put(`${BASE_URL}/${bookingId}/confirm`, {}, getAuthHeader());
+        const res = await axios.patch(`${BASE_URL}/confirm-deposited/${bookingId}`, {}, getAuthHeader());
         return res.data;
     },
 
@@ -88,44 +88,44 @@ export const bookingApi = {
         return res.data;
     },
     cancelBooking: async (bookingId, reason) => {
-        const res = await axios.patch(`${BASE_URL}/${bookingId}/cancel`, { reason }, getAuthHeader());
+        const body = typeof reason === "string" ? { reason } : reason;
+        const res = await axios.patch(`${BASE_URL}/cancel-booking/${bookingId}`, body, getAuthHeader());
         return res.data;
     },
-    
-    // Cleaning Tasks APIs
+
     getAvailableHousekeepers: async () => {
-        const res = await axios.get(`${BASE_URL}/cleaning/available-housekeepers`, getAuthHeader());
+        const res = await axios.get(`${CLEANING_BASE}/available-housekeepers`, getAuthHeader());
         return res.data;
     },
     assignCleaningTask: async (data) => {
-        const res = await axios.post(`${BASE_URL}/cleaning/assign`, data, getAuthHeader());
+        const res = await axios.post(`${CLEANING_BASE}/assign`, data, getAuthHeader());
         return res.data;
     },
     getMyCleaningTasks: async () => {
-        const res = await axios.get(`${BASE_URL}/cleaning/my-tasks`, getAuthHeader());
+        const res = await axios.get(`${CLEANING_BASE}/my-tasks`, getAuthHeader());
         return res.data;
     },
     startCleaningTask: async (id) => {
-        const res = await axios.post(`${BASE_URL}/cleaning/${id}/start`, {}, getAuthHeader());
+        const res = await axios.post(`${CLEANING_BASE}/${id}/start`, {}, getAuthHeader());
         return res.data;
     },
     completeCleaningTask: async (id) => {
-        const res = await axios.post(`${BASE_URL}/cleaning/${id}/complete`, {}, getAuthHeader());
+        const res = await axios.post(`${CLEANING_BASE}/${id}/complete`, {}, getAuthHeader());
         return res.data;
     },
     confirmCleaning: async (id) => {
-        const res = await axios.post(`${BASE_URL}/cleaning/${id}/confirm`, {}, getAuthHeader());
+        const res = await axios.post(`${CLEANING_BASE}/${id}/confirm`, {}, getAuthHeader());
         return res.data;
     },
     getAllTasks: async (params = {}) => {
-        const res = await axios.get(`${BASE_URL}/tasks/all`, {
+        const res = await axios.get(`${CLEANING_BASE}/`, {
             ...getAuthHeader(),
             params
         });
         return res.data;
     },
     getCleaningTaskByRoom: async (params = {}) => {
-        const res = await axios.get(`${BASE_URL}/cleaning/task-by-room`, {
+        const res = await axios.get(`${CLEANING_BASE}/by-room`, {
             ...getAuthHeader(),
             params
         });

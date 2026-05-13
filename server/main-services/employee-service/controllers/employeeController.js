@@ -70,7 +70,7 @@ export class EmployeeController {
                 count, technicians 
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -123,7 +123,7 @@ export class EmployeeController {
 
             return res.status(200).json({ success: true, data: result });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -134,7 +134,7 @@ export class EmployeeController {
 
             return res.status(200).json({ success: true, data: result });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -146,7 +146,7 @@ export class EmployeeController {
 
             return res.status(200).json({ success: true, data: result });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

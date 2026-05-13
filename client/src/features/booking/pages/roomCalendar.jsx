@@ -51,7 +51,7 @@ export default function RoomCalendar() {
     const fetchCalendar = async () => {
         try {
             const dateStr = format(currentDate, 'yyyy-MM-dd');
-            const response = await bookingApi.getRoomsCalendar(dateStr);
+            const response = await roomApi.getRoomsCalendar(dateStr);
 
             console.log("FULL API RESPONSE:", response);
             const data = response.rooms ? response : (response.data || {});

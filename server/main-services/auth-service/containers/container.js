@@ -5,8 +5,9 @@ import mailService from "../utils/emailService.js";
 import { UserEventHandler } from "../events/authHandler.js";
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
-import { defaultAvatars } from "../../../shared/constants/defaultAvatars.js";
+import { sendNotification } from "../../../shared/messaging/notificationPublisher.js";
 
+import { defaultAvatars } from "../../../shared/constants/defaultAvatars.js";
 import User from "../models/User.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 
@@ -24,7 +25,8 @@ class Container {
         this.userService = new UserService({
             User,
             mailService,
-            eventBus: this.eventBus
+            eventBus: this.eventBus,
+            sendNotification
         });
 
         this.userEventHandler = new UserEventHandler(this.authService, this.userService, this.eventBus);
@@ -40,7 +42,7 @@ class Container {
                 USER_EVENTS.UPDATE_USER,
                 USER_EVENTS.CREATE_ACCOUNT,
                 USER_EVENTS.RESET_PASSWORD,
-                USER_EVENTS.GET_ADMINS
+                USER_EVENTS.GET_MANAGERS
             ]
         });
 

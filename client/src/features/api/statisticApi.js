@@ -5,21 +5,16 @@ const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return { headers: { Authorization: `Bearer ${token}` } };
 };
-const BASE_URL = `${API_BASE_URL}/statistics`;
+
+const ROOM_URL = `${API_BASE_URL}/rooms/statistics`;
+const BOOKING_URL = `${API_BASE_URL}/bookings/statistics`;
+const EQUIPMENT_URL = `${API_BASE_URL}/equipments/statistics`;
+const CUSTOMER_URL = `${API_BASE_URL}/customers/statistics`;
 
 export const statisticApi = {
-    getWeeklyRevenue: async () => {
-        const res = await axios.get(`${BASE_URL}/revenue-week`, getAuthHeader());
-        return res.data;
-    },
-
-    getWeeklyBookings: async () => {
-        const res = await axios.get(`${BASE_URL}/bookings-week`, getAuthHeader());
-        return res.data;
-    },
 
     getRoomReport: async (params) => {
-        const res = await axios.get(`${BASE_URL}/reports/room-operation`, {
+        const res = await axios.get(`${ROOM_URL}/reports/json`, {
             ...getAuthHeader(),
             params,
         });
@@ -27,7 +22,7 @@ export const statisticApi = {
     },
 
     getBookingReport: async (params) => {
-        const res = await axios.get(`${BASE_URL}/reports/booking`, {
+        const res = await axios.get(`${BOOKING_URL}/reports/json`, {
             ...getAuthHeader(),
             params,
         });
@@ -35,7 +30,7 @@ export const statisticApi = {
     },
 
     getCustomerReport: async (params) => {
-        const res = await axios.get(`${BASE_URL}/reports/customers`, {
+        const res = await axios.get(`${CUSTOMER_URL}/reports/json`, {
             ...getAuthHeader(),
             params,
         });
@@ -43,7 +38,7 @@ export const statisticApi = {
     },
 
     getEquipmentReport: async (params) => {
-        const res = await axios.get(`${BASE_URL}/reports/equipments`, {
+        const res = await axios.get(`${EQUIPMENT_URL}/reports/json`, {
             ...getAuthHeader(),
             params,
         });
@@ -51,7 +46,7 @@ export const statisticApi = {
     },
 
     getServiceReport: async (params) => {
-        const res = await axios.get(`${BASE_URL}/reports/services`, {
+        const res = await axios.get(`${BASE_URL}/reports/json`, {
             ...getAuthHeader(),
             params,
         });
@@ -59,7 +54,7 @@ export const statisticApi = {
     },
 
     exportReportExcel: async (type, params) => {
-        const res = await axios.get(`${BASE_URL}/reports/${type}/excel`, {
+        const res = await axios.get(`${API_BASE_URL}/${type}/statistics/reports/excel`, {
             ...getAuthHeader(),
             params,
             responseType: 'blob',
@@ -68,7 +63,7 @@ export const statisticApi = {
     },
 
     exportReportPDF: async (type, params) => {
-        const res = await axios.get(`${BASE_URL}/reports/${type}/pdf`, {
+        const res = await axios.get(`${API_BASE_URL}/${type}/statistics/reports/pdf`, {
             ...getAuthHeader(),
             params,
             responseType: 'blob',

@@ -3,6 +3,7 @@ import { container } from "../containers/container.js";
 export class EquipmentController {
     constructor() {
         this.equipmentService = container.equipmentService;
+        this.equipmentStatisticService = container.equipmentStatisticService;
     }
 
     createEquipmentCategory = async (req, res) => {
@@ -144,6 +145,59 @@ export class EquipmentController {
     
         } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    generateEquipmentReport = async (req, res) => {
+        try {
+            const { from, to } = req.query;
+            const report = await this.equipmentStatisticService.generateEquipmentReport(from, to);
+            
+            return res.status(201).json(report);
+
+        } catch (error) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    exportEquipmentReportExcel = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const workbook = await this.equipmentStatisticService.exportEquipmentReportExcel(from, to);
+        
+            res.setHeader(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            );
+            res.setHeader(
+                "Content-Disposition",
+                "attachment; filename=bao_cao_khach_hang.xlsx"
+            );
+        
+            await workbook.xlsx.write(res);
+            res.end();
+
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    exportEquipmentReportPDF = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const doc = await this.equipmentStatisticService.exportEquipmentReportPDF(from, to);
+
+            res.setHeader("Content-Type", "application/pdf");
+
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename=bao_cao_khach_hang_${Date.now()}.pdf`
+            );
+
+            doc.pipe(res);
+            
+        } catch (err) {
+            next(err);
         }
     };
 }

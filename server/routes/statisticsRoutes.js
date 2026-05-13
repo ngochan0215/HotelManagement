@@ -36,8 +36,8 @@ router.get("/revenue-week", verifyToken, isNotCustomer, getWeeklyRevenue);
 
 // ĐẶT PHÒNG
 // lấy số lượt đặt phòng theo tuần
-router.get("/bookings-week", verifyToken, isNotCustomer, getWeeklyBookings);
-router.get("/reports/booking", getBookingReport);   // trả về json
+// router.get("/bookings-week", verifyToken, isNotCustomer, getWeeklyBookings);
+// router.get("/reports/booking", getBookingReport);   // trả về json
 router.get("/reports/booking/excel", exportBookingReportExcel); // xuất excel
 router.get("/reports/booking/pdf", exportBookingReportPDF); // xuất pdf
 
@@ -47,9 +47,9 @@ router.get("/reports/room-operation/pdf", exportRoomOperationPDF); // xuất pdf
 router.get("/reports/room-operation", getRoomOperationReport); // trả về json
 
 // KHÁCH HÀNG
-router.get("/reports/customers/excel", exportCustomerReportExcel); // xuất excel
-router.get("/reports/customers/pdf", exportCustomerReportPDF); // xuất pdf
-router.get("/reports/customers", getCustomersReport); // trả về json
+// router.get("/reports/customers/excel", exportCustomerReportExcel); // xuất excel
+// router.get("/reports/customers/pdf", exportCustomerReportPDF); // xuất pdf
+// router.get("/reports/customers", getCustomersReport); // trả về json
 
 // THIẾT BỊ
 router.get("/reports/equipments/excel", exportEquipmentReportExcel); // xuất excel

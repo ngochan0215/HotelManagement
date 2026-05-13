@@ -6,18 +6,38 @@ const getAuthHeader = () => {
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
-const BASE_URL = `${API_BASE_URL}/employee`;
+const BASE_URL = `${API_BASE_URL}/employees`;
+
+function flattenEarningsFromMyEarnings(apiData) {
+  const byDate = apiData?.by_date || {};
+  const hourlyRate = apiData?.hourly_rate ?? 0;
+  const earnings = [];
+  for (const day of Object.values(byDate)) {
+    for (const shift of day.shifts || []) {
+      earnings.push({
+        _id: shift._id,
+        period_date: day.work_date,
+        work_hours: shift.work_hours,
+        hourly_rate: hourlyRate,
+        earning_amount: shift.earning_amount,
+        status: shift.status,
+      });
+    }
+  }
+  return earnings;
+}
 
 export const employeeApi = {
   getAllEmployees: async (params = {}) => {
-    const res = await axios.get(`${BASE_URL}/all`, {
+    const res = await axios.get(`${BASE_URL}/`, {
       ...getAuthHeader(),
       params
     });
     return res.data;
   },
+  
   createEmployee: async (data) => {
-    const res = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+    const res = await axios.post(`${BASE_URL}/`, data, getAuthHeader());
     return res.data;
   },
 
@@ -28,7 +48,7 @@ export const employeeApi = {
 
   getEmployeesByPosition: async (position) => {
       const res = await axios.get(
-        `${BASE_URL}/all`,
+        `${BASE_URL}/`,
         {
           ...getAuthHeader(),
           params: { position }
@@ -39,25 +59,24 @@ export const employeeApi = {
   },
 
   createAccountForExisting: async (employeeId, data) => {
-      const url = `${BASE_URL}/${employeeId}/create-account`;
+      const url = `${BASE_URL}/create-account/${employeeId}`;
       return axios.post(url, data, getAuthHeader());
     },
 
   getProfile: async () => {
-      const res = await axios.get(`${BASE_URL}/profile/me`, getAuthHeader());
+      const res = await axios.get(`${BASE_URL}/my-profile`, getAuthHeader());
       return res.data;
   },
     resetPassword: async (employeeId, newPassword) => {
         const url = `${BASE_URL}/reset-password/${employeeId}`;
         return axios.patch(url, { newPassword }, getAuthHeader());
     },
-    
-    // Cash Out APIs
+
     cashOut: async () => {
         const res = await axios.put(`${BASE_URL}/cashOut`, {}, getAuthHeader());
         return res.data;
     },
-    
+
     getCashoutAmount: async (timespan = 'day') => {
         const res = await axios.get(`${BASE_URL}/cashOut`, {
             ...getAuthHeader(),
@@ -65,21 +84,38 @@ export const employeeApi = {
         });
         return res.data;
     },
-    
+
     getAvailableCashout: async () => {
         const res = await axios.get(`${BASE_URL}/cashOut/available`, getAuthHeader());
         return res.data;
     },
-    
-    // Earnings & Payouts APIs
+
     getEarningsHistory: async (params = {}) => {
-        const res = await axios.get(`${BASE_URL}/earnings`, {
+        const res = await axios.get(`${BASE_URL}/earnings/my`, {
             ...getAuthHeader(),
-            params
+            params: {
+              status: params.status,
+              start_date: params.start_date,
+              end_date: params.end_date,
+              period_date: params.period_date,
+            },
         });
-        return res.data;
+        const payload = res.data?.data;
+        const earnings = flattenEarningsFromMyEarnings(payload);
+        return {
+            success: res.data?.success ?? true,
+            data: {
+                earnings,
+                pagination: {
+                    page: params.page ?? 1,
+                    limit: params.limit ?? 20,
+                    total: earnings.length,
+                    totalPages: 1,
+                },
+            },
+        };
     },
-    
+
     getPayoutHistory: async (params = {}) => {
         const res = await axios.get(`${BASE_URL}/payouts`, {
             ...getAuthHeader(),

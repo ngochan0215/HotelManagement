@@ -6,7 +6,7 @@ const getAuthHeader = () => {
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
-const BASE_URL = `${API_BASE_URL}/receipt`;
+const BASE_URL = `${API_BASE_URL}/payments`;
 
 export const paymentApi = {
   createPaymentLink: async (userId, transactionData) => {

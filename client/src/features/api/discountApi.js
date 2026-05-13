@@ -6,11 +6,11 @@ const getAuthHeader = () => {
   return { headers: { Authorization: `Bearer ${token}` } };
 };
 
-const BASE_URL = `${API_BASE_URL}/discount`;
+const BASE_URL = `${API_BASE_URL}/discounts`;
 
 export const discountApi = {
   getAllDiscounts: async (params = {}) => {
-    const res = await axios.get(`${BASE_URL}/all`, {
+    const res = await axios.get(`${BASE_URL}/`, {
       ...getAuthHeader(),
       params
     });
@@ -18,17 +18,17 @@ export const discountApi = {
   },
 
   createDiscount: async (data) => {
-    const res = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+    const res = await axios.post(`${BASE_URL}/`, data, getAuthHeader());
     return res.data;
   },
 
   updateDiscount: async (id, data) => {
-    const res = await axios.patch(`${BASE_URL}/update/${id}`, data, getAuthHeader());
+    const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return res.data;
   },
 
   deleteDiscount: async (id) => {
-    const res = await axios.delete(`${BASE_URL}/delete/${id}`, getAuthHeader());
+    const res = await axios.delete(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
   },
 

@@ -110,7 +110,7 @@ export class RoomController {
             
             return res.status(200).json({ room });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     }
@@ -168,7 +168,7 @@ export class RoomController {
             
             return res.status(200).json({ success: true, message: "Phòng đã hoàn tất bảo trì."});
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -179,7 +179,7 @@ export class RoomController {
             
             return res.status(200).json({ success: true, message: "Phòng đã hoàn tất dọn dẹp."});
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -205,32 +205,96 @@ export class RoomController {
         try {
             const summary = await this.roomStatisticService.getRoomStatusSummary();
             
-            return res.status(200).json({ success: true, summary });
+            return res.status(200).json({ success: true, ...summary });
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
     getTopBookedRoomCategories = async (req, res) => {
         try {
-            const result = await this.roomService.getTopBookedRoomCategories(req.query);
+            const result = await this.roomStatisticService.getTopBookedRoomCategories(req.query);
             
-            return res.status(200).json({ success: true, result: result.result });
+            return res.status(200).json({ success: true, result });
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
     getLatestStatusOfAllRooms = async (req, res) => {
         try {
-            const result = await this.roomService.getLatestStatusOfAllRooms();
+            const result = await this.roomStatisticService.getLatestStatusOfAllRooms();
             
             return res.status(200).json({ success: true, data: result });
 
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    getCalendarRooms = async (req, res) => {
+        try {
+            const { rooms, events } = await this.roomStatisticService.getCalendarRooms(req.query);
+            
+            return res.status(200).json({ success: true, rooms, events });
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    generateRoomReport = async (req, res) => {
+        try {
+            const { from, to } = req.query;
+            const report = await this.roomStatisticService.generateRoomReport(from, to);
+            
+            return res.status(201).json(report);
+
         } catch (error) {
             return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    exportRoomReportExcel = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const workbook = await this.roomStatisticService.exportRoomReportExcel(from, to);
+        
+            res.setHeader(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            );
+            res.setHeader(
+                "Content-Disposition",
+                "attachment; filename=bao_cao_phong.xlsx"
+            );
+        
+            await workbook.xlsx.write(res);
+            res.end();
+
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    exportRoomReportPDF = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const doc = await this.roomStatisticService.exportRoomReportPDF(from, to);
+
+            res.setHeader("Content-Type", "application/pdf");
+
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename=bao_cao_phong_${Date.now()}.pdf`
+            );
+
+            doc.pipe(res);
+            
+        } catch (err) {
+            next(err);
         }
     };
 }

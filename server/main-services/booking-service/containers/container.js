@@ -6,6 +6,7 @@ import Review from "../models/Review.js";
 
 import { BookingService } from "../services/bookingService.js";
 import { ReviewService } from "../services/reviewService.js";
+import { BookingStatisticService } from "../services/statisticService.js";
 import { BookingEventHandler } from "../events/bookingHandler.js";
 
 import { EventBus } from "../../../shared/messaging/eventBus.js";
@@ -28,6 +29,10 @@ class Container {
             eventBus: this.eventBus
         });
 
+        this.bookingStatisticService = new BookingStatisticService({
+            Booking, BookingDetail, BookingStatusLog, BookingCancellation
+        });
+
         this.bookingEventHandler = new BookingEventHandler(this.bookingService, this.eventBus);
     }
 
@@ -37,10 +42,17 @@ class Container {
             bindEvents: [
                 BOOKING_EVENTS.CHECK_EXISTS_ID,
                 BOOKING_EVENTS.GET_DETAILS_BOOKING_ID,
+                BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
+                
                 BOOKING_EVENTS.GET_BOOKINGS_BY_IDS,
                 BOOKING_EVENTS.CONFIRM_FROM_PAYMENT,
                 BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
+
                 BOOKING_EVENTS. GET_CALENDAR_DATA,
+                BOOKING_EVENTS.GET_BOOKINGS_CUSTOMER_REPORT,
+                BOOKING_EVENTS.GET_LOGS_CUSTOMER_REPORT,
+
+                BOOKING_EVENTS.GET_TOP_BOOKED_ROOM_CATEGORIES
             ]
         });
 

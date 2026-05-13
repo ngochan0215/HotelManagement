@@ -14,7 +14,8 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.GET_INFO]: this.employeeGetInfo.bind(this),
             [EMPLOYEE_EVENTS.GET_INFOS_USERIDS]: this.employeeGetInfosByUserIds.bind(this),
             [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
-            [EMPLOYEE_EVENTS.GET_RECEPTIONISTS]: this.getAllReceptionists.bind(this)
+            [EMPLOYEE_EVENTS.GET_RECEPTIONISTS]: this.getAllReceptionists.bind(this),
+            [EMPLOYEE_EVENTS.GET_AVAILABLE_HOUSEKEEPERS]: this.getAvailableHousekeepers.bind(this)
         }
     }
 
@@ -186,6 +187,31 @@ export class EmployeeEventHandler {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, found: !!receptionists, receptionists })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async getAvailableHousekeepers(data, msg) {
+        try {   
+            console.log("Handling EMPLOYEE.GET_AVAILABLE_HOUSEKEEPERS");
+            const housekeepers = await this.employeeService.getAvailableHousekeepers();
+            
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, found: !!housekeepers, housekeepers })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

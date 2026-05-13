@@ -15,7 +15,7 @@ export class UserEventHandler {
             [USER_EVENTS.UPDATE_USER]: this.updateUser.bind(this),
             [USER_EVENTS.CREATE_ACCOUNT]: this.createUserAccount.bind(this),
             [USER_EVENTS.RESET_PASSWORD]: this.adminResetPassword.bind(this),
-            [USER_EVENTS.GET_ADMINS]: this.getAllAdmins.bind(this)
+            [USER_EVENTS.GET_MANAGERS]: this.getAllManagers.bind(this)
         }
     }
 
@@ -175,21 +175,20 @@ export class UserEventHandler {
         }
     }
 
-    async getAllAdmins(data, msg) {
+    async getAllManagers(data, msg) {
         try {
-            console.log("Handling GET_ADMINS");
-            const admins = await this.userService.getAllUsers(data);
+            console.log("Handling USER.GET_MANAGERS");
+            const managers = await this.userService.getAllUsers({ system_role: "manager" });
 
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: true, admins })),
+                Buffer.from(JSON.stringify({ success: true, managers })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
                 }
             );
         } catch (error) {
-            console.log("Error in getAllAdmins handler:", err);
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: false, message: err.message })),

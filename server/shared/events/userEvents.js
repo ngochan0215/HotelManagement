@@ -5,5 +5,5 @@ export const USER_EVENTS = {
     UPDATE_USER: "user.update_user",
     CREATE_ACCOUNT: "user.create_account",
     RESET_PASSWORD: "user.reset_password",
-    GET_ADMINS: "user.get_admins"
+    GET_MANAGERS: "user.get_managers"
 };

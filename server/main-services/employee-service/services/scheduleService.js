@@ -45,11 +45,11 @@ export class ScheduleService {
 
     findManagersByIds = async () => {
         const replyManager = await this.eventBus.request(
-            USER_EVENTS.GET_ADMINS,
-            { system_role: "manager" }
+            USER_EVENTS.GET_MANAGERS
         );
 
         let managerUsers, managerUserIds;
+    
         if (replyManager.success) {
             managerUsers = replyManager.admins;
             managerUserIds = managerUsers.map(u => u._id);

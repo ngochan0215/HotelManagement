@@ -5,11 +5,11 @@ const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return { headers: { Authorization: `Bearer ${token}` } };
 };
-const BASE_URL = `${API_BASE_URL}/receipt`;
+const BASE_URL = `${API_BASE_URL}/payments/receipts`;
 
 export const receiptApi = {
   getAllReceipts: async (params = {}) => {
-    const res = await axios.get(`${BASE_URL}/all`, {
+    const res = await axios.get(`${BASE_URL}/`, {
       ...getAuthHeader(),
       params,
     });
@@ -22,17 +22,17 @@ export const receiptApi = {
   },
 
   createReceipt: async (data) => {
-    const res = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+    const res = await axios.post(`${BASE_URL}/`, data, getAuthHeader());
     return res.data;
   },
 
   updateReceipt: async (id, data) => {
-    const res = await axios.patch(`${BASE_URL}/update/${id}`, data, getAuthHeader());
+    const res = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return res.data;
   },
 
   refreshReceipt: async (id) => {
-    const res = await axios.patch(`${BASE_URL}/${id}/refresh`, {}, getAuthHeader());
+    const res = await axios.patch(`${BASE_URL}/refreshing/${id}`, {}, getAuthHeader());
     return res.data;
   }
 

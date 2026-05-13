@@ -11,6 +11,7 @@ import { sendNotification, sendNotificationsToUsers } from "../../../shared/mess
 import { EquipmentService } from "../services/equipmentService.js";
 import { EquipmentImportService } from "../services/equipmentImportService.js";
 import { EquipmentInstallService } from "../services/equipmentInstallService.js";
+import { EquipmentStatisticService } from "../services/statisticsService.js";
 
 import { EquipmentEventHandler } from "../events/equipmentHandler.js";
 
@@ -40,6 +41,13 @@ class Container {
             InstallTicket, InstallDetail,
             eventBus: this.eventBus,
             sendNotification, sendNotificationsToUsers
+        });
+
+        this.equipmentStatisticService = new EquipmentStatisticService({
+            Equipment, 
+            EquipmentCategory,
+            EquipmentLog,
+            eventBus: this.eventBus
         });
 
         this.equipmentEventHandler = new EquipmentEventHandler(this.equipmentService, this.eventBus);

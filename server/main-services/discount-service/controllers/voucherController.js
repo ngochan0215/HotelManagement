@@ -56,7 +56,7 @@ export class VoucherController {
             return res.status(200).json({ success: true, message: "Delete voucher successfully!"});
 
         } catch (err) {
-            return res.status(500).json({ success: false, message: "SERVER ERROR: " + err.message });
+            return res.status(err.status || 400).json({ message: err.message });
         }
     };
 

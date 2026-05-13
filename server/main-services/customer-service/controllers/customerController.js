@@ -9,12 +9,12 @@ export class CustomerController {
         try {
             const { total, customers } = await this.customerService.getAllCustomers(req.query);
 
-            res.status(200).json({
+            return res.status(200).json({
                 success: true,
                 total,
                 customers
             });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -37,7 +37,7 @@ export class CustomerController {
                 message: "Cập nhật thông tin khách hàng thành công.",
                 data: customer,
             });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -51,7 +51,7 @@ export class CustomerController {
                 message: "Đã vô hiệu hóa tài khoản khách hàng.",
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -64,7 +64,7 @@ export class CustomerController {
                 success: true,
                 message: "Đã mở khóa tài khoản khách hàng.",
             });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -73,10 +73,64 @@ export class CustomerController {
         try {
             const customer = await this.customerService.createCustomer(req.params.userId, req.body);
             
-            res.status(201).json(customer);
+            return res.status(201).json(customer);
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    generateCustomerReport = async (req, res) => {
+        try {
+            const { from, to } = req.query;
+            const customer = await this.customerService.generateCustomerReport(from, to);
+            
+            return res.status(201).json(customer);
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    exportCustomerReportExcel = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const workbook = await this.customerService.exportCustomerReportExcel(from, to);
+        
+            res.setHeader(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            );
+
+            res.setHeader(
+                "Content-Disposition",
+                "attachment; filename=bao_cao_khach_hang.xlsx"
+            );
+        
+            await workbook.xlsx.write(res);
+            res.end();
+
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    exportCustomerReportPDF = async (req, res, next) => {
+        try {
+            const { from, to } = req.query;
+            const doc = await this.customerService.exportCustomerReportPDF(from, to);
+
+            res.setHeader("Content-Type", "application/pdf");
+
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename=bao_cao_khach_hang_${Date.now()}.pdf`
+            );
+
+            doc.pipe(res);
+            
+        } catch (err) {
+            next(err);
         }
     };
 }

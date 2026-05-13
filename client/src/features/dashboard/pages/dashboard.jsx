@@ -3,7 +3,6 @@ import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import { roomApi } from "../../api/roomApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
-import { statisticApi } from "../../api/statisticApi.js";
 
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -25,12 +24,19 @@ export default function Dashboard() {
           roomApi.getRoomStatusSummary(),
           roomApi.getTopRoomTypes(5),
           bookingApi.getCancellationReasonStats(),
-          statisticApi.getWeeklyRevenue(),
-          statisticApi.getWeeklyBookings()
+          bookingApi.getWeeklyRevenue(),
+          bookingApi.getWeeklyBookings()
         ]);
+
+        console.log("roomData: ", roomData);
+        console.log("topRooms: ", topRooms);
+        console.log("cancelData: ", cancelData);
+        console.log("revenueData: ", revenueData);
+        console.log("bookingData: ", bookingData);
 
         setRoomStatus(roomData);
         setTopRoomTypes(topRooms.result);
+        console.log("top room types: ", topRoomTypes);
 
         const totalCancel = cancelData.reduce((sum, item) => sum + item.total, 0);
         setCancelReasons(cancelData.map(item => ({

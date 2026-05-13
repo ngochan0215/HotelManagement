@@ -4,6 +4,7 @@ import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
+import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 
 export class BookingService {
     constructor({ Booking, BookingDetail, BookingStatusLog, BookingCancellation,
@@ -173,13 +174,13 @@ export class BookingService {
             // send notifications
             try {
                 // send noti for admin
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
                 const employee = await this.findEmployeeById(booking.handled_by);
                 const customer = await this.findCustomerById(booking.customer_id);
 
-                if (adminUserIds.length > 0) {
+                if (managerUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Booking đã xác nhận thanh toán tiền cọc",
                         content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
                         type: "booking",
@@ -366,19 +367,18 @@ export class BookingService {
         return employee;
     }
 
-    findAdminsByIds = async () => {
-        const replyAdmin = await this.eventBus.request(
-            USER_EVENTS.GET_ADMINS,
-            { system_role: "manager" }
+    findManagersByIds = async () => {
+        const replyManager = await this.eventBus.request(
+            USER_EVENTS.GET_MANAGERS
         );
 
-        let adminUsers, adminUserIds;
-        if (replyAdmin.success) {
-            adminUsers = replyAdmin.admins;
-            adminUserIds = adminUsers.map(u => u._id);
+        let managerUsers, managerUserIds;
+        if (replyManager.success) {
+            managerUsers = replyManager.managers;
+            managerUserIds = managerUsers.map(u => u._id);
         }
 
-        return { adminUsers, adminUserIds };
+        return { managerUsers, managerUserIds };
     }
 
     // main business logic
@@ -595,11 +595,11 @@ export class BookingService {
 
             // send notifications
             try {
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
 
-                if (adminUserIds.length > 0) {
+                if (managerUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Đơn đặt phòng mới",
                         content: `Có booking mới với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'}`,
                         type: "booking",
@@ -993,7 +993,7 @@ export class BookingService {
 
             // send notifications
             try {
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
                 const employee = await this.findEmployeeById(booking.handled_by);
                 const customer = await this.findCustomerById(booking.customer_id);
                 
@@ -1006,9 +1006,9 @@ export class BookingService {
                     expired: "Đã hết hạn"
                 };
 
-                if (adminUsers.length > 0) {
+                if (managerUsers.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Booking đã thay đổi trạng thái",
                         content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
                         type: "booking",
@@ -1222,13 +1222,13 @@ export class BookingService {
 
             // send notifications
             try {
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
                 const employee = await this.findEmployeeById(booking.handled_by);
                 const customer = await this.findCustomerById(booking.customer_id);
 
-                if (adminUsers.length > 0) {
+                if (managerUsers.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Booking đã xác nhận check-in",
                         content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
                             đã xác nhận checkin.`,
@@ -1397,13 +1397,13 @@ export class BookingService {
             // }
 
             try {
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
                 const employee = await this.findEmployeeById(booking.handled_by);
                 const customer = await this.findCustomerById(booking.customer_id);
             
-                if (adminUsers.length > 0) {
+                if (managerUsers.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Booking đã xác nhận check-out",
                         content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
                             đã xác nhận checkout. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
@@ -1683,13 +1683,13 @@ export class BookingService {
             // );
 
             try {
-                const { adminUsers, adminUserIds } = await this.findAdminsByIds();
+                const { managerUsers, managerUserIds } = await this.findManagersByIds();
                 const employee = await this.findEmployeeById(booking.handled_by);
                 const customer = await this.findCustomerById(booking.customer_id);
 
-                if (adminUsers.length > 0) {
+                if (managerUsers.length > 0) {
                     await this.sendNotificationsToUsers({
-                        userIds: adminUserIds,
+                        userIds: managerUserIds,
                         title: "Booking đã bị hủy",
                         content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
                             đã xác nhận hủy.`,
@@ -1732,60 +1732,6 @@ export class BookingService {
         } catch (err) {
             console.log("Error while cancelling booking: ", err.message);
             throw err;
-        }
-    };
-
-    getCancellationReasonStats = async (query = {}) => {
-        try {
-            const { fromDate, toDate, cancelledBy } = query;
-            const match = {};
-
-            if (fromDate && isNaN(new Date(fromDate))) {
-                throw new Error("Thời gian bắt đầu không hợp lệ.");
-            }
-            if (toDate && isNaN(new Date(toDate))) {
-                throw new Error("Thời gian kết thúc không hợp lệ.");
-            }
-
-            if (fromDate || toDate) {
-                match.cancelled_at = {};
-                if (fromDate) match.cancelled_at.$gte = new Date(fromDate);
-                if (toDate) match.cancelled_at.$lte = new Date(toDate);
-            }
-
-            const ALLOWED_CANCELLED_BY = ["user", "system", "admin"];
-                if (cancelledBy && !ALLOWED_CANCELLED_BY.includes(cancelledBy)) {
-                    throw new Error("Người thao tác Hủy phòng không hợp lệ.");
-            }
-
-            if (cancelledBy) {
-                match.cancelled_by = cancelledBy;
-            }
-
-            const stats = await RoomCancellation.aggregate([
-                { $match: match },
-                {
-                    $group: {
-                    _id: "$reason",
-                    total: { $sum: 1 },
-                    },
-                },
-            ]);
-
-            const result = Object.keys(CANCELLATION_REASON_LABELS).map(code => {
-                const found = stats.find(s => s._id === code);
-                return {
-                    reason_code: code,
-                    reason_label: CANCELLATION_REASON_LABELS[code],
-                    total: found ? found.total : 0,
-                };
-            });
-
-            return result;
-
-        } catch (error) {
-            console.log("Error while getting booking's cancellation reason statistics: ", error.message);
-            throw error;
         }
     };
 
@@ -1851,6 +1797,58 @@ export class BookingService {
 
         } catch (err) {
             console.error("Error handling GET_CALENDAR_DATA:", err);
+            throw error;
+        }
+    };
+
+    getLogsForCustomerReport = async (bookingIds) => {
+        const statusLogs = await this.BookingStatusLog.aggregate([
+            { $match: { booking_id: { $in: bookingIds } } },
+            { $sort: { start_time: -1 } },
+            {
+                $group: {
+                    _id: "$booking_id",
+                    status: { $first: "$status" }
+                }
+            }
+        ]);
+
+        return statusLogs;
+    }
+
+    getBookingsForCustomerReport = async (start, end) => {
+        const bookings = await this.Booking.find({
+            created_at: { $gte: start, $lte: end }
+        }).lean();
+
+        return bookings;
+    }
+
+    getTopBookedRoomCategories = async (query = {}) => {
+        try {
+            const limit = parseInt(query.limit, 10) || 5;
+
+            const result = await this.BookingDetail.aggregate([
+                {
+                    $group: {
+                        _id: "$room_id",           // group by room_id instead
+                        totalBooked: { $sum: 1 },
+                    },
+                },
+                { $sort: { totalBooked: -1 } },
+                { $limit: limit },
+                {
+                    $project: {
+                        _id: 0,
+                        room_id: "$_id",           // return room_id, not category_id
+                        totalBooked: 1,
+                    },
+                },
+            ]);
+            return { result }; // [{ category_id, totalBooked }]
+
+        } catch (error) {
+            console.log(error);
             throw error;
         }
     };

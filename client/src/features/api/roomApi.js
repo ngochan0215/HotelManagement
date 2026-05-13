@@ -1,8 +1,9 @@
 import axios from "axios";
 import API_BASE_URL from "../../config/apiConfig.js";
 
-const BASE_URL = `${API_BASE_URL}/room`;
-const BASE_URL_ = `${API_BASE_URL}/room-category`;
+const BASE_URL = `${API_BASE_URL}/rooms`;
+const CATEGORIES_BASE = `${BASE_URL}/categories`;
+const STATS_BASE = `${BASE_URL}/statistics`;
 
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
@@ -10,19 +11,18 @@ const getAuthHeader = () => {
 };
 
 export const roomApi = {
-  // room-category
   getAllCategories: async () => {
-    const response = await axios.get(`${BASE_URL_}/all`);
+    const response = await axios.get(`${CATEGORIES_BASE}/`);
     return response.data;
   },
 
   getCategoryById: async (id) => {
-    const response = await axios.get(`${BASE_URL_}/${id}`);
+    const response = await axios.get(`${CATEGORIES_BASE}/${id}`);
     return response.data;
   },
 
   createCategory: async (formData) => {
-    const response = await axios.post(`${BASE_URL_}/add`, formData, {
+    const response = await axios.post(`${CATEGORIES_BASE}/`, formData, {
       headers: {
         ...getAuthHeader().headers,
         "Content-Type": "multipart/form-data"
@@ -32,7 +32,7 @@ export const roomApi = {
   },
 
   updateCategory: async (id, formData) => {
-    const response = await axios.put(`${BASE_URL_}/${id}`, formData, {
+    const response = await axios.patch(`${CATEGORIES_BASE}/${id}`, formData, {
       headers: {
         ...getAuthHeader().headers,
         "Content-Type": "multipart/form-data"
@@ -42,17 +42,17 @@ export const roomApi = {
   },
 
   deleteCategory: async (id) => {
-    const response = await axios.delete(`${BASE_URL_}/${id}`, getAuthHeader());
+    const response = await axios.delete(`${CATEGORIES_BASE}/${id}`, getAuthHeader());
     return response.data;
   },
 
   forceDeleteCategory: async (id) => {
-    const response = await axios.delete(`${BASE_URL_}/${id}?force=true`, getAuthHeader());
+    const response = await axios.delete(`${CATEGORIES_BASE}/${id}?force=true`, getAuthHeader());
     return response.data;
   },
 
   getAvailableBy: async (params) => {
-    const response = await axios.get(`${BASE_URL_}/available-by`, {
+    const response = await axios.get(`${CATEGORIES_BASE}/available-by`, {
       params,
       ...getAuthHeader(),
     });
@@ -60,14 +60,17 @@ export const roomApi = {
   },
 
   getDefaultEquipmentsByCategory: async (categoryId) => {
-    const response = await axios.get(`${BASE_URL_}/${categoryId}/default-equipments`, getAuthHeader());
+    const response = await axios.get(`${CATEGORIES_BASE}/default-equipments/${categoryId}`, getAuthHeader());
     return response.data;
   },
 
-  // room
   getAllRooms: async () => {
-    const response = await axios.get(`${BASE_URL}/all`);
-    return response.data;
+    const response = await axios.get(`${BASE_URL}/`);
+    const body = response.data;
+    if (body?.data != null) {
+      return { rooms: body.data, pagination: body.pagination, success: body.success };
+    }
+    return body;
   },
 
   getRoomById: async (id) => {
@@ -76,12 +79,12 @@ export const roomApi = {
   },
 
   createRoom: async (data) => {
-    const response = await axios.post(`${BASE_URL}/add`, data, getAuthHeader());
+    const response = await axios.post(`${BASE_URL}/`, data, getAuthHeader());
     return response.data;
   },
 
   updateRoom: async (id, data) => {
-    const response = await axios.put(`${BASE_URL}/${id}`, data, getAuthHeader());
+    const response = await axios.patch(`${BASE_URL}/${id}`, data, getAuthHeader());
     return response.data;
   },
 
@@ -91,17 +94,28 @@ export const roomApi = {
   },
 
   getRoomStatusSummary: async () => {
-    const response = await axios.get(`${BASE_URL}/statistic/status`, getAuthHeader());
+    const response = await axios.get(`${STATS_BASE}/status-summary`, getAuthHeader());
     return response.data;
   },
 
   getTopRoomTypes: async (limit = 5) => {
     const response = await axios.get(
-      `${BASE_URL}/statistic/top-booked`,
+      `${STATS_BASE}/top-booked`,
       {
         ...getAuthHeader(),
         params: { limit },
       }
+    );
+    return response.data;
+  },
+
+  getRoomsCalendar: async (date = new Date()) => {
+    const response = await axios.get(
+        `${STATS_BASE}/calendar`,
+    {
+        ...getAuthHeader(),
+        params: { date },
+    }
     );
     return response.data;
   },

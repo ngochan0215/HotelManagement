@@ -90,7 +90,7 @@ export default function EmployeePage() {
   const handleOpenEdit = (emp) => {
     setEditingEmployee(emp);
     setFormData({
-      email: emp.user_id?.email || "",
+      email: emp.user?.email || "",
       password: "",
       full_name: emp.full_name,
       date_birth: emp.date_birth ? format(parseISO(emp.date_birth), "yyyy-MM-dd") : "",
@@ -154,7 +154,7 @@ export default function EmployeePage() {
   const handleAccountClick = (emp) => {
       const hasAccount = !!emp.user_id;
       setAccForm({
-          email: hasAccount ? emp.user_id.email : "",
+          email: hasAccount ? emp.user.email : "",
           password: ""
       });
       setAccountModal({
@@ -406,7 +406,7 @@ export default function EmployeePage() {
                                 </div>
                                 <div>
                                     <div className="font-bold text-gray-900">{e.full_name}</div>
-                                    <div className="text-xs text-gray-500">{e.user_id?.email || "No Email"}</div>
+                                    <div className="text-xs text-gray-500">{e.user?.email || "No Email"}</div>
                                 </div>
                             </div>
                         </td>

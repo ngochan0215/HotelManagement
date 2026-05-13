@@ -1,6 +1,6 @@
 import express from "express";
 import { AuthController} from "../controllers/authController.js";
-import { verifyToken, isManager, isEmployee } from "../../../shared/middleware/authMiddleware.js";
+import { verifyToken, isManager, isEmployee, isAdmin } from "../../../shared/middleware/authMiddleware.js";
 
 const router = express.Router();
 const authController = new AuthController();
@@ -13,7 +13,7 @@ router.post("/login-google", authController.loginGoogle);
 router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
 
-router.patch("/admin-reset-pass", verifyToken, isManager, authController.adminResetPassword);
+router.patch("/admin-reset-pass", verifyToken, isAdmin, authController.adminResetPassword);
 
 // for communication between services
 router.delete("/delete-user/:id", authController.deleteUser);

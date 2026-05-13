@@ -11,13 +11,12 @@ export const verifyToken = (req, res, next) => {
     }
     const token = authHeader.split(" ")[1];
     try {
-        // kiểm tra token có hợp lệ ko, còn hạn ko và giải mã nội dung token
         const decoded = jwt.verify(token, JWT_SECRET);
-        // hợp lệ thì lưu vào req.user
         req.user = decoded;
+
         next();
     } catch (err) {
-        return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn hoặc " + err.message });
+        return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn." });
     }
 };
 
@@ -28,18 +27,18 @@ export const isCustomer = (req, res, next) => {
     next();
 };
 
-export const isNotCustomer = (req, res, next) => {
+export const isEmployee = (req, res, next) => {
     if (req.user.role === "customer") {
-        return res.status(403).json({ message: "Bạn không phải Nhân viên hoặc Quản lý, không có quyền truy cập." });
+        return res.status(403).json({ message: "Bạn không phải Nhân sự Khách sạn, không có quyền truy cập." });
     }
     next();
 };
 
 export const isManager = (req, res, next) => {
-    if (req.user.role !== "manager") {
-        return res.status(403).json({ message: "Bạn không phải Quản lý, không có quyền truy cập." });
+    if (req.user.role === "manager" || req.user.role === "admin") {
+        return next();
     }
-    next();
+    return res.status(403).json({ message: "Bạn không phải Admin hoặc Quản lý, không có quyền truy cập." });
 };
 
 export const isAdmin = (req, res, next) => {
@@ -47,11 +46,4 @@ export const isAdmin = (req, res, next) => {
         return res.status(403).json({ message: "Bạn không phải Admin, không có quyền truy cập." });
     }
     next();
-};
-
-export const isEmployee = (req, res, next) => {
-    if (req.user.role === "employee" || req.user.role === "manager") {
-        return next();
-    }
-    return res.status(403).json({ message: "Bạn không phải Nhân viên hoặc Quản lý, không có quyền truy cập." });
 };

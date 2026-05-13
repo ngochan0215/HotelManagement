@@ -88,6 +88,7 @@ export default function CustomerPage() {
     setLoading(true);
     try {
       const res = await customerApi.getAllCustomers();
+      console.log("get all customers: ", res);
       setCustomers(res.customers || []);
     } catch (error) {
       console.error(error);
@@ -108,7 +109,7 @@ export default function CustomerPage() {
   const handleOpenEdit = (customer) => {
     setEditingCustomer(customer);
     setFormData({
-      email: customer.user_id?.email || "",
+      email: customer.user?.email || "",
       full_name: customer.full_name,
       date_birth: customer.date_birth ? format(parseISO(customer.date_birth), "yyyy-MM-dd") : "",
       phone_number: customer.phone_number,
@@ -150,7 +151,7 @@ export default function CustomerPage() {
         const randomPart = Math.floor(1000 + Math.random() * 9000);
         const autoPassword = `Customer@${randomPart}`;
         const payload = { ...formData, password: autoPassword };
-        await customerApi.createCustomer(payload);
+        await customerApi.registerCustomer(payload);
         showToast("Thêm khách hàng mới thành công!", "success");
       }
       setIsModalOpen(false);
@@ -368,7 +369,7 @@ export default function CustomerPage() {
                                 </div>
                                 <div>
                                     <div className="font-bold text-gray-900">{c.full_name}</div>
-                                    <div className="text-xs text-gray-500">{c.user_id?.email || "No Email"}</div>
+                                    <div className="text-xs text-gray-500">{c.user?.email || "No Email"}</div>
                                 </div>
                             </div>
                         </td>

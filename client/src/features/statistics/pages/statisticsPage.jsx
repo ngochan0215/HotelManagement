@@ -12,6 +12,7 @@ import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 
 import { statisticApi } from "../../api/statisticApi.js";
+import { bookingApi } from "../../api/bookingApi.js";
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#FF6B6B"];
 
@@ -30,8 +31,8 @@ export default function StatisticPage() {
     const fetchDashboard = async () => {
       try {
         const [revRes, bookRes] = await Promise.all([
-          statisticApi.getWeeklyRevenue(),
-          statisticApi.getWeeklyBookings()
+          bookingApi.getWeeklyRevenue(),
+          bookingApi.getWeeklyBookings()
         ]);
         setDashboardData({ revenue: revRes, bookings: bookRes });
       } catch (error) {
@@ -73,8 +74,8 @@ export default function StatisticPage() {
     try {
       const params = { from: dateRange.from, to: dateRange.to };
       let typeMap = {
-        room: 'room-operation',
-        booking: 'booking',
+        room: 'rooms',
+        booking: 'bookings',
         customer: 'customers',
         equipment: 'equipments',
         service: 'services'
