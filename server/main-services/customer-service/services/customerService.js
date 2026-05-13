@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
+import { Jimp } from "jimp";
+import jsQR from "jsqr";
+
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 
@@ -723,6 +726,58 @@ export class CustomerService {
             console.error("PDF Customer report error:", err);
             throw err;
         }
+    };
+
+    // qr scan 
+    scanQRCodeService = async (imageBuffer) => {
+        if (!imageBuffer) {
+            throw new Error("Vui lòng tải lên một ảnh chứa mã QR");
+        }
+
+        // Read image
+        const image = await Jimp.read(imageBuffer);
+
+        const qrImage = {
+            data: new Uint8ClampedArray(image.bitmap.data),
+            width: image.bitmap.width,
+            height: image.bitmap.height,
+        };
+
+        const code = jsQR(qrImage.data, qrImage.width, qrImage.height);
+
+        if (!code) {
+            throw new Error( "Không tìm thấy mã QR trong ảnh. Vui lòng thử lại với ảnh rõ hơn.");
+        }
+
+        const qrData = code.data;
+        let parsedData = null;
+
+        // CCCD format
+        if (qrData.includes("||") && qrData.includes("|")) {
+            const [cccd, rest] = qrData.split("||");
+            const parts = rest.split("|");
+
+            if (parts.length >= 5) {
+                parsedData = {
+                    cccd: cccd.trim(),
+                    fullName: parts[0]?.trim() || "",
+                    dateOfBirth: parts[1]?.trim() || "",
+                    gender: parts[2]?.trim() || "",
+                    address: parts[3]?.trim() || "",
+                    issueDate: parts[4]?.trim() || "",
+                };
+            }
+        }
+
+        if (!parsedData) {
+            try { parsedData = JSON.parse(qrData); } 
+            catch { parsedData = qrData; }
+        }
+
+        return {
+            parsedData,
+            rawData: qrData,
+        };
     };
 
     // communication

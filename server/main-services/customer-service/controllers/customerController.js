@@ -133,4 +133,24 @@ export class CustomerController {
             next(err);
         }
     };
+
+    scanQRCode = async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ message: "Vui lòng tải lên một ảnh." });
+            }
+
+            const result = await this.customerService.scanQRCodeService(req.file.buffer);
+            
+            return res.status(200).json({
+                success: true,
+                message: "Quét mã QR thành công",
+                data: result.parsedData,
+                rawData: result.rawData,
+            });
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
 }

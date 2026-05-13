@@ -6,7 +6,7 @@ const router = express.Router();
 const controller = new EquipmentInstallController();
 
 // //----PHIẾU LẮP ĐẶT THIẾT BỊ----//
-// router.get("/install/smart-suggestions", verifyToken, isManager, getSmartInstallSuggestions);
+router.get("/install/smart-suggestions/:roomId", verifyToken, isManager, controller.getSmartInstallSuggestions);
 router.get("/install/my", verifyToken, isEmployee, controller.getMyInstallTickets);
 
 router.post("/install", verifyToken, isManager, controller.createInstallTicket);

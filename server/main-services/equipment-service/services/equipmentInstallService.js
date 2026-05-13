@@ -583,28 +583,19 @@ export class EquipmentInstallService {
     };
     
     getSmartInstallSuggestions = async (roomId) => {
-        try {    
-            if (!roomId) {
-                throw new Error("Vui lòng cung cấp room_id");
-            }
+        try {
+            if (!roomId) throw new Error("Vui lòng cung cấp room_id");
 
-            let room = null;
-            if (roomId) {
-                const reply = await this.eventBus.request(
-                    ROOM_EVENTS.CHECK_EXISTS,
-                    { room_id: roomId }
-                );
+            const reply = await this.eventBus.request(
+                ROOM_EVENTS.CHECK_EXISTS,
+                { room_id: roomId }
+            );
+            if (!reply.found) throw new Error("Không tìm thấy phòng.");
+            if (reply.room.category_id == null)
+                throw new Error("Phòng này chưa có loại phòng, không thể đưa ra gợi ý thiết bị.");
 
-                if (!reply.found)
-                    throw new Error("Không tìm thấy phòng.");
-
-                if (reply.room.category_id == null) {
-                    throw new Error("Phòng này chưa có loại phòng, không thể đưa ra gợi ý thiết bị.");
-                }
-
-                room = reply.room;
-            }
-        
+            const room = reply.room;
+            
             const replyDefaultEquipments = await this.eventBus.request(
                 ROOM_EVENTS.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY,
                 { categoryId: room.category_id }
@@ -612,82 +603,88 @@ export class EquipmentInstallService {
             if (!replyDefaultEquipments.success) throw new Error(replyDefaultEquipments.message);
 
             const defaultEquipments = replyDefaultEquipments.defaultEquipments;
-            if (defaultEquipments.length === 0) {
+            if (!defaultEquipments.length)
                 throw new Error("Loại phòng này không có thiết bị mặc định");
-            }
-        
+
+            const equipmentCategoryIds = defaultEquipments.map(d =>
+                d.equipment_category_id?.toString?.() ?? d.equipment_category_id
+            );
+
+            const equipmentCategories = await this.EquipmentCategory.find(
+                { _id: { $in: equipmentCategoryIds } },
+                { name: 1, description: 1, unit: 1 }
+            ).lean();
+
+            const categoryMap = new Map(
+                equipmentCategories.map(c => [c._id.toString(), c])
+            );
+
             const currentEquipments = await this.Equipment.find({
                 room_id: roomId,
                 status: "in-use"
-            }).populate("category_id", "_id name");
-        
+            }).lean();
+
             const currentEquipmentCount = {};
             currentEquipments.forEach(eq => {
-                const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
-                if (catId) {
-                    currentEquipmentCount[catId] = (currentEquipmentCount[catId] || 0) + 1;
-                }
+                const catId = eq.category_id?.toString();
+                if (catId) currentEquipmentCount[catId] = (currentEquipmentCount[catId] || 0) + 1;
             });
-        
-            const stockEquipmentCount = {};
+
             const stockEquipments = await this.Equipment.find({
                 status: "in-stock",
                 room_id: null,
                 condition: { $in: ["new", "good"] }
-            }).populate("category_id", "_id name");
-            
+            }).lean();
+
+            const stockEquipmentCount = {};
             stockEquipments.forEach(eq => {
-                const catId = eq.category_id?._id?.toString() || eq.category_id?.toString();
-                if (catId) {
-                    stockEquipmentCount[catId] = (stockEquipmentCount[catId] || 0) + 1;
-                }
+                const catId = eq.category_id?.toString();
+                if (catId) stockEquipmentCount[catId] = (stockEquipmentCount[catId] || 0) + 1;
             });
-        
+
             const suggestions = [];
             for (const defaultEq of defaultEquipments) {
-                const equipmentCategoryId = defaultEq.equipment_category_id?._id?.toString() || defaultEq.equipment_category_id?.toString();
+                const equipmentCategoryId = defaultEq.equipment_category_id?.toString();
+                const categoryDetail = categoryMap.get(equipmentCategoryId);
+
                 const requiredQuantity = defaultEq.quantity || 0;
                 const currentQuantity = currentEquipmentCount[equipmentCategoryId] || 0;
                 const neededQuantity = requiredQuantity - currentQuantity;
                 const availableInStock = stockEquipmentCount[equipmentCategoryId] || 0;
-            
-            // Chỉ gợi ý nếu thiếu thiết bị (neededQuantity > 0) và có sẵn trong kho
-            if (neededQuantity > 0 && availableInStock > 0) {
-                // Số lượng gợi ý = min(neededQuantity, availableInStock)
-                const suggestedQuantity = Math.min(neededQuantity, availableInStock);
-                
-                suggestions.push({
-                    category_id: equipmentCategoryId,
-                    category_name: defaultEq.equipment_category_id?.name || "Unknown",
-                    category_description: defaultEq.equipment_category_id?.description || "",
-                    category_unit: defaultEq.equipment_category_id?.unit || "item",
-                    required_quantity: requiredQuantity,
-                    current_quantity: currentQuantity,
-                    needed_quantity: neededQuantity,
-                    available_in_stock: availableInStock,
-                    suggested_quantity: suggestedQuantity,
-                    reason: currentQuantity === 0 
-                        ? `Thiết bị chưa có trong phòng (cần ${requiredQuantity}, có ${availableInStock} trong kho)` 
-                        : `Thiếu ${neededQuantity} ${defaultEq.equipment_category_id?.unit || "cái"} (hiện có ${currentQuantity}/${requiredQuantity}, có ${availableInStock} trong kho)`
+
+                if (neededQuantity > 0 && availableInStock > 0) {
+                    const suggestedQuantity = Math.min(neededQuantity, availableInStock);
+                    suggestions.push({
+                        category_id: equipmentCategoryId,
+                        category_name: categoryDetail?.name || "Unknown",
+                        category_description: categoryDetail?.description || "",
+                        category_unit: categoryDetail?.unit || "item",
+                        required_quantity: requiredQuantity,
+                        current_quantity: currentQuantity,
+                        needed_quantity: neededQuantity,
+                        available_in_stock: availableInStock,
+                        suggested_quantity: suggestedQuantity,
+                        reason: currentQuantity === 0
+                            ? `Thiết bị chưa có trong phòng (cần ${requiredQuantity}, có ${availableInStock} trong kho)`
+                            : `Thiếu ${neededQuantity} ${categoryDetail?.unit || "cái"} (hiện có ${currentQuantity}/${requiredQuantity}, có ${availableInStock} trong kho)`
                     });
                 }
             }
-        
-            // Sắp xếp theo thứ tự ưu tiên: thiết bị chưa có trước, sau đó là thiết bị thiếu
+
             suggestions.sort((a, b) => {
                 if (a.current_quantity === 0 && b.current_quantity > 0) return -1;
                 if (a.current_quantity > 0 && b.current_quantity === 0) return 1;
                 return b.needed_quantity - a.needed_quantity;
             });
 
-            return { 
-                room_id: roomId, 
-                room_number: room ? room.room_number : null, 
-                room_category: room ? room.category_id.category_name : null, 
-                suggestions, 
-                total_suggestions: suggestions.length 
+            return {
+                room_id: roomId,
+                room_number: room.room_number,
+                room_category: room.category_id?.category_name ?? room.category_id,
+                suggestions,
+                total_suggestions: suggestions.length
             };
-        
+
         } catch (error) {
             console.error("Error in getSmartInstallSuggestions:", error);
             throw error;

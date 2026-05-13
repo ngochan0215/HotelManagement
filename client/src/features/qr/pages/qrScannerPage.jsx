@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { qrApi } from "../../api/qrApi.js";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import Toast from "../../../components/toast.jsx";
+import { customerApi } from "../../api/customerApi.js";
 
 const QrScannerPage = () => {
   const [scanning, setScanning] = useState(false);
@@ -348,7 +348,7 @@ const QrScannerPage = () => {
 
       if (imageFile) {
         // Nếu là upload file, gửi file lên server
-        result = await qrApi.scanQRCode(imageFile);
+        result = await customerApi.scanQRCode(imageFile);
       } else if (decodedText) {
         // Nếu quét trực tiếp từ camera, có thể là URL hoặc text
         // Nếu là URL ảnh, tải về và gửi lên server

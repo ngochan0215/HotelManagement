@@ -1258,9 +1258,11 @@ export class RoomService {
     getDefaultEquipmentsByRoomCategory = async (categoryId) => {
         const defaultEquipments = await this.DefaultEquipment.find({
             category_id: categoryId
-        }).select("-created_at -updated_at -__v");
+        })
+        .select("equipment_category_id quantity")
+        .lean();
 
         return defaultEquipments;
-    }
+    };
 
 }

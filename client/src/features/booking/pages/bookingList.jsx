@@ -17,7 +17,6 @@ import { bookingApi } from "../../api/bookingApi.js";
 import { roomApi } from "../../api/roomApi.js";
 import { customerApi } from "../../api/customerApi.js";
 import { receiptApi } from "../../api/receiptApi.js";
-import { qrApi } from "../../api/qrApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
 import { discountApi } from "../../api/discountApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
@@ -724,7 +723,7 @@ export default function BookingList() {
       let result;
 
       if (imageFile) {
-        result = await qrApi.scanQRCode(imageFile);
+        result = await customerApi.scanQRCode(imageFile);
       } else if (decodedText) {
         try {
           let parsedData = null;

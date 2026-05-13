@@ -44,4 +44,18 @@ export const customerApi = {
     const res = await axios.patch(`${BASE_URL}/${id}/unban`, {}, getAuthHeader());
     return res.data;
   },
+
+  scanQRCode: async (imageFile) => {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+
+    const res = await axios.post(`${BASE_URL}/create-customer/scan-qr`, formData, {
+      ...getAuthHeader(),
+      headers: {
+        ...getAuthHeader().headers,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data;
+  },
 };
