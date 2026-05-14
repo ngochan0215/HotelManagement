@@ -1,4 +1,4 @@
-import { EventBus } from "../../../shared/messaging/eventBus.js";
+﻿import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 
@@ -6,7 +6,7 @@ export const resolveUserFullName = async (user_id) => {
     if (!user_id) 
         return null;
 
-    const replyUser = await this.eventBus.request(
+    const replyUser = await this.eventBus.safeRequest(
         USER_EVENTS.GET_USER_INFO,
         { userId: user_id }
     );
@@ -15,7 +15,7 @@ export const resolveUserFullName = async (user_id) => {
     const user = replyUser.user;
 
     if (user.system_role === "employee") {
-        const replyEmployee = await this.eventBus.request(
+        const replyEmployee = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: user_id }
         );
@@ -26,7 +26,7 @@ export const resolveUserFullName = async (user_id) => {
     }
 
     if (user.system_role === "customer") {
-        const replyCustomer = await this.eventBus.request(
+        const replyCustomer = await this.eventBus.safeRequest(
             CUSTOMER_EVENTS.CHECK_EXISTS,
             { customerId: user_id }
         );

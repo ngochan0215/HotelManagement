@@ -46,8 +46,8 @@ export default function EquipmentListTab() {
 
   const loadData = async () => {
     try {
-      const res = await equipmentApi.getAllEquipments();
-      setEquipments((res && Array.isArray(res.equipments)) ? res.equipments : []);
+      const res = await equipmentApi.getAllEquipments({ limit: 9999 });
+      setEquipments((res && Array.isArray(res.data)) ? res.data : []);
     } catch (error) { console.error(error); }
   };
 
@@ -59,7 +59,7 @@ export default function EquipmentListTab() {
         result = result.filter(item => {
             const name = item.category_id?.name?.toLowerCase() || "";
             const code = (item.code || item._id.slice(-6)).toLowerCase();
-            const room = item.room_id?.room_number?.toString().toLowerCase() || "";
+            const room = item.room_info?.room_number?.toString().toLowerCase() || "";
             return name.includes(lowerTerm) || code.includes(lowerTerm) || room.includes(lowerTerm);
         });
     }
@@ -185,7 +185,7 @@ export default function EquipmentListTab() {
       setEditingItem(item);
       setFormData({
           status: item.status,
-          room_id: item.room_id?._id || "",
+          room_id: item.room_id?.toString() || "",
           note: item.note || ""
       });
       setIsModalOpen(true);
@@ -250,7 +250,7 @@ export default function EquipmentListTab() {
                         <td className="py-4 pl-4 font-mono font-bold text-gray-500 text-xs">#{displayId}</td>
                         <td className="py-4 font-medium text-gray-900">{item.category_id?.name || "---"}</td>
                         <td className="py-4 text-gray-600">
-                            {item.room_id ? <span className="flex items-center gap-1 font-bold text-indigo-600">P.{item.room_id.room_number || "..."}</span> : <span className="text-gray-400 italic">Kho</span>}
+                            {item.room_info ? <span className="flex items-center gap-1 font-bold text-indigo-600">P.{item.room_info.room_number || "..."}</span> : <span className="text-gray-400 italic">Kho</span>}
                         </td>
                         <td className="py-4"><StatusPill label={st.label} color={st.color} iconType={st.icon} /></td>
                         <td className="py-4 text-gray-500 truncate max-w-xs text-xs">{item.note}</td>

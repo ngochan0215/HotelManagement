@@ -276,8 +276,8 @@ export default function BookingList() {
       const checkedOutRoomsMap = new Map(); // Map<room_id, {room_id, booking_id, detail_id}>
       bookings.forEach(booking => {
         booking.rooms?.forEach(room => {
-          if (room.status === 'checked_out' && room.room_id?._id) {
-            const roomId = room.room_id._id;
+          if (room.status === 'checked_out' && room.room_info?._id) {
+            const roomId = room.room_info._id;
             // Chỉ lưu lần đầu tiên gặp mỗi room_id (ưu tiên booking mới hơn nếu cần)
             if (!checkedOutRoomsMap.has(roomId)) {
               checkedOutRoomsMap.set(roomId, {
@@ -980,7 +980,7 @@ export default function BookingList() {
   const filteredBookings = useMemo(() => {
       return bookings.filter(b => {
           const matchStatus = activeTab === "all" || b.status === activeTab;
-          const matchSearch = b.customer_id?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || b.customer_id?.phone_number?.includes(searchTerm);
+          const matchSearch = b.customer_info?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || b.customer_info?.phone_number?.includes(searchTerm);
           return matchStatus && matchSearch;
       });
   }, [bookings, activeTab, searchTerm]);
@@ -1118,11 +1118,11 @@ export default function BookingList() {
                         <td className="py-4 pl-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg">
-                                    {b.customer_id?.full_name?.charAt(0).toUpperCase()}
+                                    {b.customer_info?.full_name?.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                    <div className="font-bold text-gray-900">{b.customer_id?.full_name}</div>
-                                    <div className="text-xs text-gray-500">{b.customer_id?.phone_number}</div>
+                                    <div className="font-bold text-gray-900">{b.customer_info?.full_name}</div>
+                                    <div className="text-xs text-gray-500">{b.customer_info?.phone_number}</div>
                                 </div>
                             </div>
                         </td>
@@ -1131,7 +1131,7 @@ export default function BookingList() {
                                 {b.rooms?.map((r,i) => (
                                     <div key={i} className="flex items-center gap-2">
                                         <span className="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                                            P.{r.room_id?.room_number}
+                                            P.{r.room_info?.room_number}
                                         </span>
                                     </div>
                                 ))}
@@ -1161,7 +1161,7 @@ export default function BookingList() {
                                         return (
                                             <button 
                                                 key={i} 
-                                                onClick={()=>actionCheckIn(r._id, b._id, r.room_id?.room_number, b.expected_checkin)}
+                                                onClick={()=>actionCheckIn(r._id, b._id, r.room_info?.room_number, b.expected_checkin)}
                                                 className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded hover:bg-emerald-100 transition"
                                             >
                                                 <FiLogIn/> Check-in
@@ -1170,14 +1170,14 @@ export default function BookingList() {
                                     }
                                     if(r.status === 'checked_in')
                                         return (
-                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_id?.room_number, b.expected_checkout)}
+                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_info?.room_number, b.expected_checkout)}
                                                 className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded hover:bg-orange-100 transition">
                                                 <FiLogOut/> Check-out
                                             </button>
                                         );
                                     // Kiểm tra nếu đã checkout nhưng chưa có cleaningTask hoặc chưa gán nhân viên
-                                    if(r.status === 'checked_out' && r.room_id?._id) {
-                                        const roomId = r.room_id._id;
+                                    if(r.status === 'checked_out' && r.room_info?._id) {
+                                        const roomId = r.room_info._id;
                                         const taskInfo = cleaningTasksMap[roomId];
                                         
                                         // Kiểm tra nếu có cleaning task với status "completed" - hiển thị button xác nhận
@@ -1186,7 +1186,7 @@ export default function BookingList() {
                                                 <button 
                                                     key={i} 
                                                     onClick={async () => {
-                                                        if (!window.confirm(`Xác nhận hoàn thành dọn dẹp phòng ${r.room_id?.room_number}?`)) {
+                                                        if (!window.confirm(`Xác nhận hoàn thành dọn dẹp phòng ${r.room_info?.room_number}?`)) {
                                                             return;
                                                         }
                                                         try {
@@ -1245,7 +1245,7 @@ export default function BookingList() {
                                                             
                                                             setCleaningData({
                                                                 room_id: roomId,
-                                                                room_number: r.room_id?.room_number,
+                                                                room_number: r.room_info?.room_number,
                                                                 booking_id: b._id,
                                                                 room_log_id: room_log_id,
                                                                 task_id: taskInfo?._id || null // Nếu đã có task thì truyền task_id

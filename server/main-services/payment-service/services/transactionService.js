@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import * as helpers from "./paymentHelpers.js";
@@ -120,7 +120,7 @@ export class TransactionService {
 
         if (t.user_id) {
             tasks.push(
-                this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId: t.user_id })
+                this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: t.user_id })
                     .then(r => {
                         out.user = r.success && r.user ? r.user : null;
                     })
@@ -138,7 +138,7 @@ export class TransactionService {
             out.booking = receiptBooking;
         } else if (t.booking_id) {
             tasks.push(
-                this.eventBus.request(BOOKING_EVENTS.CHECK_EXISTS_ID, { bookingId: t.booking_id })
+                this.eventBus.safeRequest(BOOKING_EVENTS.CHECK_EXISTS_ID, { bookingId: t.booking_id })
                     .then(async (r) => {
                         if (r.success && r.booking) {
                             const b = r.booking.toObject ? r.booking.toObject() : r.booking;
@@ -369,7 +369,7 @@ export class TransactionService {
             // find booking
             let booking = null;
             if (transaction.booking_id) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     BOOKING_EVENTS.CHECK_EXISTS_ID,
                     { bookingId: transaction.booking_id }
                 );
@@ -387,7 +387,7 @@ export class TransactionService {
             // if deposit then request to booking-service to confirm reservation
             if (isDepositPayment && booking && booking.status === "pending") {
                 try {
-                    const confirmReply = await this.eventBus.request(
+                    const confirmReply = await this.eventBus.safeRequest(
                         BOOKING_EVENTS.CONFIRM_FROM_PAYMENT,
                         { bookingId: transaction.booking_id, employeeId: null }
                     );

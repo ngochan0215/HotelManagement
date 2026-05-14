@@ -76,8 +76,8 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
             if (mode === 'install') {
                 res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
                 // Chỉ lấy thiết bị khả dụng: in-stock, condition=new/good, room_id=null
-                const eqs = (res.equipments || []).filter(eq => 
-                    (eq.condition === 'new' || eq.condition === 'good') && 
+                const eqs = (res.data || []).filter(eq =>
+                    (eq.condition === 'new' || eq.condition === 'good') &&
                     !eq.room_id // room_id phải null
                 );
 
@@ -111,7 +111,7 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
                     status: 'in-use'
                 });
 
-                const eqs = res.equipments || [];
+                const eqs = res.data || [];
 
                 const specificOptions = eqs.map(eq => {
                     const code = eq.code ? eq.code : eq._id.slice(-6).toUpperCase();

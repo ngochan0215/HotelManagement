@@ -22,7 +22,7 @@ export class IncidentController {
 
             return res.status(200).json({ message: "Cập nhật sự cố thành công.", data: incident });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -33,7 +33,7 @@ export class IncidentController {
             
             return res.json({ success: true, message: "Phân công xử lý sự cố thành công", data: incident });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -66,7 +66,7 @@ export class IncidentController {
 
             return res.status(200).json({ data: result });
             
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -77,7 +77,7 @@ export class IncidentController {
 
             return res.status(200).json({ incident });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -88,7 +88,7 @@ export class IncidentController {
             
             return res.status(200).json({ message: "Xóa sự cố thành công." });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

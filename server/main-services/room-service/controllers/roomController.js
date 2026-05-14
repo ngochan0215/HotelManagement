@@ -44,7 +44,8 @@ export class RoomController {
             if (result?.needConfirm) {
                 return res.status(409).json({
                     code: "CATEGORY_HAS_ROOMS",
-                    roomCount: result.roomCount
+                    roomCount: result.roomCount,
+                    message: `Loại phòng này đang có ${result.roomCount} phòng. Bạn có muốn xóa tất cả phòng liên quan không?`
                 });
             }
         
@@ -58,7 +59,7 @@ export class RoomController {
         try {
             const { data, pagination } = await this.roomService.getAllRoomCategoriesService(req.query);
 
-            return res.status(200).json(data, pagination);
+            return res.status(200).json(data);
 
         } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
@@ -252,7 +253,7 @@ export class RoomController {
             
             return res.status(201).json(report);
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

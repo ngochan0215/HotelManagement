@@ -15,7 +15,8 @@ export class UserEventHandler {
             [USER_EVENTS.UPDATE_USER]: this.updateUser.bind(this),
             [USER_EVENTS.CREATE_ACCOUNT]: this.createUserAccount.bind(this),
             [USER_EVENTS.RESET_PASSWORD]: this.adminResetPassword.bind(this),
-            [USER_EVENTS.GET_MANAGERS]: this.getAllManagers.bind(this)
+            [USER_EVENTS.GET_MANAGERS]: this.getAllManagers.bind(this),
+            [USER_EVENTS.GET_ADMINS]: this.getAllAdmins.bind(this),
         }
     }
 
@@ -191,12 +192,37 @@ export class UserEventHandler {
         } catch (error) {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
-                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false
                 }
-            );  
+            );
+        }
+    }
+
+    async getAllAdmins(data, msg) {
+        try {
+            console.log("Handling USER.GET_ADMINS");
+            const admins = await this.userService.getAllUsers({ system_role: "admin" });
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, admins })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
         }
     }
 }

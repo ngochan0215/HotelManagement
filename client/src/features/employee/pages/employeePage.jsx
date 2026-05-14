@@ -154,7 +154,7 @@ export default function EmployeePage() {
   const handleAccountClick = (emp) => {
       const hasAccount = !!emp.user_id;
       setAccForm({
-          email: hasAccount ? emp.user.email : "",
+          email: emp.user?.email ?? "",
           password: ""
       });
       setAccountModal({
@@ -207,7 +207,7 @@ export default function EmployeePage() {
         e.full_name?.toLowerCase().includes(searchLower) ||
         e.phone_number?.includes(searchLower) ||
         e.CCCD?.includes(searchLower) ||
-        e.user_id?.email?.toLowerCase().includes(searchLower);
+        e.user?.email?.toLowerCase().includes(searchLower);
 
       return matchPos && matchStatus && matchSearch;
     });

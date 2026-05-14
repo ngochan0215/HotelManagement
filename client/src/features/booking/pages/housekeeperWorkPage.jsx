@@ -41,7 +41,7 @@ export default function HousekeeperWorkPage() {
     setConfirmState({
       open: true,
       title: isStart ? "Bắt đầu dọn dẹp" : "Hoàn tất dọn dẹp",
-      message: `Xác nhận ${isStart ? 'bắt đầu' : 'hoàn thành'} dọn dẹp phòng ${task.room_id?.room_number || 'N/A'}?`,
+      message: `Xác nhận ${isStart ? 'bắt đầu' : 'hoàn thành'} dọn dẹp phòng ${task.room?.room_number || 'N/A'}?`,
       onConfirm: async () => {
         try {
           if (isStart) await bookingApi.startCleaningTask(task._id);
@@ -64,7 +64,7 @@ export default function HousekeeperWorkPage() {
 
       if (!searchTerm) return true;
       const lowerTerm = searchTerm.toLowerCase();
-      const roomNum = t.room_id?.room_number?.toLowerCase() || "";
+      const roomNum = t.room?.room_number?.toLowerCase() || "";
       return roomNum.includes(lowerTerm) || t._id.toLowerCase().includes(lowerTerm);
     });
 
@@ -189,7 +189,7 @@ const StatCard = ({ label, count, icon: Icon, color, active, onClick }) => {
 };
 
 const TaskCard = ({ task, onView, onAction, getStatusBadge }) => {
-  const roomDisplay = task.room_id ? `P.${task.room_id.room_number}` : "---";
+  const roomDisplay = task.room ? `P.${task.room.room_number}` : "---";
   const isPending = task.status === "pending";
   const isDoing = task.status === "in_progress";
   const isCompleted = task.status === "completed" || task.status === "confirmed";
@@ -261,7 +261,7 @@ const TaskCard = ({ task, onView, onAction, getStatusBadge }) => {
 const TaskDetailModal = ({ task, onClose }) => {
   const startTime = parseISO(task.created_at);
   const deadlineTime = addHours(startTime, 2);
-  const roomCategory = task.room_id?.room_category_id?.name || task.room_id?.room_category_id || "Tiêu chuẩn";
+  const roomCategory = task.room?.category_id?.category_name || "Tiêu chuẩn";
 
   return (
     <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-md text-slate-800">
@@ -277,7 +277,7 @@ const TaskDetailModal = ({ task, onClose }) => {
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="bg-indigo-50 p-4 rounded-2xl border-2 border-indigo-100 shadow-sm">
               <p className="text-[10px] font-black text-indigo-400 uppercase mb-1 tracking-widest">PHÒNG</p>
-              <p className="text-3xl font-black text-indigo-900">{task.room_id?.room_number}</p>
+              <p className="text-3xl font-black text-indigo-900">{task.room?.room_number}</p>
             </div>
             <div className="bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm">
               <p className="text-[10px] font-black text-rose-400 uppercase mb-1 tracking-widest">LOẠI PHÒNG</p>

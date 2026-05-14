@@ -12,6 +12,7 @@ export default function InstallTicketDetailModal({ ticket, onClose }) {
     const fetchDetails = async () => {
       try {
         const res = await equipmentApi.getEquipmentInstallById(ticket._id);
+        console.log("installl detail: ", res);
         if (res.success) {
           setFullTicket(res.install);
           setDetails(res.install.install_details || []);
@@ -25,7 +26,7 @@ export default function InstallTicketDetailModal({ ticket, onClose }) {
     fetchDetails();
   }, [ticket._id]);
 
-  const roomDisplay = fullTicket.room_id ? `Phòng ${fullTicket.room_id.room_number}` : "---";
+  const roomDisplay = fullTicket.room_id ? `Phòng ${fullTicket.room_info?.room_number}` : "---";
   const typeText = fullTicket.type === 'install' ? 'Lắp đặt' : 'Tháo dỡ';
   const typeBadge = fullTicket.type === 'install' ? (
     <span className="inline-flex items-center gap-1 text-indigo-600 bg-indigo-50 px-2 py-1 rounded text-xs font-bold border border-indigo-100">
@@ -105,7 +106,7 @@ export default function InstallTicketDetailModal({ ticket, onClose }) {
                       Nhân viên được gán
                     </div>
                     <p className="font-semibold text-gray-900">
-                      {fullTicket.handled_by.full_name || 'N/A'}
+                      {fullTicket.handler_info.full_name || 'N/A'}
                     </p>
                   </div>
                 )}

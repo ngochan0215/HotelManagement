@@ -50,7 +50,7 @@ export class ReceiptController {
                 data: receipt
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -64,7 +64,7 @@ export class ReceiptController {
                 receipt
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -78,7 +78,7 @@ export class ReceiptController {
                 receipt
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

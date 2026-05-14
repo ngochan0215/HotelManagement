@@ -15,9 +15,10 @@ export const userApi = {
     const token = localStorage.getItem("token");
     const decoded = jwtDecode(token);
     const userId = decoded.userId || decoded._id || decoded.id;
-    const res = await axios.get(`${USERS_BASE}/profile/${userId}`, getAuthHeader());
-    const profile = res.data.userProfile;
-    return { data: profile };
+    const res = await axios.get(`${EMPLOYEES_BASE}/my-profile`, getAuthHeader());
+
+    const profile = res.data;
+    return profile;
   },
 
   updateProfile: async (data) => {

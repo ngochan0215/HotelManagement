@@ -14,7 +14,7 @@ export class NotificationController {
                 message: "Notification marked as read",
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -28,7 +28,7 @@ export class NotificationController {
                 message: "Notification marked as deleted",
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -42,7 +42,7 @@ export class NotificationController {
                 message: "All notifications marked as read",
             });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -54,7 +54,7 @@ export class NotificationController {
                 success: true,
                 notifications
             });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

@@ -33,16 +33,17 @@ const startServer = async () => {
     await connectDB(process.env.DB_URL);
     await container.init();
     
-    // startCancelPendingBookingJob();
-    // startCancelCheckinLateBookingJob();
-    // startCheckinReminderJob();
-    // startCheckoutReminderJob();
-    // startDepositDeadlineReminderJob();
-    // startCheckinTimeReminderJob();
+    // cron job
+    startCancelPendingBookingJob();
+    startCancelCheckinLateBookingJob();
+    startCheckinReminderJob();
+    startCheckoutReminderJob();
+    startDepositDeadlineReminderJob();
+    startCheckinTimeReminderJob();
 
-    app.use(bookingRoute);
     app.use("/reviews", reviewRoute);
     app.use("/statistics", statisticRoute);
+    app.use(bookingRoute);
 
     const PORT = process.env.PORT || 3009;
     app.listen(PORT, () => {

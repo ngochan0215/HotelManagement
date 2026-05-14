@@ -60,7 +60,8 @@ export const employeeApi = {
 
   createAccountForExisting: async (employeeId, data) => {
       const url = `${BASE_URL}/create-account/${employeeId}`;
-      return axios.post(url, data, getAuthHeader());
+      const res = await axios.post(url, data, getAuthHeader());
+      return res.data;
     },
 
   getProfile: async () => {
@@ -69,7 +70,8 @@ export const employeeApi = {
   },
     resetPassword: async (employeeId, newPassword) => {
         const url = `${BASE_URL}/reset-password/${employeeId}`;
-        return axios.patch(url, { newPassword }, getAuthHeader());
+        const res = await axios.patch(url, { newPassword }, getAuthHeader());
+        return res.data;
     },
 
     cashOut: async () => {

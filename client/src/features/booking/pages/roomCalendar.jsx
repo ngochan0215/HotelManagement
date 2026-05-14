@@ -53,13 +53,13 @@ export default function RoomCalendar() {
             const dateStr = format(currentDate, 'yyyy-MM-dd');
             const response = await roomApi.getRoomsCalendar(dateStr);
 
-            console.log("FULL API RESPONSE:", response);
+            //console.log("FULL API RESPONSE:", response);
             const data = response.rooms ? response : (response.data || {});
 
             const roomList = data.rooms || [];
             const eventList = data.events || [];
 
-            console.log("Danh sách phòng tìm thấy:", roomList.length);
+            //console.log("Danh sách phòng tìm thấy:", roomList.length);
 
             setRooms(roomList);
 
@@ -150,9 +150,21 @@ export default function RoomCalendar() {
         try { await bookingApi.confirmBooking(selectedEvent.booking_id); alert("Thành công!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
     };
     const handleCheckIn = () => navigate('/booking-management');
+
     const handleCheckOut = () => navigate('/booking-management');
+
     const handleCompleteCleaning = async () => {
-        try { await roomApi.completeCleaning(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
+        try {
+            console.log("selectedEvent: ", selectedEvent);
+            await roomApi.completeCleaning(selectedEvent.room_id); 
+            alert("Xong!"); 
+            setSelectedEvent(null); 
+            fetchCalendar(); 
+
+        } catch (err) 
+        { 
+            alert(err.response?.data?.message || err.message); 
+        }
     };
     const handleCompleteMaintenance = async () => {
         try { await roomApi.completeMaintenance(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }

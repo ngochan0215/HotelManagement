@@ -19,6 +19,7 @@ const updateAllCustomerTiers = async () => {
   if (!customers.length) return;
 
   const bulkOps = [];
+  
   for (const customer of customers) {
     const newTier = container.customerService.calculateMembershipTier({
       booking_count: customer.booking_count || 0,

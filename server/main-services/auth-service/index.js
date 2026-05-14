@@ -26,7 +26,7 @@ const startServer = async () => {
     await container.init();
 
     app.use(authRoutes);
-    app.use("/users", userRoutes);
+    app.use(userRoutes);
 
     const PORT = process.env.PORT || 3001;
 

@@ -104,10 +104,9 @@ export default function Sidebar() {
   };
 
   const checkPermission = (item) => {
-    // Nếu item có excludeManager, manager không được xem
-    if (item.excludeManager && userRole === "manager") return false;
-    
-    if (userRole === "manager") return true;
+    const isManagerOrAdmin = userRole === "manager" || userRole === "admin";
+    if (item.excludeManager && isManagerOrAdmin) return false;
+    if (isManagerOrAdmin) return true;
     if (!item.allowed) return true;
     return item.allowed.includes(userPosition);
   };

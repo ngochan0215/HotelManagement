@@ -30,9 +30,9 @@ const startServer = async () => {
     // startSyncRoomStatusJob();
     // startFixRoomLogsJob();
 
-    app.use(roomRoute);
     app.use("/categories", roomCategoryRoute);
     app.use("/statistics", roomStatisticRoute);
+    app.use(roomRoute);
     
     const PORT = process.env.PORT || 3005;
 

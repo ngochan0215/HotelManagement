@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
@@ -18,7 +18,7 @@ export class CompensateService {
     // helper
 
     getEmployeeByUserId = async (employeeUserId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: employeeUserId }
         );
@@ -30,7 +30,7 @@ export class CompensateService {
     };
 
     getEquipmentById = async (equipmentId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EQUIPMENT_EVENTS.CHECK_EXISTS,
             { equipmentId }
         );
@@ -55,7 +55,7 @@ export class CompensateService {
         if (allUserIds.length === 0)
             return isArray ? list : list[0];
 
-        const replyUsers = await this.eventBus.request(
+        const replyUsers = await this.eventBus.safeRequest(
             USER_EVENTS.GET_USERS_INFO,
             { userIds: allUserIds }
         );
@@ -73,7 +73,7 @@ export class CompensateService {
             (async () => {
                 const map = {};
                 if (employeeIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
                     { employee_user_ids: employeeIds }
                 );
@@ -94,7 +94,7 @@ export class CompensateService {
             (async () => {
                 const map = {};
                 if (customerIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     CUSTOMER_EVENTS.GET_INFOS_USERIDS,
                     { customerUserIds: customerIds }
                 );
@@ -154,7 +154,7 @@ export class CompensateService {
         let roomMap = {};
 
         if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
@@ -529,7 +529,7 @@ export class CompensateService {
             }
         
             if (updates.handled_by) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     USER_EVENTS.GET_USER_INFO,
                     { userId: updates.handled_by }
                 );
@@ -638,7 +638,7 @@ export class CompensateService {
         try {
             const equipment = await this.getEquipmentById(equipment_id);
 
-            const categoryReply = await this.eventBus.request(
+            const categoryReply = await this.eventBus.safeRequest(
                 EQUIPMENT_EVENTS.GET_CATEGORY_INFO,
                 { categoryId: equipment.category_id }
             );
@@ -686,14 +686,14 @@ export class CompensateService {
                     throw new Error("Resolution không hợp lệ.");
             }
 
-            const replyUpdate = await this.eventBus.request(
+            const replyUpdate = await this.eventBus.safeRequest(
                 EQUIPMENT_EVENTS.UPDATE_LOG,
                 { equipmentId: equipment_id }
             );
             if (!replyUpdate.success) 
                 throw new Error(replyUpdate.message);
 
-            const replyCreate = await this.eventBus.request(
+            const replyCreate = await this.eventBus.safeRequest(
                 EQUIPMENT_EVENTS.CREATE_LOG,
                 { 
                     equipment_id,
@@ -706,7 +706,7 @@ export class CompensateService {
             );
             if (!replyCreate.success) throw new Error(replyCreate.message);
             
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EQUIPMENT_EVENTS.UPDATE_INTERNAL,
                 { 
                     equipmentId: equipment_id,

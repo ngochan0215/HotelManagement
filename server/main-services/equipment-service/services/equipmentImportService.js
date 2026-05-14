@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 
 export class EquipmentImportService {
@@ -71,7 +71,7 @@ export class EquipmentImportService {
                 throw new Error("Yêu cầu nhập thông tin đầy đủ.");
 
             if (employeeUserId) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                     { employee_user_id: employeeUserId }
                 );
@@ -127,7 +127,7 @@ export class EquipmentImportService {
             let filter = {};
 
             if (employee_id) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.CHECK_EXISTS,
                     { employee_id }
                 );
@@ -160,7 +160,7 @@ export class EquipmentImportService {
             let employeeMap = {};
 
             if (employeeIds.length > 0) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.GET_INFO,
                     { employee_ids: employeeIds }
                 );
@@ -190,7 +190,7 @@ export class EquipmentImportService {
 
             const result = tickets.map(ticket => ({
                 ...ticket,
-                employee_info: employeeMap[tickets.employee_id?.toString()] || null,
+                employee_info: employeeMap[ticket.employee_id?.toString()] || null,
                 import_details: importMap[ticket._id.toString()] || [],
             }));
 
@@ -406,7 +406,7 @@ export class EquipmentImportService {
                 throw new Error("Yêu cầu employeeUserId.");
             }
             if (employeeUserId) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                     { employee_user_id: employeeUserId }
                 );

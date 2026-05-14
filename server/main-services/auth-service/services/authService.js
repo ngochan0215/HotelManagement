@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+﻿import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
@@ -78,7 +78,7 @@ export class AuthService {
 
         try {
             if (system_role === "customer") {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     CUSTOMER_EVENTS.REGISTERED, 
                     {
                         userId: user._id,
@@ -99,7 +99,7 @@ export class AuthService {
                 }
 
             } else if (system_role === "employee") {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.REGISTERED, 
                     {
                         userId: user._id,
@@ -196,7 +196,7 @@ export class AuthService {
         let customerId = null;
         
         if (user.system_role === "customer") {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
                 { customer_user_id: user._id }
             );
@@ -206,7 +206,7 @@ export class AuthService {
                 customerId = reply.customer._id;
             }
         } else {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                 { employee_user_id: user._id }
             );
@@ -358,9 +358,12 @@ export class AuthService {
         }
 
         const user = await this.User.findById(userId);
+        if (!user) throw new Error("Không tìm thấy tài khoản người dùng.");
+
         user.password = newPassword;
 
         await user.save();
+        return true;
     };
 
     async deleteUser(userId) {

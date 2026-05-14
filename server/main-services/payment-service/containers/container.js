@@ -3,10 +3,13 @@ import Transaction from "../models/Transaction.js";
 
 import { ReceiptService } from "../services/receiptService.js";
 import { TransactionService } from "../services/transactionService.js";
+import { PaymentEventHandler } from "../events/paymentHandler.js";
 
 import { payOSpayin } from "../config/payos.js";
 import { EventBus } from "../../../shared/messaging/eventBus.js";
+import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
+import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
 
 class Container {
     constructor() {
@@ -28,10 +31,21 @@ class Container {
             sendNotification,
             sendNotificationsToUsers,
         });
+
+        this.paymentEventHandler = new PaymentEventHandler(this.receiptService, this.eventBus);
     }
 
     async init() {
-        await this.eventBus.connect();
+        await this.eventBus.connect({
+            queueName: "payment-service-events",
+            bindEvents: [
+                PAYMENT_EVENTS.CREATE_RECEIPT,
+            ]
+        });
+
+        const handlers = this.paymentEventHandler.handlers();
+        const consumer = new EventConsumer(this.eventBus, handlers);
+        await consumer.start();
     }
 }
 

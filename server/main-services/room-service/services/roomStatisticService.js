@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+﻿import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
@@ -56,7 +56,7 @@ export class RoomStatisticService {
 
     getTopBookedRoomCategories = async (query = {}) => {
         try {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_TOP_BOOKED_ROOM_CATEGORIES,
                 query
             );
@@ -244,7 +244,7 @@ export class RoomStatisticService {
                 .lean();
 
             // fetch booking data from booking-service
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_CALENDAR_DATA,
                 { 
                     roomIds, 
@@ -327,10 +327,10 @@ export class RoomStatisticService {
                         booking_id:     booking._id,
                         booking_code:   booking._id.toString().slice(-6).toUpperCase(),
                         booking_status: booking.status,
-                        customer_id:    booking.customer_id?._id,
-                        customer_name:  booking.customer_id?.full_name || "Khách vãng lai",
-                        customer_phone: booking.customer_id?.phone_number || "",
-                        customer_cccd:  booking.customer_id?.CCCD || ""
+                        customer_id:    booking.customer_id,
+                        customer_name:  booking.customer_info?.full_name || "Khách vãng lai",
+                        customer_phone: booking.customer_info?.phone_number || "",
+                        customer_cccd:  booking.customer_info?.CCCD || ""
                     } : null
                 };
             });

@@ -61,7 +61,7 @@ export default function TechnicianWorkPage() {
     setConfirmState({
       open: true,
       title: isStart ? "Bắt đầu công việc" : "Hoàn thành công việc",
-      message: `Xác nhận ${isStart ? 'bắt đầu' : 'hoàn tất'} phiếu tại phòng ${ticket.room_id?.room_number}?`,
+      message: `Xác nhận ${isStart ? 'bắt đầu' : 'hoàn tất'} phiếu tại phòng ${ticket.room_info?.room_number}?`,
       onConfirm: async () => {
         try {
           if (isStart) await equipmentApi.startInstallTicket(ticket._id);
@@ -88,7 +88,7 @@ export default function TechnicianWorkPage() {
       if (filterStatus === 'completed' && !isCompleted) return false;
       if (!searchTerm) return true;
       const lowerTerm = searchTerm.toLowerCase();
-      const room = t.room_id?.room_number?.toLowerCase() || "";
+      const room = t.room_info?.room_number?.toLowerCase() || "";
       const code = t._id.toLowerCase();
       return room.includes(lowerTerm) || code.includes(lowerTerm);
     });
@@ -215,7 +215,7 @@ const StatCard = ({ label, count, icon: Icon, color, active, onClick }) => {
 };
 
 const TicketCard = ({ ticket, onView, onAction, getTypeBadge, getStatusBadge }) => {
-  const roomDisplay = ticket.room_id ? `P.${ticket.room_id.room_number}` : "---";
+  const roomDisplay = ticket.room_info ? `P.${ticket.room_info.room_number}` : "---";
   const hasStart = ticket.started_at && ticket.started_at !== "";
   const hasEnd = ticket.completed_at && ticket.completed_at !== "";
   const canStart = ticket.status === "assigned" || (ticket.status === "waiting_confirm" && !hasStart);
@@ -281,7 +281,7 @@ const TicketDetailModal = ({ ticket, onClose }) => {
         </div>
         <div className="p-5 overflow-y-auto bg-white flex-1 no-scrollbar">
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 shadow-inner"><p className="text-[10px] font-black text-indigo-400 uppercase mb-1 text-xs">VỊ TRÍ</p><p className="text-2xl font-black text-indigo-900">Phòng {ticket.room_id?.room_number}</p></div>
+            <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 shadow-inner"><p className="text-[10px] font-black text-indigo-400 uppercase mb-1 text-xs">VỊ TRÍ</p><p className="text-2xl font-black text-indigo-900">Phòng {ticket.room_info?.room_number}</p></div>
             <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 shadow-inner"><p className="text-[10px] font-black text-rose-400 uppercase mb-1 text-xs">LOẠI VIỆC</p><p className="text-lg font-black text-rose-900 uppercase">{ticket.type === 'install' ? 'Lắp đặt' : 'Tháo dỡ'}</p></div>
           </div>
           <h4 className="font-black text-gray-800 mb-3 flex items-center gap-2 border-b-2 border-gray-100 pb-2 text-xs uppercase tracking-widest"><FiTool className="text-indigo-500" /> Thiết bị yêu cầu ({details.length})</h4>

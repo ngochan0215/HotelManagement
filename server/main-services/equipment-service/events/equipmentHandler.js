@@ -1,8 +1,10 @@
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 
 export class EquipmentEventHandler {
-    constructor(equipmentService, eventBus) {
+    constructor(equipmentService, equipmentInstallService, equipmentImportService, eventBus) {
         this.equipmentService = equipmentService;
+        this.equipmentInstallService = equipmentInstallService;
+        this.equipmentImportService = equipmentImportService;
         this.eventBus = eventBus;
     }
 
@@ -14,7 +16,8 @@ export class EquipmentEventHandler {
             [EQUIPMENT_EVENTS.GET_CATEGORIES_INFO]: this.getEquipmentCategoriesInfo.bind(this),
             [EQUIPMENT_EVENTS.UPDATE_LOG]: this.updateEquipmentLog.bind(this),
             [EQUIPMENT_EVENTS.CREATE_LOG]: this.createEquipmentLog.bind(this),
-
+            [EQUIPMENT_EVENTS.GET_ALL_INSTALL_TICKETS]: this.getAllInstallTickets.bind(this),
+            [EQUIPMENT_EVENTS.GET_ALL_IMPORT_TICKETS]: this.getAllImportTickets.bind(this),
         }
     }
 
@@ -159,6 +162,56 @@ export class EquipmentEventHandler {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, equipmentLog })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async getAllInstallTickets(data, msg) {
+        try {
+            const result = await this.equipmentInstallService.getAllInstallsForTasks(data);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, ...result })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async getAllImportTickets(data, msg) {
+        try {
+            const result = await this.equipmentImportService.getAllEquipmentTickets(data);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, ...result })),
                 {
                     correlationId: msg.properties.correlationId,
                     persistent: false

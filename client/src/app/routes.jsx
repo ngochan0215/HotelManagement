@@ -22,9 +22,37 @@ import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
 
-// Component để route đến đúng trang công việc
+const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
+  const { user } = useAuth();
+  useLocation();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
+  const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
+
+  if (excludeManager && (role === 'manager' || role === 'admin')) return <Navigate to="/dashboard" replace />;
+  if ((role === 'manager' || role === 'admin') && !excludeManager) return children;
+
+  if (allowed && allowed.length > 0) {
+    const allowedLower = allowed.map(p => p.toLowerCase());
+    if (!allowedLower.includes(position)) {
+      let redirectPath = "/login";
+      if (position === 'receptionist') redirectPath = "/room-calendar";
+      else if (position === 'technician' || position === 'housekeeper') redirectPath = "/my-work";
+      else if (position === 'accountant') redirectPath = "/invoices";
+      else redirectPath = "/profile";
+
+      return <Navigate to={redirectPath} replace />;
+    }
+  }
+
+  return children;
+};
+
 function WorkPageRouter() {
-  const position = (localStorage.getItem("position") || "").toLowerCase();
+  const { user } = useAuth();
+  const position = ((user?.position) || localStorage.getItem("position") || "").toLowerCase();
 
   if (position === "technician") {
     return <TechnicianWorkPage />;
@@ -38,63 +66,39 @@ function WorkPageRouter() {
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
 
-  const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
-    const location = useLocation();
-    if (!user) return <Navigate to="/login" replace />;
-
-    const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
-    const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
-
-    if (excludeManager && role === 'manager') return <Navigate to="/dashboard" replace />;
-    if (role === 'manager' && !excludeManager) return children;
-
-    if (allowed && allowed.length > 0) {
-      const allowedLower = allowed.map(p => p.toLowerCase());
-      if (!allowedLower.includes(position)) {
-        let redirectPath = "/login";
-        if (position === 'receptionist') redirectPath = "/room-calendar";
-        else if (position === 'technician' || position === 'housekeeper') redirectPath = "/my-work";
-        else if (position === 'accountant') redirectPath = "/invoices";
-        else redirectPath = "/profile";
-
-        return <Navigate to={redirectPath} replace />;
-      }
-    }
-
-    return children;
-  };
   if (isLoading) {
-      return (
-        <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            <p className="mt-2 text-gray-600">Đang tải...</p>
-          </div>
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          <p className="mt-2 text-gray-600">Đang tải...</p>
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    const getHomePath = () => {
-      if (!user) return "/login";
-      const position = (user.position || "").toLowerCase();
-      if (user.role === 'manager') return "/dashboard";
-      if (position === 'receptionist') return "/room-calendar";
-      if (position === 'technician' || position === 'housekeeper') return "/my-work";
-      if (position === 'accountant') return "/invoices";
-      return "/profile";
-    };
+  const getHomePath = () => {
+    if (!user) return "/login";
+    const position = (user.position || "").toLowerCase();
+    if (user.role === 'manager' || user.role === 'admin') return "/dashboard";
+    if (position === 'receptionist') return "/room-calendar";
+    if (position === 'technician' || position === 'housekeeper') return "/my-work";
+    if (position === 'accountant') return "/invoices";
+    return "/profile";
+  };
+
   return (
     <Routes>
-     <Route path="/" element={<Navigate to={getHomePath()} replace />} />
-           <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
+      <Route path="/" element={<Navigate to={getHomePath()} replace />} />
+      <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
 
-           <Route path="/profile" element={
-             <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
-           } />
+      <Route path="/profile" element={
+        <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
+      } />
 
-           <Route path="/dashboard" element={
-             <ProtectedRoute allowed={['manager']}> <Dashboard /> </ProtectedRoute>
-           } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute allowed={['manager', 'admin']}> <Dashboard /> </ProtectedRoute>
+      } />
       <Route path="/employees" element={
         <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
       } />
@@ -141,7 +145,7 @@ export default function AppRoutes() {
       } />
 
       {/* THỐNG KÊ */}
-       <Route path="/reports" element={
+      <Route path="/reports" element={
         <ProtectedRoute allowed={['accountant']}> <StatisticsPage /> </ProtectedRoute>
       } />
 
@@ -150,11 +154,11 @@ export default function AppRoutes() {
         <ProtectedRoute allowed={[]}> <AllTasksPage /> </ProtectedRoute>
       } />
 
-       {/* CÁC TRANG CHUNG */}
-       <Route path="/promotions" element={<ProtectedRoute allowed={['receptionist', 'customer_service']}><DiscountPage /></ProtectedRoute>} />
+      {/* CÁC TRANG CHUNG */}
+      <Route path="/promotions" element={<ProtectedRoute allowed={['receptionist', 'customer_service']}><DiscountPage /></ProtectedRoute>} />
 
-       <Route path="/payment/success" element={<PaymentResultPage />} />
-       <Route path="/payment/cancel" element={<PaymentResultPage />} />
+      <Route path="/payment/success" element={<PaymentResultPage />} />
+      <Route path="/payment/cancel" element={<PaymentResultPage />} />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

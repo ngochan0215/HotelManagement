@@ -21,6 +21,7 @@ export class EventBus {
         const maxAttempts = 5;
         const delayMs = 2000;
         let lastErr;
+        
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 const connection = await amqp.connect(url);
@@ -96,6 +97,16 @@ export class EventBus {
 
             this.channel.ack(msg);
         });
+    }
+
+    async safeRequest(event, data, fallback = null) {
+        try {
+            const reply = await this.request(event, data);
+            return reply;
+        } catch (err) {
+            console.warn(`[CIRCUIT BREAKER] ${event} failed: ${err.message}`);
+            return fallback ?? { success: false, message: `Service unavailable: ${event}` };
+        }
     }
 
     async request(event, data, timeout = 5000) {

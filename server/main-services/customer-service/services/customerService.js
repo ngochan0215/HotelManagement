@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
@@ -53,7 +53,7 @@ export class CustomerService {
 
             const userIds = customers.map(c => c.user_id);
 
-            const reply = await this.eventBus.request(USER_EVENTS.GET_USERS_INFO, { userIds });
+            const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds });
             if (!reply.success) {
                 throw new Error(reply.message);
             }
@@ -89,7 +89,7 @@ export class CustomerService {
             throw new Error("Không tìm thấy khách hàng.");
         }
 
-        const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
         if (!reply.success) {
             throw new Error(reply.message);
         } else {  
@@ -127,7 +127,7 @@ export class CustomerService {
             if (email !== undefined) {
                 let user = null;
 
-                const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+                const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
                 if (reply.found) {
                     user = reply.user;
                 } else {
@@ -135,13 +135,13 @@ export class CustomerService {
                 }
 
                 if (email !== user.email) {
-                    const reply = await this.eventBus.request(USER_EVENTS.CHECK_EXISTED_EMAIL, { email });
+                    const reply = await this.eventBus.safeRequest(USER_EVENTS.CHECK_EXISTED_EMAIL, { email });
                     if (reply.found) {
                         throw new Error("Email đã tồn tại.");
                     }
                 }
 
-                const replyUpdate = await this.eventBus.request(
+                const replyUpdate = await this.eventBus.safeRequest(
                     USER_EVENTS.UPDATE_USER, 
                     { 
                         userId: customer.user_id, 
@@ -220,7 +220,7 @@ export class CustomerService {
             customer.status = "banned";
             await customer.save();
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 USER_EVENTS.UPDATE_USER, 
                 { 
                     userId: customer.user_id, 
@@ -260,7 +260,7 @@ export class CustomerService {
             customer.status = "active";
             await customer.save();
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 USER_EVENTS.UPDATE_USER, 
                 { 
                     userId: customer.user_id, 
@@ -356,7 +356,7 @@ export class CustomerService {
         
             const customers = await this.Customer.find().lean();
         
-            const replyBookings = await this.eventBus.request(
+            const replyBookings = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_BOOKINGS_CUSTOMER_REPORT,
                 { start, end }
             );
@@ -365,7 +365,7 @@ export class CustomerService {
             const bookings = replyBookings.bookings;
             const bookingIds = bookings.map(b => b._id);
         
-            const replyLogs = await this.eventBus.request(
+            const replyLogs = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_LOGS_CUSTOMER_REPORT,
                 { bookingIds }
             );

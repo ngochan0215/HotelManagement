@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
@@ -182,7 +182,7 @@ export class EquipmentInstallService {
         let handlerMap = {};
 
         if (employeeIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_INFO,
                 { employee_ids: employeeIds }
             );
@@ -195,7 +195,7 @@ export class EquipmentInstallService {
         }
 
         if (handlerIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_INFO,
                 { employee_ids: handlerIds }
             );
@@ -230,7 +230,7 @@ export class EquipmentInstallService {
         let roomMap = {};
 
         if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
@@ -264,7 +264,7 @@ export class EquipmentInstallService {
     };
 
     getEmployeeByUserId = async (employeeUserId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: employeeUserId }
         );
@@ -276,7 +276,7 @@ export class EquipmentInstallService {
     };
  
     getEmployeeById = async (employeeId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS,
             { employee_id: employeeId }
         );
@@ -288,7 +288,7 @@ export class EquipmentInstallService {
     };
  
     getTechnicianAvailable = async (employeeId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE,
             { employee_id: employeeId }
         );
@@ -300,7 +300,7 @@ export class EquipmentInstallService {
     };
  
     getRoomById = async (roomId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             ROOM_EVENTS.CHECK_EXISTS,
             { room_id: roomId }
         );
@@ -312,7 +312,7 @@ export class EquipmentInstallService {
     };
  
     getManagersUserIds = async () => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             USER_EVENTS.GET_MANAGERS
         );
         
@@ -413,7 +413,7 @@ export class EquipmentInstallService {
                 }
         
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
                         userIds: adminUserIds,
@@ -519,7 +519,7 @@ export class EquipmentInstallService {
                 }
         
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                         await this.sendNotificationsToUsers({
                             userIds: adminUserIds,
@@ -582,11 +582,41 @@ export class EquipmentInstallService {
         }
     };
     
+    getAllInstallsForTasks = async (query = {}) => {
+        const { counts, installs } = await this.getAllEquipmentInstalls(query);
+
+        if (!installs.length) return { counts: 0, installs: [] };
+
+        const ticketIds = installs.map(i => i._id);
+
+        const details = await this.InstallDetail.find({ ticket_id: { $in: ticketIds } })
+            .populate({
+                path: "equipment_id",
+                populate: { path: "category_id", select: "name" },
+                select: "category_id condition status code"
+            })
+            .lean();
+
+        const detailMap = {};
+        for (const d of details) {
+            const key = d.ticket_id.toString();
+            if (!detailMap[key]) detailMap[key] = [];
+            detailMap[key].push(d);
+        }
+
+        const result = installs.map(install => ({
+            ...install,
+            install_details: detailMap[install._id.toString()] || []
+        }));
+
+        return { counts: result.length, installs: result };
+    };
+
     getSmartInstallSuggestions = async (roomId) => {
         try {
             if (!roomId) throw new Error("Vui lòng cung cấp room_id");
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.CHECK_EXISTS,
                 { room_id: roomId }
             );
@@ -596,7 +626,7 @@ export class EquipmentInstallService {
 
             const room = reply.room;
             
-            const replyDefaultEquipments = await this.eventBus.request(
+            const replyDefaultEquipments = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_DEFAULT_EQUIPMENTS_ROOM_CATEGORY,
                 { categoryId: room.category_id }
             );
@@ -755,11 +785,9 @@ export class EquipmentInstallService {
                     select: "category_id condition status code"
                 });
 
-            return { install: 
-                {
-                    ...finalResult,
-                    install_details: installDetails
-                } 
+            return {
+                ...finalResult,
+                install_details: installDetails
             };
         
         } catch (error) {
@@ -920,8 +948,8 @@ export class EquipmentInstallService {
                         const roomText = updatedTicket.room_id ? ` phòng ${room.room_number}` : "";
                         const typeText = install_ticket.type === "uninstall" ? "tháo dỡ" : "lắp đặt";
 
-                        await sendNotificationToUsers({
-                            userId: userId,
+                        await this.sendNotification({
+                            userId: employee.user_id,
                             title: "Công việc mới được gán",
                             content: `Bạn được gán phiếu ${typeText} thiết bị${roomText} #${install_ticket._id.toString().slice(-6)}`,
                             type: "equipment",
@@ -957,7 +985,7 @@ export class EquipmentInstallService {
             }
 
             const room = await this.getRoomById(installTicket.room_id);
-            const employee = await this._getEmployeeById(installTicket.handled_by);
+            const employee = installTicket.handled_by ? await this.getEmployeeById(installTicket.handled_by) : null;
         
             if (!["pending", "assigned", "waiting_confirm"].includes(installTicket.status)) {
                 throw new Error("Chỉ được xóa phiếu lắp đặt ở trạng thái pending, assigned hoặc waiting_confirm.");
@@ -1065,7 +1093,7 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
                         userIds: adminUserIds,
@@ -1256,7 +1284,7 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
                         userIds: adminUserIds,
@@ -1339,7 +1367,7 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
                         userIds: adminUserIds,
@@ -1421,7 +1449,7 @@ export class EquipmentInstallService {
                 }
 
                 // send noti for admin
-                const adminUserIds = await this.getAdminUserIds();
+                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
                         userIds: adminUserIds,

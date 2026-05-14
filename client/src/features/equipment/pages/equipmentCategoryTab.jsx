@@ -50,31 +50,22 @@ export default function EquipmentCategoryTab() {
   const loadData = async () => {
     try {
       const [catRes, eqRes] = await Promise.all([
-        equipmentApi.getAllCategories(),
-        equipmentApi.getAllEquipments()
+        equipmentApi.getAllCategories({ limit: 9999 }),
+        equipmentApi.getAllEquipments({ limit: 9999 })
       ]);
-
-      console.log("catRes: ", catRes);
-      console.log("eqRes: ", eqRes);
 
       const cats = (catRes && Array.isArray(catRes.categories)) ? catRes.categories : [];
       const eqs = (eqRes && Array.isArray(eqRes.data)) ? eqRes.data : [];
 
-      console.log("cats: ", cats);
-      console.log("eqs: ", eqs);
-
       const processedCategories = cats.map(cat => {
-        if (cat.total_quantity !== undefined) return cat;
-
         const items = eqs.filter(e => e.category_id?._id === cat._id || e.category_id === cat._id);
         return {
           ...cat,
-          total_count: items.length,
-          in_stock_count: items.filter(e => e.status === 'in-stock').length,
+          total_count: cat.total_quantity || 0,
+          in_stock_count: cat.storage_quantity || 0,
           in_use_count: items.filter(e => e.status === 'in-use').length,
           broken_count: items.filter(e => ['maintenance', 'disposed', 'lost'].includes(e.status) || e.condition === 'broken').length
         };
-
       });
 
       setCategories(processedCategories);

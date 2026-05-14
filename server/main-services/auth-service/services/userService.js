@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+﻿import bcrypt from "bcrypt";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 
@@ -36,26 +36,26 @@ export class UserService {
 
             let extraData = {};
 
-            if (user.system_role === "employee") {
-                const reply = await this.eventBus.request(
-                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                    { employee_user_id: user._id }
-                );
-    
-                if (reply.found)
-                    extraData = reply.employee;
-
-            } else {
-                const reply = await this.eventBus.request(
+            if (user.system_role === "customer") {
+                const reply = await this.eventBus.safeRequest(
                     CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
                     { customer_user_id: user._id }
                 );
     
                 if (reply.found)
                     extraData = reply.customer;
+
+            } else {
+                const reply = await this.eventBus.safeRequest(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                    { employee_user_id: user._id }
+                );
+    
+                if (reply.found)
+                    extraData = reply.employee;
             }
 
-            //console.log("EXXTRA DATA: ", extraData);
+            console.log("EXXTRA DATA: ", extraData);
             return {
                 ...user,
                 ...extraData

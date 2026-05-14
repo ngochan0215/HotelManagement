@@ -1,5 +1,6 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class EquipmentService {
     constructor({ Equipment, EquipmentCategory, EquipmentLog, eventBus }) {
@@ -41,10 +42,12 @@ export class EquipmentService {
                 throw new Error("Tên danh mục đã tồn tại.");
             }
 
-            const equipmentCategory = await this.EquipmentCategory.create({ 
+            const equipmentCategory = await this.EquipmentCategory.create({
                 warehouse, name, description, unit, price,
                 type: type || "single"
             });
+
+            await cache.delByPattern("equipment:categories:*");
 
             return equipmentCategory;
         } catch (err) {
@@ -55,7 +58,11 @@ export class EquipmentService {
 
     getAllEquipmentCategories = async (query = {}) => {
         try {
-            const { min_price, max_price, min_storage, max_storage, 
+            const cacheKey = makeCacheKey("equipment:categories", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
+            const { min_price, max_price, min_storage, max_storage,
                 page = 1, limit = 10, sort_by = "created_at", order = "desc"
             } = query;
 
@@ -91,8 +98,8 @@ export class EquipmentService {
                 this.EquipmentCategory.countDocuments(filter)
             ]);
 
-            return {
-                total, 
+            const response = {
+                total,
                 categories,
                 pagination: {
                     total,
@@ -103,6 +110,10 @@ export class EquipmentService {
                     has_prev: currentPage > 1
                 }
             };
+
+            await cache.set(cacheKey, response, 300);
+
+            return response;
 
         } catch (err) {
             console.log("Error in getting all equipment categories: ", err.message);
@@ -177,9 +188,11 @@ export class EquipmentService {
 
             const updated = await this.EquipmentCategory.findByIdAndUpdate(categoryId, updateData, { new: true })
                 .select("-__v -updated_at -created_at");
-            
+
+            await cache.delByPattern("equipment:categories:*");
+
             return updated;
-            
+
         } catch (err) {
             console.log("Error in updating equipment category: ", err.message);
             throw err;
@@ -202,6 +215,8 @@ export class EquipmentService {
             }
 
             await this.EquipmentCategory.findByIdAndDelete(categoryId);
+
+            await cache.delByPattern("equipment:categories:*");
 
             return { success: true };
 
@@ -292,7 +307,7 @@ export class EquipmentService {
         let roomMap = {};
 
         if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );

@@ -42,7 +42,8 @@ class Container {
                 USER_EVENTS.UPDATE_USER,
                 USER_EVENTS.CREATE_ACCOUNT,
                 USER_EVENTS.RESET_PASSWORD,
-                USER_EVENTS.GET_MANAGERS
+                USER_EVENTS.GET_MANAGERS,
+                USER_EVENTS.GET_ADMINS,
             ]
         });
 

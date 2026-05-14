@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
@@ -18,7 +18,7 @@ export class IncidentService {
     // helper
 
     getEmployeeByUserId = async (employeeUserId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: employeeUserId }
         );
@@ -30,7 +30,7 @@ export class IncidentService {
     };
  
     getEmployeeById = async (employeeId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS,
             { employee_id: employeeId }
         );
@@ -42,7 +42,7 @@ export class IncidentService {
     };
 
     getUserById = async (userId) => {
-        const replyUser = await this.eventBus.request(
+        const replyUser = await this.eventBus.safeRequest(
             USER_EVENTS.GET_USER_INFO,
             { userId }
         );
@@ -66,7 +66,7 @@ export class IncidentService {
         if (allUserIds.length === 0)
             return isArray ? list : list[0];
 
-        const replyUsers = await this.eventBus.request(
+        const replyUsers = await this.eventBus.safeRequest(
             USER_EVENTS.GET_USERS_INFO,
             { userIds: allUserIds }
         );
@@ -84,7 +84,7 @@ export class IncidentService {
             (async () => {
                 const map = {};
                 if (employeeIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
                     { employee_user_ids: employeeIds }
                 );
@@ -105,7 +105,7 @@ export class IncidentService {
             (async () => {
                 const map = {};
                 if (customerIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     CUSTOMER_EVENTS.GET_INFOS_USERIDS,
                     { customerUserIds: customerIds }
                 );
@@ -165,7 +165,7 @@ export class IncidentService {
         let roomMap = {};
 
         if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
@@ -202,7 +202,7 @@ export class IncidentService {
             }
 
             if (room_id) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     ROOM_EVENTS.CHECK_EXISTS,
                     { room_id }
                 );
@@ -211,7 +211,7 @@ export class IncidentService {
             }
 
             if (equipment_ids && Array.isArray(equipment_ids) && equipment_ids.length > 0) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS,
                     { equipmentIds: equipment_ids }
                 );
@@ -508,6 +508,78 @@ export class IncidentService {
 
         } catch (error) {
             console.log("Error in getting all incidents: ", error.message);
+            throw error;
+        }
+    };
+
+    async getAllIncidentsForTasks(query = {}) {
+        try {
+            const { status, severity, type, caused_by } = query;
+            const filter = {};
+            if (status) filter.status = status;
+            if (severity) filter.severity = severity;
+            if (type) filter.type = type;
+            if (caused_by) filter.caused_by = caused_by;
+
+            const incidents = await this.Incident.find(filter)
+                .sort({ created_at: -1 }).lean();
+
+            // batch rooms
+            const roomIds = [...new Set(incidents.map(i => i.room_id?.toString()).filter(Boolean))];
+            let roomMap = {};
+            if (roomIds.length) {
+                const reply = await this.eventBus.safeRequest(ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: roomIds });
+                if (reply.success) {
+                    for (const room of reply.rooms) {
+                        roomMap[room._id.toString()] = { _id: room._id, room_number: room.room_number };
+                    }
+                }
+            }
+
+            // batch users for reporter_id → need email
+            const reporterIds = [...new Set(incidents.map(i => i.reporter_id?.toString()).filter(Boolean))];
+            let reporterMap = {};
+            if (reporterIds.length) {
+                const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds: reporterIds });
+                if (reply.success) {
+                    for (const user of reply.users) {
+                        reporterMap[user._id.toString()] = { _id: user._id, email: user.email };
+                    }
+                }
+            }
+
+            // batch employees for assignee_info.assignee_id → need full_name, phone_number
+            const assigneeIds = [...new Set(
+                incidents.map(i => i.assignee_info?.assignee_id?.toString()).filter(Boolean)
+            )];
+            let assigneeMap = {};
+            if (assigneeIds.length) {
+                const reply = await this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: assigneeIds });
+                if (reply.success) {
+                    for (const emp of reply.employees) {
+                        assigneeMap[emp._id.toString()] = { _id: emp._id, full_name: emp.full_name, phone_number: emp.phone_number };
+                    }
+                }
+            }
+
+            return incidents.map(incident => {
+                const roomId = incident.room_id?.toString();
+                const reporterId = incident.reporter_id?.toString();
+                const assigneeId = incident.assignee_info?.assignee_id?.toString();
+
+                return {
+                    ...incident,
+                    room_id: roomId ? (roomMap[roomId] || incident.room_id) : null,
+                    reporter_id: reporterId ? (reporterMap[reporterId] || incident.reporter_id) : null,
+                    assignee_info: incident.assignee_info ? {
+                        ...incident.assignee_info,
+                        assignee_id: assigneeId ? (assigneeMap[assigneeId] || incident.assignee_info.assignee_id) : null,
+                    } : null,
+                };
+            });
+
+        } catch (error) {
+            console.log("Error in getAllIncidentsForTasks: ", error.message);
             throw error;
         }
     };

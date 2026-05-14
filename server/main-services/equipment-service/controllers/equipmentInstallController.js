@@ -11,7 +11,7 @@ export class EquipmentInstallController {
             
             return res.status(201).json({ success: true, message: "Tạo phiếu lắp đặt thiết bị thành công.", data: { install } });
     
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -22,7 +22,7 @@ export class EquipmentInstallController {
             
             return res.status(201).json({ success: true, message: "Tạo phiếu tháo dỡ thiết bị thành công.", data: { install } });
     
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -33,7 +33,7 @@ export class EquipmentInstallController {
     
         res.status(200).json({ success: true, counts, installs });
     
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };
@@ -60,7 +60,7 @@ export class EquipmentInstallController {
           count, installs 
         });
 
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };
@@ -71,25 +71,22 @@ export class EquipmentInstallController {
           
           res.status(200).json({ success: true, install });
       
-        } catch (error) {
+        } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
         }
     };
     
     updateEquipmentInstall = async (req, res) => {
         try {
-            const { install_ticket, details } = await this.equipmentInstallService.updateEquipmentInstall(req.params.id, req.body);
+            const { data } = await this.equipmentInstallService.updateEquipmentInstall(req.params.id, req.body);
 
             return res.status(200).json({
               success: true,
               message: "Cập nhật phiếu lắp đặt thiết bị thành công.",
-              data: {
-                install_ticket,
-                equipment_count: details.length,
-              },
+              data,
             });
     
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -103,7 +100,7 @@ export class EquipmentInstallController {
           message: "Đã xóa phiếu lắp đặt thiết bị thành công.",
         });
     
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };
@@ -118,7 +115,7 @@ export class EquipmentInstallController {
           data: { install_id, equipment_count },
         });
     
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };
@@ -133,7 +130,7 @@ export class EquipmentInstallController {
           data
         });
 
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };
@@ -148,7 +145,7 @@ export class EquipmentInstallController {
           data
         });
 
-      } catch (error) {
+      } catch (err) {
           return res.status(err.status || 400).json({ message: err.message });
       }
     };

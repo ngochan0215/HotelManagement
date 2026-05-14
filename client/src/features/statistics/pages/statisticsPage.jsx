@@ -98,8 +98,8 @@ export default function StatisticPage() {
     try {
       const params = { from: dateRange.from, to: dateRange.to };
       let typeMap = {
-        room: 'room-operation',
-        booking: 'booking',
+        room: 'rooms',
+        booking: 'bookings',
         customer: 'customers',
         equipment: 'equipments',
         service: 'services'

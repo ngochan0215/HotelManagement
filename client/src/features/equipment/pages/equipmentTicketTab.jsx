@@ -40,6 +40,10 @@ export default function EquipmentTicketTab() {
         equipmentApi.getAllImportTickets(),
         equipmentApi.getAllInstallTickets()
       ]);
+
+      console.log("install tickets: ", resInstall);
+      console.log("import tickets: ", resImport);
+
       setImports(resImport.tickets || []);
       setInstalls(resInstall.installs || []);
     } catch (error) { console.error(error); } finally { setLoading(false); }
@@ -450,7 +454,7 @@ export default function EquipmentTicketTab() {
                   <tbody className="divide-y divide-gray-100">
                       {installsPagination.data.map((item) => {
                           const isInstall = isInstallType(item);
-                          const roomDisplay = item.room_id ? `P.${item.room_id.room_number}` : "---";
+                          const roomDisplay = item.room_id ? `P.${item.room_info?.room_number}` : "---";
 
                           return (
                           <tr key={item._id} className="hover:bg-gray-50">
@@ -476,7 +480,7 @@ export default function EquipmentTicketTab() {
                               <td className="px-4 py-3">
                                 {item.handled_by ? (
                                   <span className="text-sm font-medium text-gray-900">
-                                    {item.handled_by.full_name || 'N/A'}
+                                    {item.handler_info.full_name || 'N/A'}
                                   </span>
                                 ) : (
                                   <span className="text-sm text-gray-400 italic">Chưa phân công</span>

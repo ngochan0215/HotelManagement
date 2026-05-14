@@ -6,8 +6,8 @@ import { uploadRoomImages } from "../utils/uploadImage.js";
 const router = express.Router();
 const controller = new RoomController();
 
-router.get("/available-by", controller.getAvailableRoomCategories);
 router.get("/", controller.getAllRoomCategories);
+router.get("/available-by", controller.getAvailableRoomCategories);
 router.get("/:id", controller.getRoomCategoryById);
 router.get("/default-equipments/:id", verifyToken, isEmployee, controller.getDefaultEquipmentsByCategory);
 

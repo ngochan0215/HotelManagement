@@ -88,7 +88,7 @@ export default function ImportTicketDetailModal({ ticket, onClose }) {
                       Người tạo phiếu
                     </div>
                     <p className="font-semibold text-gray-900">
-                      {fullTicket.employee_id.full_name || ticket.employee_id?.full_name || 'N/A'}
+                      {fullTicket.employee_info?.full_name || ticket.employee_info?.full_name || 'N/A'}
                     </p>
                   </div>
                 )}
@@ -119,14 +119,6 @@ export default function ImportTicketDetailModal({ ticket, onClose }) {
                   </div>
                 )}
 
-                {fullTicket.confirmed_by && (
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <div className="text-green-600 text-xs mb-1">Người xác nhận</div>
-                    <p className="font-semibold text-green-900">
-                      {fullTicket.confirmed_by.full_name || 'N/A'}
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Danh sách thiết bị nhập */}

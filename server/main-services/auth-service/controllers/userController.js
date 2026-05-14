@@ -94,8 +94,8 @@ export class UserController {
             // console.log("REQ BODY: ", req.body);
             await this.userService.setRole(req.body);
             return res.status(200).json({ message: "Admin reset role for user successfully."});
-        } catch (error) {
-            return res.status(error.status || 400).json({ message: error.message });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
         }
     }
 }

@@ -7,14 +7,39 @@ import EquipmentCategory from "../models/EquipmentCategory.js";
 import EquipmentLog from "../models/EquipmentLog.js";
 import { container } from "../containers/container.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
-import { sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
+import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
 
-const getManagerIds = async () => {
-  const reply = await container.eventBus.request(USER_EVENTS.GET_MANAGERS);
+// helpers
 
-  if (!reply?.success || !Array.isArray(reply.managers)) return [];
+const getManagerAndAdminIds = async () => {
+  const [replyManagers, replyAdmins] = await Promise.all([
+    container.eventBus.safeRequest(USER_EVENTS.GET_MANAGERS),
+    container.eventBus.safeRequest(USER_EVENTS.GET_ADMINS),
+  ]);
 
-  return reply.managers.map((u) => u._id).filter(Boolean);
+  const managerIds = replyManagers?.success && Array.isArray(replyManagers.managers)
+    ? replyManagers.managers.map((u) => u._id).filter(Boolean)
+    : [];
+
+  const adminIds = replyAdmins?.success && Array.isArray(replyAdmins.admins)
+    ? replyAdmins.admins.map((u) => u._id).filter(Boolean)
+    : [];
+
+  return [...new Set([...managerIds, ...adminIds].map(String))];
+};
+
+const getEmployeeUserId = async (employeeId) => {
+  if (!employeeId) return null;
+
+  const reply = await container.eventBus.safeRequest(
+    EMPLOYEE_EVENTS.CHECK_EXISTS,
+    { employee_id: employeeId }
+  );
+
+  return reply?.success && reply.employee?.user_id
+    ? reply.employee.user_id
+    : null;
 };
 
 const startCronJob = ({ name, schedule, handler }) => {
@@ -35,12 +60,13 @@ const notifyImportTickets = async () => {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
 
-  const managerIds = await getManagerIds();
+  const managerAndAdminIds = await getManagerAndAdminIds();
 
+  // expire overdue tickets
   const expiredTickets = await ImportTicket.find({
     status: "waiting_confirm",
     import_date: { $lt: start },
-  }).select("_id");
+  }).select("_id employee_id");
 
   if (expiredTickets.length) {
     await ImportTicket.updateMany(
@@ -48,12 +74,12 @@ const notifyImportTickets = async () => {
       { $set: { status: "expired" } }
     );
 
-    if (managerIds.length) {
+    if (managerAndAdminIds.length) {
       for (const ticket of expiredTickets) {
         await sendNotificationsToUsers({
-          userIds: managerIds,
+          userIds: managerAndAdminIds,
           title: "Phiếu nhập thiết bị quá hạn",
-          content: `Phiếu nhập thiết bị ${ticket._id} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
+          content: `Phiếu nhập thiết bị #${ticket._id.toString().slice(-6)} đã quá ngày nhập kho và bị chuyển sang trạng thái quá hạn.`,
           type: "equipment",
           kind: "ImportTicket",
           refId: ticket._id,
@@ -62,10 +88,11 @@ const notifyImportTickets = async () => {
     }
   }
 
+  // promote today's pending → waiting_confirm
   const dueTickets = await ImportTicket.find({
     status: "pending",
     import_date: { $gte: start, $lte: end },
-  }).select("_id");
+  }).select("_id employee_id");
 
   if (dueTickets.length) {
     await ImportTicket.updateMany(
@@ -73,17 +100,59 @@ const notifyImportTickets = async () => {
       { $set: { status: "waiting_confirm" } }
     );
 
-    if (managerIds.length) {
+    if (managerAndAdminIds.length) {
       for (const ticket of dueTickets) {
         await sendNotificationsToUsers({
-          userIds: managerIds,
+          userIds: managerAndAdminIds,
           title: "Phiếu nhập thiết bị đến ngày",
-          content: `Phiếu nhập thiết bị ${ticket._id} đã đến ngày nhập kho.`,
+          content: `Phiếu nhập thiết bị #${ticket._id.toString().slice(-6)} đã đến ngày nhập kho.`,
           type: "equipment",
           kind: "ImportTicket",
           refId: ticket._id,
         });
       }
+    }
+  }
+};
+
+const remindImportTickets = async () => {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() + 12 * 60 * 60 * 1000);              // +12 h
+  const windowEnd   = new Date(now.getTime() + 12 * 60 * 60 * 1000 + 5 * 60 * 1000); // +12 h 5 min
+
+  const tickets = await ImportTicket.find({
+    status: "pending",
+    import_date: { $gte: windowStart, $lt: windowEnd },
+  }).select("_id employee_id");
+
+  if (!tickets.length) return;
+
+  const managerAndAdminIds = await getManagerAndAdminIds();
+
+  for (const ticket of tickets) {
+    const shortenId = ticket._id.toString().slice(-6);
+
+    if (managerAndAdminIds.length) {
+      await sendNotificationsToUsers({
+        userIds: managerAndAdminIds,
+        title: "Nhắc nhở: Phiếu nhập thiết bị sắp đến hạn",
+        content: `Phiếu nhập thiết bị #${shortenId} sẽ đến ngày nhập kho trong vòng 12 tiếng tới.`,
+        type: "equipment",
+        kind: "ImportTicket",
+        refId: ticket._id,
+      });
+    }
+
+    const employeeUserId = await getEmployeeUserId(ticket.employee_id);
+    if (employeeUserId) {
+      await sendNotification({
+        userId: employeeUserId,
+        title: "Nhắc nhở: Phiếu nhập thiết bị sắp đến hạn",
+        content: `Phiếu nhập thiết bị #${shortenId} mà bạn phụ trách sẽ đến ngày nhập kho trong vòng 12 tiếng tới.`,
+        type: "equipment",
+        kind: "ImportTicket",
+        refId: ticket._id,
+      });
     }
   }
 };
@@ -94,8 +163,10 @@ const notifyInstallTickets = async () => {
   start.setHours(0, 0, 0, 0);
   const end = new Date();
   end.setHours(23, 59, 59, 999);
-  const managerIds = await getManagerIds();
 
+  const managerAndAdminIds = await getManagerAndAdminIds();
+
+  // expire overdue tickets
   const expiredTickets = await InstallTicket.find({
     status: { $in: ["waiting_confirm", "pending", "assigned"] },
     install_date: { $lt: start },
@@ -107,26 +178,16 @@ const notifyInstallTickets = async () => {
       { $set: { status: "expired" } }
     );
 
-    const details = await InstallDetail.find({ ticket_id: ticket._id }).select(
-      "equipment_id"
-    );
+    const details = await InstallDetail.find({ ticket_id: ticket._id }).select("equipment_id");
     const equipmentIds = details.map((d) => d.equipment_id);
 
     if (!equipmentIds.length) continue;
 
-    const equipments = await Equipment.find({ _id: { $in: equipmentIds } }).select(
-      "category_id"
-    );
+    const equipments = await Equipment.find({ _id: { $in: equipmentIds } }).select("category_id");
 
     await Equipment.updateMany(
       { _id: { $in: equipmentIds } },
-      {
-        $set: {
-          status: "in-stock",
-          condition: "new",
-          room_id: null,
-        },
-      }
+      { $set: { status: "in-stock", condition: "new", room_id: null } }
     );
 
     if (ticket.type === "install") {
@@ -136,12 +197,8 @@ const notifyInstallTickets = async () => {
         if (!key) continue;
         countByCategory.set(key, (countByCategory.get(key) || 0) + 1);
       }
-
       for (const [categoryId, count] of countByCategory.entries()) {
-        await EquipmentCategory.updateOne(
-          { _id: categoryId },
-          { $inc: { storage_quantity: count } }
-        );
+        await EquipmentCategory.updateOne({ _id: categoryId }, { $inc: { storage_quantity: count } });
       }
     }
 
@@ -165,12 +222,12 @@ const notifyInstallTickets = async () => {
     await InstallDetail.deleteMany({ ticket_id: ticket._id });
   }
 
-  if (managerIds.length && expiredTickets.length) {
+  if (managerAndAdminIds.length && expiredTickets.length) {
     for (const ticket of expiredTickets) {
       await sendNotificationsToUsers({
-        userIds: managerIds,
+        userIds: managerAndAdminIds,
         title: "Phiếu lắp đặt thiết bị quá hạn",
-        content: `Phiếu lắp đặt thiết bị ${ticket._id} đã quá hạn và bị hủy.`,
+        content: `Phiếu lắp đặt thiết bị #${ticket._id.toString().slice(-6)} đã quá hạn và bị hủy.`,
         type: "equipment",
         kind: "InstallTicket",
         refId: ticket._id,
@@ -178,10 +235,11 @@ const notifyInstallTickets = async () => {
     }
   }
 
+  // promote today's pending → waiting_confirm
   const dueTickets = await InstallTicket.find({
     status: "pending",
     install_date: { $gte: start, $lte: end },
-  }).select("_id");
+  }).select("_id employee_id");
 
   if (dueTickets.length) {
     await InstallTicket.updateMany(
@@ -189,12 +247,12 @@ const notifyInstallTickets = async () => {
       { $set: { status: "waiting_confirm" } }
     );
 
-    if (managerIds.length) {
+    if (managerAndAdminIds.length) {
       for (const ticket of dueTickets) {
         await sendNotificationsToUsers({
-          userIds: managerIds,
+          userIds: managerAndAdminIds,
           title: "Phiếu lắp đặt thiết bị đến ngày",
-          content: `Phiếu lắp đặt thiết bị ${ticket._id} đã đến ngày lắp đặt.`,
+          content: `Phiếu lắp đặt thiết bị #${ticket._id.toString().slice(-6)} đã đến ngày lắp đặt.`,
           type: "equipment",
           kind: "InstallTicket",
           refId: ticket._id,
@@ -204,16 +262,55 @@ const notifyInstallTickets = async () => {
   }
 };
 
-export const startImportTicketJob = () =>
-  startCronJob({
-    name: "import tickets",
-    schedule: "*/5 * * * *",
-    handler: notifyImportTickets,
-  });
+const remindInstallTickets = async () => {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  const windowEnd   = new Date(now.getTime() + 12 * 60 * 60 * 1000 + 5 * 60 * 1000);
 
-export const startInstallTicketJob = () =>
-  startCronJob({
-    name: "install tickets",
-    schedule: "*/5 * * * *",
-    handler: notifyInstallTickets,
-  });
+  const tickets = await InstallTicket.find({
+    status: { $in: ["pending", "assigned"] },
+    install_date: { $gte: windowStart, $lt: windowEnd },
+  }).select("_id employee_id");
+
+  if (!tickets.length) return;
+
+  const managerAndAdminIds = await getManagerAndAdminIds();
+
+  for (const ticket of tickets) {
+    const shortenId = ticket._id.toString().slice(-6);
+
+    if (managerAndAdminIds.length) {
+      await sendNotificationsToUsers({
+        userIds: managerAndAdminIds,
+        title: "Nhắc nhở: Phiếu lắp đặt thiết bị sắp đến hạn",
+        content: `Phiếu lắp đặt thiết bị #${shortenId} sẽ đến ngày lắp đặt trong vòng 12 tiếng tới.`,
+        type: "equipment",
+        kind: "InstallTicket",
+        refId: ticket._id,
+      });
+    }
+
+    // notify the assigned technician individually
+    const employeeUserId = await getEmployeeUserId(ticket.employee_id);
+    if (employeeUserId) {
+      await sendNotification({
+        userId: employeeUserId,
+        title: "Nhắc nhở: Phiếu lắp đặt sắp đến hạn",
+        content: `Phiếu lắp đặt thiết bị #${shortenId} được giao cho bạn sẽ đến ngày thực hiện trong vòng 12 tiếng tới.`,
+        type: "equipment",
+        kind: "InstallTicket",
+        refId: ticket._id,
+      });
+    }
+  }
+};
+
+export const startImportTicketJob = () => {
+  startCronJob({ name: "import tickets status",      schedule: "*/5 * * * *", handler: notifyImportTickets });
+  startCronJob({ name: "import tickets 12h reminder", schedule: "*/5 * * * *", handler: remindImportTickets });
+};
+
+export const startInstallTicketJob = () => {
+  startCronJob({ name: "install tickets status",      schedule: "*/5 * * * *", handler: notifyInstallTickets });
+  startCronJob({ name: "install tickets 12h reminder", schedule: "*/5 * * * *", handler: remindInstallTickets });
+};

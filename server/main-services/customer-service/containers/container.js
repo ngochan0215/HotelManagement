@@ -26,10 +26,11 @@ class Container {
             queueName: "customer-service-events",
             bindEvents: [
                 CUSTOMER_EVENTS.REGISTERED,
-                CUSTOMER_EVENTS.CHECK_EXISTS,  
+                CUSTOMER_EVENTS.CHECK_EXISTS,
                 CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
                 CUSTOMER_EVENTS.GET_INFOS_USERIDS,
-                CUSTOMER_EVENTS.GET_INFOS_IDS
+                CUSTOMER_EVENTS.GET_INFOS_IDS,
+                CUSTOMER_EVENTS.UPDATE_POINTS,
             ]
         });
 

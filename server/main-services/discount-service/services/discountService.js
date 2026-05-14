@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import { CUSTOMER_EVENTS } from '../../../shared/events/customerEvents.js';
 
 export class DiscountService {
@@ -279,7 +279,7 @@ export class DiscountService {
     //     }
         
     //     if (conditions.customer_tiers && conditions.customer_tiers.length > 0) {
-    //         const reply = await this.eventBus.request(
+    //         const reply = await this.eventBus.safeRequest(
     //             CUSTOMER_EVENTS.CHECK_EXISTS,
     //             { customerId }
     //         );

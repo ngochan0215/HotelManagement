@@ -1,7 +1,8 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class RoomService {
     constructor({ Room, RoomCategory, RoomLog, DefaultEquipment, eventBus }) {
@@ -68,7 +69,9 @@ export class RoomService {
             if (items.length) {
                 await this.DefaultEquipment.insertMany(items);
             }
-            
+
+            await cache.delByPattern("room:categories:*");
+
             return { roomCategory, items };
         } catch (err) {
             console.log("Error in createRoomCategoryService:", err);
@@ -122,7 +125,9 @@ export class RoomService {
                 category.images = files.map(f => f.path);
                 await category.save();
             }
-            
+
+            await cache.delByPattern("room:categories:*");
+
             return category;
         } catch (err) {
             console.log("Error in updateRoomCategoryService:", err);
@@ -151,7 +156,9 @@ export class RoomService {
             
             await this.RoomCategory.findByIdAndDelete(id);
             await this.DefaultEquipment.deleteMany({ category_id: id });
-            
+
+            await cache.delByPattern("room:categories:*");
+
             return { success: true };
         } catch (err) {
             console.log("Error in deleteRoomCategoryService:", err);
@@ -161,6 +168,10 @@ export class RoomService {
     
     getAllRoomCategoriesService = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("room:categories", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { page = 1, limit = 10, keyword, sort_by = "created_at", order = "dsc",
                 min_price, max_price, max_adults, max_children } = query;
 
@@ -227,7 +238,7 @@ export class RoomService {
                 )
             ];
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                 { categoryIds: equipmentCategoryIds }
             );
@@ -267,7 +278,7 @@ export class RoomService {
                 default_equipments: equipmentMap[cat._id.toString()] || []
             }));
 
-            return {
+            const response = {
                 data: result,
                 pagination: {
                     total,
@@ -278,6 +289,10 @@ export class RoomService {
                     has_prev: currentPage > 1
                 }
             };
+
+            await cache.set(cacheKey, response, 300);
+
+            return response;
 
         } catch (err) {
             console.log("Error in getAllRoomCategoriesService:", err);
@@ -305,7 +320,7 @@ export class RoomService {
 
             let equipmentCategoryMap = {};
             if (equipmentCategoryIds.length > 0) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
@@ -362,7 +377,7 @@ export class RoomService {
 
             let equipmentCategoryMap = {};
             if (equipmentCategoryIds.length > 0) {
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
@@ -395,11 +410,15 @@ export class RoomService {
     // return list of available room categories with available rooms based on search criteria
     getAvailableRoomCategoriesService = async (query = {}) => {
         const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
-    
+
         if (!checkin || !checkout) {
             throw new Error("Phải điền thời gian nhận và trả phòng.");
         }
-    
+
+        const availCacheKey = makeCacheKey("room:available", query);
+        const cachedAvail = await cache.get(availCacheKey);
+        if (cachedAvail) return cachedAvail;
+
         const start = new Date(checkin);
         const end = new Date(checkout);
     
@@ -416,7 +435,7 @@ export class RoomService {
         }
     
         // get active bookings 
-        const replyActiveBookings = await this.eventBus.request(
+        const replyActiveBookings = await this.eventBus.safeRequest(
             BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
             {}
         );
@@ -426,7 +445,7 @@ export class RoomService {
         const activeBookingIds = activeBookings.map((b) => b._id);
     
         // get busy rooms from both bookings and room logs
-        const replyDetails = await this.eventBus.request(
+        const replyDetails = await this.eventBus.safeRequest(
             BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
             { bookingIds: activeBookingIds }
         );
@@ -529,7 +548,9 @@ export class RoomService {
             }))
             .filter((item) => item.availableRooms > 0)
             .sort((a, b) => a.price - b.price);
-    
+
+        await cache.set(availCacheKey, result, 60);
+
         return result;
     };
 
@@ -740,7 +761,7 @@ export class RoomService {
             if (!mongoose.Types.ObjectId.isValid(roomId))
                 throw new Error("ID phòng không hợp lệ!");
         
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                 { employee_user_id: userId }
             );
@@ -838,6 +859,8 @@ export class RoomService {
         
             await room.save();
 
+            await cache.delByPattern("room:available:*");
+
             // Populate roomStatusLog (virtual field tham chiếu RoomLog) để frontend có thể hiển thị
             const nowForPopulate = new Date();
             const updatedRoom = await this.Room.findById(roomId)
@@ -900,7 +923,6 @@ export class RoomService {
     completeCleaning = async (roomId, userId) => {
         try {
             const now = new Date();
-
             const room = await this.Room.findById(roomId);
             if (!room) {
                 throw new Error("Không tìm thấy phòng.");
@@ -1216,6 +1238,9 @@ export class RoomService {
             const result = isArray
                 ? await this.RoomLog.insertMany(data, options)
                 : await this.RoomLog.create([data], options);
+
+            await cache.delByPattern("room:available:*");
+
             return result;
         } catch (err) {
             console.log("Error in insertRoomLog:", err);

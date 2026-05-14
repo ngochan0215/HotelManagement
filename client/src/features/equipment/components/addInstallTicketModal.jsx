@@ -88,8 +88,8 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                 // Chỉ lấy thiết bị khả dụng: in-stock, condition=new/good, room_id=null
                 // Lưu ý: Backend sẽ filter thêm, nhưng FE cũng nên filter để hiển thị chính xác
                 res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
-                const eqs = (res.equipments || []).filter(eq => 
-                    (eq.condition === 'new' || eq.condition === 'good') && 
+                const eqs = (res.data || []).filter(eq =>
+                    (eq.condition === 'new' || eq.condition === 'good') &&
                     !eq.room_id // room_id phải null
                 );
 
@@ -124,7 +124,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                     status: 'in-use'
                 });
 
-                const eqs = res.equipments || [];
+                const eqs = res.data || [];
 
                 // Fetch danh sách phiếu tháo dỡ cùng thời điểm để loại trừ thiết bị đã có trong đó
                 let busyEquipmentIds = new Set();

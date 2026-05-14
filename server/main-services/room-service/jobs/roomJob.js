@@ -1,4 +1,4 @@
-import cron from "node-cron";
+﻿import cron from "node-cron";
 import Room from "../models/Room.js";
 import RoomLog from "../models/RoomLog.js";
 import { container } from "../containers/container.js";
@@ -56,7 +56,7 @@ const fixRoomLogsFromCancelledBookings = async () => {
   if (!activeNonAvailableLogs.length) return;
 
   const bookingIds = [...new Set(activeNonAvailableLogs.map((l) => l.booking_id.toString()))];
-  const reply = await container.eventBus.request(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds });
+  const reply = await container.eventBus.safeRequest(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds });
   const bookings = reply?.bookings || [];
   const staleStatus = new Set(["cancelled", "expired", "completed"]);
 

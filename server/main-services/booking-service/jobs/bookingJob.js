@@ -1,4 +1,4 @@
-import cron from "node-cron";
+﻿import cron from "node-cron";
 import Booking from "../models/Booking.js";
 import BookingDetail from "../models/BookingDetail.js";
 import BookingStatusLog from "../models/BookingStatusLog.js";
@@ -24,19 +24,31 @@ const startCronJob = ({ name, schedule, handler }) => {
 // helper 
 
 const getManagerIds = async () => {
-  const reply = await container.eventBus.request(USER_EVENTS.GET_ADMINS, { system_role: "manager" });
-  if (!reply?.success || !Array.isArray(reply.admins)) return [];
-  return reply.admins.map((u) => u._id).filter(Boolean);
+  const reply = await container.eventBus.safeRequest(
+    USER_EVENTS.GET_MANAGERS, 
+    { system_role: "manager" }
+  );
+
+  if (!reply?.success || !Array.isArray(reply.managers)) return [];
+  return reply.managers.map((u) => u._id).filter(Boolean);
 };
 
 const getReceptionistIds = async () => {
-  const reply = await container.eventBus.request(EMPLOYEE_EVENTS.GET_RECEPTIONISTS, {});
+  const reply = await container.eventBus.safeRequest(
+    EMPLOYEE_EVENTS.GET_RECEPTIONISTS, 
+    {}
+  );
+
   const employees = reply?.receptionists?.employees || [];
   return employees.map((e) => e.user_id).filter(Boolean);
 };
 
 const getCustomerById = async (customerId) => {
-  const reply = await container.eventBus.request(CUSTOMER_EVENTS.CHECK_EXISTS, { customerId });
+  const reply = await container.eventBus.safeRequest(
+    CUSTOMER_EVENTS.CHECK_EXISTS, 
+    { customerId }
+  );
+  
   if (!reply?.success) return null;
   return reply.customer || null;
 };
@@ -46,16 +58,19 @@ const freeRoomsForBooking = async (booking, details, reasonNote) => {
   if (!roomIds.length) return;
 
   const now = new Date();
-  await container.eventBus.request(ROOM_EVENTS.UPDATE_ROOM_INFO, {
-    filter: { _id: { $in: roomIds } },
-    updateData: {
-      room_status: "available",
-      start_time: now,
-      end_time: now,
-    },
-  });
+  await container.eventBus.safeRequest(
+    ROOM_EVENTS.UPDATE_ROOM_INFO, 
+    {
+      filter: { _id: { $in: roomIds } },
+      updateData: {
+        room_status: "available",
+        start_time: now,
+        end_time: now,
+      },
+    }
+  );
 
-  await container.eventBus.request(ROOM_EVENTS.UPDATE_ROOM_LOG, {
+  await container.eventBus.safeRequest(ROOM_EVENTS.UPDATE_ROOM_LOG, {
     filter: {
       room_id: { $in: roomIds },
       status: { $in: ["reserved", "booked"] },
@@ -74,7 +89,10 @@ const freeRoomsForBooking = async (booking, details, reasonNote) => {
     handled_by: null,
   }));
 
-  await container.eventBus.request(ROOM_EVENTS.INSERT_ROOM_LOG, { data: availableLogs });
+  await container.eventBus.safeRequest(
+    ROOM_EVENTS.INSERT_ROOM_LOG, 
+    { data: availableLogs }
+  );
 };
 
 const cancelBookingBySystem = async (booking, status, note) => {
@@ -87,13 +105,20 @@ const cancelBookingBySystem = async (booking, status, note) => {
 
   await BookingDetail.updateMany(
     { booking_id: booking._id },
-    { $set: { status: "cancelled", cancelled_at: now, cancellation_reason: "no_show" } }
+    { $set: 
+      { 
+        status: "cancelled", 
+        cancelled_at: now, 
+        cancellation_reason: "no_show" 
+      } 
+    }
   );
 
   await BookingStatusLog.findOneAndUpdate(
     { booking_id: booking._id, end_time: null },
     { $set: { end_time: now } }
   );
+
   await BookingStatusLog.create({
     booking_id: booking._id,
     status,
@@ -329,7 +354,6 @@ const notifyCheckinTimeReminder = async () => {
     }
   }
 };
-
 
 export const startCancelPendingBookingJob = () =>
     startCronJob({

@@ -35,9 +35,7 @@ export default function NotificationDropdown() {
 
   useEffect(() => {
     if (!user) return;
-    const SOCKET_URL =
-      import.meta.env.VITE_API_BASE_URL?.replace("/api/v1", "") ||
-      "http://localhost:3000";
+    const SOCKET_URL = "http://localhost:3007";
 
     const token = localStorage.getItem("token");
 

@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import * as helpers from "./paymentHelpers.js";
 
@@ -17,7 +17,10 @@ export class ReceiptService {
     
     findEmployeeById = (employeeId) => helpers.findEmployeeById(this.eventBus, employeeId);
     
-    findAdminsByIds = () => helpers.findAdminsByIds(this.eventBus);
+    findAdminsByIds = async () => {
+        const { managerUserIds } = await helpers.findManagersByIds(this.eventBus);
+        return managerUserIds || [];
+    };
     
     findPendingCompensationTickets = (bookingId) => helpers.findPendingCompensationTickets(this.eventBus, bookingId);
     
@@ -28,6 +31,34 @@ export class ReceiptService {
     enrichReceipts = (receipts) => helpers.enrichReceipts(this.eventBus, receipts);
 
     // main business logic
+
+    createReceiptFromBooking = async (data) => {
+        const {
+            booking_id, employee_id, discount_id, discount_snapshot,
+            base_room_fee, total_fee, deposit_amount, final_amount,
+            amount_due, payment, status, note
+        } = data;
+
+        const existing = await this.Receipt.findOne({ booking_id });
+        if (existing) return existing;
+
+        const receipt = await this.Receipt.create({
+            booking_id,
+            employee_id,
+            discount_id: discount_id || null,
+            discount_snapshot: discount_snapshot || null,
+            base_room_fee,
+            total_fee,
+            deposit_amount,
+            final_amount,
+            amount_due,
+            payment,
+            status: status || "pending",
+            note: note || "",
+        });
+
+        return receipt;
+    };
 
     updateReceiptAfterCheckout = async (booking_id) => {
         try {
@@ -179,7 +210,7 @@ export class ReceiptService {
             const depositAmount = booking.deposit || 0;
         
             // calculate original room fee
-            const replyDetails = await this.eventBus.request(
+            const replyDetails = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_DETAILS_BOOKING_ID,
                 { bookingId: booking_id }
             );
@@ -303,18 +334,18 @@ export class ReceiptService {
             if (!allowedPayment.includes(payment))
                 throw new Error("Phương thức thanh toán không hợp lệ.");
         
-            const receipt = await this.Receipt.findById(receiptId).lean();
+            const receipt = await this.Receipt.findById(receiptId);
             if (!receipt)
                 throw new Error("Không tìm thấy hóa đơn.");
-        
+
             if (receipt.status === "paid") {
                 throw new Error("Hóa đơn đã thanh toán không thể thay đổi trạng thái.");
             }
-        
+
             if (receipt.status === "cancelled") {
                 throw new Error("Hóa đơn đã hủy không thể cập nhật được nữa.");
             }
-        
+
             const booking = await this.findBookingById(receipt.booking_id);
             const receiptEmployee = await this.findEmployeeById(receipt.employee_id);
             const adminUserIds = await this.findAdminsByIds();

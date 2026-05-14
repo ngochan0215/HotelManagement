@@ -1,4 +1,4 @@
-import cron from "node-cron";
+﻿import cron from "node-cron";
 import Receipt from "../models/Receipt.js";
 import { container } from "../containers/container.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
@@ -25,7 +25,7 @@ const syncCancelledReceiptsFromBookings = async () => {
   const bookingIds = [...new Set(receipts.map((r) => r.booking_id?.toString()).filter(Boolean))];
   if (!bookingIds.length) return;
 
-  const reply = await container.eventBus.request(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds });
+  const reply = await container.eventBus.safeRequest(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds });
   const bookings = reply?.bookings || [];
   const bookingStatusById = new Map(bookings.map((b) => [b._id.toString(), b.status]));
 

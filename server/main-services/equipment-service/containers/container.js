@@ -50,7 +50,12 @@ class Container {
             eventBus: this.eventBus
         });
 
-        this.equipmentEventHandler = new EquipmentEventHandler(this.equipmentService, this.eventBus);
+        this.equipmentEventHandler = new EquipmentEventHandler(
+            this.equipmentService,
+            this.equipmentInstallService,
+            this.equipmentImportService,
+            this.eventBus
+        );
     }
 
     async init() {
@@ -63,7 +68,9 @@ class Container {
                 EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                 EQUIPMENT_EVENTS.UPDATE_LOG,
                 EQUIPMENT_EVENTS.CREATE_LOG,
-                EQUIPMENT_EVENTS.UPDATE_INTERNAL
+                EQUIPMENT_EVENTS.UPDATE_INTERNAL,
+                EQUIPMENT_EVENTS.GET_ALL_INSTALL_TICKETS,
+                EQUIPMENT_EVENTS.GET_ALL_IMPORT_TICKETS,
             ]
         });
 

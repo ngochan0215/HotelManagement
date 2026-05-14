@@ -47,9 +47,12 @@ const receiptSchema = new mongoose.Schema(
 
         // Snapshot tiền
         base_room_fee: { type: Number, required: true },   // từ booking
-        total_fee: { type: Number, required: true },       // từ booking (đã discount)
+        
+        discount_amount: { type: Number, default: 0 },
         service_fee: { type: Number, default: 0 },
         compensate_fee: { type: Number, default: 0 },
+
+        total_fee: { type: Number, required: true },       // từ booking (đã discount)
         deposit_amount: { type: Number, required: true }, // từ booking (đã discount)
 
         final_amount: { type: Number, required: true },    // tổng trước cọc

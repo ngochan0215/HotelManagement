@@ -17,7 +17,7 @@ export class TransactionController {
                 data: paymentLinkData,
             });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -42,12 +42,12 @@ export class TransactionController {
                 };
             }
             
-            res.status(200).json({ 
+            return res.status(200).json({ 
                 success: true,
                 data: cleanedData 
             });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     }
@@ -58,9 +58,9 @@ export class TransactionController {
             const payoutData = req.body;
 
             await this.transactionService.payOut(payoutData, userId);
-            res.status(200).json({ message: 'Payout initiated successfully' });
+            return res.status(200).json({ message: 'Payout initiated successfully' });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -77,12 +77,12 @@ export class TransactionController {
                 });
             }
             
-            res.status(200).json({ 
+            return res.status(200).json({ 
                 success: true,
                 data: transactionDetail 
             });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     }
@@ -92,13 +92,13 @@ export class TransactionController {
             const { bookingId } = req.params;
             const result = await this.transactionService.paymentSucceeded(bookingId);
             
-            res.status(200).json({ 
+            return res.status(200).json({ 
                 success: true,
                 message: 'Cập nhật giao dịch thành công',
                 data: result
             });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     }
@@ -108,13 +108,13 @@ export class TransactionController {
             const { bookingId } = req.params;
             const result = await this.transactionService.paymentFailed(bookingId);
             
-            res.status(200).json({ 
+            return res.status(200).json({ 
                 success: true,
                 message: 'Cập nhật giao dịch thất bại',
                 data: result
             });
         }
-        catch (error) {
+        catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     }

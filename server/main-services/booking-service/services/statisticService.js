@@ -1,19 +1,21 @@
-import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
+﻿import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from "../../../shared/config/pdf.js";
-import { formatCurrency, formatDate, addFooter, addHeader, addTable } 
+import { formatCurrency, formatDate, addFooter, addHeader, addTable }
     from "../../../shared/config/pdf.js";
-import { safeForEach, parseRange, getWeekRange, getMonthRange, getRange } 
+import { safeForEach, parseRange, getWeekRange, getMonthRange, getRange }
   from "../../../shared/config/excel.js";
+import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
 export class BookingStatisticService {
-    constructor({ Booking, BookingDetail, BookingStatusLog, BookingCancellation }) {
+    constructor({ Booking, BookingDetail, BookingStatusLog, BookingCancellation, eventBus }) {
         this.Booking = Booking;
         this.BookingDetail = BookingDetail;
         this.BookingStatusLog = BookingStatusLog;
         this.BookingCancellation = BookingCancellation;
+        this.eventBus = eventBus;
     }
 
     getCancellationReasonStats = async (query = {}) => {
@@ -310,10 +312,21 @@ export class BookingStatisticService {
     
       const bookingDetails = await this.BookingDetail.find({
         booking_id: { $in: bookingIds }
-      })
-        .populate("room_id", "room_number")
-        .lean();
-    
+      }).lean();
+
+      const uniqueRoomIds = [...new Set(bookingDetails.map(d => d.room_id?.toString()).filter(Boolean))];
+      let roomNumberMap = {};
+      if (uniqueRoomIds.length && this.eventBus) {
+        try {
+          const reply = await this.eventBus.safeRequest(ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: uniqueRoomIds });
+          if (reply.success) {
+            for (const room of reply.rooms) {
+              roomNumberMap[room._id.toString()] = room.room_number;
+            }
+          }
+        } catch (_) {}
+      }
+
       const statusLogs = await this.BookingStatusLog.aggregate([
         { $match: { booking_id: { $in: bookingIds } } },
         { $sort: { start_time: -1 } },
@@ -382,7 +395,7 @@ export class BookingStatisticService {
         if (!booking) return;
     
         const status = statusMap[d.booking_id.toString()] || "pending";
-        const roomKey = d.room_id?.room_number || "Unknown";
+        const roomKey = roomNumberMap[d.room_id?.toString()] || "Unknown";
     
         if (!byRoom[roomKey]) {
           byRoom[roomKey] = {

@@ -1,11 +1,11 @@
-import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
+﻿import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { INCIDENT_EVENTS } from "../../../shared/events/incidentEvents.js";
 
 export async function findCustomerById(eventBus, customerId) {
-    const replyCustomer = await eventBus.request(
+    const replyCustomer = await eventBus.safeRequest(
         CUSTOMER_EVENTS.CHECK_EXISTS,
         { customerId }
     );
@@ -17,7 +17,7 @@ export async function findCustomerById(eventBus, customerId) {
 }
 
 export async function findEmployeeByUserId(eventBus, employeeUserId) {
-    const replyEmployee = await eventBus.request(
+    const replyEmployee = await eventBus.safeRequest(
         EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
         { employee_user_id: employeeUserId }
     );
@@ -28,7 +28,7 @@ export async function findEmployeeByUserId(eventBus, employeeUserId) {
 }
 
 export async function findEmployeeById(eventBus, employeeId) {
-    const replyEmployee = await eventBus.request(
+    const replyEmployee = await eventBus.safeRequest(
         EMPLOYEE_EVENTS.CHECK_EXISTS,
         { employee_id: employeeId }
     );
@@ -39,12 +39,12 @@ export async function findEmployeeById(eventBus, employeeId) {
 }
 
 export async function findManagersByIds(eventBus) {
-    const reply = await eventBus.request(
+    const reply = await eventBus.safeRequest(
         USER_EVENTS.GET_MANAGERS
     );
 
     let managerUsers, managerUserIds;
-    if (replyAdmin.success) {
+    if (reply.success) {
         managerUsers = reply.managers;
         managerUserIds = managerUsers.map(u => u._id);
     }
@@ -53,7 +53,7 @@ export async function findManagersByIds(eventBus) {
 }
 
 export async function findPendingCompensationTickets(eventBus, bookingId) {
-    const replyTickets = await eventBus.request(
+    const replyTickets = await eventBus.safeRequest(
         INCIDENT_EVENTS.FIND_PENDING_COMPENSATION,
         { bookingId }
     );
@@ -65,7 +65,7 @@ export async function findPendingCompensationTickets(eventBus, bookingId) {
 }
 
 export async function findBookingById(eventBus, bookingId) {
-    const reply = await eventBus.request(
+    const reply = await eventBus.safeRequest(
         BOOKING_EVENTS.CHECK_EXISTS_ID,
         { bookingId }
     );
@@ -90,7 +90,7 @@ export async function populateBookingPeople(eventBus, bookings) {
         (async () => {
             const map = {};
             if (employeeIds.length === 0) return map;
-            const reply = await eventBus.request(
+            const reply = await eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_INFO,
                 { employee_ids: employeeIds }
             );
@@ -109,7 +109,7 @@ export async function populateBookingPeople(eventBus, bookings) {
         (async () => {
             const map = {};
             if (customerIds.length === 0) return map;
-            const reply = await eventBus.request(
+            const reply = await eventBus.safeRequest(
                 CUSTOMER_EVENTS.GET_INFOS_IDS,
                 { customerIds: customerIds }
             );
@@ -142,7 +142,7 @@ export async function enrichReceipts(eventBus, receipts) {
     const bookingIds = [...new Set(plain.map(r => r.booking_id?.toString()).filter(Boolean))];
     let bookings = [];
     if (bookingIds.length) {
-        const reply = await eventBus.request(
+        const reply = await eventBus.safeRequest(
             BOOKING_EVENTS.GET_BOOKINGS_BY_IDS,
             { bookingIds }
         );
@@ -158,7 +158,7 @@ export async function enrichReceipts(eventBus, receipts) {
     const employeeIds = [...new Set(plain.map(r => r.employee_id?.toString()).filter(Boolean))];
     let employees = [];
     if (employeeIds.length) {
-        const replyEmp = await eventBus.request(
+        const replyEmp = await eventBus.safeRequest(
             EMPLOYEE_EVENTS.GET_INFO,
             { employee_ids: employeeIds }
         );
@@ -174,7 +174,7 @@ export async function enrichReceipts(eventBus, receipts) {
     )];
     let users = [];
     if (userIds.length) {
-        const replyUsers = await eventBus.request(
+        const replyUsers = await eventBus.safeRequest(
             USER_EVENTS.GET_USERS_INFO,
             { userIds }
         );
@@ -190,7 +190,7 @@ export async function enrichReceipts(eventBus, receipts) {
     )];
     const ticketEntries = await Promise.all(
         ticketIds.map(async (tid) => {
-            const rep = await eventBus.request(
+            const rep = await eventBus.safeRequest(
                 INCIDENT_EVENTS.GET_COMPENSATION_BY_ID,
                 { ticketId: tid }
             );

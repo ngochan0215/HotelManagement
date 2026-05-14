@@ -36,6 +36,7 @@ export default function RoomCategoryTab() {
   const loadCategories = async () => {
     try {
       const data = await roomApi.getAllCategories();
+      console.log("room categories: ", data);
       setCategories(data);
     } catch (error) {
       console.error("Lỗi tải loại phòng:", error);
@@ -143,7 +144,7 @@ export default function RoomCategoryTab() {
 
     setSelectedEquipments(
       item.default_equipments?.map(eq => ({
-        equipment_category_id: eq.equipment_category_id._id,
+        equipment_category_id: eq.equipment_category_id?.toString?.() || eq.equipment_category_id,
         quantity: eq.quantity
       })) || []
     );
@@ -320,7 +321,7 @@ export default function RoomCategoryTab() {
               <ul className="space-y-2">
                 {selectedCategory.default_equipments.map(eq => (
                   <li key={eq._id} className="flex justify-between items-center bg-gray-50 p-3 rounded border border-gray-100">
-                    <span className="font-medium text-gray-700 text-sm">{eq.equipment_category_id?.name}</span>
+                    <span className="font-medium text-gray-700 text-sm">{eq.equipment_category?.name || eq.equipment_category_id?.name}</span>
                     <span className="text-indigo-600 font-bold text-sm">× {eq.quantity}</span>
                   </li>
                 ))}

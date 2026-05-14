@@ -59,6 +59,7 @@ export default function RoomListTab() {
   const [technicians, setTechnicians] = useState([]);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
   const [loadingTechnicians, setLoadingTechnicians] = useState(false);
+  
   // Phòng đã có phiếu lắp đặt chưa hủy (pending/assigned/waiting_confirm/completed) → ẩn nút "Tạo phiếu lắp đặt"
   const [roomIdsWithActiveInstallTicket, setRoomIdsWithActiveInstallTicket] = useState(new Set());
   
@@ -127,7 +128,8 @@ export default function RoomListTab() {
     setLoadingCleaningTasks(true);
     try {
       const cleaningRooms = rooms.filter(r => {
-        const status = r.roomStatusLog?.status || r.room_status;
+        const log = Array.isArray(r.roomStatusLog) ? r.roomStatusLog[0] : r.roomStatusLog;
+        const status = log?.status || r.room_status;
         return status === "cleaning";
       });
 
@@ -158,6 +160,9 @@ export default function RoomListTab() {
         roomApi.getAllRooms(),
         roomApi.getAllCategories()
       ]);
+
+      console.log("room: ", roomsRes);
+      // console.log("categories: ", catsRes);
 
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
         //console.log("ROOMS: ", roomsRes.rooms);
@@ -191,8 +196,10 @@ export default function RoomListTab() {
     
     if (sortBy === "status") {
       sorted.sort((a, b) => {
-        const statusA = a.roomStatusLog?.status || a.room_status || "new";
-        const statusB = b.roomStatusLog?.status || b.room_status || "new";
+        const logA = Array.isArray(a.roomStatusLog) ? a.roomStatusLog[0] : a.roomStatusLog;
+        const logB = Array.isArray(b.roomStatusLog) ? b.roomStatusLog[0] : b.roomStatusLog;
+        const statusA = logA?.status || a.room_status || "new";
+        const statusB = logB?.status || b.room_status || "new";
         const labelA = STATUS_MAP[statusA]?.label || statusA;
         const labelB = STATUS_MAP[statusB]?.label || statusB;
         
@@ -323,7 +330,7 @@ export default function RoomListTab() {
 
       if (res.success && res.default_equipments && res.default_equipments.length > 0) {
         // Đếm tồn kho theo danh mục: chỉ thiết bị in-stock, condition new/good, chưa gắn phòng
-        const eqs = (stockRes.equipments || []).filter(
+        const eqs = (stockRes.data || []).filter(
           (eq) => (eq.condition === "new" || eq.condition === "good") && !eq.room_id
         );
         const stockByCategory = {};
@@ -636,12 +643,12 @@ export default function RoomListTab() {
           <tbody className="text-gray-700 text-sm">
             {currentRooms.length > 0 ? (
               currentRooms.map((room) => {
-                const displayStatus = room.roomStatusLog?.status || room.room_status || "new";
+                // roomStatusLog is an array — pick the first entry
+                const activeLog = Array.isArray(room.roomStatusLog) ? room.roomStatusLog[0] : room.roomStatusLog;
+                const displayStatus = activeLog?.status || room.room_status || "new";
                 const statusInfo = STATUS_MAP[displayStatus] || STATUS_MAP.available;
-
-                // Lấy start_time và end_time từ roomStatusLog hoặc fallback về room.start_time/end_time
-                const logStartTime = room.roomStatusLog?.start_time || room.start_time;
-                const logEndTime = room.roomStatusLog?.end_time || room.end_time;
+                const logStartTime = activeLog?.start_time;
+                const logEndTime = activeLog?.end_time;
                 
                 const start_time = logStartTime
                   ? new Date(logStartTime).toLocaleString("vi-VN") : "—";
@@ -975,7 +982,7 @@ export default function RoomListTab() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {defaultEquipments.map((de, index) => {
-                      const eqCategory = de.equipment_category_id;
+                      const eqCategory = de.equipment_category;
                       const canInstall = de.can_install !== false;
                       const needed = Number(de.quantity) || 0;
                       const available = de.stock_available ?? 0;

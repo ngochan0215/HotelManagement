@@ -38,6 +38,7 @@ class Container {
             bindEvents: [
                 INCIDENT_EVENTS.FIND_PENDING_COMPENSATION,
                 INCIDENT_EVENTS.GET_COMPENSATION_BY_ID,
+                INCIDENT_EVENTS.GET_ALL_INCIDENTS_INTERNAL,
             ]
         });
 

@@ -12,7 +12,8 @@ export class CustomerEventHandler {
             [CUSTOMER_EVENTS.CHECK_EXISTS]: this.customerCheckExists.bind(this),
             [CUSTOMER_EVENTS.CHECK_EXISTS_USERID]: this.checkExistsByUserId.bind(this),
             [CUSTOMER_EVENTS.GET_INFOS_USERIDS]: this.getInfosByUserIds.bind(this),
-            [CUSTOMER_EVENTS.GET_INFOS_IDS]: this.getInfosByIds.bind(this)
+            [CUSTOMER_EVENTS.GET_INFOS_IDS]: this.getInfosByIds.bind(this),
+            [CUSTOMER_EVENTS.UPDATE_POINTS]: this.updateCustomerPoints.bind(this),
         }
     }
 
@@ -147,6 +148,26 @@ export class CustomerEventHandler {
                     correlationId: msg.properties.correlationId,
                     persistent: false
                 }
+            );
+        }
+    }
+
+    async updateCustomerPoints(data, msg) {
+        try {
+            console.log("Handling CUSTOMER_EVENTS.UPDATE_POINTS");
+            const { customer_id, points, reason } = data;
+            const result = await this.customerService.updateCustomerPoints({ customer_id, points, reason });
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true, ...result })),
+                { correlationId: msg.properties.correlationId, persistent: false }
+            );
+        } catch (error) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: error.message })),
+                { correlationId: msg.properties.correlationId, persistent: false }
             );
         }
     }

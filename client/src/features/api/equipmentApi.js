@@ -13,8 +13,11 @@ const EMPLOYEES_BASE = `${API_BASE_URL}/employees`;
 export const equipmentApi = {
   // categories
 
-  getAllCategories: async () => {
-    const res = await axios.get(`${BASE_URL}/categories`, getAuthHeader());
+  getAllCategories: async (params) => {
+    const res = await axios.get(`${BASE_URL}/categories`, {
+      ...getAuthHeader(),
+      params: params
+    });
     return res.data;
   },
   createCategory: async (data) => {

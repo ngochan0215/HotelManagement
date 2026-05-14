@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 
 const EDIT_LIMIT_HOURS = 48;
@@ -25,7 +25,7 @@ export class ReviewService {
         ]);
 
         const { avg = 0, count = 0 } = result[0] || {};
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             ROOM_EVENTS.UPDATE_CATEGORY_RATING,
             { 
                 categoryId: category_id, 
@@ -37,10 +37,6 @@ export class ReviewService {
         );
 
         if (!reply.success) throw new Error(reply.message);
-        // await this.RoomCategory.findByIdAndUpdate(category_id, {
-        //     average_rating: Math.round(avg * 10) / 10,
-        //     review_count: count,
-        // });
     }
 
     async getBookedCategoryIds(booking_id) {
@@ -52,7 +48,7 @@ export class ReviewService {
 
         const roomIds = details.map((d) => d.room_id.toString());
 
-        const replyRooms = await this.eventBus.request(
+        const replyRooms = await this.eventBus.safeRequest(
             ROOM_EVENTS.GET_CATEGORY_IDS,
             { roomIds }
         );

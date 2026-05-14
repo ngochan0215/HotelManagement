@@ -76,7 +76,7 @@ export class EquipmentController {
                 }
             });
         
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -155,7 +155,7 @@ export class EquipmentController {
             
             return res.status(201).json(report);
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

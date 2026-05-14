@@ -1,4 +1,4 @@
-import { USER_EVENTS } from "../../../shared/events/userEvents.js";
+﻿import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import mongoose from "mongoose";
 
 const MAP_ROLE = {
@@ -44,7 +44,7 @@ export class ScheduleService {
     // helper
 
     findManagersByIds = async () => {
-        const replyManager = await this.eventBus.request(
+        const replyManager = await this.eventBus.safeRequest(
             USER_EVENTS.GET_MANAGERS
         );
 

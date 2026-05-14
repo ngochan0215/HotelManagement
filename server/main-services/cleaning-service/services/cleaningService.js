@@ -1,7 +1,11 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
+import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
+import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
+import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
+import { INCIDENT_EVENTS } from "../../../shared/events/incidentEvents.js";
 
 export class CleaningService {
     constructor({ CleaningTask, eventBus, sendNotification, sendNotificationsToUsers }) {
@@ -11,10 +15,25 @@ export class CleaningService {
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
 
+    createTaskFromBooking = async ({ room_id, room_log_id, booking_id, note }) => {
+        const existing = await this.CleaningTask.findOne({ room_log_id });
+        if (existing) return existing;
+
+        const task = await this.CleaningTask.create({
+            room_id,
+            room_log_id,
+            booking_id: booking_id || null,
+            status: "pending",
+            note: note || "",
+        });
+
+        return task;
+    };
+
     // helper
 
     findManagersByIds = async () => {
-        const replyManager = await this.eventBus.request(
+        const replyManager = await this.eventBus.safeRequest(
             USER_EVENTS.GET_MANAGERS
         );
 
@@ -28,7 +47,7 @@ export class CleaningService {
     };
 
     findEmployeeByUserId = async (employeeUserId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: employeeUserId }
         );
@@ -38,7 +57,7 @@ export class CleaningService {
     }
 
     findEmployeeById = async (employeeId) => {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS,
             { employee_id: employeeId }
         );
@@ -48,7 +67,7 @@ export class CleaningService {
     }
 
     findRoomById = async (roomId) => {
-        const replyRoom = await this.eventBus.request(
+        const replyRoom = await this.eventBus.safeRequest(
             ROOM_EVENTS.CHECK_EXISTS,
             { room_id: roomId }
         );
@@ -60,7 +79,7 @@ export class CleaningService {
 
     getAvailableHousekeepers = async () => {
         try {
-            const replyHousekeepers = await this.eventBus.request(
+            const replyHousekeepers = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_AVAILABLE_HOUSEKEEPERS,
                 {}
             );
@@ -111,7 +130,7 @@ export class CleaningService {
             const hasHandledBy = task.handled_by && 
                 (typeof task.handled_by === 'object' ? task.handled_by._id : task.handled_by);
             
-            if (hasHandledBy && task.handled_by.toString() !== handled_by) {
+            if (hasHandledBy && task.handled_by.toString() !== handledBy) {
                 if (task.status !== "pending") {
                     throw new Error("Không thể thay đổi nhân viên khi công việc đã bắt đầu");
                 }
@@ -121,7 +140,7 @@ export class CleaningService {
                 throw new Error("Công việc đã được gán và đang xử lý");
             }
 
-            const replyHousekeepers = await this.eventBus.request(
+            const replyHousekeepers = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_AVAILABLE_HOUSEKEEPERS,
                 {}
             );
@@ -135,7 +154,7 @@ export class CleaningService {
             }
 
             const activeTask = await this.CleaningTask.findOne({
-                handled_by: handled_by,
+                handled_by: handledBy,
                 status: { $in: ["pending", "in_progress"] },
                 _id: { $ne: task._id }
             });
@@ -149,7 +168,7 @@ export class CleaningService {
             
             await task.save();
 
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: { _id: roomLogId },
@@ -370,7 +389,7 @@ export class CleaningService {
             const roomId = task.room_id;
             const roomLogId = task.room_log_id;
 
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: { _id: roomLogId },
@@ -387,7 +406,7 @@ export class CleaningService {
                 note: `Phòng đã được dọn dẹp và sẵn sàng`,
             };
 
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, 
                 {
                     data: roomLog
@@ -395,7 +414,7 @@ export class CleaningService {
             );
             if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
     
-            const replyUpdateRoom = await this.eventBus.request(
+            const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO, 
                 {
                     filter: { _id: roomId },
@@ -451,151 +470,143 @@ export class CleaningService {
     getAllTasks = async (query = {}) => {
         try {
             const { type, status } = query;
-            // type: 'cleaning' | 'install' | 'equipment_import' | 'product_import' | 'incident' | 'all'
-    
             const tasks = [];
-    
-            // Cleaning tasks
+
+            // === CLEANING TASKS ===
             if (!type || type === 'all' || type === 'cleaning') {
-                const cleaningTasks = await this.CleaningTask.find(status ? { status } : {})
-                    .populate("room_id", "room_number category_id")
-                    .populate("handled_by", "full_name phone_number")
-                    .populate({
-                        path: "booking_id",
-                        select: "expected_checkin expected_checkout status", // Lấy ngày giờ
-                        populate: {
-                            path: "customer_id",
-                            select: "full_name phone_number email" // Lấy tên khách
+                const filter = status ? { status } : {};
+
+                const cleaningRaw = await this.CleaningTask.find(filter).sort({ created_at: -1 }).lean();
+
+                const roomIds = [...new Set(cleaningRaw.map(t => t.room_id?.toString()).filter(Boolean))];
+                let roomMap = {};
+                if (roomIds.length) {
+                    const reply = await this.eventBus.safeRequest(ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: roomIds });
+                    if (reply.success) {
+                        for (const room of reply.rooms) {
+                            roomMap[room._id.toString()] = { _id: room._id, room_number: room.room_number, category_id: room.category_id };
                         }
-                    })
-                    .sort({ created_at: -1 });
-    
-                tasks.push(...cleaningTasks.map(t => {
-                    const taskObj = t.toObject();
+                    }
+                }
+
+                const employeeIds = [...new Set(cleaningRaw.map(t => t.handled_by?.toString()).filter(Boolean))];
+                let employeeMap = {};
+                if (employeeIds.length) {
+                    const reply = await this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: employeeIds });
+                    if (reply.success) {
+                        for (const emp of reply.employees) {
+                            employeeMap[emp._id.toString()] = { _id: emp._id, full_name: emp.full_name, phone_number: emp.phone_number };
+                        }
+                    }
+                }
+
+                const bookingIds = [...new Set(cleaningRaw.map(t => t.booking_id?.toString()).filter(Boolean))];
+                let bookingMap = {};
+                if (bookingIds.length) {
+                    const replyBookings = await this.eventBus.safeRequest(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds });
+                    if (replyBookings.success) {
+                        const customerIds = [...new Set(replyBookings.bookings.map(b => b.customer_id?.toString()).filter(Boolean))];
+                        let customerMap = {};
+                        if (customerIds.length) {
+                            const replyCustomers = await this.eventBus.safeRequest(CUSTOMER_EVENTS.GET_INFOS_IDS, { customerIds });
+                            if (replyCustomers.success) {
+                                for (const cus of replyCustomers.customers) {
+                                    customerMap[cus._id.toString()] = cus;
+                                }
+                            }
+                        }
+                        for (const booking of replyBookings.bookings) {
+                            const customerId = booking.customer_id?.toString();
+                            bookingMap[booking._id.toString()] = {
+                                ...booking,
+                                customer: customerId ? (customerMap[customerId] || null) : null
+                            };
+                        }
+                    }
+                }
+
+                tasks.push(...cleaningRaw.map(t => {
+                    const booking = t.booking_id ? bookingMap[t.booking_id.toString()] : null;
                     return {
-                        ...taskObj,
+                        ...t,
                         task_type: "cleaning",
-                        booking_info: t.booking_id ? {
-                            customer_name: t.booking_id.customer_id?.full_name,
-                            customer_phone: t.booking_id.customer_id?.phone_number,
-                            checkin: t.booking_id.expected_checkin,
-                            checkout: t.booking_id.expected_checkout,
-                            status: t.booking_id.status
+                        room_id: t.room_id ? (roomMap[t.room_id.toString()] || null) : null,
+                        handled_by: t.handled_by ? (employeeMap[t.handled_by.toString()] || null) : null,
+                        booking_info: booking ? {
+                            customer_name: booking.customer?.full_name,
+                            customer_phone: booking.customer?.phone_number,
+                            checkin: booking.expected_checkin,
+                            checkout: booking.expected_checkout,
+                            status: booking.status
                         } : null
                     };
                 }));
             }
-    
-            // Equipment install tasks
+
             if (!type || type === 'all' || type === 'install') {
-                const installTasks = await EquipmentInstall.find(status ? { status } : {})
-                    .populate("room_id", "room_number")
-                    .populate("handled_by", "full_name phone_number")
-                    .sort({ created_at: -1 })
-                    .lean();
-    
-                // Lấy install_details cho từng install task
-                const installIds = installTasks.map(t => t._id);
-                const installDetails = await InstallDetail.find({ install_id: { $in: installIds } })
-                    .populate({
-                        path: "equipment_id",
-                        populate: { path: "category_id", select: "name description" },
-                        select: "category_id condition status code"
-                    })
-                    .lean();
-    
-                // Group install_details theo install_id
-                const detailsMap = {};
-                installDetails.forEach(detail => {
-                    const installId = detail.install_id.toString();
-                    if (!detailsMap[installId]) detailsMap[installId] = [];
-                    detailsMap[installId].push(detail);
-                });
-    
-                tasks.push(...installTasks.map(t => ({
-                    ...t,
-                    task_type: "install",
-                    install_details: detailsMap[t._id.toString()] || []
-                })));
+                try {
+                    const reply = await this.eventBus.safeRequest(
+                        EQUIPMENT_EVENTS.GET_ALL_INSTALL_TICKETS,
+                        status ? { status } : {}
+                    );
+                    if (reply.success) {
+                        tasks.push(...(reply.installs || []).map(t => ({
+                            ...t,
+                            task_type: "install",
+                            room_id: t.room_info || null,
+                            handled_by: t.handler_info || null,
+                        })));
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch install tasks:", err.message);
+                }
             }
-    
-            // Equipment import tickets
+
+            // === EQUIPMENT IMPORT TASKS ===
             if (!type || type === 'all' || type === 'equipment_import') {
-                const equipmentTickets = await EquipmentTicket.find(status ? { status } : {})
-                    .populate("employee_id", "full_name phone_number")
-                    .sort({ created_at: -1 })
-                    .lean();
-    
-                // Lấy import details cho từng ticket
-                const ticketIds = equipmentTickets.map(t => t._id);
-                const equipmentImports = await EquipmentImport.find({ ticket_id: { $in: ticketIds } })
-                    .populate("category_id", "name description")
-                    .lean();
-    
-                // Group imports theo ticket_id
-                const importsMap = {};
-                equipmentImports.forEach(imp => {
-                    const ticketId = imp.ticket_id.toString();
-                    if (!importsMap[ticketId]) importsMap[ticketId] = [];
-                    importsMap[ticketId].push(imp);
-                });
-    
-                tasks.push(...equipmentTickets.map(t => ({
-                    ...t,
-                    task_type: "equipment_import",
-                    import_details: importsMap[t._id.toString()] || []
-                })));
+                try {
+                    const reply = await this.eventBus.safeRequest(
+                        EQUIPMENT_EVENTS.GET_ALL_IMPORT_TICKETS,
+                        status ? { status } : {}
+                    );
+                    if (reply.success) {
+                        tasks.push(...(reply.tickets || []).map(t => ({
+                            ...t,
+                            task_type: "equipment_import",
+                            employee_id: t.employee_info || null,
+                            import_details: (t.import_details || []).map(d => ({
+                                ...d,
+                                quantity: d.import_quantity,
+                                total_import_price: (d.import_price || 0) * (d.import_quantity || 0)
+                            }))
+                        })));
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch import tasks:", err.message);
+                }
             }
-    
-            // Product import tickets (GoodTicket)
-            if (!type || type === 'all' || type === 'product_import') {
-                const goodTickets = await GoodTicket.find(status ? { status } : {})
-                    .populate("employee_id", "full_name phone_number")
-                    .sort({ created_at: -1 })
-                    .lean();
-    
-                // Lấy import details cho từng ticket
-                const ticketIds = goodTickets.map(t => t._id);
-                const goodImports = await GoodImport.find({ ticket_id: { $in: ticketIds } })
-                    .populate("service_id", "name description")
-                    .lean();
-    
-                // Group imports theo ticket_id
-                const importsMap = {};
-                goodImports.forEach(imp => {
-                    const ticketId = imp.ticket_id.toString();
-                    if (!importsMap[ticketId]) importsMap[ticketId] = [];
-                    importsMap[ticketId].push(imp);
-                });
-    
-                tasks.push(...goodTickets.map(t => ({
-                    ...t,
-                    task_type: "product_import",
-                    import_details: importsMap[t._id.toString()] || []
-                })));
-            }
-    
-            // Incidents
+
+            // === INCIDENT TASKS ===
             if (!type || type === 'all' || type === 'incident') {
-                const incidents = await Incident.find(status ? { status } : {})
-                    .populate("room_id", "room_number")
-                    .populate("reporter_id", "email")
-                    .populate("causer_id", "email")
-                    .populate("booking_id", "_id")
-                    .populate("assignee_info.assignee_id", "full_name phone_number")
-                    .sort({ created_at: -1 })
-                    .lean();
-    
-                tasks.push(...incidents.map(t => ({
-                    ...t,
-                    task_type: "incident"
-                })));
+                try {
+                    const reply = await this.eventBus.safeRequest(
+                        INCIDENT_EVENTS.GET_ALL_INCIDENTS_INTERNAL,
+                        status ? { status } : {}
+                    );
+                    if (reply.success) {
+                        tasks.push(...(reply.incidents || []).map(t => ({
+                            ...t,
+                            task_type: "incident",
+                        })));
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch incident tasks:", err.message);
+                }
             }
-    
-            // Sắp xếp theo thời gian tạo
+
             tasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             return tasks;
-    
+
         } catch (error) {
             console.error("GetAllTasks Error:", error);
             throw error;
@@ -618,7 +629,7 @@ export class CleaningService {
             // Nếu không có task, tìm room_log_id từ RoomLog
             let room_log_id = null;
             if (!task && room_id) {
-                const replyLog = await this.eventBus.request(
+                const replyLog = await this.eventBus.safeRequest(
                     ROOM_EVENTS.FIND_ROOM_LOGS,
                     {
                         filter: {
@@ -670,7 +681,7 @@ export class CleaningService {
                 ...new Set(tasks.map(task => task.room_id.toString()))
             ];
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
@@ -687,7 +698,7 @@ export class CleaningService {
                 room: roomMap.get(task.room_id.toString()) || null
             }));
 
-            return tasks;
+            return tasksWithRoomInfo;
 
         } catch (error) {
             console.error("getMyCleaningTasks Error:", error);

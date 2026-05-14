@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import { CUSTOMER_EVENTS } from '../../../shared/events/customerEvents.js';
 
 export class VoucherService {
@@ -600,7 +600,7 @@ export class VoucherService {
     }
 
     async getCustomerById(customerId) {
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             CUSTOMER_EVENTS.CHECK_EXISTS,
             { customerId }
         );

@@ -74,7 +74,7 @@ export class EquipmentImportController {
                 success: true,
                 message: "Xác nhận nhập kho thành công",
             });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

@@ -34,16 +34,16 @@ export default function ProfilePage() {
 
     try {
       setLoading(true);
-      const res = await userApi.getProfile();
-      const data = res.data;
-      setProfile(data);
+      const profile = await userApi.getProfile();
+      setProfile(profile);
 
-      const isEmployee = data.user_id && typeof data.user_id === 'object';
-      const newName = isEmployee ? data.full_name : "Quản trị viên";
-      const newAvatar = isEmployee ? data.user_id.avatar : data.avatar;
+      const isEmployee = !!profile.user_info;
+      const newName = isEmployee ? profile.full_name : "Quản trị viên";
+      const newAvatar = isEmployee ? profile.user_info.avatar : profile.avatar;
 
-      if (user?.name !== newName || user?.avatar !== newAvatar) {
-          refreshUser({ name: newName, avatar: newAvatar });
+      console.log("user: ", user);
+      if (user?.full_name !== newName || user?.avatar !== newAvatar) {
+            refreshUser({ name: newName, avatar: newAvatar });
       }
 
       hasFetched.current = true;
@@ -74,7 +74,7 @@ export default function ProfilePage() {
   };
 
   const openEditModal = () => {
-      const isEmployeeRecord = profile.user_id && typeof profile.user_id === 'object';
+      const isEmployeeRecord = !!profile.user_info;
       setEditForm({
           name: isEmployeeRecord ? profile.full_name : "User System",
           phone: isEmployeeRecord ? profile.phone_number : "",
@@ -101,11 +101,11 @@ export default function ProfilePage() {
   if (loading) return <div className="flex h-screen items-center justify-center bg-gray-50">Đang tải hồ sơ...</div>;
   if (!profile) return <div className="flex h-screen items-center justify-center bg-gray-50">Không tìm thấy thông tin.</div>;
 
-  const isEmployeeRecord = profile.user_id && typeof profile.user_id === 'object';
+  const isEmployeeRecord = !!profile.user_info;
   const displayData = {
-    avatar: isEmployeeRecord ? profile.user_id.avatar : profile.avatar,
-    email: isEmployeeRecord ? profile.user_id.email : profile.email,
-    role: isEmployeeRecord ? profile.user_id.system_role : profile.system_role,
+    avatar: isEmployeeRecord ? profile.user_info.avatar : profile.avatar,
+    email: isEmployeeRecord ? profile.user_info.email : profile.email,
+    role: isEmployeeRecord ? profile.user_info.system_role : profile.system_role,
     fullName: isEmployeeRecord ? profile.full_name : "User System",
     position: translateMap[profile.position] || profile.position || "Admin",
     phone: isEmployeeRecord ? profile.phone_number : "---",

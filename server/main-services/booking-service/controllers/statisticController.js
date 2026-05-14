@@ -21,8 +21,8 @@ export class BookingStatisticController {
             const { from, to } = req.query;
 
             const report = await this.bookingStatisticService.generateBookingReport(from, to);
-            
-            return res.status(200).json({ success: true, data: report });
+
+            return res.status(201).json(report);
 
         } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });

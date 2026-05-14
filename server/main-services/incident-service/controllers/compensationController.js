@@ -33,7 +33,7 @@ export class CompensationController {
 
             return res.status(200).json({ total: result.length, data: result });
 
-        } catch (error) { 
+        } catch (err) { 
             return res.status(err.status || 400).json({ message: err.message }); 
         }
     };
@@ -42,7 +42,7 @@ export class CompensationController {
         try {
             const ticket = await this.compensationService.getCompensateTicketById(req.params.id);
             return res.status(200).json({ ticket });
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -53,7 +53,7 @@ export class CompensationController {
 
             return res.status(200).json({ message: "Cập nhật phiếu đền bù thành công.", data: ticket });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
@@ -64,7 +64,7 @@ export class CompensationController {
             
             return res.status(200).json({ message: "Xác nhận bồi thường thành công." });
 
-        } catch (error) {
+        } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };

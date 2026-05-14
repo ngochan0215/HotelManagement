@@ -13,7 +13,7 @@ router.post("/", verifyToken, isAdmin, controller.createRoom);
 router.patch("/:id", verifyToken, isAdmin, controller.updateRoom);
 router.delete("/:id", verifyToken, isAdmin, controller.deleteRoom);
 
-router.post("/:roomId/cleaning/complete", verifyToken, isEmployee, controller.completeCleaning);
-router.post("/:roomId/maintenance/complete", verifyToken, isEmployee, controller.completeMaintenance);
+router.post("/:id/cleaning/complete", verifyToken, isEmployee, controller.completeCleaning);
+router.post("/:id/maintenance/complete", verifyToken, isEmployee, controller.completeMaintenance);
 
 export default router;

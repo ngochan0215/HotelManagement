@@ -30,7 +30,8 @@ class Container {
         });
 
         this.bookingStatisticService = new BookingStatisticService({
-            Booking, BookingDetail, BookingStatusLog, BookingCancellation
+            Booking, BookingDetail, BookingStatusLog, BookingCancellation,
+            eventBus: this.eventBus
         });
 
         this.bookingEventHandler = new BookingEventHandler(this.bookingService, this.eventBus);

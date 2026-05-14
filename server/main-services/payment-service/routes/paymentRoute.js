@@ -1,5 +1,5 @@
 import express from "express";
-import { isNotCustomer, verifyToken } from "../../../shared/middleware/authMiddleware.js";
+import { isEmployee, verifyToken } from "../../../shared/middleware/authMiddleware.js";
 import { TransactionController } from "../controllers/transactionController.js";
 
 const router = express.Router();

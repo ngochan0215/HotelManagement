@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+﻿import bcrypt from "bcrypt";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 
 const CCCD_REGEX = /^[0-9]{12}$/;
@@ -80,11 +80,11 @@ export class EmployeeService {
         let employees = await this.Employee.find(filter)
             .select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
 
-        if (!employees.length) return { total: 0, customers: [] };
+        if (!employees.length) return { count: 0, employees: [] };
 
-        const userIds = customers.map(c => c.user_id);
+        const userIds = employees.map(e => e.user_id).filter(Boolean);
 
-        const reply = await this.eventBus.request(USER_EVENTS.GET_USERS_INFO, { userIds });
+        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds });
         if (!reply.success) {
             throw new Error(reply.message);
         }
@@ -94,7 +94,7 @@ export class EmployeeService {
         );
 
         const result = employees.map(employee => {
-            const user = userMap.get(employee.user_id.toString());
+            const user = employee.user_id ? userMap.get(employee.user_id.toString()) : null;
             return {
                 ...employee,
                 user: user
@@ -116,7 +116,7 @@ export class EmployeeService {
         }
 
         // let user = null;
-        // const reply = await this.eventBus.request(
+        // const reply = await this.eventBus.safeRequest(
         //     USER_EVENTS.GET_USER_INFO, 
         //     { userId: employee.user_id }
         // );
@@ -183,7 +183,7 @@ export class EmployeeService {
             employee.status = status;
         }
 
-        const valid_positions = ["manager", "receptionist", "housekeeping", "technician", "customer_service"];
+        const valid_positions = ["manager", "receptionist", "housekeeper", "technician", "customer_service"];
         if (position) {
             if (!valid_positions.includes(position))
                 throw new Error(`Vị trí không hợp lệ. Giá trị cho phép: ${valid_positions.join(", ")}`);
@@ -194,7 +194,7 @@ export class EmployeeService {
         if (email !== undefined) {
             let user = null;
 
-            const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId: employee.user_id });
+            const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: employee.user_id });
             if (reply.found) {
                 user = reply.user;
             } else {
@@ -202,13 +202,13 @@ export class EmployeeService {
             }
 
             if (email !== user.email) {
-                const reply = await this.eventBus.request(USER_EVENTS.CHECK_EXISTED_EMAIL, { email });
+                const reply = await this.eventBus.safeRequest(USER_EVENTS.CHECK_EXISTED_EMAIL, { email });
                 if (reply.found) {
                     throw new Error("Email đã tồn tại.");
                 }
             }
 
-            const replyUpdate = await this.eventBus.request(
+            const replyUpdate = await this.eventBus.safeRequest(
                 USER_EVENTS.UPDATE_USER, 
                 { 
                     userId: employee.user_id, 
@@ -270,7 +270,7 @@ export class EmployeeService {
 
         const system_role = "employee";
         try {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 USER_EVENTS.CREATE_ACCOUNT,
                 {
                     email, password, system_role
@@ -306,7 +306,7 @@ export class EmployeeService {
 
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 USER_EVENTS.RESET_PASSWORD,
                 {
                     userId: employee.user_id,
@@ -424,7 +424,7 @@ export class EmployeeService {
             throw new Error("Nhân viên chưa có tài khoản.");
         }
 
-        const reply = await this.eventBus.request(
+        const reply = await this.eventBus.safeRequest(
             USER_EVENTS.UPDATE_USER,
             {
                 userId: employee.user_id,
@@ -452,7 +452,7 @@ export class EmployeeService {
         }
 
         let user_info = null;
-        const reply = await this.eventBus.request(USER_EVENTS.GET_USER_INFO, { userId });
+        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId });
         if(!reply.success)
             throw new Error(reply.message);
         

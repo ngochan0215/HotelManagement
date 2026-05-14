@@ -1,9 +1,11 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
+import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
+import { CLEANING_EVENTS } from "../../../shared/events/cleaningEvents.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 
 export class BookingService {
@@ -67,7 +69,7 @@ export class BookingService {
             }
 
             for (const bd of bookingDetails) {
-                const replyLogs = await this.eventBus.request(
+                const replyLogs = await this.eventBus.safeRequest(
                     ROOM_EVENTS.FIND_ROOM_LOGS,
                     {
                         filter: {
@@ -84,7 +86,7 @@ export class BookingService {
                 );
 
                 if(replyLogs.roomLogs) {
-                    const replyRoom = await this.eventBus.request(
+                    const replyRoom = await this.eventBus.safeRequest(
                         ROOM_EVENTS.CHECK_EXISTS,
                         { room_id: bd.room_id }
                     );
@@ -98,7 +100,7 @@ export class BookingService {
 
             const roomIds = bookingDetails.map(bd => bd.room_id);
 
-            const replyUpdateRoom = await this.eventBus.request(
+            const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO,
                 { 
                     filter: {
@@ -112,7 +114,7 @@ export class BookingService {
             );
             if (!replyUpdateRoom.success) throw new Error(replyUpdateRoom.message);
 
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG,
                 { 
                     filter: {
@@ -135,7 +137,7 @@ export class BookingService {
                 note: `Phòng được giữ vì booking ${bd.booking_id} đã được cọc.`,
                 handled_by: booking.handled_by,
             }));
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG,
                 { data: roomLogs }
             );
@@ -244,7 +246,7 @@ export class BookingService {
             (async () => {
                 const map = {};
                 if (employeeIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.GET_INFO,
                     { employee_ids: employeeIds }
                 );
@@ -263,7 +265,7 @@ export class BookingService {
             (async () => {
                 const map = {};
                 if (customerIds.length === 0) return map;
-                const reply = await this.eventBus.request(
+                const reply = await this.eventBus.safeRequest(
                     CUSTOMER_EVENTS.GET_INFOS_IDS,
                     { customerIds: customerIds }
                 );
@@ -301,7 +303,7 @@ export class BookingService {
         let roomMap = {};
 
         if (roomIds.length > 0) {
-            const reply = await this.eventBus.request(
+            const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
@@ -331,7 +333,7 @@ export class BookingService {
     };
 
     findCustomerById = async (customerId) => {
-        const replyCustomer = await this.eventBus.request(
+        const replyCustomer = await this.eventBus.safeRequest(
             CUSTOMER_EVENTS.CHECK_EXISTS,
             { customerId }
         );
@@ -344,7 +346,7 @@ export class BookingService {
     }
 
     findEmployeeByUserId = async (employeeUserId) => {
-        const replyEmployee = await this.eventBus.request(
+        const replyEmployee = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
             { employee_user_id: employeeUserId }
         );
@@ -356,7 +358,7 @@ export class BookingService {
     }
 
     findEmployeeById = async (employeeId) => {
-        const replyEmployee = await this.eventBus.request(
+        const replyEmployee = await this.eventBus.safeRequest(
             EMPLOYEE_EVENTS.CHECK_EXISTS,
             { employee_id: employeeId }
         );
@@ -368,7 +370,7 @@ export class BookingService {
     }
 
     findManagersByIds = async () => {
-        const replyManager = await this.eventBus.request(
+        const replyManager = await this.eventBus.safeRequest(
             USER_EVENTS.GET_MANAGERS
         );
 
@@ -397,7 +399,7 @@ export class BookingService {
 
             const customer = await this.findCustomerById(customer_id);
             const employee = await this.findEmployeeByUserId(employeeUserId);
-            console.log("EMPLOYEE: ", employee);
+
             if (!Array.isArray(rooms) || rooms.length === 0) {
                 throw new Error("Phải đặt ít nhất một phòng!");
             }
@@ -423,7 +425,7 @@ export class BookingService {
                     throw new Error("ID Phòng không hợp lệ.");
                 } 
 
-                const replyRoom = await this.eventBus.request(
+                const replyRoom = await this.eventBus.safeRequest(
                     ROOM_EVENTS.CHECK_EXISTS,
                     { room_id: room.room_id }
                 );
@@ -435,6 +437,11 @@ export class BookingService {
                 }
             }
 
+            const baseRoomFee = rooms.reduce((sum, r) => {
+                const nights = this.calcNights(expected_checkin, expected_checkout);
+                return sum + (r.base_fee * nights);
+            }, 0);
+
             let discount = null;
             let discountSnapshot = null;
             let discountAmount = 0;
@@ -443,7 +450,7 @@ export class BookingService {
                     throw new Error("ID Khuyến mãi không hợp lệ");
                 }
 
-                const replyDiscount = await this.eventBus.request(
+                const replyDiscount = await this.eventBus.safeRequest(
                     DISCOUNT_EVENTS.CHECK_EXISTS,
                     { discountId: discount_id }
                 );
@@ -460,7 +467,6 @@ export class BookingService {
                     throw new Error("Khuyến mãi không còn trong thời gian hiệu lực.");
                 }
 
-                // get discount info
                 if (discount.discount.type === "PERCENT") {
                     discountAmount = Math.round(baseRoomFee * discount.discount.value / 100);
                     if (discount.discount.max_discount && discountAmount > discount.discount.max_discount) {
@@ -469,7 +475,7 @@ export class BookingService {
                 } else {
                     discountAmount = discount.discount.value;
                 }
-                
+
                 discountSnapshot = {
                     code: discount.code,
                     name: discount.name,
@@ -479,7 +485,6 @@ export class BookingService {
             }
 
             const handled_by = employee._id;
-            console.log("ID: ", employee._id);
             const isScheduled = new Date(expected_checkin) > new Date();
             const isImmediate = deposit === 0;
             let initialStatus = isImmediate ? "in_progress" : "pending";
@@ -528,7 +533,7 @@ export class BookingService {
             const roomIds = bookingDetails.map(bd => bd.room_id);
             const shortenId = booking._id.toString().slice(-6);
 
-            const replyUpdateRoom = await this.eventBus.request(
+            const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO,
                 {
                     filter: { _id: { $in: roomIds } },
@@ -552,7 +557,7 @@ export class BookingService {
                     : `Phòng được giữ chỗ bởi: ${shortenId} trong vòng 1 tiếng kể từ khi đặt`,
                 handled_by: booking.handled_by || null,
             }));
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, 
                 {
                     data: roomLogs
@@ -567,31 +572,25 @@ export class BookingService {
             const amountDue = Math.max(finalAmount - depositAmount, 0);
 
             const paymentMethod = depositAmount === 0 ? "unknown" : "bank";
-            const receiptStatus = "pending";
 
-            // calculate orignal room fee (before extracting deposit)
-            const baseRoomFee = rooms.reduce((sum, r) => {
-                const nights = this.calcNights(expected_checkin, expected_checkout);
-                return sum + (r.base_fee * nights);
-            }, 0);
-
-            // const receipt = await Receipt.create(
-            // [{
-            //     booking_id: booking[0]._id,
-            //     employee_id: employee._id,
-            //     discount_id: discount_id || null,
-            //     discount_snapshot: discountSnapshot,
-            //     base_room_fee: baseRoomFee,
-            //     total_fee: totalFee,
-            //     deposit_amount: depositAmount,
-            //     final_amount: finalAmount,
-            //     amount_due: amountDue,
-            //     payment: paymentMethod,
-            //     status: receiptStatus,
-            //     note: isImmediate ? "Hóa đơn tạo tự động khi đặt liền (không cần cọc)" : "Hóa đơn tạo tự động, chờ thanh toán cọc",
-            // }],
-            // { session }
-            // );
+            const replyReceipt = await this.eventBus.safeRequest(
+                PAYMENT_EVENTS.CREATE_RECEIPT,
+                {
+                    booking_id: booking._id,
+                    employee_id: employee._id,
+                    discount_id: discount_id || null,
+                    discount_snapshot: discountSnapshot,
+                    base_room_fee: baseRoomFee,
+                    total_fee: totalFee,
+                    deposit_amount: depositAmount,
+                    final_amount: finalAmount,
+                    amount_due: amountDue,
+                    payment: paymentMethod,
+                    status: "pending",
+                    note: isImmediate ? "Hóa đơn tạo tự động khi đặt liền (không cần cọc)" : "Hóa đơn tạo tự động, chờ thanh toán cọc",
+                }
+            );
+            if (!replyReceipt.success) throw new Error(replyReceipt.message);
 
             // send notifications
             try {
@@ -619,7 +618,7 @@ export class BookingService {
                 });
 
                 // send noti for receptionists
-                const replyReceptionists = await this.eventBus.request(
+                const replyReceptionists = await this.eventBus.safeRequest(
                     EMPLOYEE_EVENTS.GET_RECEPTIONISTS,
                     {}
                 );
@@ -653,12 +652,8 @@ export class BookingService {
 
     confirmBooking = async (bookingId, employeeId) => {
         try {
-            console.log("Confirming booking:", bookingId, "by employee:", employeeId);          
             const booking = await this.confirmBookingInternal(bookingId, employeeId);
-            console.log("Booking confirmed:", booking);
-
             return booking;
-
         } catch (error) {
             console.log("Error in confirming booking: ", error.log);
             throw error;
@@ -679,7 +674,7 @@ export class BookingService {
                 .lean();
 
             if (bookings.length === 0) {
-                return res.json([]);
+                return { total: 0, bookings: [] };
             }
 
             const populatedBookings = await this.populateCustomerAndEmployee(bookings);
@@ -790,7 +785,7 @@ export class BookingService {
             const shortenId = booking._id.toString().slice(-6);
 
             const hasConflict = async (roomId, start, end, statuses) => {
-                const replyFindLogs = await this.eventBus.request(
+                const replyFindLogs = await this.eventBus.safeRequest(
                     ROOM_EVENTS.FIND_ROOM_LOGS,
                     {
                         filter: {
@@ -820,7 +815,7 @@ export class BookingService {
                 
                 case "expired":
                     for (const bd of bookingDetails) {
-                        const replyUpdateLog = await this.eventBus.request(
+                        const replyUpdateLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.UPDATE_ROOM_LOG, 
                             {
                                 filter: {
@@ -845,7 +840,7 @@ export class BookingService {
                         note: `Booking có ID: #${shortenId} chuyển sang trạng thái ${status}, phòng được giải phóng`,
                         handled_by: userId || null,
                     }));
-                    const replyInsertLog = await this.eventBus.request(
+                    const replyInsertLog = await this.eventBus.safeRequest(
                         ROOM_EVENTS.INSERT_ROOM_LOG, {
                         data: availableRoomLogs
                     });
@@ -876,7 +871,7 @@ export class BookingService {
                             note: `Booking với ID: #${shortenId} đã được xác nhận đặt cọc.`,
                             handled_by: booking.handled_by || userId || null,
                         };
-                        const replyInsertLog = await this.eventBus.request(
+                        const replyInsertLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.INSERT_ROOM_LOG, {
                             data: roomLog
                         });
@@ -897,7 +892,7 @@ export class BookingService {
                             throw new Error(`Phòng ${bd.room_id.room_number} đang được sử dụng`);
                         }
 
-                        const replyUpdateLog = await this.eventBus.request(
+                        const replyUpdateLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.UPDATE_ROOM_LOG, 
                             {
                                 filter: {
@@ -924,7 +919,7 @@ export class BookingService {
                             note: `Booking với ID: #${shortenId} đã xác nhận check-in.`,
                             handled_by: booking.handled_by || userId || null,
                         };
-                        const replyInsertLog = await this.eventBus.request(
+                        const replyInsertLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.INSERT_ROOM_LOG, {
                             data: roomLog
                         });
@@ -936,7 +931,7 @@ export class BookingService {
 
                 case "checked_out": {
                     for (const bd of bookingDetails) {
-                        const replyUpdateLog = await this.eventBus.request(
+                        const replyUpdateLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.UPDATE_ROOM_LOG, 
                             {
                                 filter: {
@@ -964,7 +959,7 @@ export class BookingService {
                             note: `Cleaning after checkout booking ${booking._id}`,
                             handled_by: null,
                         };
-                        const replyInsertLog = await this.eventBus.request(
+                        const replyInsertLog = await this.eventBus.safeRequest(
                             ROOM_EVENTS.INSERT_ROOM_LOG, {
                             data: roomLog
                         });
@@ -1071,7 +1066,7 @@ export class BookingService {
             const bookingDetails = [];
 
             for (const room of rooms) {
-                const replyRoom = await this.eventBus.request(
+                const replyRoom = await this.eventBus.safeRequest(
                     ROOM_EVENTS.CHECK_EXISTS,
                     { room_id: room.room_id }
                 );
@@ -1129,17 +1124,17 @@ export class BookingService {
                 throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể check-in.`);
             }
 
-            const replyRoom = await this.eventBus.request(
+            const replyRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.CHECK_EXISTS,
                 { room_id: detail.room_id }
             );
             if (!replyRoom.found) {
-                throw new Error(`Không tìm thấy phòng ${room.room_number}`);
+                throw new Error(`Không tìm thấy phòng ${detail.room_id}`);
             }
             const room = replyRoom.room;
 
             // find conflict room logs, close old logs and insert new one
-            const conflictLog = await this.eventBus.request(
+            const conflictLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.FIND_ROOM_LOGS,
                 {
                     filter: {
@@ -1149,7 +1144,7 @@ export class BookingService {
                         status: { $in: ["occupied", "maintenance", "cleaning"] },
                         $or: [
                             { end_time: null },
-                            { end_time: { $gt: bd.expected_checkin } }
+                            { end_time: { $gt: detail.expected_checkin } }
                         ]
                     },
                     opts: { limit: 1 }
@@ -1159,7 +1154,7 @@ export class BookingService {
                 throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này.");
             }
 
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: {
@@ -1182,7 +1177,7 @@ export class BookingService {
                 note: `Phòng đã được checkin theo booking ${booking._id}`,
                 handled_by: booking.handled_by || null,
             };
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, {
                 data: roomLogs
             });
@@ -1192,7 +1187,7 @@ export class BookingService {
             detail.actual_checkin = now;
             await detail.save();
 
-            const replyUpdateRoom = await this.eventBus.request(
+            const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO, 
                 {
                     filter: { _id: detail.room_id },
@@ -1289,24 +1284,25 @@ export class BookingService {
             });
 
             if (!detail) {
-            throw new Error("Không tìm thấy phòng trong booking.");
+                throw new Error("Không tìm thấy phòng trong booking.");
             }
 
             if (detail.status !== "checked_in") {
-            throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể checkout.`);
+                throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể checkout.`);
             }
 
-            const replyRoom = await this.eventBus.request(
+            const replyRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.CHECK_EXISTS,
                 { room_id: detail.room_id }
             );
             if (!replyRoom.found) {
-                throw new Error(`Không tìm thấy phòng ${room.room_number}`);
+                throw new Error(`Không tìm thấy phòng ${detail.room_id}`);
             }
             const room = replyRoom.room;
+            const shortenId = booking._id.toString().slice(-6);
 
             // close old logs and insert new ones (cleaning task)
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: {
@@ -1333,28 +1329,28 @@ export class BookingService {
                 handled_by: null, 
             };
 
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, {
                 data: roomLog
             });
             if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
 
-            // await CleaningTask.create(
-            // [{
-            //     room_id: detail.room_id,
-            //     room_log_id: roomLog._id,
-            //     booking_id: bookingId,
-            //     status: "pending",
-            //     note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
-            // }],
-            // { session }
-            // );
+            const replyCleaningTask = await this.eventBus.safeRequest(
+                CLEANING_EVENTS.CREATE_TASK,
+                {
+                    room_id: detail.room_id,
+                    room_log_id: replyInsertLog.roomLogs._id,
+                    booking_id: bookingId,
+                    note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
+                }
+            );
+            if (!replyCleaningTask.success) console.warn(`[CHECKOUT] Tạo cleaning task thất bại: ${replyCleaningTask.message}`);
 
             detail.status = "checked_out";
             detail.actual_checkout = now;
             await detail.save();
 
-            const replyUpdateRoom = await this.eventBus.request(
+            const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO, 
                 {
                     filter: { _id: detail.room_id },
@@ -1458,7 +1454,7 @@ export class BookingService {
         try {
             const now = new Date();
             
-            const booking = await this.Booking.findById(bookingId).session(session);
+            const booking = await this.Booking.findById(bookingId);
             if (!booking) {
                 throw new Error("Không tìm thấy booking.");
             }
@@ -1488,7 +1484,7 @@ export class BookingService {
             detail.cancellation_reason = reason;
             await detail.save();
 
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: {
@@ -1513,7 +1509,7 @@ export class BookingService {
                 handled_by: userId || null,
             };
 
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, {
                 data: roomLog
             });
@@ -1531,14 +1527,14 @@ export class BookingService {
             });
 
             const allDetails = await this.BookingDetail.find({ booking_id: bookingId });
-            const new_status = calculateBookingStatus(allDetails);
-            if (new_status !== booking.status) {  
+            const new_status = this.calculateBookingStatus(allDetails);
+            if (new_status !== booking.status) {
                 booking.status = new_status;
                 await booking.save();
 
                 await this.BookingStatusLog.findOneAndUpdate(
                     {
-                        bookingId,
+                        booking_id: bookingId,
                         end_time: null,
                     },
                     {
@@ -1547,7 +1543,7 @@ export class BookingService {
                 );
 
                 await this.BookingStatusLog.create({
-                    bookingId,
+                    booking_id: bookingId,
                     status: booking.status,
                     start_time: now,
                     end_time: null,
@@ -1606,7 +1602,7 @@ export class BookingService {
             const details = await this.BookingDetail.find({ booking_id: bookingId }).lean();
             const roomIds = details.map(bd => bd.room_id);
             
-            const replyUpdateLog = await this.eventBus.request(
+            const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
                 {
                     filter: {
@@ -1632,13 +1628,13 @@ export class BookingService {
                     handled_by: userId || null,
                 };
             });
-            const replyInsertLog = await this.eventBus.request(
+            const replyInsertLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.INSERT_ROOM_LOG, {
                 data: availableRoomLogs
             });
             if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
 
-           const replyUpdateRoom = await this.eventBus.request(
+           const replyUpdateRoom = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_INFO, 
                 {
                     filter: { _id: { $in: roomIds } },
@@ -1667,11 +1663,11 @@ export class BookingService {
             }
 
             // trừ điểm khách vì đã hủy
-            // await updateCustomerPoints({
-            //   customer_id: booking.customer_id,
-            //   points: -20,
-            //   reason: "Trừ 20 điểm vì hủy booking"
-            // });
+            const replyPoints = await this.eventBus.safeRequest(
+                CUSTOMER_EVENTS.UPDATE_POINTS,
+                { customer_id: booking.customer_id, points: -20, reason: "Trừ 20 điểm vì hủy booking" }
+            );
+            if (!replyPoints.success) console.warn(`[CANCEL] Trừ điểm khách thất bại: ${replyPoints.message}`);
 
             // hủy luôn hóa đơn
             // await Receipt.updateMany(
@@ -1783,12 +1779,12 @@ export class BookingService {
 
             const bookingIds = [...new Set(bookingDetails.map(d => d.booking_id?.toString()).filter(Boolean))];
 
-            const bookings = await this.Booking.find({
+            const rawBookings = await this.Booking.find({
                 _id: { $in: bookingIds },
                 status: { $nin: ["cancelled", "expired"] }
-            })
-                .populate("customer_id", "full_name phone_number CCCD")
-                .lean();
+            }).lean();
+
+            const bookings = await this.populateCustomerAndEmployee(rawBookings);
 
             return {
                 bookingDetails,
@@ -1797,7 +1793,7 @@ export class BookingService {
 
         } catch (err) {
             console.error("Error handling GET_CALENDAR_DATA:", err);
-            throw error;
+            throw err;
         }
     };
 
