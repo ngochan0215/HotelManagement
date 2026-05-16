@@ -109,8 +109,13 @@ export const bookingApi = {
         const res = await axios.post(`${CLEANING_BASE}/${id}/start`, {}, getAuthHeader());
         return res.data;
     },
-    completeCleaningTask: async (id) => {
-        const res = await axios.post(`${CLEANING_BASE}/${id}/complete`, {}, getAuthHeader());
+    completeCleaningTask: async (id, images = []) => {
+        const token = localStorage.getItem("token");
+        const formData = new FormData();
+        images.forEach((file) => formData.append("images", file));
+        const res = await axios.post(`${CLEANING_BASE}/${id}/complete`, formData, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
         return res.data;
     },
     confirmCleaning: async (id) => {

@@ -53,7 +53,12 @@ export class CleaningController {
 
     completeCleaningTask = async (req, res) => {
         try {
-            const task = await this.cleaningService.completeCleaningTask(req.params.id, req.user?.userId);
+            const images = (req.files || []).map((f) => f.path);
+            const task = await this.cleaningService.completeCleaningTask(
+                req.params.id,
+                req.user?.userId,
+                images,
+            );
 
             return res.status(200).json({ success: true, message: "Hoàn thành công việc dọn dẹp. Chờ admin xác nhận.", data: task });
 

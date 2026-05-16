@@ -287,33 +287,36 @@ export class CleaningService {
         }
     };
     
-    completeCleaningTask = async (taskId, userId) => {        
-        try {    
+    completeCleaningTask = async (taskId, userId, images = []) => {
+        try {
             const employee = await this.findEmployeeByUserId(userId);
             if (!employee) {
                 throw new Error("Không tìm thấy thông tin nhân viên");
             }
-    
+
             const task = await this.CleaningTask.findById(taskId);
             if (!task) {
                 throw new Error("Không tìm thấy công việc");
             }
-    
+
             const room = await this.findRoomById(task.room_id);
             if (!room) {
                 throw new Error("Không tìm thấy phòng");
             }
-    
+
             if (task.handled_by?.toString() !== employee._id.toString()) {
                 throw new Error("Bạn không được gán công việc này");
             }
-    
+
             if (task.status !== "in_progress") {
                 throw new Error("Công việc chưa được bắt đầu");
             }
-    
+
             task.status = "completed";
             task.completed_at = new Date();
+            if (images.length > 0) {
+                task.completion_images = images;
+            }
             await task.save();
 
             try {

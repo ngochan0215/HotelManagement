@@ -22,6 +22,8 @@ const cleaningTaskSchema = new mongoose.Schema(
 
     confirmed_at: { type: Date, default: null },
 
+    completion_images: { type: [String], default: [] },
+
     note: { type: String, default: "" },
   },
   { 

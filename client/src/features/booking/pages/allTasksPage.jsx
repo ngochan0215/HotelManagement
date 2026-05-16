@@ -587,16 +587,26 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
                         <p className="text-xs text-slate-600 italic">"{task.note}"</p>
                     </div>
                 )}
+
+                {task.completion_images?.length > 0 && (
+                    <CompletionPhotos images={task.completion_images} />
+                )}
             </div>
         );
     }
 
     return (
-        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">GHI CHÚ</p>
-            <p className="font-bold text-blue-900 text-sm">
-                {task.note ? `"${task.note}"` : "Vệ sinh phòng theo quy trình chuẩn."}
-            </p>
+        <div className="space-y-3">
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">GHI CHÚ</p>
+                <p className="font-bold text-blue-900 text-sm">
+                    {task.note ? `"${task.note}"` : "Vệ sinh phòng theo quy trình chuẩn."}
+                </p>
+            </div>
+
+            {task.completion_images?.length > 0 && (
+                <CompletionPhotos images={task.completion_images} />
+            )}
         </div>
     );
   };
@@ -707,6 +717,22 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
     </div>
   );
 }
+
+const CompletionPhotos = ({ images }) => (
+    <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            📷 Ảnh minh chứng ({images.length})
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+            {images.map((url, idx) => (
+                <a key={idx} href={url} target="_blank" rel="noreferrer"
+                    className="block aspect-square rounded-xl overflow-hidden border-2 border-slate-100 shadow-sm hover:shadow-md hover:scale-105 transition-all">
+                    <img src={url} alt={`proof-${idx}`} className="w-full h-full object-cover" />
+                </a>
+            ))}
+        </div>
+    </div>
+);
 
 const TimeLineRow = ({ label, time, highlight }) => {
   if (!time) return null;
