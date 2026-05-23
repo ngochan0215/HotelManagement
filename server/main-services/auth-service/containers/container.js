@@ -5,7 +5,7 @@ import mailService from "../utils/emailService.js";
 import { UserEventHandler } from "../events/authHandler.js";
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
-import { sendNotification } from "../../../shared/messaging/notificationPublisher.js";
+import { sendNotification } from "../messaging/notificationPublisher.js";
 
 import { defaultAvatars } from "../../../shared/constants/defaultAvatars.js";
 import User from "../models/User.js";
