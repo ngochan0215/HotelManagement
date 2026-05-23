@@ -39,9 +39,11 @@ const LoginPage = () => {
         } else {
            try {
                const res = await employeeApi.getProfile();
-               if (res.employee && res.employee.position) {
-                   localStorage.setItem("position", res.employee.position);
-                   const pos = res.employee.position;
+               const employee = res.employee || res;
+               const pos = employee?.position;
+
+               if (pos) {
+                   localStorage.setItem("position", pos);
                    if (pos === 'receptionist') navigate("/room-calendar");
                    else if (pos === 'technician') navigate("/incidents");
                    else navigate("/dashboard");
@@ -112,9 +114,11 @@ const LoginPage = () => {
                 try {
                   const res = await employeeApi.getProfile();
 
-                  if (res.employee && res.employee.position) {
-                    localStorage.setItem("position", res.employee.position);
-                    const pos = res.employee.position;
+                  const employee = res.employee || res;
+                  const pos = employee?.position;
+
+                  if (pos) {
+                    localStorage.setItem("position", pos);
 
                     if (pos === 'receptionist') navigate("/room-calendar");
                     else if (pos === 'technician') navigate("/incidents");
