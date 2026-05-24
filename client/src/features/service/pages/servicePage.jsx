@@ -11,10 +11,10 @@ export default function ServicePage() {
   return (
     <div className="flex bg-[#F3F4F6] min-h-screen font-sans text-gray-800">
       <Sidebar />
-      <div className="flex-1 ml-[270px]">
+      <div className="flex-1 ml-[270px] min-w-0 overflow-x-hidden">
         <Topbar />
 
-        <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="p-8 w-full max-w-7xl mx-auto space-y-6">
 
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-200 pb-4">
                 <div>
@@ -24,7 +24,7 @@ export default function ServicePage() {
                     <p className="text-gray-500 text-sm mt-1">Quản lý menu, kho hàng hóa và theo dõi phiếu nhập/xuất.</p>
                 </div>
 
-                <div className="bg-gray-200 p-1 rounded-xl flex gap-1">
+                <div className="bg-gray-200 p-1 rounded-xl flex flex-wrap gap-1 max-w-full">
                     <button
                         onClick={() => setActiveTab("list")}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${

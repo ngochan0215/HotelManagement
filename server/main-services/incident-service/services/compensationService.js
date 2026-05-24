@@ -37,9 +37,9 @@ export class CompensateService {
             { equipmentId }
         );
 
-        if (!reply.success) 
+        if (!reply.success)
             throw new Error(reply.message || "Không tìm thấy thiết bị.");
-        
+
         return reply.equipment;
     };
 
@@ -236,51 +236,51 @@ export class CompensateService {
 
     async createCompensateTicket (userId, incidentId, data) {
         try {
-            const { payer_type, payer_id, compensation_details, note } = data;
-            
+            const { payer_type, payer_id: rawPayerId, compensation_details, note } = data;
+
             const actor = await this.getEmployeeByUserId(userId);
-        
+
             if ( !payer_type || !compensation_details ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin (người bồi thường, chi tiết đền bù).");
             }
-        
+
             const incident = await this.Incident.findById(incidentId);
             if (!incident) {
                 throw new Error("Sự cố không tồn tại.");
             }
-        
-            if (!payer_id) payer_id = incident.causer_id;
-        
+
+            const payer_id = rawPayerId || incident.causer_id;
+
             if (incident.compensation_status !== "none") {
                 throw new Error("Sự cố đã có phiếu đền bù.");
             }
-        
-            const existedTicket = await this.CompensateTicket.findOne({ incidentId });
-        
+
+            const existedTicket = await this.CompensateTicket.findOne({ incident_id: incidentId });
+
             if (existedTicket) {
                 throw new Error("Sự cố này đã có phiếu đền bù.");
             }
-        
+
             const validPayers = ["customer", "employee", "hotel"];
             if (!validPayers.includes(payer_type)) {
                 throw new Error("payer_type không hợp lệ.");
             }
-        
+
             if (payer_type !== "hotel" && !payer_id) {
                 throw new Error("Cần xác định người chịu trách nhiệm chi trả.");
             }
-        
+
             const { details, totalFee } = await this.buildCompensationDetails(compensation_details, incident);
-        
+
             for (const item of details) {
                 await this.updateEquipmentByResolution({
-                    equipment_id: item.equipment_id, 
-                    resolution: item.resolution, 
-                    handled_by: req.user.employee_id, 
+                    equipment_id: item.equipment_id,
+                    resolution: item.resolution,
+                    handled_by: actor._id,
                     note: `Sự cố ${incident._id}`
                 });
             }
-        
+
             // thêm phiếu đền bù
             const ticket = await this.CompensateTicket.create({
                 incident_id: incident._id,
@@ -334,20 +334,20 @@ export class CompensateService {
     
     async createCompensateTicketOther (incidentId, userId, data) {
         try {
-            const { payer_type, payer_id, total_fee, note } = data;
+            const { payer_type, payer_id: rawPayerId, total_fee, note } = data;
 
             const actor = await this.getEmployeeByUserId(userId);
-    
+
             if ( !payer_type || !total_fee ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin.");
             }
-        
+
             const incident = await this.Incident.findById(incidentId);
             if (!incident) {
                 throw new Error("Sự cố không tồn tại.");
             }
-        
-            if (!payer_id) payer_id = incident.causer_id;
+
+            const payer_id = rawPayerId || incident.causer_id;
         
             if (incident.compensation_status !== "none") {
                 throw new Error("Sự cố đã có phiếu đền bù.");
@@ -424,17 +424,7 @@ export class CompensateService {
     
             const compensations = await this.CompensateTicket.find(filter)
                 .select("-__v -updated_at")
-                .populate({
-                    path: "incident_id", select: "-__v -updated_at -created_at",
-                })
-                .populate({
-                    path: "compensation_details.equipment_id",
-                    select: "condition status",
-                    // populate: {
-                    // path: "category_id",
-                    // select: "name price",
-                    // },
-                })
+                .populate({ path: "incident_id", select: "-__v -updated_at -created_at" })
                 .sort({ created_at: -1 }).lean();
     
             const incidents = compensations.map(t => t.incident_id).filter(Boolean);
@@ -516,21 +506,7 @@ export class CompensateService {
 
             const compensation = await this.CompensateTicket.findById(ticketId)
                 .select("-__v")
-                .populate({
-                    path: "incident_id", select: "-__v -updated_at -created_at",
-                    // populate: [
-                    // { path: "room_id", select: "room_number" },
-                    // { path: "reporter_id", select: "system_role" },
-                    // { path: "causer_id", select: "system_role" },
-                    // ],
-                })
-                .populate({
-                    path: "compensation_details.equipment_id",
-                    // populate: {
-                    // path: "category_id",
-                    // select: "name price",
-                    // },
-                })
+                .populate({ path: "incident_id", select: "-__v -updated_at -created_at" })
                 .lean();
         
             if (!compensation)

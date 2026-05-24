@@ -19,6 +19,8 @@ import { customerApi } from "../../api/customerApi.js";
 import { receiptApi } from "../../api/receiptApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
 import { discountApi } from "../../api/discountApi.js";
+import { serviceApi } from "../../api/serviceApi.js";
+import { incidentApi } from "../../api/incidentApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import AssignHousekeeperModal from "../components/assignHousekeeperModal.jsx";
 
@@ -57,7 +59,6 @@ export default function BookingList() {
   if (!employeeId && user?.token) {
       try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
   }
-  if (!employeeId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
 
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
@@ -120,6 +121,8 @@ export default function BookingList() {
 
   const [selectedBooking, setSelectedBooking] = useState(null);
 
+  if (!employeeId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
+
   useEffect(() => {
     fetchData();
     const handleClickOutside = (event) => {
@@ -133,8 +136,12 @@ export default function BookingList() {
       if (html5QrCodeRef.current) {
         html5QrCodeRef.current.stop().catch(() => {});
       }
-      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      if (payosPollingRef.current) clearInterval(payosPollingRef.current);
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
+      if (payosPollingRef.current) {
+        clearInterval(payosPollingRef.current);
+      }
     };
   }, []);
 
@@ -913,11 +920,11 @@ export default function BookingList() {
       
       if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
         window.open(paymentRes.data.checkoutUrl, '_blank');
+        startPayOSPolling(bookingId);
         setToast({
           message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.",
           type: "info"
         });
-        startPayOSPolling(bookingId); // auto-refresh when payment confirmed
       } else {
         throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
       }
@@ -1431,7 +1438,6 @@ export default function BookingList() {
                             </button>
                         </div>
 
-                        {bookingMode === 'immediate'}
                     </div>
 
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mt-1">
@@ -1865,131 +1871,348 @@ export default function BookingList() {
 
 // ─── Booking Detail Modal ────────────────────────────────────────────────────
 
-const ROOM_STATUS_MAP = {
-  confirmed: { label: "Đã xác nhận", color: "bg-blue-100 text-blue-700" },
-  checked_in: { label: "Đang ở", color: "bg-indigo-100 text-indigo-700" },
-  checked_out: { label: "Đã trả", color: "bg-gray-100 text-gray-600" },
+const USAGE_STATUS_LABEL = {
+  pending: { label: "Chờ sử dụng", cls: "bg-blue-100 text-blue-700" },
+  waiting_confirm: { label: "Chờ xác nhận", cls: "bg-yellow-100 text-yellow-800" },
+  completed: { label: "Hoàn thành", cls: "bg-green-100 text-green-700" },
+  cancelled: { label: "Đã hủy", cls: "bg-red-100 text-red-500" },
+  expired: { label: "Hết hạn", cls: "bg-gray-100 text-gray-500" },
 };
 
+const INCIDENT_STATUS_LABEL = {
+  open:     { label: "Mở", cls: "bg-red-100 text-red-700" },
+  assigned: { label: "Đã phân công", cls: "bg-orange-100 text-orange-700" },
+  resolved: { label: "Đã giải quyết", cls: "bg-blue-100 text-blue-700" },
+  closed:   { label: "Đã đóng", cls: "bg-gray-100 text-gray-600" },
+};
+
+const RECEIPT_STATUS_LABEL = {
+  paid:        { label: "Đã thanh toán", cls: "bg-emerald-100 text-emerald-700" },
+  pending:     { label: "Chờ thanh toán", cls: "bg-orange-100 text-orange-700" },
+  "half-paid": { label: "TT một phần",   cls: "bg-yellow-100 text-yellow-700" },
+  cancelled:   { label: "Đã hủy",        cls: "bg-gray-100 text-gray-500" },
+  refunded:    { label: "Đã hoàn tiền",  cls: "bg-blue-100 text-blue-700" },
+};
+
+const ROOM_STATUS_MAP = {
+  confirmed:   { label: "Đã xác nhận", color: "bg-blue-100 text-blue-700" },
+  checked_in:  { label: "Đang ở",      color: "bg-indigo-100 text-indigo-700" },
+  checked_out: { label: "Đã trả",      color: "bg-gray-100 text-gray-600" },
+  cancelled:   { label: "Đã hủy",      color: "bg-red-100 text-red-500" },
+};
+
+const STATUS_HEADER_BG = {
+  yellow:  "from-amber-500 to-yellow-400",
+  blue:    "from-blue-600 to-sky-400",
+  indigo:  "from-indigo-600 to-violet-500",
+  emerald: "from-emerald-600 to-teal-400",
+  red:     "from-red-600 to-rose-400",
+  gray:    "from-gray-500 to-slate-400",
+};
+
+function SectionBlock({ colorCls, label, children }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`w-1 h-4 rounded-full ${colorCls}`} />
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SkeletonBlock() {
+  return <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />;
+}
+
 function BookingDetailModal({ booking: b, onClose }) {
+  const [serviceUsages, setServiceUsages] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+  const [receipt, setReceipt] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchExtra = async () => {
+      try {
+        const [svcRes, rcptRes, incRes] = await Promise.allSettled([
+          serviceApi.getAllServiceUsage({ booking_id: b._id }),
+          receiptApi.getAllReceipts({ booking_id: b._id }),
+          incidentApi.getAllIncidents({ booking_id: b._id }),
+        ]);
+        if (svcRes.status === "fulfilled") setServiceUsages(svcRes.value?.data || []);
+        if (rcptRes.status === "fulfilled") setReceipt((rcptRes.value?.receipts || [])[0] || null);
+        if (incRes.status === "fulfilled") setIncidents(incRes.value?.data || []);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchExtra();
+  }, [b._id]);
+
   const nights = calcNights(b.expected_checkin, b.expected_checkout);
   const statusInfo = STATUS_MAP[b.status] || STATUS_MAP.pending;
+  const headerGradient = STATUS_HEADER_BG[statusInfo.color] || STATUS_HEADER_BG.gray;
 
-  const statusColorMap = {
-    yellow: "bg-yellow-100 text-yellow-700 border-yellow-200",
-    blue: "bg-blue-100 text-blue-700 border-blue-200",
-    indigo: "bg-indigo-100 text-indigo-700 border-indigo-200",
-    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    red: "bg-red-100 text-red-700 border-red-200",
-    gray: "bg-gray-100 text-gray-600 border-gray-200",
-  };
+  const totalServiceFee = serviceUsages.reduce((acc, s) => acc + (s.total_fee || 0), 0);
+  const remaining = Math.max(0, (b.total_fee || 0) - (b.deposit || 0));
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <div>
-            <h3 className="font-black text-lg text-gray-900">Chi tiết đặt phòng</h3>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">#{b._id?.slice(-8).toUpperCase()}</p>
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+
+        {/* Gradient Header */}
+        <div className={`relative bg-gradient-to-r ${headerGradient} px-6 py-5 text-white`}>
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition"
+          >✕</button>
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center font-black text-xl shadow-inner">
+              {b.customer_info?.full_name?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-black text-xl truncate">{b.customer_info?.full_name}</h3>
+              <p className="text-white/70 text-sm mt-0.5">{b.customer_info?.phone_number}</p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-white/25 border border-white/30 uppercase tracking-wide">
+                  {statusInfo.label}
+                </span>
+                <span className="text-white/50 text-xs font-mono">#{b._id?.slice(-8).toUpperCase()}</span>
+                <span className="text-white/50 text-xs">
+                  {format(new Date(b.expected_checkin), "dd/MM/yyyy")} → {format(new Date(b.expected_checkout), "dd/MM/yyyy")}
+                </span>
+              </div>
+            </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-400 transition font-bold">✕</button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 space-y-5 no-scrollbar">
-          {/* Status */}
-          <div className="flex justify-center">
-            <span className={`px-4 py-1.5 rounded-full text-sm font-black border uppercase tracking-wide ${statusColorMap[statusInfo.color] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-              {statusInfo.label}
-            </span>
+        <div className="p-6 overflow-y-auto flex-1 space-y-6 no-scrollbar">
+
+          {/* Date grid */}
+          <div className="grid grid-cols-5 gap-3">
+            <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Check-in</p>
+              <p className="text-sm font-black text-slate-800">{format(new Date(b.expected_checkin), "HH:mm")}</p>
+              <p className="text-xs text-slate-500">{format(new Date(b.expected_checkin), "dd/MM/yyyy")}</p>
+            </div>
+            <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center">
+              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Đêm</p>
+              <p className="text-2xl font-black text-indigo-700">{nights}</p>
+            </div>
+            <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-end">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Check-out</p>
+              <p className="text-sm font-black text-slate-800">{format(new Date(b.expected_checkout), "HH:mm")}</p>
+              <p className="text-xs text-slate-500">{format(new Date(b.expected_checkout), "dd/MM/yyyy")}</p>
+            </div>
           </div>
 
           {/* Customer */}
           <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Khách hàng</p>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center font-black text-xl">
-                {b.customer_info?.full_name?.charAt(0).toUpperCase()}
+            <SectionBlock colorCls="bg-indigo-500" label="Thông tin khách hàng">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <p className="text-[10px] text-indigo-400 font-bold uppercase">Họ tên</p>
+                  <p className="font-bold text-gray-900">{b.customer_info?.full_name || "---"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-indigo-400 font-bold uppercase">Điện thoại</p>
+                  <p className="font-bold text-gray-900">{b.customer_info?.phone_number || "---"}</p>
+                </div>
+                {b.customer_info?.CCCD && (
+                  <div className="col-span-2">
+                    <p className="text-[10px] text-indigo-400 font-bold uppercase">CCCD</p>
+                    <p className="font-mono text-gray-700 text-sm">{b.customer_info.CCCD}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] text-indigo-400 font-bold uppercase">Người lớn</p>
+                  <p className="font-bold text-gray-900">{b.adults || 1} người</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-indigo-400 font-bold uppercase">Trẻ em</p>
+                  <p className="font-bold text-gray-900">{b.children || 0} em</p>
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-gray-900">{b.customer_info?.full_name}</p>
-                <p className="text-sm text-gray-500">{b.customer_info?.phone_number}</p>
-                {b.customer_info?.CCCD && <p className="text-xs text-gray-400 font-mono">CCCD: {b.customer_info.CCCD}</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Check-in</p>
-              <p className="text-xs font-black text-slate-800">{format(new Date(b.expected_checkin), "HH:mm")}</p>
-              <p className="text-[10px] text-slate-500">{format(new Date(b.expected_checkin), "dd/MM/yyyy")}</p>
-            </div>
-            <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center">
-              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Số đêm</p>
-              <p className="text-2xl font-black text-indigo-700">{nights}</p>
-            </div>
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Check-out</p>
-              <p className="text-xs font-black text-slate-800">{format(new Date(b.expected_checkout), "HH:mm")}</p>
-              <p className="text-[10px] text-slate-500">{format(new Date(b.expected_checkout), "dd/MM/yyyy")}</p>
-            </div>
+            </SectionBlock>
           </div>
 
           {/* Rooms */}
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Phòng đã đặt ({b.rooms?.length || 0})</p>
+          <SectionBlock colorCls="bg-violet-500" label={`Phòng đã đặt  (${b.rooms?.length || 0})`}>
             <div className="space-y-2">
               {b.rooms?.map((r, i) => {
                 const rs = ROOM_STATUS_MAP[r.status] || { label: r.status, color: "bg-gray-100 text-gray-600" };
                 return (
-                  <div key={i} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                  <div key={i} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-violet-100 transition">
                     <div className="flex items-center gap-3">
-                      <span className="font-black text-indigo-700 text-lg">P.{r.room_info?.room_number}</span>
-                      {r.room_info?.category_name && <span className="text-xs text-gray-400">{r.room_info.category_name}</span>}
+                      <div className="w-9 h-9 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center font-black text-sm">
+                        {r.room_info?.room_number}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800 text-sm">Phòng {r.room_info?.room_number}</p>
+                        {r.room_info?.category_name && <p className="text-xs text-gray-400">{r.room_info.category_name}</p>}
+                      </div>
                     </div>
                     <span className={`text-[10px] font-black px-2 py-1 rounded-full ${rs.color}`}>{rs.label}</span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </SectionBlock>
+
+          {/* Handler employee */}
+          {b.handler_employee_info && (
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+              <SectionBlock colorCls="bg-amber-500" label="Nhân viên phụ trách">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center font-black text-base">
+                    {b.handler_employee_info?.full_name?.charAt(0).toUpperCase() || "?"}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">{b.handler_employee_info?.full_name}</p>
+                    <p className="text-xs text-gray-500 capitalize">{b.handler_employee_info?.position || b.handler_employee_info?.role || ""}</p>
+                  </div>
+                </div>
+              </SectionBlock>
+            </div>
+          )}
 
           {/* Financials */}
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tài chính</p>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 font-medium">Tổng tiền</span>
-              <span className="font-black text-gray-800">{(b.total_fee || 0).toLocaleString()} đ</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 font-medium">Tiền cọc</span>
-              <span className="font-bold text-indigo-600">{(b.deposit || 0).toLocaleString()} đ</span>
-            </div>
-            {b.discount_id && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 font-medium">Mã giảm giá</span>
-                <span className="font-bold text-emerald-600">{b.discount_id?.code || "Đã áp dụng"}</span>
+          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+            <SectionBlock colorCls="bg-emerald-500" label="Tài chính">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Tổng tiền phòng</span>
+                  <span className="font-black text-gray-800">{(b.total_fee || 0).toLocaleString()} đ</span>
+                </div>
+                {totalServiceFee > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Phí dịch vụ</span>
+                    <span className="font-bold text-orange-600">{totalServiceFee.toLocaleString()} đ</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Tiền cọc</span>
+                  <span className="font-bold text-indigo-600">{(b.deposit || 0).toLocaleString()} đ</span>
+                </div>
+                {b.discount_id && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Mã giảm giá</span>
+                    <span className="font-bold text-emerald-600">{b.discount_id?.code || "Đã áp dụng"}</span>
+                  </div>
+                )}
+                <div className="border-t border-emerald-100 pt-2 flex justify-between font-bold">
+                  <span className="text-gray-700">Còn lại cần thu</span>
+                  <span className="text-emerald-700 text-base">{remaining.toLocaleString()} đ</span>
+                </div>
               </div>
-            )}
+            </SectionBlock>
           </div>
 
-          {/* Guests */}
-          <div className="flex gap-3">
-            <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Người lớn</p>
-              <p className="text-xl font-black text-slate-700">{b.adults || 1}</p>
-            </div>
-            <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trẻ em</p>
-              <p className="text-xl font-black text-slate-700">{b.children || 0}</p>
-            </div>
-          </div>
+          {/* Service Usage */}
+          <SectionBlock colorCls="bg-orange-500" label="Dịch vụ đã sử dụng">
+            {loading ? <SkeletonBlock /> : serviceUsages.length === 0 ? (
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-100 text-center text-sm text-orange-400 italic">Chưa có dịch vụ nào</div>
+            ) : (
+              <div className="space-y-2">
+                {serviceUsages.map((s, i) => {
+                  const st = USAGE_STATUS_LABEL[s.status] || { label: s.status, cls: "bg-gray-100 text-gray-500" };
+                  return (
+                    <div key={i} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-100 rounded-xl">
+                      <div>
+                        <p className="font-bold text-sm text-gray-800">Phiếu #{s._id.slice(-6).toUpperCase()}</p>
+                        <p className="text-xs text-gray-500">NV: {s.employee_id?.full_name || "System"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-orange-700 text-sm">{(s.total_fee || 0).toLocaleString()} đ</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end text-sm pt-1 pr-1">
+                  <span className="font-black text-orange-700">Tổng: {totalServiceFee.toLocaleString()} đ</span>
+                </div>
+              </div>
+            )}
+          </SectionBlock>
+
+          {/* Incidents — only shown when loading or when there are any */}
+          {(loading || incidents.length > 0) && (
+            <SectionBlock colorCls="bg-red-500" label="Sự cố & Bồi thường">
+              {loading ? <SkeletonBlock /> : (
+                <div className="space-y-2">
+                  {incidents.map((inc, i) => {
+                    const ist = INCIDENT_STATUS_LABEL[inc.status] || { label: inc.status, cls: "bg-gray-100 text-gray-500" };
+                    return (
+                      <div key={i} className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-gray-800">{inc.type || "Sự cố"}</p>
+                            {inc.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{inc.description}</p>}
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${ist.cls}`}>{ist.label}</span>
+                        </div>
+                        {inc.causer_name && (
+                          <p className="text-xs text-red-600 mt-1.5 font-medium">Gây ra bởi: {inc.causer_name}</p>
+                        )}
+                        {inc.compensation_status && inc.compensation_status !== "none" && (
+                          <p className="text-xs text-orange-600 mt-0.5 font-medium">Bồi thường: {inc.compensation_status}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionBlock>
+          )}
+
+          {/* Receipt */}
+          <SectionBlock colorCls="bg-teal-500" label="Hóa đơn">
+            {loading ? <SkeletonBlock /> : !receipt ? (
+              <div className="p-4 bg-teal-50 rounded-xl border border-teal-100 text-center text-sm text-teal-400 italic">Chưa có hóa đơn</div>
+            ) : (
+              <div className="p-4 bg-teal-50 border border-teal-100 rounded-xl space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-mono text-teal-600 font-bold">#{receipt._id.slice(-8).toUpperCase()}</span>
+                  {(() => {
+                    const rst = RECEIPT_STATUS_LABEL[receipt.status] || { label: receipt.status, cls: "bg-gray-100 text-gray-500" };
+                    return <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${rst.cls}`}>{rst.label}</span>;
+                  })()}
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Tổng hóa đơn</span>
+                  <span className="font-black text-teal-700 text-base">{(receipt.final_amount || 0).toLocaleString()} đ</span>
+                </div>
+                {receipt.deposit_amount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Đã cọc</span>
+                    <span className="font-bold text-indigo-600">{receipt.deposit_amount.toLocaleString()} đ</span>
+                  </div>
+                )}
+                {receipt.payment && receipt.payment !== "unknown" && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Phương thức</span>
+                    <span className="font-bold text-gray-700">{receipt.payment === "cash" ? "Tiền mặt" : "Chuyển khoản (PayOS)"}</span>
+                  </div>
+                )}
+                {receipt.created_at && (
+                  <div className="flex justify-between text-xs text-gray-400 pt-1 border-t border-teal-100">
+                    <span>Ngày tạo HĐ</span>
+                    <span>{format(new Date(receipt.created_at), "dd/MM/yyyy HH:mm")}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </SectionBlock>
+
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-          <button onClick={onClose} className="px-8 py-2.5 bg-gray-900 text-white font-black rounded-xl text-xs hover:bg-black transition uppercase tracking-widest">
+          <button
+            onClick={onClose}
+            className={`px-8 py-2.5 bg-gradient-to-r ${headerGradient} text-white font-black rounded-xl text-xs hover:opacity-90 transition shadow-lg uppercase tracking-widest`}
+          >
             Đóng lại
           </button>
         </div>

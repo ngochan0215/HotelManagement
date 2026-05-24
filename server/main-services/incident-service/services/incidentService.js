@@ -6,6 +6,7 @@ import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
+import { IncidentStateMachine } from "../patterns/incidentStateMachine.js";
 const MAX_DAYS = 30;
 
 export class IncidentService {
@@ -261,8 +262,7 @@ export class IncidentService {
             if (!incident) 
                 throw new Error("Không tìm thấy sự cố.");
             
-            if (incident.status === "closed") 
-                throw new Error("Không thể cập nhật sự cố đã đóng.");
+            IncidentStateMachine.assertCanUpdate(incident.status);
 
             const actor = await this.getEmployeeByUserId(actorId);
 
@@ -302,8 +302,8 @@ export class IncidentService {
             ]);
 
             await this.IncidentLog.create({
-                incident_id: incident._id,
-                action: "updated",
+                incident_id: incident._id, 
+                action: "updated", 
                 from_status: incident.status, 
                 to_status: updates.status || null,
                 actor_id: actor._id, 
@@ -330,9 +330,7 @@ export class IncidentService {
             if (!incident) 
                 throw new Error("Không tìm thấy sự cố");
             
-            if (["resolved", "closed"].includes(incident.status)) {
-                throw new Error("Không thể phân công sự cố đã xử lý xong");
-            }
+            IncidentStateMachine.assertCanAssign(incident.status);
 
             const [assignee, actor] = await Promise.all([
                 this.getEmployeeById(assigneeId),
@@ -340,6 +338,7 @@ export class IncidentService {
             ]);
 
             const prevStatus = incident.status;
+            const targetStatus = IncidentStateMachine.getTargetStatus("assign");
             incident.assignee_info = {
                 assignee_id: assignee._id, 
                 assignee_name: assignee.full_name, 
@@ -349,6 +348,8 @@ export class IncidentService {
 
             incident.status = "in_progress";
             if (note) incident.processing_note = note;
+            incident.status = targetStatus;
+            if (note) incident.processing_note = note; 
             await incident.save();
             await Promise.all([
                 cache.del(`incident:one:${incidentId}`),
@@ -358,10 +359,10 @@ export class IncidentService {
 
             // ghi log
             await this.IncidentLog.create({
-                incident_id: incident._id,
-                action: "assigned",
+                incident_id: incident._id, 
+                action: "assigned", 
                 from_status: prevStatus, 
-                to_status: "in_progress",
+                to_status: targetStatus,
                 actor_id: actor._id, 
                 actor_name: actor.full_name, 
                 actor_role: actor.position, 
@@ -379,7 +380,6 @@ export class IncidentService {
     async resolveIncident(userId, incidentId, data) {
         try {
             const { note } = data;
-
             if (!note) throw new Error("Thiếu ghi chú xử lý.");
 
             const [user, actor, incident] = await Promise.all([
@@ -387,12 +387,10 @@ export class IncidentService {
                 this.getEmployeeByUserId(userId),
                 this.Incident.findById(incidentId),
             ]);
-            if (!incident)
+            if (!incident) 
                 throw new Error("Không tìm thấy sự cố.");
 
-            if (incident.status !== "in_progress") {
-                throw new Error("Sự cố chưa được phân công hoặc đã đóng.");
-            }
+            IncidentStateMachine.assertCanResolve(incident.status);
 
             if (user.system_role === "employee") {
                 const assignee_id = incident.assignee_info?.assignee_id;
@@ -402,10 +400,10 @@ export class IncidentService {
             }
 
             const oldStatus = incident.status;
-
-            incident.status = "resolved";
+            const targetStatus = IncidentStateMachine.getTargetStatus("resolve");
+            incident.status = targetStatus;
             incident.resolved_at = new Date();
-            incident.processing_note = note;
+            incident.processing_note = note; 
             await incident.save();
             await Promise.all([
                 cache.del(`incident:one:${incidentId}`),
@@ -417,7 +415,7 @@ export class IncidentService {
                 incident_id: incident._id,
                 action: "resolved",
                 from_status: oldStatus,
-                to_status: "resolved",
+                to_status: targetStatus,
                 actor_id: actor._id,
                 actor_name: actor.full_name,
                 actor_role: actor.position,
@@ -449,14 +447,14 @@ export class IncidentService {
                 }
             }
 
-            if (incident.status !== "resolved") 
-                throw new Error("Chỉ đóng được sự cố đã Resolved.");
+            IncidentStateMachine.assertCanClose(incident.status);
 
             const oldStatus = incident.status;
-            incident.status = "closed";
+            const targetStatus = IncidentStateMachine.getTargetStatus("close");
+            incident.status = targetStatus;
             incident.closed_at = new Date();
-
-            if (note) incident.processing_note = note;
+            
+            if (note) incident.processing_note = note; 
             await incident.save();
             await Promise.all([
                 cache.del(`incident:one:${incidentId}`),
@@ -471,7 +469,7 @@ export class IncidentService {
                 incident_id: incident._id, 
                 action: "closed", 
                 from_status: oldStatus, 
-                to_status: "closed",
+                to_status: targetStatus,
                 actor_id: actor._id, 
                 actor_name: actor.full_name, 
                 actor_role: actor.position, 
@@ -491,12 +489,11 @@ export class IncidentService {
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
-            const { status, severity, compensation_status, room_id, type, caused_by, booking_id } = query;
-
             const [user, employee] = await Promise.all([
                 this.getUserById(userId),
                 this.getEmployeeByUserId(userId),
             ]);
+            const { status, severity, compensation_status, room_id, type, caused_by, booking_id } = query;
 
             const filter = {};
             if (user.system_role !== 'manager' && user.system_role !== 'admin') {
@@ -511,6 +508,7 @@ export class IncidentService {
             if (room_id) filter.room_id = room_id;
             if (type) filter.type = type;
             if (caused_by) filter.caused_by = caused_by;
+            if (booking_id) filter.booking_id = booking_id;
 
             const incidents = await this.Incident.find(filter)
                 .sort({ created_at: -1 }).lean();
@@ -563,6 +561,7 @@ export class IncidentService {
             const incidents = await this.Incident.find(filter)
                 .sort({ created_at: -1 }).lean();
 
+            // batch rooms
             const roomIds = [...new Set(incidents.map(i => i.room_id?.toString()).filter(Boolean))];
             const reporterIds = [...new Set(incidents.map(i => i.reporter_id?.toString()).filter(Boolean))];
             const assigneeIds = [...new Set(
@@ -578,16 +577,16 @@ export class IncidentService {
             const roomMap = {};
             if (roomReply.success) {
                 for (const room of roomReply.rooms) {
-                    roomMap[room._id.toString()] = { _id: room._id, room_number: room.room_number };
+                        roomMap[room._id.toString()] = { _id: room._id, room_number: room.room_number };
+                    }
                 }
-            }
 
             const reporterMap = {};
             if (reporterReply.success) {
                 for (const user of reporterReply.users) {
-                    reporterMap[user._id.toString()] = { _id: user._id, email: user.email };
+                        reporterMap[user._id.toString()] = { _id: user._id, email: user.email };
+                    }
                 }
-            }
 
             const assigneeMap = {};
             if (assigneeReply.success) {
@@ -677,7 +676,7 @@ export class IncidentService {
                 cache.delByPattern("incident:list:*"),
                 cache.delByPattern("incident:tasks:*"),
             ]);
-
+            
             return { success: true };
         } catch (error) {
             console.log("Error in deleting incident: ", error.message);

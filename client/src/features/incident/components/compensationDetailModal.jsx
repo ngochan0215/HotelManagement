@@ -127,6 +127,8 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
   const incident = ticket.incident_id;
   const compensationDetails = ticket.compensation_details || [];
 
+  console.log("Rendering CompensationDetailModal with ticket:", ticket);
+
   return (
     <>
     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -189,11 +191,11 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
                   {getPayerTypeLabel(ticket.payer_type)}
                 </p>
               </div>
-              {ticket.incident?.causer_name && (
+              {incident?.causer_name && (
                 <div>
                   <span className="text-xs text-gray-500">Người gây ra:</span>
                   <p className="font-semibold text-gray-800">
-                    {ticket.incident.causer_name}
+                    {incident.causer_name}
                   </p>
                 </div>
               )}
@@ -225,7 +227,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
                     <span className="text-xs text-gray-500">Phòng:</span>
                     <p className="font-semibold text-gray-800 flex items-center gap-1">
                       <FiMapPin className="text-indigo-600" size={14} />
-                      Phòng {incident.room_id.room_number}
+                      Phòng {incident.room_info.room_number}
                     </p>
                   </div>
                 )}

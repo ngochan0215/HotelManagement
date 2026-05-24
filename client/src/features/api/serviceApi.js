@@ -44,6 +44,21 @@ export const serviceApi = {
     return res.data;
   },
 
+  createCategory: async (formData) => {
+    const res = await axios.post(`${BASE_URL}/category/add`, formData, getAuthHeader(true));
+    return res.data;
+  },
+
+  updateCategory: async (id, formData) => {
+    const res = await axios.patch(`${BASE_URL}/category/update/${id}`, formData, getAuthHeader(true));
+    return res.data;
+  },
+
+  deleteCategory: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/category/delete/${id}`, getAuthHeader());
+    return res.data;
+  },
+
     getOutOfStockServices: async () => {
       const res = await axios.get(`${BASE_URL}/import/out-of-stock`, getAuthHeader());
       return res.data;
@@ -65,8 +80,8 @@ export const serviceApi = {
       return res.data;
     },
 
-    getAllServiceUsage: async () => {
-      const res = await axios.get(`${BASE_URL}/usage/all`, getAuthHeader());
+    getAllServiceUsage: async (params = {}) => {
+      const res = await axios.get(`${BASE_URL}/usage/all`, { ...getAuthHeader(), params });
       return res.data;
     },
     createServiceUsage: async (data) => {

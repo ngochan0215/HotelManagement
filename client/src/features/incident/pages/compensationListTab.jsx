@@ -5,6 +5,15 @@ import CompensationDetailModal from "../components/compensationDetailModal.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
 
+const INCIDENT_TYPE_LABEL = {
+  equipment: "Thiết bị",
+  technical: "Kỹ thuật",
+  facility: "Cơ sở vật chất",
+  service: "Dịch vụ",
+  safety: "An toàn",
+  other: "Khác",
+};
+
 export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -17,13 +26,14 @@ export default function CompensationListTab() {
       setLoading(true);
       try {
         const res = await incidentApi.getAllCompensateTickets();
-        // SỬA Ở ĐÂY: Lấy res.data vì backend trả về { total, data: [...] }
-        // Kiểm tra kỹ xem res có phải mảng hay object chứa data
         const list = Array.isArray(res) ? res : (res.data || []);
+
+        console.log("Fetched compensation tickets:", list);
         setTickets(list);
+
       } catch (err) {
         console.error("Lỗi fetch bồi thường:", err);
-        setTickets([]); // Đảm bảo luôn là mảng để không crash
+        setTickets([]);
       } finally {
         setLoading(false);
       }
@@ -98,11 +108,11 @@ export default function CompensationListTab() {
                         {t.payer_type === 'customer' ? 'Khách hàng' :
                          t.payer_type === 'employee' ? 'Nhân viên' : 'Khách sạn'}
                       </span>
-                      <span className="text-xs text-gray-400">{t.incident?.causer_name || "N/A"}</span>
+                      <span className="text-xs text-gray-400">{t.incident_id?.causer_name || "N/A"}</span>
                     </div>
                   </td>
                   <td className="py-4 px-6 text-xs">
-                    <div className="font-medium text-gray-600">Sự cố: {t.incident_id?.type}</div>
+                    <div className="font-medium text-gray-600">Sự cố: {INCIDENT_TYPE_LABEL[t.incident_id?.type] || t.incident_id?.type}</div>
                     <div className="text-gray-400 italic truncate max-w-[150px]">
                       {t.incident_id?.description}
                     </div>

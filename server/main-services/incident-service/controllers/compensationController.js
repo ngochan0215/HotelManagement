@@ -40,8 +40,8 @@ export class CompensationController {
 
     getCompensateTicketById = async (req, res) => {
         try {
-            const ticket = await this.compensationService.getCompensateTicketById(req.params.id);
-            return res.status(200).json({ ticket });
+            const result = await this.compensationService.getCompensateTicketById(req.params.id);
+            return res.status(200).json(result);
         } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }

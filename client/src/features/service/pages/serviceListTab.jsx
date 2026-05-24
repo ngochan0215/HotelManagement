@@ -5,6 +5,7 @@ import {
 } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
+import ServiceCategorySection from "../components/serviceCategorySection.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
@@ -43,7 +44,8 @@ export default function ServiceListTab() {
     try { userId = jwtDecode(user.token).userId; } catch (err) {}
   }
   if (!userId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
-  const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
+  const userRole = (user?.role || localStorage.getItem("role") || "").toLowerCase();
+  const isManager = userRole === "manager" || userRole === "admin";
   
   useEffect(() => {
     console.log("🔍 Debug ServiceListTab:");
@@ -319,6 +321,7 @@ export default function ServiceListTab() {
 
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
+        <ServiceCategorySection categories={categories} canManage={isManager} onRefresh={fetchData} />
 
         <div className="flex justify-between items-center mb-6">
             {isManager ? (
@@ -341,8 +344,8 @@ export default function ServiceListTab() {
             )}
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 justify-between mb-6">
-            <div className="relative w-full lg:w-96">
+        <div className="mb-6 w-full min-w-0 space-y-3">
+            <div className="relative w-full min-w-0">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input
                     type="text"
@@ -353,8 +356,8 @@ export default function ServiceListTab() {
                 />
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-1">
-                <div className="relative min-w-[200px]">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 w-full min-w-0">
+                <div className="relative w-full min-w-0">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiFilter className="text-gray-500" size={16} /></div>
                     <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
                         <option value="all">Tất cả Danh mục</option>
@@ -363,10 +366,10 @@ export default function ServiceListTab() {
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 bg-gray-100 p-1 rounded-lg">
+                <div className="flex flex-nowrap items-center gap-1 bg-gray-100 p-1 rounded-xl h-[46px] w-full min-w-0 overflow-hidden">
                     <button 
                         onClick={() => setFilterStatus("all")} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
                             filterStatus === "all" 
                                 ? "bg-white text-indigo-600 shadow-sm" 
                                 : "text-gray-500 hover:text-gray-700"
@@ -376,7 +379,7 @@ export default function ServiceListTab() {
                     </button>
                     <button 
                         onClick={() => setFilterStatus("active")} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
                             filterStatus === "active" 
                                 ? "bg-white text-green-600 shadow-sm" 
                                 : "text-gray-500 hover:text-gray-700"
@@ -386,7 +389,7 @@ export default function ServiceListTab() {
                     </button>
                     <button 
                         onClick={() => setFilterStatus("inactive")} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap ${
+                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
                             filterStatus === "inactive" 
                                 ? "bg-white text-red-600 shadow-sm" 
                                 : "text-gray-500 hover:text-gray-700"
