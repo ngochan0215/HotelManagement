@@ -5,6 +5,7 @@ import {
 } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
+import ServiceCategorySection from "../components/serviceCategorySection.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
@@ -44,7 +45,8 @@ export default function ServiceListTab() {
   }
   if (!userId) 
     return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
-  const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
+  const userRole = (user?.role || localStorage.getItem("role") || "").toLowerCase();
+  const isManager = userRole === "manager" || userRole === "admin";
   
   useEffect(() => {
     console.log("🔍 Debug ServiceListTab:");
@@ -320,6 +322,7 @@ export default function ServiceListTab() {
 
   return (
     <div className="bg-white p-6 rounded-b-2xl shadow-sm border border-t-0 border-gray-100">
+        <ServiceCategorySection categories={categories} canManage={isManager} onRefresh={fetchData} />
 
         <div className="flex justify-between items-center mb-6">
             {isManager ? (
