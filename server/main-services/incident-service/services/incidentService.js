@@ -4,7 +4,7 @@ import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
-
+import { IncidentStateMachine } from "../patterns/incidentStateMachine.js";
 const MAX_DAYS = 30;
 
 export class IncidentService {
@@ -256,8 +256,7 @@ export class IncidentService {
             if (!incident) 
                 throw new Error("Không tìm thấy sự cố.");
             
-            if (incident.status === "closed") 
-                throw new Error("Không thể cập nhật sự cố đã đóng.");
+            IncidentStateMachine.assertCanUpdate(incident.status);
 
             const actor = await this.getEmployeeByUserId(actorId);
 
@@ -320,14 +319,13 @@ export class IncidentService {
             if (!incident) 
                 throw new Error("Không tìm thấy sự cố");
             
-            if (["resolved", "closed"].includes(incident.status)) {
-                throw new Error("Không thể phân công sự cố đã xử lý xong");
-            }
+            IncidentStateMachine.assertCanAssign(incident.status);
 
             const assignee = await this.getEmployeeById(assigneeId);
             const actor = await this.getEmployeeByUserId(actorId);
 
             const prevStatus = incident.status;
+            const targetStatus = IncidentStateMachine.getTargetStatus("assign");
             incident.assignee_info = {
                 assignee_id: assignee._id, 
                 assignee_name: assignee.full_name, 
@@ -335,7 +333,7 @@ export class IncidentService {
                 assigned_at: new Date(),
             };
 
-            incident.status = "in_progress";
+            incident.status = targetStatus;
             if (note) incident.processing_note = note; 
             await incident.save();
 
@@ -344,7 +342,7 @@ export class IncidentService {
                 incident_id: incident._id, 
                 action: "assigned", 
                 from_status: prevStatus, 
-                to_status: "in_progress",
+                to_status: targetStatus,
                 actor_id: actor._id, 
                 actor_name: actor.full_name, 
                 actor_role: actor.position, 
@@ -372,9 +370,7 @@ export class IncidentService {
             if (!incident) 
                 throw new Error("Không tìm thấy sự cố.");
 
-            if (incident.status !== "in_progress") {
-                throw new Error("Sự cố chưa được phân công hoặc đã đóng.");
-            }
+            IncidentStateMachine.assertCanResolve(incident.status);
 
             if (user.system_role === "employee") {
                 const assignee_id = incident.assignee_info?.assignee_id;
@@ -384,8 +380,8 @@ export class IncidentService {
             }
 
             const oldStatus = incident.status;
-
-            incident.status = "resolved";
+            const targetStatus = IncidentStateMachine.getTargetStatus("resolve");
+            incident.status = targetStatus;
             incident.resolved_at = new Date();
             incident.processing_note = note; 
             await incident.save();
@@ -394,7 +390,7 @@ export class IncidentService {
                 incident_id: incident._id,
                 action: "resolved",
                 from_status: oldStatus,
-                to_status: "resolved",
+                to_status: targetStatus,
                 actor_id: actor._id,
                 actor_name: actor.full_name,
                 actor_role: actor.position,
@@ -426,11 +422,11 @@ export class IncidentService {
                 }
             }
 
-            if (incident.status !== "resolved") 
-                throw new Error("Chỉ đóng được sự cố đã Resolved.");
+            IncidentStateMachine.assertCanClose(incident.status);
 
             const oldStatus = incident.status;
-            incident.status = "closed";
+            const targetStatus = IncidentStateMachine.getTargetStatus("close");
+            incident.status = targetStatus;
             incident.closed_at = new Date();
             
             if (note) incident.processing_note = note; 
@@ -443,7 +439,7 @@ export class IncidentService {
                 incident_id: incident._id, 
                 action: "closed", 
                 from_status: oldStatus, 
-                to_status: "closed",
+                to_status: targetStatus,
                 actor_id: actor._id, 
                 actor_name: actor.full_name, 
                 actor_role: actor.position, 
