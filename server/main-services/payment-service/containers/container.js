@@ -5,7 +5,7 @@ import { ReceiptService } from "../services/receiptService.js";
 import { TransactionService } from "../services/transactionService.js";
 import { PaymentEventHandler } from "../events/paymentHandler.js";
 
-import { payOSpayin } from "../config/payos.js";
+import { PaymentGatewayFactory } from "../payment/paymentGatewayFactory.js";
 import { EventBus } from "../../../shared/messaging/eventBus.js";
 import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { sendNotification, sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
@@ -26,7 +26,7 @@ class Container {
         this.transactionService = new TransactionService({
             Receipt,
             Transaction,
-            payOSpayin: payOSpayin,
+            paymentGateway: PaymentGatewayFactory.getGateway("payos"),
             eventBus: this.eventBus,
             sendNotification,
             sendNotificationsToUsers,

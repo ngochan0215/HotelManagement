@@ -4,11 +4,11 @@ import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import * as helpers from "./paymentHelpers.js";
 
 export class TransactionService {
-    constructor({ Receipt, Transaction, payOSpayin, eventBus,
+    constructor({ Receipt, Transaction, paymentGateway, eventBus,
         sendNotification, sendNotificationsToUsers }) {
         this.Receipt = Receipt;
         this.Transaction = Transaction;
-        this.payOSpayin = payOSpayin;
+        this.paymentGateway = paymentGateway;
         this.eventBus = eventBus;
         this.sendNotification = sendNotification;
         this.sendNotificationsToUsers = sendNotificationsToUsers;
@@ -64,7 +64,7 @@ export class TransactionService {
                 status: 'pending',
             });
         
-            const payOSResponse = await this.payOSpayin.paymentRequests.create(paymentData);
+            const payOSResponse = await this.paymentGateway.createPaymentRequest(paymentData);
             const data = payOSResponse?.data || payOSResponse;
         
             try {
@@ -87,7 +87,7 @@ export class TransactionService {
     
     getPaymentLinkDetail = async (bookingId) => {
         try {
-            const getPaymentDetail = await this.payOSpayin.paymentRequests.get(bookingId);
+            const getPaymentDetail = await this.paymentGateway.getPaymentRequest(bookingId);
             return getPaymentDetail;
 
         } catch (error) {
