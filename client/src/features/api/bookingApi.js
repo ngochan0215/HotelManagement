@@ -58,6 +58,11 @@ export const bookingApi = {
         return { ...d, result: d.bookings ?? d.result };
     },
 
+    getBookingById: async (bookingId) => {
+        const res = await axios.get(`${BASE_URL}/${bookingId}`, getAuthHeader());
+        return res.data;
+    },
+
     confirmBooking: async (bookingId) => {
         const res = await axios.patch(`${BASE_URL}/confirm-deposited/${bookingId}`, {}, getAuthHeader());
         return res.data;

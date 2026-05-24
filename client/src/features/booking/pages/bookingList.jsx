@@ -107,6 +107,7 @@ export default function BookingList() {
   const html5QrCodeRef = useRef(null);
   const scanTimeoutRef = useRef(null);
   const scanAttemptsRef = useRef(0);
+  const payosPollingRef = useRef(null);
 
   const [confirmState, setConfirmState] = useState({
       open: false, title: "", message: "", confirmText: "Đồng ý", type: "danger", onConfirm: null
@@ -137,6 +138,9 @@ export default function BookingList() {
       }
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
+      }
+      if (payosPollingRef.current) {
+        clearInterval(payosPollingRef.current);
       }
     };
   }, []);
@@ -846,6 +850,29 @@ export default function BookingList() {
   const selectCustomer = (c) => { setFormData({ ...formData, customer_id: c._id }); setSelectedCustDisplay(c); setCustSearchQuery(""); setShowCustDropdown(false); };
   const clearSelectedCustomer = () => { setFormData({ ...formData, customer_id: "" }); setSelectedCustDisplay(null); setCustSearchQuery(""); };
 
+  const startPayOSPolling = (bookingId) => {
+    if (payosPollingRef.current) clearInterval(payosPollingRef.current);
+    let attempts = 0;
+    const maxAttempts = 75; // 75 × 4s ≈ 5 minutes
+    payosPollingRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        clearInterval(payosPollingRef.current);
+        payosPollingRef.current = null;
+        return;
+      }
+      try {
+        const res = await bookingApi.getBookingById(bookingId);
+        if (res?.booking?.status && res.booking.status !== "pending") {
+          clearInterval(payosPollingRef.current);
+          payosPollingRef.current = null;
+          fetchData();
+          setToast({ type: "success", message: "Thanh toán tiền cọc thành công! Đơn đặt phòng đã được xác nhận." });
+        }
+      } catch { /* ignore polling errors */ }
+    }, 4000);
+  };
+
   const actionConfirm = async (bookingId) => {
     try {
       // Tìm booking để lấy thông tin deposit
@@ -890,9 +917,10 @@ export default function BookingList() {
       if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
         // Mở link thanh toán trong tab mới
         window.open(paymentRes.data.checkoutUrl, '_blank');
-        setToast({ 
-          message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.", 
-          type: "info" 
+        startPayOSPolling(bookingId);
+        setToast({
+          message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.",
+          type: "info"
         });
       } else {
         throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");

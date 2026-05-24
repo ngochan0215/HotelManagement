@@ -87,7 +87,7 @@ export class BookingService {
                     }
                 );
 
-                if(replyLogs.roomLogs) {
+                if(replyLogs.roomLogs?.length > 0) {
                     const replyRoom = await this.eventBus.safeRequest(
                         ROOM_EVENTS.CHECK_EXISTS,
                         { room_id: bd.room_id }
@@ -1341,7 +1341,7 @@ export class BookingService {
                 CLEANING_EVENTS.CREATE_TASK,
                 {
                     room_id: detail.room_id,
-                    room_log_id: replyInsertLog.roomLogs._id,
+                    room_log_id: Array.isArray(replyInsertLog.roomLogs) ? replyInsertLog.roomLogs[0]?._id : replyInsertLog.roomLogs?._id,
                     booking_id: bookingId,
                     note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
                 }
@@ -1440,7 +1440,7 @@ export class BookingService {
             }
 
             return {
-                room_log_id: replyInsertLog.roomLogs._id,
+                room_log_id: Array.isArray(replyInsertLog.roomLogs) ? replyInsertLog.roomLogs[0]?._id : replyInsertLog.roomLogs?._id,
                 room_id: detail.room_id,
                 room_number: room.room_number,
                 booking_id: bookingId,
