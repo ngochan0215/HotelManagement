@@ -2,11 +2,15 @@ import React, { useEffect, useState } from "react";
 import { FiDollarSign, FiCheckCircle, FiLoader, FiAlertCircle, FiEye } from "react-icons/fi";
 import { incidentApi } from "../../api/incidentApi.js";
 import CompensationDetailModal from "../components/compensationDetailModal.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 
 export default function CompensationListTab() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   // ...
     const fetchTickets = async () => {
@@ -28,16 +32,22 @@ export default function CompensationListTab() {
 
   useEffect(() => { fetchTickets(); }, []);
 
-  const handleConfirmPaid = async (ticketId) => {
-    if (!window.confirm("Xác nhận khoản bồi thường này đã được thanh toán?")) return;
-
-    try {
-      await incidentApi.confirmCompensationPaid(ticketId); // gọi đúng mapping
-      alert("Đã xác nhận thanh toán. Sự cố liên quan đã được đóng.");
-      fetchTickets();
-    } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
-    }
+  const handleConfirmPaid = (ticketId) => {
+    setConfirmState({
+      open: true,
+      title: "Xác nhận thanh toán",
+      message: "Xác nhận khoản bồi thường này đã được thanh toán?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await incidentApi.confirmCompensationPaid(ticketId);
+          setToast({ type: "success", message: "Đã xác nhận thanh toán. Sự cố liên quan đã được đóng." });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
   return (
@@ -157,6 +167,19 @@ export default function CompensationListTab() {
           onClose={() => setSelectedTicketId(null)}
         />
       )}
+
+      {confirmState.open && (
+        <ConfirmModal
+          open={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText="Xác nhận"
+          cancelText="Hủy"
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        />
+      )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

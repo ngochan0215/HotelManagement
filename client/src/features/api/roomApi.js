@@ -64,8 +64,8 @@ export const roomApi = {
     return response.data;
   },
 
-  getAllRooms: async () => {
-    const response = await axios.get(`${BASE_URL}/`);
+  getAllRooms: async (params = {}) => {
+    const response = await axios.get(`${BASE_URL}/`, { params });
     const body = response.data;
     if (body?.data != null) {
       return { rooms: body.data, pagination: body.pagination, success: body.success };

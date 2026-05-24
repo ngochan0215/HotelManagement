@@ -409,149 +409,159 @@ export class RoomService {
     
     // return list of available room categories with available rooms based on search criteria
     getAvailableRoomCategoriesService = async (query = {}) => {
-        const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
+        try {
+            const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
+            console.log("Received query in getAvailableRoomCategoriesService:", query);
 
-        if (!checkin || !checkout) {
-            throw new Error("Phải điền thời gian nhận và trả phòng.");
-        }
+            if (!checkin || !checkout) {
+                throw new Error("Phải điền thời gian nhận và trả phòng.");
+            }
 
-        const availCacheKey = makeCacheKey("room:available", query);
-        const cachedAvail = await cache.get(availCacheKey);
-        if (cachedAvail) return cachedAvail;
+            const availCacheKey = makeCacheKey("room:available", query);
+            const cachedAvail = await cache.get(availCacheKey);
+            if (cachedAvail) return cachedAvail;
 
-        const start = new Date(checkin);
-        const end = new Date(checkout);
-    
-        if (start >= end) {
-            throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
-        }
-    
-        if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
-            throw new Error("Số lượng người lớn không hợp lệ.");
-        }
-    
-        if (children && (isNaN(Number(children)) || Number(children) < 0)) {
-            throw new Error("Số lượng trẻ em không hợp lệ.");
-        }
-    
-        // get active bookings 
-        const replyActiveBookings = await this.eventBus.safeRequest(
-            BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
-            {}
-        );
-        if (!replyActiveBookings.success) throw new Error(reply.message);
+            const start = new Date(checkin);
+            const end = new Date(checkout);
+        
+            if (start >= end) {
+                throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
+            }
+        
+            if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
+                throw new Error("Số lượng người lớn không hợp lệ.");
+            }
+        
+            if (children && (isNaN(Number(children)) || Number(children) < 0)) {
+                throw new Error("Số lượng trẻ em không hợp lệ.");
+            }
+        
+            // get active bookings 
+            const replyActiveBookings = await this.eventBus.safeRequest(
+                BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
+                {}
+            );
+            if (!replyActiveBookings.success) throw new Error(replyActiveBookings.message);
 
-        const activeBookings = replyActiveBookings.activeBookings;
-        const activeBookingIds = activeBookings.map((b) => b._id);
-    
-        // get busy rooms from both bookings and room logs
-        const replyDetails = await this.eventBus.safeRequest(
-            BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
-            { bookingIds: activeBookingIds }
-        );
-        if (!replyDetails.success) throw new Error(reply.message);
+            const activeBookings = replyActiveBookings.activeBookings;
+            const activeBookingIds = activeBookings.map((b) => b._id);
 
-        const busyBookingDetails = replyDetails.details;
-        const busyRoomIdsFromBookings = [
-            ...new Set(busyBookingDetails.map((b) => b.room_id.toString())),
-        ];
-    
-        const busyRoomLogs = await this.RoomLog.find({
-            status: { $in: ["booked", "occupied", "reserved"] },
-            start_time: { $lt: end },
-            $or: [{ end_time: { $gt: start } }, { end_time: null }],
-        }).select("room_id");
-    
-        const busyRoomIdsFromLogs = [
-            ...new Set(busyRoomLogs.map((log) => log.room_id.toString())),
-        ];
-    
-        const allBusyRoomIds = [
-            ...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs]),
-        ];
-    
-        // get all rooms that are not in busyRoomIds and not in maintenance/new status
-        const allRooms = await this.Room.find({
-            _id: { $nin: allBusyRoomIds },
-        }).select("_id category_id room_number room_status");
-    
-        const availableRooms = [];
-    
-        for (const room of allRooms) {
-            const conflictingLog = await this.RoomLog.findOne({
-                room_id: room._id,
-                status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
+            // get busy rooms from both bookings and room logs
+            const replyDetails = await this.eventBus.safeRequest(
+                BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
+                { 
+                    bookingIds: activeBookingIds,
+                    start: start,
+                    end: end
+                }
+            );
+            if (!replyDetails.success) throw new Error(replyDetails.message);
+
+            const busyBookingDetails = replyDetails.details;
+            const busyRoomIdsFromBookings = [
+                ...new Set(busyBookingDetails.map((b) => b.room_id.toString())),
+            ];
+        
+            const busyRoomLogs = await this.RoomLog.find({
+                status: { $in: ["booked", "occupied", "reserved"] },
                 start_time: { $lt: end },
                 $or: [{ end_time: { $gt: start } }, { end_time: null }],
-            });
-    
-            if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
-                if (room.room_status === "cleaning") {
-                    const cleaningLog = await this.RoomLog.findOne({
-                        room_id: room._id,
-                        status: "cleaning",
-                        start_time: { $lte: start },
-                        $or: [
-                            { end_time: { $lte: start } }, 
-                            { end_time: null }
-                        ],
-                    }).sort({ start_time: -1 });
+            }).select("room_id");
         
-                    if (!cleaningLog || (cleaningLog.end_time && cleaningLog.end_time <= start)) {
+            const busyRoomIdsFromLogs = [
+                ...new Set(busyRoomLogs.map((log) => log.room_id.toString())),
+            ];
+        
+            const allBusyRoomIds = [
+                ...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs]),
+            ];
+        
+            // get all rooms that are not in busyRoomIds and not in maintenance/new status
+            const allRooms = await this.Room.find({
+                _id: { $nin: allBusyRoomIds },
+            }).select("_id category_id room_number room_status");
+        
+            const availableRooms = [];
+        
+            for (const room of allRooms) {
+                const conflictingLog = await this.RoomLog.findOne({
+                    room_id: room._id,
+                    status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
+                    start_time: { $lt: end },
+                    $or: [{ end_time: { $gt: start } }, { end_time: null }],
+                });
+        
+                if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
+                    if (room.room_status === "cleaning") {
+                        const cleaningLog = await this.RoomLog.findOne({
+                            room_id: room._id,
+                            status: "cleaning",
+                            start_time: { $lte: start },
+                            $or: [
+                                { end_time: { $lte: start } }, 
+                                { end_time: null }
+                            ],
+                        }).sort({ start_time: -1 });
+            
+                        if (!cleaningLog || (cleaningLog.end_time && cleaningLog.end_time <= start)) {
+                            availableRooms.push(room);
+                        }
+
+                    } else {
                         availableRooms.push(room);
                     }
-
-                } else {
-                    availableRooms.push(room);
                 }
             }
-        }
-    
-        const roomsByCategory = {};
-    
-        for (const room of availableRooms) {
-            const categoryId = room.category_id.toString();
-    
-            if (!roomsByCategory[categoryId]) {
-                roomsByCategory[categoryId] = [];
+        
+            const roomsByCategory = {};
+        
+            for (const room of availableRooms) {
+                const categoryId = room.category_id.toString();
+        
+                if (!roomsByCategory[categoryId]) {
+                    roomsByCategory[categoryId] = [];
+                }
+        
+                roomsByCategory[categoryId].push({
+                    room_id: room._id,
+                    room_number: room.room_number,
+                });
             }
-    
-            roomsByCategory[categoryId].push({
-                room_id: room._id,
-                room_number: room.room_number,
+        
+            const categoryIds = Object.keys(roomsByCategory);
+            const categories = await this.RoomCategory.find({
+                _id: { $in: categoryIds },
             });
+        
+            let result = categories
+                .filter((cat) => {
+                    if (adults && cat.max_adults < Number(adults)) return false;
+                    if (children && cat.max_children < Number(children)) return false;
+                    if (minPrice && cat.price < Number(minPrice)) return false;
+                    if (maxPrice && cat.price > Number(maxPrice)) return false;
+                    return true;
+                })
+                .map((cat) => ({
+                    category_id: cat._id,
+                    name: cat.category_name,
+                    price: cat.price,
+                    adults: cat.max_adults,
+                    children: cat.max_children,
+                    description: cat.description,
+                    availableRooms:
+                        roomsByCategory[cat._id.toString()]?.length || 0,
+                    rooms: roomsByCategory[cat._id.toString()] || [],
+                }))
+                .filter((item) => item.availableRooms > 0)
+                .sort((a, b) => a.price - b.price);
+
+            await cache.set(availCacheKey, result, 60);
+
+            return result;
+        } catch (error) {
+            console.log("Error in getAvailableRoomCategoriesService:", error);
+            throw error;
         }
-    
-        const categoryIds = Object.keys(roomsByCategory);
-        const categories = await this.RoomCategory.find({
-            _id: { $in: categoryIds },
-        });
-    
-        let result = categories
-            .filter((cat) => {
-                if (adults && cat.max_adults < Number(adults)) return false;
-                if (children && cat.max_children < Number(children)) return false;
-                if (minPrice && cat.price < Number(minPrice)) return false;
-                if (maxPrice && cat.price > Number(maxPrice)) return false;
-                return true;
-            })
-            .map((cat) => ({
-                category_id: cat._id,
-                name: cat.category_name,
-                price: cat.price,
-                adults: cat.max_adults,
-                children: cat.max_children,
-                description: cat.description,
-                availableRooms:
-                    roomsByCategory[cat._id.toString()]?.length || 0,
-                rooms: roomsByCategory[cat._id.toString()] || [],
-            }))
-            .filter((item) => item.availableRooms > 0)
-            .sort((a, b) => a.price - b.price);
-
-        await cache.set(availCacheKey, result, 60);
-
-        return result;
     };
 
     // ROOM

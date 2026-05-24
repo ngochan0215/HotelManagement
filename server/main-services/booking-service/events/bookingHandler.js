@@ -79,9 +79,9 @@ export class BookingEventHandler {
     async findBookingDetailsByBookingIds(data, msg) {
         try {
             console.log("Handling BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS");
-            const { bookingIds } = data;
-            const details = await this.bookingService.findBookingDetailsByBookingIds(bookingIds);
-            
+            const { bookingIds, start, end } = data;
+            const details = await this.bookingService.findBookingDetailsByBookingIds(bookingIds, start, end);
+
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,
                 Buffer.from(JSON.stringify({ success: true, details })),

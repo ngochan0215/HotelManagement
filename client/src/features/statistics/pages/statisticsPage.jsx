@@ -10,6 +10,7 @@ import {
 
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
+import Toast from "../../../components/toast.jsx";
 
 import { statisticApi } from "../../api/statisticApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
@@ -26,6 +27,7 @@ export default function StatisticPage() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [dashboardData, setDashboardData] = useState({ revenue: null, bookings: null });
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -90,7 +92,7 @@ export default function StatisticPage() {
       link.click();
       link.remove();
     } catch (error) {
-      alert("Lỗi xuất file Excel");
+      setToast({ type: "error", message: "Lỗi xuất file Excel" });
     }
   };
 
@@ -114,7 +116,7 @@ export default function StatisticPage() {
       link.click();
       link.remove();
     } catch (error) {
-      alert("Lỗi xuất file PDF");
+      setToast({ type: "error", message: "Lỗi xuất file PDF" });
     }
   };
 
@@ -215,6 +217,7 @@ export default function StatisticPage() {
 
         </div>
       </div>
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

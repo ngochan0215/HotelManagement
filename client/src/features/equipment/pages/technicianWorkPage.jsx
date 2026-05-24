@@ -53,7 +53,7 @@ export default function TechnicianWorkPage() {
       // Nếu ngày hẹn lịch không phải hôm nay, cảnh báo và return
       if (installDate.getTime() !== today.getTime()) {
         const dateStr = format(parseISO(ticket.install_date), "dd/MM/yyyy");
-        alert(`Bạn chỉ có thể bắt đầu công việc vào ngày hẹn lịch (${dateStr}). Vui lòng đợi đến ngày đó để thực hiện.`);
+        setToast({ type: "error", message: `Bạn chỉ có thể bắt đầu công việc vào ngày hẹn lịch (${dateStr}). Vui lòng đợi đến ngày đó để thực hiện.` });
         return;
       }
     }

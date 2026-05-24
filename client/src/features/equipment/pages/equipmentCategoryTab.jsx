@@ -5,6 +5,7 @@ import {
 } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 import { RankBadge } from "../../../components/ui/label.jsx";
 import Pagination from "../../../components/pagination.jsx";
 
@@ -35,6 +36,7 @@ export default function EquipmentCategoryTab() {
   });
   const [creating, setCreating] = useState(false);
   const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState("");
+  const [toast, setToast] = useState(null);
 
   const UNIT_MAP = { item: "Cái", box: "Bộ" };
   const formatUnit = (unit) => UNIT_MAP[unit] || unit || "Cái";
@@ -185,9 +187,9 @@ export default function EquipmentCategoryTab() {
       setEditingItem(null);
       setFormData({ name: "", description: "", unit: "item", price: "" });
       loadData();
-      alert("Thành công!");
+      setToast({ type: "success", message: "Thành công!" });
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -196,9 +198,9 @@ export default function EquipmentCategoryTab() {
         await equipmentApi.deleteCategory(confirmDelete.id);
         loadData();
         setConfirmDelete({ open: false, id: null });
-        alert("Xóa danh mục thành công!");
+        setToast({ type: "success", message: "Xóa danh mục thành công!" });
       } catch (error) {
-        alert("Không thể xóa danh mục này (có thể đang có thiết bị sử dụng).");
+        setToast({ type: "error", message: "Không thể xóa danh mục này (có thể đang có thiết bị sử dụng)." });
       }
     };
 
@@ -231,11 +233,11 @@ export default function EquipmentCategoryTab() {
         setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
         setShowPreviewModal(true);
       } else {
-        alert("Không có thiết bị nào hết tồn kho (số lượng = 0).");
+        setToast({ type: "info", message: "Không có thiết bị nào hết tồn kho (số lượng = 0)." });
       }
     } catch (error) {
       console.error("Error fetching out of stock categories:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -251,7 +253,7 @@ export default function EquipmentCategoryTab() {
 
   const handleRemovePreviewItem = (index) => {
     if (previewItems.length === 1) {
-      alert("Phải có ít nhất 1 thiết bị trong phiếu nhập!");
+      setToast({ type: "error", message: "Phải có ít nhất 1 thiết bị trong phiếu nhập!" });
       return;
     }
     const updated = previewItems.filter((_, i) => i !== index);
@@ -260,21 +262,21 @@ export default function EquipmentCategoryTab() {
 
   const handleAddPreviewItem = () => {
     if (!selectedCategoryToAdd) {
-      alert("Vui lòng chọn thiết bị cần thêm!");
+      setToast({ type: "info", message: "Vui lòng chọn thiết bị cần thêm!" });
       return;
     }
-    
+
     // Kiểm tra xem category đã có trong danh sách chưa
     const existingIds = previewItems.map(item => item.category_id);
     if (existingIds.includes(selectedCategoryToAdd)) {
-      alert("Thiết bị này đã có trong phiếu nhập!");
+      setToast({ type: "info", message: "Thiết bị này đã có trong phiếu nhập!" });
       return;
     }
-    
+
     // Tìm category được chọn
     const categoryToAdd = allCategoriesForPreview.find(cat => cat._id === selectedCategoryToAdd);
     if (!categoryToAdd) {
-      alert("Không tìm thấy danh mục được chọn!");
+      setToast({ type: "error", message: "Không tìm thấy danh mục được chọn!" });
       return;
     }
     
@@ -297,12 +299,12 @@ export default function EquipmentCategoryTab() {
 
   const handleConfirmCreate = async () => {
     if (!previewFormData.import_date) {
-      alert("Vui lòng chọn ngày nhập!");
+      setToast({ type: "error", message: "Vui lòng chọn ngày nhập!" });
       return;
     }
 
     if (previewItems.length === 0) {
-      alert("Không có thiết bị nào để tạo phiếu nhập!");
+      setToast({ type: "error", message: "Không có thiết bị nào để tạo phiếu nhập!" });
       return;
     }
 
@@ -310,11 +312,11 @@ export default function EquipmentCategoryTab() {
     for (let i = 0; i < previewItems.length; i++) {
       const item = previewItems[i];
       if (!item.import_quantity || item.import_quantity <= 0) {
-        alert(`Thiết bị "${item.category_name}": Số lượng nhập phải > 0`);
+        setToast({ type: "error", message: `Thiết bị "${item.category_name}": Số lượng nhập phải > 0` });
         return;
       }
       if (!item.import_price || item.import_price <= 0) {
-        alert(`Thiết bị "${item.category_name}": Giá nhập phải > 0`);
+        setToast({ type: "error", message: `Thiết bị "${item.category_name}": Giá nhập phải > 0` });
         return;
       }
     }
@@ -333,16 +335,16 @@ export default function EquipmentCategoryTab() {
       });
 
       if (res.success) {
-        alert(res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại thiết bị!`);
+        setToast({ type: "success", message: res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại thiết bị!` });
         setShowPreviewModal(false);
         setPreviewItems([]);
-        loadData(); // Reload để cập nhật dữ liệu
+        loadData();
       } else {
-        alert("Lỗi: " + (res.message || "Không thể tạo phiếu nhập"));
+        setToast({ type: "error", message: "Lỗi: " + (res.message || "Không thể tạo phiếu nhập") });
       }
     } catch (error) {
       console.error("Error creating import ticket:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     } finally {
       setCreating(false);
     }
@@ -507,6 +509,7 @@ export default function EquipmentCategoryTab() {
         </div>
       )}
       {confirmDelete.open && (<ConfirmModal open={confirmDelete.open} title="Xóa danh mục" message="Bạn chắc chắn muốn xóa?" confirmText="Xóa" cancelText="Hủy" onConfirm={handleDelete} onCancel={() => setConfirmDelete({ open: false })} />)}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
       {/* Preview Modal for Auto Create Import Ticket */}
       {showPreviewModal && (

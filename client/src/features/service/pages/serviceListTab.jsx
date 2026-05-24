@@ -6,6 +6,8 @@ import {
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 
 export default function ServiceListTab() {
   const [services, setServices] = useState([]);
@@ -32,6 +34,8 @@ export default function ServiceListTab() {
     default_quantity: 20,
     default_price_percent: 0.8
   });
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const { user } = useAuth();
   let userId = user?._id;
@@ -83,15 +87,22 @@ export default function ServiceListTab() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${name}" không?`)) return;
-    try {
-        await serviceApi.deleteService(id);
-        alert("Đã xóa thành công!");
-        fetchData();
-    } catch (error) {
-        alert("Lỗi xóa: " + (error.response?.data?.message || error.message));
-    }
+  const handleDelete = (id, name) => {
+    setConfirmState({
+      open: true,
+      title: "Xóa dịch vụ",
+      message: `Bạn có chắc chắn muốn xóa "${name}" không?`,
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await serviceApi.deleteService(id);
+          setToast({ type: "success", message: "Đã xóa thành công!" });
+          fetchData();
+        } catch (error) {
+          setToast({ type: "error", message: "Lỗi xóa: " + (error.response?.data?.message || error.message) });
+        }
+      }
+    });
   };
 
   // Auto create import ticket handlers
@@ -119,11 +130,11 @@ export default function ServiceListTab() {
         setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
         setShowPreviewModal(true);
       } else {
-        alert("Không có sản phẩm nào hết tồn kho (số lượng = 0).");
+        setToast({ type: "info", message: "Không có sản phẩm nào hết tồn kho (số lượng = 0)." });
       }
     } catch (error) {
       console.error("Error fetching out of stock services:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -145,24 +156,23 @@ export default function ServiceListTab() {
 
   const handleConfirmCreate = async () => {
     if (!previewFormData.import_date) {
-      alert("Vui lòng chọn ngày nhập!");
+      setToast({ type: "error", message: "Vui lòng chọn ngày nhập!" });
       return;
     }
 
     if (previewItems.length === 0) {
-      alert("Không có sản phẩm nào để tạo phiếu nhập!");
+      setToast({ type: "error", message: "Không có sản phẩm nào để tạo phiếu nhập!" });
       return;
     }
 
-    // Validate items
     for (let i = 0; i < previewItems.length; i++) {
       const item = previewItems[i];
       if (!item.import_quantity || item.import_quantity <= 0) {
-        alert(`Sản phẩm "${item.service_name}": Số lượng nhập phải > 0`);
+        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Số lượng nhập phải > 0` });
         return;
       }
       if (!item.import_price || item.import_price <= 0) {
-        alert(`Sản phẩm "${item.service_name}": Giá nhập phải > 0`);
+        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Giá nhập phải > 0` });
         return;
       }
     }
@@ -181,16 +191,16 @@ export default function ServiceListTab() {
       });
 
       if (res.success) {
-        alert(res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!`);
+        setToast({ type: "success", message: res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!` });
         setShowPreviewModal(false);
         setPreviewItems([]);
-        fetchData(); // Reload để cập nhật dữ liệu
+        fetchData();
       } else {
-        alert("Lỗi: " + (res.message || "Không thể tạo phiếu nhập"));
+        setToast({ type: "error", message: "Lỗi: " + (res.message || "Không thể tạo phiếu nhập") });
       }
     } catch (error) {
       console.error("Error creating import ticket:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     } finally {
       setCreating(false);
     }
@@ -475,6 +485,19 @@ export default function ServiceListTab() {
         {isManager && (
             <ServiceModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} initialData={editingService} />
         )}
+
+        {confirmState.open && (
+          <ConfirmModal
+            open={confirmState.open}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText="Xác nhận"
+            cancelText="Hủy"
+            onConfirm={confirmState.onConfirm}
+            onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+          />
+        )}
+        {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
         {/* Preview Modal for Auto Create Import Ticket */}
         {showPreviewModal && (

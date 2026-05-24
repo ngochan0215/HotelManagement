@@ -9,6 +9,8 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
+import Toast from "../../../components/toast.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import AssignHousekeeperModal from "../components/assignHousekeeperModal.jsx";
 
@@ -79,6 +81,9 @@ export default function AllTasksPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [cleaningData, setCleaningData] = useState(null);
+
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -158,7 +163,7 @@ export default function AllTasksPage() {
       setShowAssignModal(true);
     } catch (error) {
       console.error("Error preparing assign modal:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -350,16 +355,21 @@ export default function AllTasksPage() {
                                       {/* Nút xác nhận hoàn thành - hiển thị khi status là completed */}
                                       {task.status === 'completed' && (
                                         <button
-                                          onClick={async () => {
-                                            if (!window.confirm('Xác nhận hoàn tất dọn dẹp cho phòng này?')) return;
-                                            try {
-                                              await bookingApi.confirmCleaning(task._id);
-                                              alert('Xác nhận hoàn thành dọn dẹp thành công!');
-                                              fetchTasks();
-                                            } catch (error) {
-                                              alert('Lỗi: ' + (error.response?.data?.message || error.message));
+                                          onClick={() => setConfirmState({
+                                            open: true,
+                                            title: "Xác nhận hoàn tất",
+                                            message: "Xác nhận hoàn tất dọn dẹp cho phòng này?",
+                                            onConfirm: async () => {
+                                              setConfirmState(s => ({ ...s, open: false }));
+                                              try {
+                                                await bookingApi.confirmCleaning(task._id);
+                                                setToast({ type: "success", message: "Xác nhận hoàn thành dọn dẹp thành công!" });
+                                                fetchTasks();
+                                              } catch (error) {
+                                                setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+                                              }
                                             }
-                                          }}
+                                          })}
                                           className="p-2 bg-green-50 rounded-xl text-green-600 hover:bg-green-100 transition-all shadow-sm active:scale-90"
                                           title="Xác nhận hoàn thành dọn dẹp"
                                         >
@@ -394,14 +404,25 @@ export default function AllTasksPage() {
       </div>
 
       {showDetailModal && selectedTask && (
-        <TaskDetailModal 
-          task={selectedTask} 
-          onClose={() => { setShowDetailModal(false); setSelectedTask(null); }} 
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => { setShowDetailModal(false); setSelectedTask(null); }}
           onRefresh={fetchTasks}
           isManager={isManager}
           onAssignCleaning={handleAssignCleaning}
+          setToast={setToast}
         />
       )}
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText="Xác nhận"
+        cancelText="Hủy"
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
       {showAssignModal && cleaningData && (
         <AssignHousekeeperModal
@@ -421,22 +442,28 @@ export default function AllTasksPage() {
   );
 }
 
-function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning }) {
+function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning, setToast }) {
   const [confirming, setConfirming] = useState(false);
+  const [localConfirm, setLocalConfirm] = useState({ open: false, onConfirm: null });
 
-  const handleConfirmCleaning = async () => {
-    if (!window.confirm('Xác nhận hoàn tất dọn dẹp cho phòng này?')) return;
-    setConfirming(true);
-    try {
-        await bookingApi.confirmCleaning(task._id);
-        alert('Xác nhận hoàn thành dọn dẹp thành công!');
-        onRefresh(); 
-        onClose();
-    }
-    catch (error) { 
-      alert('Lỗi: ' + (error.response?.data?.message || error.message)); 
-    }
-    finally { setConfirming(false); }
+  const handleConfirmCleaning = () => {
+    setLocalConfirm({
+      open: true,
+      onConfirm: async () => {
+        setLocalConfirm(s => ({ ...s, open: false }));
+        setConfirming(true);
+        try {
+          await bookingApi.confirmCleaning(task._id);
+          setToast({ type: "success", message: "Xác nhận hoàn thành dọn dẹp thành công!" });
+          onRefresh();
+          onClose();
+        } catch (error) {
+          setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+        } finally {
+          setConfirming(false);
+        }
+      }
+    });
   };
 
   const needsAssignment = task.task_type === 'cleaning' && (!task.handled_by || (typeof task.handled_by === "object" && !task.handled_by?._id));
@@ -714,6 +741,15 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
           </button>
         </div>
       </div>
+      <ConfirmModal
+        open={localConfirm.open}
+        title="Xác nhận hoàn tất"
+        message="Xác nhận hoàn tất dọn dẹp cho phòng này?"
+        confirmText="Xác nhận"
+        cancelText="Hủy"
+        onConfirm={localConfirm.onConfirm}
+        onCancel={() => setLocalConfirm(s => ({ ...s, open: false }))}
+      />
     </div>
   );
 }

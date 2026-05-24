@@ -3,6 +3,8 @@ import {
   FiSearch, FiPrinter, FiPlus, FiCalendar, FiFileText, FiDollarSign, FiCheckCircle, FiTag, FiLogOut,
   FiChevronLeft, FiChevronRight, FiRefreshCw
 } from "react-icons/fi";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import ReceiptDetailModal from "../components/receiptDetailModal.jsx";
@@ -57,6 +59,8 @@ export default function ReceiptList() {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [paymentModalData, setPaymentModalData] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState("");
@@ -321,13 +325,13 @@ export default function ReceiptList() {
 
                                                 if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
                                                   window.open(paymentRes.data.checkoutUrl, '_blank');
-                                                  alert("Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.");
+                                                  setToast({ type: "success", message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới." });
                                                   fetchReceipts();
                                                 } else {
                                                   throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
                                                 }
                                               } catch (error) {
-                                                alert("Lỗi: " + (error.response?.data?.error || error.message));
+                                                setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.error || error.message) });
                                               }
                                             }}
                                             className="flex items-center gap-1 bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-200 transition"
@@ -339,15 +343,22 @@ export default function ReceiptList() {
                                     {(item.status === 'pending' || item.status === 'half-paid') && (
                                         <>
                                             <button
-                                                onClick={async () => {
-                                                  if (!window.confirm("Cập nhật hóa đơn để làm mới phí dịch vụ và bồi thường sau checkout?")) return;
-                                                  try {
-                                                    await receiptApi.refreshReceipt(item._id);
-                                                    alert("Đã cập nhật hóa đơn thành công!");
-                                                    fetchReceipts();
-                                                  } catch (error) {
-                                                    alert("Lỗi: " + (error.response?.data?.message || error.message));
-                                                  }
+                                                onClick={() => {
+                                                  setConfirmState({
+                                                    open: true,
+                                                    title: "Cập nhật hóa đơn",
+                                                    message: "Cập nhật hóa đơn để làm mới phí dịch vụ và bồi thường sau checkout?",
+                                                    onConfirm: async () => {
+                                                      setConfirmState(s => ({ ...s, open: false }));
+                                                      try {
+                                                        await receiptApi.refreshReceipt(item._id);
+                                                        setToast({ type: "success", message: "Đã cập nhật hóa đơn thành công!" });
+                                                        fetchReceipts();
+                                                      } catch (error) {
+                                                        setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+                                                      }
+                                                    }
+                                                  });
                                                 }}
                                                 className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-200 transition"
                                                 title="Cập nhật phí dịch vụ và bồi thường sau checkout"
@@ -408,6 +419,19 @@ export default function ReceiptList() {
             onSuccess={fetchReceipts}
         />
       )}
+
+      {confirmState.open && (
+        <ConfirmModal
+          open={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText="Xác nhận"
+          cancelText="Hủy"
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        />
+      )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

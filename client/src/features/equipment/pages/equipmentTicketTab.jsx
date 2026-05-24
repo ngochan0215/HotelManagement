@@ -10,6 +10,8 @@ import UpdateInstallTicketModal from "../components/updateInstallTicketModal.jsx
 import InstallTicketDetailModal from "../components/installTicketDetailModal.jsx";
 import ImportTicketDetailModal from "../components/importTicketDetailModal.jsx";
 import Pagination from "../../../components/pagination.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 
 export default function EquipmentTicketTab() {
   const [imports, setImports] = useState([]);
@@ -32,6 +34,9 @@ export default function EquipmentTicketTab() {
   // Filter states
   const [installsFilterStatus, setInstallsFilterStatus] = useState("all");
   const [importsFilterStatus, setImportsFilterStatus] = useState("all");
+
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -124,23 +129,40 @@ export default function EquipmentTicketTab() {
     );
   };
 
-  const handleConfirmImport = async (id) => {
-    if (!window.confirm("Xác nhận nhập kho?")) return;
-    try {
-      await equipmentApi.confirmImportTicket(id);
-      alert("Thành công!"); fetchTickets();
-    } catch (err) { alert("Lỗi: " + err.message); }
+  const handleConfirmImport = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Xác nhận nhập kho",
+      message: "Bạn có chắc chắn muốn xác nhận nhập kho phiếu này?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await equipmentApi.confirmImportTicket(id);
+          setToast({ type: "success", message: "Nhập kho thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
-  const handleDeleteImport = async (id) => {
-    if (!window.confirm("Bạn có chắc chắn muốn hủy phiếu nhập này?")) return;
-    try {
-      await equipmentApi.deleteImportTicket(id);
-      alert("Đã hủy phiếu nhập thành công!"); 
-      fetchTickets();
-    } catch (err) { 
-      alert("Lỗi: " + (err.response?.data?.message || err.message)); 
-    }
+  const handleDeleteImport = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Hủy phiếu nhập",
+      message: "Bạn có chắc chắn muốn hủy phiếu nhập này?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await equipmentApi.deleteImportTicket(id);
+          setToast({ type: "success", message: "Đã hủy phiếu nhập thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
   // Kiểm tra xem có thể cập nhật/hủy phiếu nhập không (chưa đến ngày nhập)
@@ -159,27 +181,40 @@ export default function EquipmentTicketTab() {
     return importDate > today;
   };
 
-  const handleConfirmInstall = async (id) => {
-    if (!window.confirm("Xác nhận hoàn tất phiếu này?")) return;
-    try {
-      await equipmentApi.confirmInstallTicket(id);
-      alert("Thành công!"); 
-      fetchTickets();
-    } catch (err) 
-    { 
-        alert("Lỗi: " + err.message); 
-    }
+  const handleConfirmInstall = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Xác nhận hoàn tất",
+      message: "Bạn có chắc chắn muốn xác nhận hoàn tất phiếu này?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await equipmentApi.confirmInstallTicket(id);
+          setToast({ type: "success", message: "Xác nhận thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
-  const handleDeleteInstall = async (id) => {
-    if (!window.confirm("Bạn có chắc chắn muốn hủy phiếu này?")) return;
-    try {
-      await equipmentApi.deleteInstallTicket(id);
-      alert("Đã hủy phiếu thành công!"); 
-      fetchTickets();
-    } catch (err) { 
-      alert("Lỗi: " + (err.response?.data?.message || err.message)); 
-    }
+  const handleDeleteInstall = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Hủy phiếu",
+      message: "Bạn có chắc chắn muốn hủy phiếu này?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await equipmentApi.deleteInstallTicket(id);
+          setToast({ type: "success", message: "Đã hủy phiếu thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
   // Kiểm tra xem có thể cập nhật phiếu không (trước ngày lắp đặt/tháo dỡ)
@@ -689,6 +724,17 @@ export default function EquipmentTicketTab() {
           />
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText="Xác nhận"
+        cancelText="Hủy"
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
