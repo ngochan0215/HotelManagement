@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
-// Thêm FiTool vào import để có icon cái cờ lê
-import { FiClock, FiPlus, FiUser, FiMapPin, FiArrowRight, FiFilter, FiCheckCircle, FiAlertCircle, FiLoader, FiCheckSquare, FiArchive, FiTool } from "react-icons/fi";
+import { FiClock, FiPlus, FiUser, FiMapPin, FiArrowRight, FiFilter, 
+  FiCheckCircle, FiAlertCircle, FiLoader, FiCheckSquare, FiArchive, FiTool } 
+from "react-icons/fi";
+
 import { incidentApi } from "../../api/incidentApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
 import CreateIncidentForm from "../components/createIncidentForm.jsx";
@@ -24,15 +26,12 @@ const statusLabel = {
 export default function IncidentListTab() {
   const { user } = useAuth();
 
-  // --- 1. XÁC ĐỊNH ROLE CHÍNH XÁC ---
-  // Kiểm tra kỹ các trường hợp role có thể trả về (viết hoa/thường, nằm trong data...)
+  // xác định role của user
   const roleRaw = user?.system_role || user?.role || user?.data?.system_role || "";
   const userRole = String(roleRaw).toLowerCase();
   const isManager = userRole === "manager" || userRole === "admin";
 
-  // --- 2. KHỞI TẠO STATE ---
-  // Nếu là Manager -> Tab mặc định là 'new'
-  // Nếu là Employee -> Tab mặc định là 'my_assign' (Việc cần làm)
+  // khởi tạo state, mặc định tab đầu tiên sẽ là "new" cho manager, "my_assign" cho employee
   const [activeTab, setActiveTab] = useState(isManager ? "new" : "my_assign");
 
   const [incidents, setIncidents] = useState([]);
@@ -41,31 +40,35 @@ export default function IncidentListTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  // Reset tab khi đổi user (ví dụ logout rồi login user khác)
+  // Reset tab khi đổi user
   useEffect(() => {
     setActiveTab(isManager ? "new" : "my_assign");
   }, [isManager]);
 
-  // --- 3. GỌI API ---
   const fetchData = async () => {
     setLoading(true);
     try {
-      let params = {};
+      const params = isManager ? { status: activeTab } : {};
 
       if (isManager) {
-        // Manager: Gửi status lên Server để lọc luôn
-        params.status = activeTab;
-      } else {
-        // Employee: Không gửi status, lấy hết sự cố liên quan về rồi Client tự lọc
-      }
-
       const [incidentRes, empRes] = await Promise.all([
         incidentApi.getAllIncidents(params),
-        employeeApi.getAllEmployees()
+        employeeApi.getAllEmployees(),
       ]);
 
       setIncidents(Array.isArray(incidentRes) ? incidentRes : incidentRes?.data ?? []);
       setEmployees(empRes?.employees || empRes?.data || []);
+
+      } else {
+        const [incidentRes, profileRes] = await Promise.all([
+          incidentApi.getAllIncidents(params),
+          employeeApi.getProfile(),
+        ]);
+
+        setIncidents(Array.isArray(incidentRes) ? incidentRes : incidentRes?.data ?? []);
+        const ownProfile = profileRes?.employee ?? profileRes;
+        setEmployees(ownProfile ? [ownProfile] : []);
+      }
     } catch (e) {
       console.error(e);
       setIncidents([]);
@@ -74,9 +77,9 @@ export default function IncidentListTab() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [activeTab, isManager]); // Chạy lại khi đổi tab hoặc đổi quyền
+  // chạy lại khi đổi tab hoặc đổi quyền
+  useEffect(() => { fetchData(); }, [activeTab, isManager]);
 
-  // --- 4. LOGIC LỌC DỮ LIỆU TẠI CLIENT (CHO EMPLOYEE) ---
   const currentEmployee = employees.find(e => {
       const uid = typeof e.user_id === 'object' ? e.user_id._id : e.user_id;
       return String(uid) === String(user?.userId || user?._id);
@@ -85,24 +88,22 @@ export default function IncidentListTab() {
   const currentUserId = user?.userId || user?._id;
 
   const getDisplayedIncidents = () => {
-    // Nếu là Manager: API đã trả về đúng list theo status rồi -> Dùng luôn
     if (isManager) return incidents;
 
-    // Nếu là Employee: Lọc list tổng ra theo Tab hiện tại
     return incidents.filter(item => {
-        if (activeTab === 'my_assign') {
-            const assignId = item.assignee_info?.assignee_id;
-            return String(assignId) === String(currentEmployeeId);
-        }
-        if (activeTab === 'my_report') {
-            const repId = item.reporter_id?._id || item.reporter_id;
-            return String(repId) === String(currentUserId);
-        }
-        if (activeTab === 'my_cause') {
-            const causeId = item.causer_id?._id || item.causer_id;
-            return String(causeId) === String(currentUserId);
-        }
-        return true;
+      if (activeTab === 'my_assign') {
+          const assignId = item.assignee_info?.assignee_id;
+          return String(assignId) === String(currentEmployeeId);
+      }
+      if (activeTab === 'my_report') {
+          const repId = item.reporter_id?._id || item.reporter_id;
+          return String(repId) === String(currentUserId);
+      }
+      if (activeTab === 'my_cause') {
+          const causeId = item.causer_id?._id || item.causer_id;
+          return String(causeId) === String(currentUserId);
+      }
+      return true;
     });
   };
 
@@ -131,7 +132,6 @@ export default function IncidentListTab() {
     return { name, role: roleMap[roleCode] || roleCode };
   };
 
-  // Component Tab Button nhỏ gọn
   const TabButton = ({ id, label, icon: Icon, colorClass }) => (
     <button
         onClick={() => setActiveTab(id)}
@@ -201,7 +201,7 @@ export default function IncidentListTab() {
 
                         <h3 className="font-bold text-gray-900 flex items-center gap-1 mb-2">
                             <FiMapPin className="text-gray-400" size={14}/>
-                            {item.room_id ? `Phòng ${item.room_id.room_number}` : "Khu vực chung"}
+                            {item.room_id ? `Phòng ${item.room_info.room_number}` : "Khu vực chung"}
                         </h3>
 
                         <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">

@@ -65,8 +65,8 @@ export const serviceApi = {
       return res.data;
     },
 
-    getAllServiceUsage: async () => {
-      const res = await axios.get(`${BASE_URL}/usage/all`, getAuthHeader());
+    getAllServiceUsage: async (params = {}) => {
+      const res = await axios.get(`${BASE_URL}/usage/all`, { ...getAuthHeader(), params });
       return res.data;
     },
     createServiceUsage: async (data) => {

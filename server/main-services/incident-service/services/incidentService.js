@@ -459,8 +459,8 @@ export class IncidentService {
 
     async getAllIncidents(userId, query = {}) {
         try {
-            const { status, severity, compensation_status, room_id, type, caused_by } = query;
-            
+            const { status, severity, compensation_status, room_id, type, caused_by, booking_id } = query;
+
             const user = await this.getUserById(userId);
             const employee = await this.getEmployeeByUserId(userId);
 
@@ -477,6 +477,7 @@ export class IncidentService {
             if (room_id) filter.room_id = room_id;
             if (type) filter.type = type;
             if (caused_by) filter.caused_by = caused_by;
+            if (booking_id) filter.booking_id = booking_id;
 
             const incidents = await this.Incident.find(filter)
                 .sort({ created_at: -1 }).lean();

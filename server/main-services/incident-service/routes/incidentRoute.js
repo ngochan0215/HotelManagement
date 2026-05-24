@@ -8,21 +8,21 @@ const incidentController = new IncidentController();
 const compensationController = new CompensationController();
 
 // manage incidents
-router.get("/", verifyToken, isManager, incidentController.getAllIncidents);
-router.get("/:id", verifyToken, isManager, incidentController.getIncidentById);
+router.get("/", verifyToken, isEmployee, incidentController.getAllIncidents);
+router.get("/compensation-tickets", verifyToken, isEmployee, compensationController.getAllCompensateTickets);
+
+router.get("/:id", verifyToken, isEmployee, incidentController.getIncidentById);
+router.get("/compensation-tickets/:id", verifyToken, isEmployee, compensationController.getCompensateTicketById);
 
 router.post("/", verifyToken, isEmployee, incidentController.createIncident);
 router.patch("/:id", verifyToken, isEmployee, incidentController.updateIncident);
-router.delete("/:id", verifyToken, isEmployee, incidentController.deleteIncident);
+router.delete("/:id", verifyToken, isManager, incidentController.deleteIncident);
 
 router.patch("/mark-assigned/:id", verifyToken, isManager, incidentController.assignIncident);
 router.patch("/mark-resolved/:id", verifyToken, isEmployee, incidentController.resolveIncident);
 router.patch("/mark-closed/:id", verifyToken, isManager, incidentController.closedIncident);
 
 // manage compensation tickets
-router.get("/compensation-tickets", verifyToken, isManager, compensationController.getAllCompensateTickets);
-router.get("/compensation-tickets/:id", verifyToken, isEmployee, compensationController.getCompensateTicketById);
-
 router.post("/:incident_id/compensation-tickets", verifyToken, isEmployee, compensationController.createCompensateTicket);
 router.post("/:incident_id/compensation-tickets/others", verifyToken, isEmployee, compensationController.createCompensateTicketOther);
 

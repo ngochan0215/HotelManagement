@@ -479,6 +479,24 @@ export class ReceiptService {
         }
     };
     
+    getReceiptInfoByBooking = async ({ booking_id, compensate_ticket_id }) => {
+        const filter = { booking_id };
+        if (compensate_ticket_id) filter.compensate_ticket_id = compensate_ticket_id;
+
+        const receipt = await this.Receipt.findOne(filter)
+            .select("status compensate_fee compensate_ticket_id").lean();
+
+        if (receipt) return { receipt, receiptByBooking: null };
+
+        const receiptByBooking = await this.Receipt.findOne({
+            booking_id,
+            compensate_fee: { $gt: 0 },
+            status: { $in: ["pending", "half-paid"] }
+        }).select("status").lean();
+
+        return { receipt: null, receiptByBooking: receiptByBooking || null };
+    };
+
     refreshReceiptAfterCheckout = async (receiptId) => {
         try {        
             if (!mongoose.Types.ObjectId.isValid(receiptId))

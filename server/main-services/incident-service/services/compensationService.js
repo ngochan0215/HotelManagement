@@ -4,6 +4,7 @@ import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
 
 export class CompensateService {
     constructor({ CompensateTicket, CompensateDetail, Incident, IncidentLog, eventBus }) 
@@ -35,10 +36,78 @@ export class CompensateService {
             { equipmentId }
         );
 
-        if (!reply.success) 
+        if (!reply.success)
             throw new Error(reply.message || "Không tìm thấy thiết bị.");
-        
+
         return reply.equipment;
+    };
+
+    populateEquipmentDetails = async (tickets) => {
+        const isArray = Array.isArray(tickets);
+        const list = isArray ? tickets : [tickets];
+
+        const allEquipmentIds = [...new Set(
+            list.flatMap(t =>
+                (t.compensation_details || [])
+                    .map(d => d.equipment_id?.toString())
+                    .filter(Boolean)
+            )
+        )];
+
+        if (allEquipmentIds.length === 0)
+            return isArray ? list : list[0];
+
+        const eqReply = await this.eventBus.safeRequest(
+            EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS,
+            { equipmentIds: allEquipmentIds }
+        );
+
+        if (!eqReply.success)
+            return isArray ? list : list[0];
+
+        const equipments = eqReply.equipments || [];
+
+        const allCategoryIds = [...new Set(
+            equipments.map(e => e.category_id?.toString()).filter(Boolean)
+        )];
+
+        let categoryMap = {};
+        if (allCategoryIds.length > 0) {
+            const catReply = await this.eventBus.safeRequest(
+                EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
+                { categoryIds: allCategoryIds }
+            );
+            console.log("Category info reply for compensation tickets:", catReply);
+            if (catReply.success) {
+                for (const cat of catReply.categories || []) {
+                    categoryMap[cat._id.toString()] = cat;
+                }
+            }
+        }
+
+        const equipmentMap = {};
+        for (const eq of equipments) {
+            const cat = categoryMap[eq.category_id?.toString()];
+            equipmentMap[eq._id.toString()] = {
+                _id: eq._id,
+                condition: eq.condition,
+                status: eq.status,
+                name: cat?.name || null,
+                price: cat?.price || null,
+            };
+        }
+
+        const results = list.map(ticket => ({
+            ...ticket,
+            compensation_details: (ticket.compensation_details || []).map(detail => ({
+                ...detail,
+                equipment_info: detail.equipment_id
+                    ? (equipmentMap[detail.equipment_id.toString()] || null)
+                    : null,
+            })),
+        }));
+
+        return isArray ? results : results[0];
     };
 
     populateReporterAndCauser = async (incidents) => {
@@ -182,51 +251,51 @@ export class CompensateService {
 
     async createCompensateTicket (userId, incidentId, data) {
         try {
-            const { payer_type, payer_id, compensation_details, note } = data;
-            
+            const { payer_type, payer_id: rawPayerId, compensation_details, note } = data;
+
             const actor = await this.getEmployeeByUserId(userId);
-        
+
             if ( !payer_type || !compensation_details ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin (người bồi thường, chi tiết đền bù).");
             }
-        
+
             const incident = await this.Incident.findById(incidentId);
             if (!incident) {
                 throw new Error("Sự cố không tồn tại.");
             }
-        
-            if (!payer_id) payer_id = incident.causer_id;
-        
+
+            const payer_id = rawPayerId || incident.causer_id;
+
             if (incident.compensation_status !== "none") {
                 throw new Error("Sự cố đã có phiếu đền bù.");
             }
-        
-            const existedTicket = await this.CompensateTicket.findOne({ incidentId });
-        
+
+            const existedTicket = await this.CompensateTicket.findOne({ incident_id: incidentId });
+
             if (existedTicket) {
                 throw new Error("Sự cố này đã có phiếu đền bù.");
             }
-        
+
             const validPayers = ["customer", "employee", "hotel"];
             if (!validPayers.includes(payer_type)) {
                 throw new Error("payer_type không hợp lệ.");
             }
-        
+
             if (payer_type !== "hotel" && !payer_id) {
                 throw new Error("Cần xác định người chịu trách nhiệm chi trả.");
             }
-        
+
             const { details, totalFee } = await this.buildCompensationDetails(compensation_details, incident);
-        
+
             for (const item of details) {
                 await this.updateEquipmentByResolution({
-                    equipment_id: item.equipment_id, 
-                    resolution: item.resolution, 
-                    handled_by: req.user.employee_id, 
+                    equipment_id: item.equipment_id,
+                    resolution: item.resolution,
+                    handled_by: actor._id,
                     note: `Sự cố ${incident._id}`
                 });
             }
-        
+
             // thêm phiếu đền bù
             const ticket = await this.CompensateTicket.create({
                 incident_id: incident._id,
@@ -274,20 +343,20 @@ export class CompensateService {
     
     async createCompensateTicketOther (incidentId, userId, data) {
         try {
-            const { payer_type, payer_id, total_fee, note } = data;
+            const { payer_type, payer_id: rawPayerId, total_fee, note } = data;
 
             const actor = await this.getEmployeeByUserId(userId);
-    
+
             if ( !payer_type || !total_fee ) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin.");
             }
-        
+
             const incident = await this.Incident.findById(incidentId);
             if (!incident) {
                 throw new Error("Sự cố không tồn tại.");
             }
-        
-            if (!payer_id) payer_id = incident.causer_id;
+
+            const payer_id = rawPayerId || incident.causer_id;
         
             if (incident.compensation_status !== "none") {
                 throw new Error("Sự cố đã có phiếu đền bù.");
@@ -351,17 +420,7 @@ export class CompensateService {
     
             const compensations = await this.CompensateTicket.find(filter)
                 .select("-__v -updated_at")
-                .populate({
-                    path: "incident_id", select: "-__v -updated_at -created_at",
-                })
-                .populate({
-                    path: "compensation_details.equipment_id",
-                    select: "condition status",
-                    // populate: {
-                    // path: "category_id",
-                    // select: "name price",
-                    // },
-                })
+                .populate({ path: "incident_id", select: "-__v -updated_at -created_at" })
                 .sort({ created_at: -1 }).lean();
     
             const incidents = compensations.map(t => t.incident_id).filter(Boolean);
@@ -378,28 +437,24 @@ export class CompensateService {
             // Check receipt song song cho tất cả tickets
             const receiptChecks = await Promise.all(
                 compensations.map(async (ticket) => {
-                    if (!ticket.booking_id) 
-                        return { 
-                            isInReceipt: false, 
-                            receiptStatus: null 
-                        };
+                    if (!ticket.booking_id)
+                        return { isInReceipt: false, receiptStatus: null };
 
-                    // const receipt = await this.Receipt.findOne({
-                    //     booking_id: ticket.booking_id,
-                    //     compensate_ticket_id: ticket._id
-                    // }).select("status").lean();
+                    const reply = await this.eventBus.safeRequest(
+                        PAYMENT_EVENTS.GET_RECEIPT_BY_BOOKING,
+                        {
+                            booking_id: ticket.booking_id.toString(),
+                            compensate_ticket_id: ticket._id.toString()
+                        }
+                    );
 
-                    if (receipt) 
-                        return { 
-                            isInReceipt: true, 
-                            receiptStatus: receipt.status 
-                        };
+                    if (!reply.success)
+                        return { isInReceipt: false, receiptStatus: null };
 
-                    // const receiptByBooking = await this.Receipt.findOne({
-                    //     booking_id: ticket.booking_id,
-                    //     compensate_fee: { $gt: 0 },
-                    //     status: { $in: ["pending", "half-paid"] }
-                    // }).select("status").lean();
+                    const { receipt, receiptByBooking } = reply;
+
+                    if (receipt)
+                        return { isInReceipt: true, receiptStatus: receipt.status };
 
                     return {
                         isInReceipt: !!receiptByBooking,
@@ -424,7 +479,7 @@ export class CompensateService {
                 };
             });
 
-            return result;
+            return await this.populateEquipmentDetails(result);
     
         } catch (error) { 
             console.log("Error in getting all compensation tickets: ", error.message);
@@ -436,21 +491,7 @@ export class CompensateService {
         try {
             const compensation = await this.CompensateTicket.findById(ticketId)
                 .select("-__v")
-                .populate({
-                    path: "incident_id", select: "-__v -updated_at -created_at",
-                    // populate: [
-                    // { path: "room_id", select: "room_number" },
-                    // { path: "reporter_id", select: "system_role" },
-                    // { path: "causer_id", select: "system_role" },
-                    // ],
-                })
-                .populate({
-                    path: "compensation_details.equipment_id",
-                    // populate: {
-                    // path: "category_id",
-                    // select: "name price",
-                    // },
-                })
+                .populate({ path: "incident_id", select: "-__v -updated_at -created_at" })
                 .lean();
         
             if (!compensation)
@@ -469,12 +510,12 @@ export class CompensateService {
                 };
             }
 
-            return {
-                data: {
-                    ...compensation,
-                    incident_id: finalIncident,
-                },
-            };
+            const enriched = await this.populateEquipmentDetails({
+                ...compensation,
+                incident_id: finalIncident,
+            });
+
+            return { data: enriched };
 
         } catch (error) {
             console.log("Error in getting compensate ticket: ", error.message);

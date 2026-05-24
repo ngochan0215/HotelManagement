@@ -122,6 +122,8 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
   const incident = ticket.incident_id;
   const compensationDetails = ticket.compensation_details || [];
 
+  console.log("Rendering CompensationDetailModal with ticket:", ticket);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
@@ -182,11 +184,11 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
                   {getPayerTypeLabel(ticket.payer_type)}
                 </p>
               </div>
-              {ticket.incident?.causer_name && (
+              {incident?.causer_name && (
                 <div>
                   <span className="text-xs text-gray-500">Người gây ra:</span>
                   <p className="font-semibold text-gray-800">
-                    {ticket.incident.causer_name}
+                    {incident.causer_name}
                   </p>
                 </div>
               )}
@@ -218,7 +220,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
                     <span className="text-xs text-gray-500">Phòng:</span>
                     <p className="font-semibold text-gray-800 flex items-center gap-1">
                       <FiMapPin className="text-indigo-600" size={14} />
-                      Phòng {incident.room_id.room_number}
+                      Phòng {incident.room_info.room_number}
                     </p>
                   </div>
                 )}
