@@ -219,7 +219,11 @@ export class ReceiptService {
             
             const bookingDetails = replyDetails.details;
             const baseRoomFee = bookingDetails.reduce((sum, detail) => {
-                const nights = Math.ceil((new Date(detail.expected_checkout) - new Date(detail.expected_checkin)) / (1000 * 60 * 60 * 24));
+                const d1 = new Date(detail.expected_checkin);
+                const d2 = new Date(detail.expected_checkout);
+                const day1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate());
+                const day2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+                const nights = Math.max(Math.round((day2 - day1) / (1000 * 60 * 60 * 24)), 1);
                 return sum + (detail.base_fee * nights);
             }, 0);
         

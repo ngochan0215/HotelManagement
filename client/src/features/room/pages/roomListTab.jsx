@@ -6,6 +6,8 @@ import { bookingApi } from "../../api/bookingApi.js";
 import dayjs from "dayjs";
 import { StatusPill } from "../../../components/ui/label.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
+import Toast from "../../../components/toast.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
 
 const STATUS_MAP = {
   new:         { label: "Mới tạo",  color: "blue" },
@@ -27,6 +29,9 @@ export default function RoomListTab() {
   const [editingItem, setEditingItem] = useState(null);
   const [cleaningTasksMap, setCleaningTasksMap] = useState({}); // Map room_id -> cleaningTask
   const [loadingCleaningTasks, setLoadingCleaningTasks] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [confirmDeleteRoom, setConfirmDeleteRoom] = useState({ open: false, id: null, status: "" });
+  const [confirmCleaningRoom, setConfirmCleaningRoom] = useState({ open: false, taskId: null, roomNumber: "" });
 
   // Kiểm tra role của user
   const isManager = useMemo(() => {
@@ -54,18 +59,18 @@ export default function RoomListTab() {
   const [showInstallPreview, setShowInstallPreview] = useState(false);
   const [defaultEquipments, setDefaultEquipments] = useState([]);
   const [loadingEquipments, setLoadingEquipments] = useState(false);
-  const [newRoomId, setNewRoomId] = useState(null); // Lưu room_id sau khi tạo phòng
-  const [suggestedRoomNumber, setSuggestedRoomNumber] = useState(""); // Số phòng được gợi ý
+  const [newRoomId, setNewRoomId] = useState(null);
+  const [suggestedRoomNumber, setSuggestedRoomNumber] = useState("");
   const [technicians, setTechnicians] = useState([]);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
   const [loadingTechnicians, setLoadingTechnicians] = useState(false);
   
-  // Phòng đã có phiếu lắp đặt chưa hủy (pending/assigned/waiting_confirm/completed) → ẩn nút "Tạo phiếu lắp đặt"
+  // Phòng đã có phiếu lắp đặt status !== completed → ẩn nút "Tạo phiếu lắp đặt"
   const [roomIdsWithActiveInstallTicket, setRoomIdsWithActiveInstallTicket] = useState(new Set());
   
   // --- STATE SẮP XẾP ---
-  const [sortBy, setSortBy] = useState(null); // "status" | "category" | null
-  const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
+  const [sortBy, setSortBy] = useState(null);
+  const [sortOrder, setSortOrder] = useState("asc");
 
   const isTimeRequired = ["maintenance", "cleaning"].includes(formData.room_status);
   const isStatusLocked = editingItem && ["occupied", "booked", "reserved"].includes(editingItem.room_status);
@@ -85,15 +90,20 @@ export default function RoomListTab() {
       try {
         const res = await equipmentApi.getAllInstallTickets();
         const installs = res.installs || [];
+
         const statusNotCancelled = ["pending", "assigned", "waiting_confirm", "completed"];
         const ids = new Set();
+        
         installs.forEach((ticket) => {
           if (ticket.type !== "install") return;
+
           const status = (ticket.status || "").toLowerCase();
           if (!statusNotCancelled.includes(status)) return;
+          
           const roomId = ticket.room_id?._id || ticket.room_id;
           if (roomId) ids.add(roomId.toString());
         });
+
         setRoomIdsWithActiveInstallTicket(ids);
       } catch (err) {
         console.error("Lỗi tải phiếu lắp đặt:", err);
@@ -157,15 +167,11 @@ export default function RoomListTab() {
   const fetchData = async () => {
     try {
       const [roomsRes, catsRes] = await Promise.all([
-        roomApi.getAllRooms(),
+        roomApi.getAllRooms({ limit: 1000 }),
         roomApi.getAllCategories()
       ]);
 
-      console.log("room: ", roomsRes);
-      // console.log("categories: ", catsRes);
-
       if (roomsRes && Array.isArray(roomsRes.rooms)) {
-        //console.log("ROOMS: ", roomsRes.rooms);
         setRooms(roomsRes.rooms);
       } else {
         setRooms([]);
@@ -264,11 +270,11 @@ export default function RoomListTab() {
 
     if (isTimeRequired) {
         if (!payload.start_time || !payload.end_time) {
-            alert("Vui lòng nhập đầy đủ Thời gian bắt đầu và Kết thúc cho trạng thái này!");
+            setToast({ type: "error", message: "Vui lòng nhập đầy đủ Thời gian bắt đầu và Kết thúc cho trạng thái này!" });
             return;
         }
         if (new Date(payload.end_time) <= new Date(payload.start_time)) {
-            alert("Thời gian kết thúc phải sau thời gian bắt đầu!");
+            setToast({ type: "error", message: "Thời gian kết thúc phải sau thời gian bắt đầu!" });
             return;
         }
     } else {
@@ -289,7 +295,7 @@ export default function RoomListTab() {
         setTimeout(() => {
           fetchData();
         }, 100);
-        alert("Thành công!");
+        setToast({ type: "success", message: "Cập nhật phòng thành công!" });
       } else {
         // Tạo phòng mới
         const res = await roomApi.createRoom(payload);
@@ -299,25 +305,25 @@ export default function RoomListTab() {
         });
         setSuggestedRoomNumber("");
         fetchData();
-        alert("Thành công!");
+        setToast({ type: "success", message: "Tạo phòng mới thành công!" });
       }
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
   const handlePreviewInstallTicket = async (categoryId, roomId = null) => {
     if (!categoryId) {
-      alert("Vui lòng chọn loại phòng trước!");
+      setToast({ type: "error", message: "Vui lòng chọn loại phòng trước!" });
       return;
     }
 
     // Nếu có roomId được truyền vào, dùng nó
     // Nếu không, dùng room_id từ editingItem
     const targetRoomId = roomId || (editingItem && editingItem._id);
-    
+
     if (!targetRoomId) {
-      alert("Không tìm thấy thông tin phòng. Vui lòng chọn phòng từ danh sách hoặc tạo phòng trước!");
+      setToast({ type: "error", message: "Không tìm thấy thông tin phòng. Vui lòng chọn phòng từ danh sách hoặc tạo phòng trước!" });
       return;
     }
 
@@ -355,10 +361,10 @@ export default function RoomListTab() {
         setNewRoomId(targetRoomId);
         setShowInstallPreview(true);
       } else {
-        alert("Loại phòng này không có thiết bị mặc định nào. Không thể tạo phiếu lắp đặt tự động.");
+        setToast({ type: "error", message: "Loại phòng này không có thiết bị mặc định nào. Không thể tạo phiếu lắp đặt tự động." });
       }
     } catch (error) {
-      alert("Lỗi khi lấy danh sách thiết bị mặc định: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi khi lấy danh sách thiết bị mặc định: " + (error.response?.data?.message || error.message) });
     } finally {
       setLoadingEquipments(false);
     }
@@ -366,13 +372,13 @@ export default function RoomListTab() {
 
   const handleCreateInstallTicket = async () => {
     if (!newRoomId) {
-      alert("Không tìm thấy thông tin phòng!");
+      setToast({ type: "error", message: "Không tìm thấy thông tin phòng!" });
       return;
     }
 
     const installableItems = defaultEquipments.filter((de) => de.can_install !== false);
     if (installableItems.length === 0) {
-      alert("Không có thiết bị nào đủ tồn kho để lắp đặt. Vui lòng nhập thêm thiết bị trước.");
+      setToast({ type: "error", message: "Không có thiết bị nào đủ tồn kho để lắp đặt. Vui lòng nhập thêm thiết bị trước." });
       return;
     }
 
@@ -397,11 +403,12 @@ export default function RoomListTab() {
 
       await equipmentApi.createInstallTicket(payload);
       const skippedCount = defaultEquipments.length - installableItems.length;
-      alert(
-        skippedCount > 0
+      setToast({
+        type: "success",
+        message: skippedCount > 0
           ? `Đã tạo phiếu lắp đặt với ${installableItems.length} loại thiết bị (${skippedCount} loại thiếu tồn kho đã bỏ qua).`
           : "Tạo phiếu lắp đặt tự động thành công!"
-      );
+      });
       setShowInstallPreview(false);
       setDefaultEquipments([]);
       setNewRoomId(null);
@@ -411,7 +418,7 @@ export default function RoomListTab() {
       setSuggestedRoomNumber("");
       fetchData();
     } catch (error) {
-      alert("Lỗi khi tạo phiếu lắp đặt: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi khi tạo phiếu lắp đặt: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -519,18 +526,23 @@ export default function RoomListTab() {
     setSuggestedRoomNumber(suggestedNumber);
   };
 
-  const handleDelete = async (id, status) => {
+  const handleDelete = (id, status) => {
     if (["occupied", "booked"].includes(status)) {
-        alert("Không thể xóa phòng đang có khách hoặc đã được đặt trước!");
-        return;
+      setToast({ type: "error", message: "Không thể xóa phòng đang có khách hoặc đã được đặt trước!" });
+      return;
     }
-    if (window.confirm("Xóa phòng này?")) {
-      try {
-        await roomApi.deleteRoom(id);
-        fetchData();
-      } catch (error) {
-        alert("Lỗi xóa: " + error.message);
-      }
+    setConfirmDeleteRoom({ open: true, id, status });
+  };
+
+  const executeDeleteRoom = async () => {
+    const { id } = confirmDeleteRoom;
+    setConfirmDeleteRoom({ open: false, id: null, status: "" });
+    try {
+      await roomApi.deleteRoom(id);
+      fetchData();
+      setToast({ type: "success", message: "Đã xóa phòng thành công." });
+    } catch (error) {
+      setToast({ type: "error", message: "Lỗi xóa: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -542,7 +554,7 @@ export default function RoomListTab() {
       const log = Array.isArray(room.roomStatusLog) ? room.roomStatusLog[0] : null;
 
       if (!room) {
-        alert("Không tìm thấy dữ liệu phòng!");
+        setToast({ type: "error", message: "Không tìm thấy dữ liệu phòng!" });
         return;
       }
       setEditingItem(room);
@@ -559,7 +571,7 @@ export default function RoomListTab() {
       setIsModalOpen(true);
     } catch (error) {
       console.error(error);
-      alert("Không tải được dữ liệu phòng!");
+      setToast({ type: "error", message: "Không tải được dữ liệu phòng!" });
     }
   };
 
@@ -678,20 +690,8 @@ export default function RoomListTab() {
                       <div className="flex items-center justify-end gap-2">
                         {/* Button xác nhận cleaning cho phòng có status "cleaning" và cleaning task status "completed" */}
                         {displayStatus === "cleaning" && cleaningTasksMap[room._id] && cleaningTasksMap[room._id].status === "completed" && (
-                          <button 
-                            onClick={async () => {
-                              if (!window.confirm(`Xác nhận hoàn thành dọn dẹp phòng ${room.room_number}?`)) {
-                                return;
-                              }
-                              try {
-                                await bookingApi.confirmCleaning(cleaningTasksMap[room._id]._id);
-                                alert('Xác nhận hoàn thành dọn dẹp thành công!');
-                                await checkCleaningTasks();
-                                fetchData();
-                              } catch (error) {
-                                alert('Lỗi: ' + (error.response?.data?.message || error.message));
-                              }
-                            }}
+                          <button
+                            onClick={() => setConfirmCleaningRoom({ open: true, taskId: cleaningTasksMap[room._id]._id, roomNumber: room.room_number })}
                             disabled={!isManager || loadingCleaningTasks}
                             className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded transition ${
                               isManager && !loadingCleaningTasks
@@ -711,7 +711,7 @@ export default function RoomListTab() {
                                 setEditingItem(room);
                                 handlePreviewInstallTicket(categoryId, room._id);
                               } else {
-                                alert("Phòng này chưa có loại phòng. Vui lòng cập nhật loại phòng trước!");
+                                setToast({ type: "error", message: "Phòng này chưa có loại phòng. Vui lòng cập nhật loại phòng trước!" });
                               }
                             }}
                             className="text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded text-xs font-medium flex items-center gap-1"
@@ -915,6 +915,39 @@ export default function RoomListTab() {
           </div>
         </div>
       )}
+
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
+      <ConfirmModal
+        open={confirmDeleteRoom.open}
+        title="Xóa phòng"
+        message="Bạn có chắc muốn xóa phòng này không?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onConfirm={executeDeleteRoom}
+        onCancel={() => setConfirmDeleteRoom({ open: false, id: null, status: "" })}
+      />
+
+      <ConfirmModal
+        open={confirmCleaningRoom.open}
+        title="Xác nhận dọn dẹp"
+        message={`Xác nhận hoàn thành dọn dẹp phòng ${confirmCleaningRoom.roomNumber}?`}
+        confirmText="Xác nhận"
+        cancelText="Hủy"
+        onConfirm={async () => {
+          const { taskId } = confirmCleaningRoom;
+          setConfirmCleaningRoom({ open: false, taskId: null, roomNumber: "" });
+          try {
+            await bookingApi.confirmCleaning(taskId);
+            setToast({ type: "success", message: "Xác nhận hoàn thành dọn dẹp thành công!" });
+            await checkCleaningTasks();
+            fetchData();
+          } catch (error) {
+            setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+          }
+        }}
+        onCancel={() => setConfirmCleaningRoom({ open: false, taskId: null, roomNumber: "" })}
+      />
 
       {/* Preview Modal cho phiếu lắp đặt tự động */}
       {showInstallPreview && (

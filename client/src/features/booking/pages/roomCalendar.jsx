@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
+import Toast from "../../../components/toast.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
 import { bookingApi } from "../../api/bookingApi.js";
 import { roomApi } from "../../api/roomApi.js";
 import { serviceApi } from "../../api/serviceApi.js";
@@ -39,6 +41,8 @@ export default function RoomCalendar() {
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showServiceModal, setShowServiceModal] = useState(false);
     const [selectedServicesToAdd, setSelectedServicesToAdd] = useState([]);
+    const [toast, setToast] = useState(null);
+    const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
     const currentTimePosition = useMemo(() => {
         const now = new Date();
@@ -145,9 +149,23 @@ export default function RoomCalendar() {
         return { left: (differenceInMinutes(drawStart, dayStart) / 60) * HOUR_WIDTH, width: Math.max(width, 40) };
     };
 
-    const handleConfirmDeposit = async () => {
-        if (!window.confirm("Xác nhận khách đã đóng tiền cọc?")) return;
-        try { await bookingApi.confirmBooking(selectedEvent.booking_id); alert("Thành công!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
+    const handleConfirmDeposit = () => {
+        setConfirmState({
+            open: true,
+            title: "Xác nhận tiền cọc",
+            message: "Xác nhận khách đã đóng tiền cọc?",
+            onConfirm: async () => {
+                setConfirmState(s => ({ ...s, open: false }));
+                try {
+                    await bookingApi.confirmBooking(selectedEvent.booking_id);
+                    setToast({ type: "success", message: "Xác nhận cọc thành công!" });
+                    setSelectedEvent(null);
+                    fetchCalendar();
+                } catch (err) {
+                    setToast({ type: "error", message: err.response?.data?.message || err.message });
+                }
+            }
+        });
     };
     const handleCheckIn = () => navigate('/booking-management');
 
@@ -156,18 +174,23 @@ export default function RoomCalendar() {
     const handleCompleteCleaning = async () => {
         try {
             console.log("selectedEvent: ", selectedEvent);
-            await roomApi.completeCleaning(selectedEvent.room_id); 
-            alert("Xong!"); 
-            setSelectedEvent(null); 
-            fetchCalendar(); 
-
-        } catch (err) 
-        { 
-            alert(err.response?.data?.message || err.message); 
+            await roomApi.completeCleaning(selectedEvent.room_id);
+            setToast({ type: "success", message: "Hoàn thành dọn dẹp!" });
+            setSelectedEvent(null);
+            fetchCalendar();
+        } catch (err) {
+            setToast({ type: "error", message: err.response?.data?.message || err.message });
         }
     };
     const handleCompleteMaintenance = async () => {
-        try { await roomApi.completeMaintenance(selectedEvent.room_id); alert("Xong!"); setSelectedEvent(null); fetchCalendar(); } catch (err) { alert(err.response?.data?.message || err.message); }
+        try {
+            await roomApi.completeMaintenance(selectedEvent.room_id);
+            setToast({ type: "success", message: "Hoàn thành bảo trì!" });
+            setSelectedEvent(null);
+            fetchCalendar();
+        } catch (err) {
+            setToast({ type: "error", message: err.response?.data?.message || err.message });
+        }
     };
 
     const openAddServiceModal = () => {
@@ -179,8 +202,8 @@ export default function RoomCalendar() {
     const handleSubmitService = async () => {
         try {
             const valid = selectedServicesToAdd.filter(s => s.service_id && s.quantity > 0);
-            if (!valid.length) { alert("Chọn dịch vụ"); return; }
-            if (!selectedEvent.customer_id) { alert("Lỗi: Không tìm thấy thông tin khách hàng."); return; }
+            if (!valid.length) { setToast({ type: "error", message: "Vui lòng chọn ít nhất một dịch vụ." }); return; }
+            if (!selectedEvent.customer_id) { setToast({ type: "error", message: "Lỗi: Không tìm thấy thông tin khách hàng." }); return; }
 
             const payload = {
                 booking_id: selectedEvent.booking_id,
@@ -192,9 +215,12 @@ export default function RoomCalendar() {
                 }))
             };
             await serviceApi.createServiceUsage(payload);
-            alert("Thêm dịch vụ thành công!");
+            setToast({ type: "success", message: "Thêm dịch vụ thành công!" });
             setShowServiceModal(false); setSelectedEvent(null);
-        } catch (err) { console.error(err); alert("Lỗi: " + (err.response?.data?.message || err.message)); }
+        } catch (err) {
+            console.error(err);
+            setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
     };
 
     const handleEmptySlotClick = () => navigate('/booking-management');
@@ -356,6 +382,16 @@ export default function RoomCalendar() {
                     </div>
                 )}
             </div>
+            <ConfirmModal
+                open={confirmState.open}
+                title={confirmState.title}
+                message={confirmState.message}
+                confirmText="Xác nhận"
+                cancelText="Hủy"
+                onConfirm={confirmState.onConfirm}
+                onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+            />
+            {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
         </div>
     );
 }

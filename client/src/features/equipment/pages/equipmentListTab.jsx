@@ -5,6 +5,7 @@ import {
 } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 import { StatusPill } from "../../../components/ui/label.jsx";
 import Pagination from "../../../components/pagination.jsx";
 
@@ -35,6 +36,7 @@ export default function EquipmentListTab() {
 
   const [formData, setFormData] = useState({ status: "", note: "", room_id: "" });
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null });
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -163,9 +165,9 @@ export default function EquipmentListTab() {
       await equipmentApi.updateEquipment(editingItem._id, payload);
       setIsModalOpen(false);
       loadData();
-      alert("Cập nhật thành công!");
+      setToast({ type: "success", message: "Cập nhật thành công!" });
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -174,9 +176,9 @@ export default function EquipmentListTab() {
       await equipmentApi.deleteEquipment(confirmDelete.id);
       loadData();
       setConfirmDelete({ open: false, id: null });
-      alert("Đã xóa thiết bị thành công.");
+      setToast({ type: "success", message: "Đã xóa thiết bị thành công." });
     } catch (error) {
-      alert("Lỗi xóa: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi xóa: " + (error.response?.data?.message || error.message) });
       setConfirmDelete({ open: false, id: null });
     }
   };
@@ -319,6 +321,7 @@ export default function EquipmentListTab() {
             onCancel={() => setConfirmDelete({ open: false, id: null })}
         />
       )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }

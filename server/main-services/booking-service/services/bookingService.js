@@ -20,18 +20,20 @@ export class BookingService {
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
     
-    // helper
+    // helper — 1 đêm = 14:00 ngày N đến 12:00 ngày N+1 (chu kỳ chuẩn khách sạn)
+    // Số đêm = số ngày lịch giữa ngày check-in và ngày check-out (bỏ giờ)
     calcNights = (expected_checkin, expected_checkout) => {
-        const diffMs = new Date(expected_checkout) - new Date(expected_checkin);
+        const d1 = new Date(expected_checkin);
+        const d2 = new Date(expected_checkout);
+        const day1 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate());
+        const day2 = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+        const nights = Math.round((day2 - day1) / (1000 * 60 * 60 * 24));
 
-        if (diffMs <= 0) {
+        if (nights <= 0) {
             throw new Error("Thời gian checkout phải lớn hơn checkin");
         }
 
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const days = diffHours / 24;
-
-        return Math.ceil(days * 100) / 100;
+        return nights;
     };
 
     calculateBookingStatus = (details) => {
@@ -1748,7 +1750,7 @@ export class BookingService {
         return details;
     }
 
-    findBookingDetailsByBookingIds = async (activeBookingIds) => {
+    findBookingDetailsByBookingIds = async (activeBookingIds, start, end) => {
         const busyBookingDetails = await this.BookingDetail.find({
             booking_id: { $in: activeBookingIds },
             status: { $ne: "cancelled" },

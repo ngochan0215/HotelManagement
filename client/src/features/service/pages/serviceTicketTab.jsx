@@ -9,6 +9,8 @@ import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
 import ServiceUsageDetailModal from "../components/serviceUsageDetailModal.jsx";
 import UpdateServiceUsageModal from "../components/updateServiceUsageModal.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 
 export default function ServiceTicketTab() {
   const { user } = useAuth();
@@ -30,6 +32,8 @@ export default function ServiceTicketTab() {
   const [editingImportId, setEditingImportId] = useState(null);
 
   const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -113,11 +117,11 @@ export default function ServiceTicketTab() {
         setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
         setShowPreviewModal(true);
       } else {
-        alert("Không có sản phẩm nào hết tồn kho (số lượng = 0).");
+        setToast({ type: "info", message: "Không có sản phẩm nào hết tồn kho (số lượng = 0)." });
       }
     } catch (error) {
       console.error("Error fetching out of stock services:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };
 
@@ -133,24 +137,23 @@ export default function ServiceTicketTab() {
 
   const handleConfirmCreate = async () => {
     if (!previewFormData.import_date) {
-      alert("Vui lòng chọn ngày nhập!");
+      setToast({ type: "error", message: "Vui lòng chọn ngày nhập!" });
       return;
     }
 
     if (previewItems.length === 0) {
-      alert("Không có sản phẩm nào để tạo phiếu nhập!");
+      setToast({ type: "error", message: "Không có sản phẩm nào để tạo phiếu nhập!" });
       return;
     }
 
-    // Validate items
     for (let i = 0; i < previewItems.length; i++) {
       const item = previewItems[i];
       if (!item.import_quantity || item.import_quantity <= 0) {
-        alert(`Sản phẩm "${item.service_name}": Số lượng nhập phải > 0`);
+        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Số lượng nhập phải > 0` });
         return;
       }
       if (!item.import_price || item.import_price <= 0) {
-        alert(`Sản phẩm "${item.service_name}": Giá nhập phải > 0`);
+        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Giá nhập phải > 0` });
         return;
       }
     }
@@ -169,16 +172,16 @@ export default function ServiceTicketTab() {
       });
 
       if (res.success) {
-        alert(res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!`);
+        setToast({ type: "success", message: res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!` });
         setShowPreviewModal(false);
         setPreviewItems([]);
-        fetchTickets(); // Reload để cập nhật dữ liệu
+        fetchTickets();
       } else {
-        alert("Lỗi: " + (res.message || "Không thể tạo phiếu nhập"));
+        setToast({ type: "error", message: "Lỗi: " + (res.message || "Không thể tạo phiếu nhập") });
       }
     } catch (error) {
       console.error("Error creating import ticket:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     } finally {
       setCreating(false);
     }
@@ -248,37 +251,58 @@ export default function ServiceTicketTab() {
   };
 
   // --- ACTIONS ---
-  const handleConfirmImport = async (id) => {
-    if (!window.confirm("Xác nhận nhập kho? Số lượng tồn kho sẽ được cập nhật.")) return;
-    try {
-      await serviceApi.confirmGoodTicket(id);
-      alert("Đã nhập kho thành công!");
-      fetchTickets();
-    } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
-    }
+  const handleConfirmImport = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Xác nhận nhập kho",
+      message: "Xác nhận nhập kho? Số lượng tồn kho sẽ được cập nhật.",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await serviceApi.confirmGoodTicket(id);
+          setToast({ type: "success", message: "Đã nhập kho thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
-  const handleConfirmUsage = async (id) => {
-      if (!window.confirm("Xác nhận toàn bộ phiếu sử dụng dịch vụ?")) return;
-      try {
+  const handleConfirmUsage = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Xác nhận phiếu dịch vụ",
+      message: "Xác nhận toàn bộ phiếu sử dụng dịch vụ?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
           await serviceApi.confirmServiceUsage(id);
-          alert("Đã xác nhận phiếu sử dụng dịch vụ!");
+          setToast({ type: "success", message: "Đã xác nhận phiếu sử dụng dịch vụ!" });
           fetchTickets();
-      } catch (err) {
-          alert("Lỗi: " + (err.response?.data?.message || err.message));
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
       }
+    });
   };
 
-  const handleCancelUsage = async (id) => {
-      if (!window.confirm("Hủy toàn bộ phiếu sử dụng dịch vụ?")) return;
-      try {
+  const handleCancelUsage = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Hủy phiếu dịch vụ",
+      message: "Hủy toàn bộ phiếu sử dụng dịch vụ?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
           await serviceApi.cancelServiceUsage(id);
-          alert("Đã hủy phiếu sử dụng dịch vụ!");
+          setToast({ type: "success", message: "Đã hủy phiếu sử dụng dịch vụ!" });
           fetchTickets();
-      } catch (err) {
-          alert("Lỗi: " + (err.response?.data?.message || err.message));
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
       }
+    });
   };
 
   const canUpdateOrDeleteImport = (ticket) => {
@@ -290,15 +314,22 @@ export default function ServiceTicketTab() {
     return importDate > today;
   };
 
-  const handleDeleteImport = async (id) => {
-    if (!window.confirm("Bạn chắc chắn muốn xóa phiếu nhập này?")) return;
-    try {
-      await serviceApi.deleteGoodTicket(id);
-      alert("Đã xóa phiếu nhập thành công!");
-      fetchTickets();
-    } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
-    }
+  const handleDeleteImport = (id) => {
+    setConfirmState({
+      open: true,
+      title: "Xóa phiếu nhập",
+      message: "Bạn chắc chắn muốn xóa phiếu nhập này?",
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await serviceApi.deleteGoodTicket(id);
+          setToast({ type: "success", message: "Đã xóa phiếu nhập thành công!" });
+          fetchTickets();
+        } catch (err) {
+          setToast({ type: "error", message: "Lỗi: " + (err.response?.data?.message || err.message) });
+        }
+      }
+    });
   };
 
   const renderStatus = (status) => {
@@ -702,6 +733,18 @@ export default function ServiceTicketTab() {
         )}
       </div>
       )}
+      {confirmState.open && (
+        <ConfirmModal
+          open={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText="Xác nhận"
+          cancelText="Hủy"
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        />
+      )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
