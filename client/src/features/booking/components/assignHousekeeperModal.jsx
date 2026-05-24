@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiUser } from "react-icons/fi";
 import { bookingApi } from "../../api/bookingApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function AssignHousekeeperModal({ cleaningData, onClose, onSuccess }) {
   const [housekeepers, setHousekeepers] = useState([]);
   const [selectedHousekeeper, setSelectedHousekeeper] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchHousekeepers = async () => {
@@ -15,7 +17,7 @@ export default function AssignHousekeeperModal({ cleaningData, onClose, onSucces
         setHousekeepers(res.housekeepers || []);
       } catch (error) {
         console.error("Error fetching housekeepers:", error);
-        alert("Lỗi khi tải danh sách nhân viên: " + (error.response?.data?.message || error.message));
+        setToast({ message: "Lỗi khi tải danh sách nhân viên: " + (error.response?.data?.message || error.message), type: "error" });
       } finally {
         setFetching(false);
       }
@@ -26,7 +28,7 @@ export default function AssignHousekeeperModal({ cleaningData, onClose, onSucces
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedHousekeeper) {
-      alert("Vui lòng chọn nhân viên dọn dẹp");
+      setToast({ message: "Vui lòng chọn nhân viên dọn dẹp", type: "error" });
       return;
     }
 
@@ -43,26 +45,28 @@ export default function AssignHousekeeperModal({ cleaningData, onClose, onSucces
       }
       
       if (!room_log_id) {
-        alert("Không tìm thấy thông tin room log. Vui lòng thử lại.");
+        setToast({ message: "Không tìm thấy thông tin room log. Vui lòng thử lại.", type: "error" });
         setLoading(false);
         return;
       }
-      
+
       await bookingApi.assignCleaningTask({
         room_log_id: room_log_id,
         handled_by: selectedHousekeeper
       });
-      alert("Gán nhân viên thành công!");
+      setToast({ message: "Gán nhân viên thành công!", type: "success" });
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
         <div className="bg-gray-50 border-b border-gray-100 px-6 py-4 flex justify-between items-center">
@@ -128,5 +132,6 @@ export default function AssignHousekeeperModal({ cleaningData, onClose, onSucces
         </div>
       </div>
     </div>
+    </>
   );
 }

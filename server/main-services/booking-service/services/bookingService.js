@@ -7,6 +7,7 @@ import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
 import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
 import { CLEANING_EVENTS } from "../../../shared/events/cleaningEvents.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class BookingService {
     constructor({ Booking, BookingDetail, BookingStatusLog, BookingCancellation,
@@ -20,7 +21,7 @@ export class BookingService {
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
     
-    // helper — 1 đêm = 14:00 ngày N đến 12:00 ngày N+1 (chu kỳ chuẩn khách sạn)
+    // 1 đêm = 14:00 ngày N đến 12:00 ngày N+1 (chu kỳ chuẩn khách sạn)
     // Số đêm = số ngày lịch giữa ngày check-in và ngày check-out (bỏ giờ)
     calcNights = (expected_checkin, expected_checkout) => {
         const d1 = new Date(expected_checkin);
@@ -87,7 +88,7 @@ export class BookingService {
                     }
                 );
 
-                if(replyLogs.roomLogs) {
+                if(replyLogs.roomLogs?.length > 0) {
                     const replyRoom = await this.eventBus.safeRequest(
                         ROOM_EVENTS.CHECK_EXISTS,
                         { room_id: bd.room_id }
@@ -174,55 +175,44 @@ export class BookingService {
             );
 
             console.log(`Booking ${booking_id} đã được xác nhận thành công.`);
+            await Promise.all([
+                cache.del(`booking:one:${booking_id}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
 
-            // send notifications
-            try {
-                // send noti for admin
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
-                const employee = await this.findEmployeeById(booking.handled_by);
-                const customer = await this.findCustomerById(booking.customer_id);
-
+            // fire-and-forget notifications (do not block response)
+            Promise.all([
+                this.findManagersByIds(),
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]).then(([{ managerUserIds }, employee, customer]) => {
+                const notifPromises = [];
                 if (managerUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Booking đã xác nhận thanh toán tiền cọc",
                         content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
                 }
-
-                // send noti for customer
-                if (customer && customer.user_id) {
-                    await this.sendNotification({
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: customer.user_id,
                         title: "Booking đặt cọc thành công",
-                        content: `Bạn đã đặt cọc bookitng có ID: #${booking._id.toString().slice(-6)} thành công! Hãy để ý ngày giờ checkin nhé.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        content: `Bạn đã đặt cọc booking có ID: #${booking._id.toString().slice(-6)} thành công! Hãy để ý ngày giờ checkin nhé.`,
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
                 }
-
-                // send noti for handled employee
-                if (employee && employee.user_id) {
-                    await this.sendNotification({
+                if (employee?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: employee.user_id,
                         title: "Booking đặt cọc thành công",
-                        content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng 
-                            ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận đặt cọc thành công.`,
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
                 }
-
-                console.log("Notifications sent for booking confirmation.");
-
-            } catch (notifError) {
-                console.error("Error sending notification:", notifError);
-            }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[confirmBooking] Notification error (non-fatal):", err.message));
 
             return booking;
 
@@ -399,8 +389,10 @@ export class BookingService {
                 throw new Error("ID Khách hàng không hợp lệ!");
             }
 
-            const customer = await this.findCustomerById(customer_id);
-            const employee = await this.findEmployeeByUserId(employeeUserId);
+            const [customer, employee] = await Promise.all([
+                this.findCustomerById(customer_id),
+                this.findEmployeeByUserId(employeeUserId),
+            ]);
 
             if (!Array.isArray(rooms) || rooms.length === 0) {
                 throw new Error("Phải đặt ít nhất một phòng!");
@@ -594,56 +586,45 @@ export class BookingService {
             );
             if (!replyReceipt.success) throw new Error(replyReceipt.message);
 
-            // send notifications
-            try {
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
+            console.log("Booking created successfully.");
+            await cache.delByPattern("booking:list:*");
 
+            // fire-and-forget notifications
+            Promise.all([
+                this.findManagersByIds(),
+                this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_RECEPTIONISTS, {}),
+            ]).then(([{ managerUserIds }, replyReceptionists]) => {
+                const receptionistsUserIds = replyReceptionists.found
+                    ? replyReceptionists.receptionists.employees.map(e => e.user_id)
+                    : [];
+                const notifPromises = [];
                 if (managerUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Đơn đặt phòng mới",
                         content: `Có booking mới với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'}`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
                 }
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: customer.user_id,
+                        title: "Booking mới",
+                        content: `Bạn đã đặt booking mới có ID: #${shortenId} thành công! Vui lòng thanh toán tiền cọc nếu đặt trước nhe.`,
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
+                }
+                if (receptionistsUserIds.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: receptionistsUserIds,
+                        title: "Booking mới",
+                        content: `Có booking mới với ID: #${shortenId} từ khách hàng ${customer.full_name || "N/A"}`,
+                        type: "booking", kind: "Booking", refId: booking._id
+                    }));
+                }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[createBooking] Notification error (non-fatal):", err.message));
 
-                // send noti for customer
-                await this.sendNotification({
-                    userId: customer.user_id,
-                    title: "Booking mới",
-                    content: `Bạn đã đặt booking mới có ID: #${shortenId} thành công! Vui lòng thanh toán tiền cọc nếu đặt trước nhe.`,
-                    type: "booking",
-                    kind: "Booking",
-                    refId: booking._id
-                });
-
-                // send noti for receptionists
-                const replyReceptionists = await this.eventBus.safeRequest(
-                    EMPLOYEE_EVENTS.GET_RECEPTIONISTS,
-                    {}
-                );
-                if (!replyReceptionists.found)
-                    throw new Error("Không tìm thấy nhân viên lễ tân hợp lệ.");
-
-                const receptionists = replyReceptionists.receptionists.employees;
-                const receptionistsUserIds = receptionists.map(e => e.user_id);
-
-                await this.sendNotificationsToUsers({
-                    userIds: receptionistsUserIds,
-                    title: "Booking mới",
-                    content: `Có booking mới với ID: #${shortenId} từ khách hàng ${customer.full_name || "N/A"}`,
-                    type: "booking",
-                    kind: "Booking",
-                    refId: booking._id
-                });
-
-            } catch (notifError) {
-                console.error("Error sending notification:", notifError);
-            }
-
-            console.log("Booking created successfully.");
             return booking;
 
         } catch (error) {
@@ -664,6 +645,10 @@ export class BookingService {
 
     getAllBookings = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("booking:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { isScheduled, status } = query;
             const filter = {};
 
@@ -676,15 +661,19 @@ export class BookingService {
                 .lean();
 
             if (bookings.length === 0) {
-                return { total: 0, bookings: [] };
+                const emptyResponse = { total: 0, bookings: [] };
+                await cache.set(cacheKey, emptyResponse, 60);
+                return emptyResponse;
             }
 
-            const populatedBookings = await this.populateCustomerAndEmployee(bookings);
             const bookingIds = bookings.map(b => b._id);
 
-            const bookingDetails = await this.BookingDetail.find({ booking_id: { $in: bookingIds } })
-                .select("-created_at -updated_at -__v")
-                .lean();
+            const [populatedBookings, bookingDetails] = await Promise.all([
+                this.populateCustomerAndEmployee(bookings),
+                this.BookingDetail.find({ booking_id: { $in: bookingIds } })
+                    .select("-created_at -updated_at -__v")
+                    .lean(),
+            ]);
 
             const populatedDetails = await this.populateRoom(bookingDetails);
 
@@ -703,7 +692,9 @@ export class BookingService {
                 rooms: bookingDetailMap[booking._id.toString()] || []
             }));
 
-            return { total: populatedBookings.length, bookings: result };
+            const response = { total: populatedBookings.length, bookings: result };
+            await cache.set(cacheKey, response, 60);
+            return response;
 
         } catch (error) {
             console.log("Error in getting all bookings: ", error.message);
@@ -716,6 +707,10 @@ export class BookingService {
             if (!mongoose.Types.ObjectId.isValid(bookingId)) {
                 throw new Error("Booking ID không hợp lệ.");
             }
+
+            const cacheKey = `booking:one:${bookingId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const [booking, bookingDetails] = await Promise.all([
                 this.Booking.findById(bookingId).lean(),
@@ -742,10 +737,9 @@ export class BookingService {
                 status: item.status,
             }));
 
-            return { 
-                booking: populatedBooking,
-                rooms
-            }
+            const detailResponse = { booking: populatedBooking, rooms };
+            await cache.set(cacheKey, detailResponse, 60);
+            return detailResponse;
 
         } catch (error) {
             console.log("Error in getting booking detail: ", error.log);
@@ -988,57 +982,49 @@ export class BookingService {
             booking.status = status;
             await booking.save();
 
-            // send notifications
-            try {
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
-                const employee = await this.findEmployeeById(booking.handled_by);
-                const customer = await this.findCustomerById(booking.customer_id);
-                
-                const statusLabels = {
-                    pending: "Đang chờ",
-                    confirmed: "Đã xác nhận",
-                    checked_in: "Đã check-in",
-                    checked_out: "Đã check-out",
-                    cancelled: "Đã hủy",
-                    expired: "Đã hết hạn"
-                };
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
 
-                if (managerUsers.length > 0) {
-                    await this.sendNotificationsToUsers({
+            // fire-and-forget notifications
+            const statusLabels = {
+                pending: "Đang chờ", confirmed: "Đã xác nhận", checked_in: "Đã check-in",
+                checked_out: "Đã check-out", cancelled: "Đã hủy", expired: "Đã hết hạn"
+            };
+            const statusLabel = statusLabels[status] || status;
+            Promise.all([
+                this.findManagersByIds(),
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]).then(([{ managerUserIds }, employee, customer]) => {
+                const notifPromises = [];
+                if (managerUserIds.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Booking đã thay đổi trạng thái",
-                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabel}"`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (customer && customer.user_id) {
-                    await this.sendNotification({
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: customer.user_id,
                         title: "Booking đã thay đổi trạng thái",
-                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabel}"`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (employee && employee.user_id) {
-                    await this.sendNotification({
+                if (employee?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: employee.user_id,
                         title: "Booking đã thay đổi trạng thái",
-                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabels[status] || status}"`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Booking #${shortenId} đã chuyển sang trạng thái "${statusLabel}"`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-            
-            } catch (notifError) {
-                console.error("Error sending notification:", notifError);
-            }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[updateBookingStatus] Notification error (non-fatal):", err.message));
 
             return { success: true };
 
@@ -1095,6 +1081,10 @@ export class BookingService {
             );
 
             await booking.save();
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
             return { success: true };
 
         } catch (err) {
@@ -1217,51 +1207,44 @@ export class BookingService {
                 handled_by: userId || null,
             });
 
-            // send notifications
-            try {
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
-                const employee = await this.findEmployeeById(booking.handled_by);
-                const customer = await this.findCustomerById(booking.customer_id);
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
 
-                if (managerUsers.length > 0) {
-                    await this.sendNotificationsToUsers({
+            // fire-and-forget notifications
+            Promise.all([
+                this.findManagersByIds(),
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]).then(([{ managerUserIds }, employee, customer]) => {
+                const notifPromises = [];
+                if (managerUserIds.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Booking đã xác nhận check-in",
-                        content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận checkin.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận checkin.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (customer && customer.user_id) {
-                    await this.sendNotification({
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: customer.user_id,
                         title: "Bạn đã check-in thành công",
-                        content: `Bạn đã checkin phòng ${room.room_number} thuộc booking #${shortenId} thành công!
-                            Chúc bạn có những trải nghiệm tuyệt vời.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        content: `Bạn đã checkin phòng ${room.room_number} thuộc booking #${shortenId} thành công! Chúc bạn có những trải nghiệm tuyệt vời.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (employee && employee.user_id) {
-                    await this.sendNotification({
+                if (employee?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: employee.user_id,
                         title: "Booking check-in thành công",
-                        content: `Phòng ${room.room_number} thuộc booking #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận checkin.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Phòng ${room.room_number} thuộc booking #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận checkin.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-            } catch (notifError) {
-                console.error("Error sending notification:", notifError);
-            }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[checkinBooking] Notification error (non-fatal):", err.message));
 
             return { success: true };
 
@@ -1341,12 +1324,13 @@ export class BookingService {
                 CLEANING_EVENTS.CREATE_TASK,
                 {
                     room_id: detail.room_id,
-                    room_log_id: replyInsertLog.roomLogs._id,
+                    room_log_id: Array.isArray(replyInsertLog.roomLogs) ? replyInsertLog.roomLogs[0]?._id : replyInsertLog.roomLogs?._id,
                     booking_id: bookingId,
                     note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
                 }
             );
-            if (!replyCleaningTask.success) console.warn(`[CHECKOUT] Tạo cleaning task thất bại: ${replyCleaningTask.message}`);
+            if (!replyCleaningTask.success) 
+                console.error(`[CHECKOUT] Tạo cleaning task thất bại: ${replyCleaningTask.message}`);
 
             detail.status = "checked_out";
             detail.actual_checkout = now;
@@ -1394,53 +1378,47 @@ export class BookingService {
             //     console.error("Lỗi khi cập nhật hóa đơn sau checkout:", receiptError);
             // }
 
-            try {
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
-                const employee = await this.findEmployeeById(booking.handled_by);
-                const customer = await this.findCustomerById(booking.customer_id);
-            
-                if (managerUsers.length > 0) {
-                    await this.sendNotificationsToUsers({
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
+
+            // fire-and-forget notifications
+            Promise.all([
+                this.findManagersByIds(),
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]).then(([{ managerUserIds }, employee, customer]) => {
+                const notifPromises = [];
+                if (managerUserIds.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Booking đã xác nhận check-out",
-                        content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận checkout. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Phòng ${room.room_number} thuộc booking với ID: #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận checkout. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (customer && customer.user_id) {
-                    await this.sendNotification({
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: customer.user_id,
                         title: "Bạn đã check-out thành công",
-                        content: `Bạn đã checkout phòng ${room.room_number} thuộc booking #${shortenId} thành công!
-                            Cảm ơn bạn đã lựa chọn dịch vụ của chúng tôi.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        content: `Bạn đã checkout phòng ${room.room_number} thuộc booking #${shortenId} thành công! Cảm ơn bạn đã lựa chọn dịch vụ của chúng tôi.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (employee && employee.user_id) {
-                    await this.sendNotification({
+                if (employee?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: employee.user_id,
                         title: "Booking check-out thành công",
-                        content: `Phòng ${room.room_number} thuộc booking #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận check-out. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Phòng ${room.room_number} thuộc booking #${shortenId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận check-out. Hãy kiểm tra hóa đơn và dọn dẹp phòng.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-            } catch (notifError) {
-                console.error("Error sending notification:", notifError);
-            }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[checkoutBooking] Notification error (non-fatal):", err.message));
 
             return {
-                room_log_id: replyInsertLog.roomLogs._id,
+                room_log_id: Array.isArray(replyInsertLog.roomLogs) ? replyInsertLog.roomLogs[0]?._id : replyInsertLog.roomLogs?._id,
                 room_id: detail.room_id,
                 room_number: room.room_number,
                 booking_id: bookingId,
@@ -1554,6 +1532,10 @@ export class BookingService {
                 });
             }
 
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
             return { success: true };
 
         } catch (error) {
@@ -1681,50 +1663,48 @@ export class BookingService {
             // );
 
             try {
-                const { managerUsers, managerUserIds } = await this.findManagersByIds();
-                const employee = await this.findEmployeeById(booking.handled_by);
-                const customer = await this.findCustomerById(booking.customer_id);
+                const [{ managerUsers, managerUserIds }, employee, customer] = await Promise.all([
+                    this.findManagersByIds(),
+                    this.findEmployeeById(booking.handled_by),
+                    this.findCustomerById(booking.customer_id),
+                ]);
 
+                const cancelId = booking._id.toString().slice(-6);
+                const notifPromises = [];
                 if (managerUsers.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: managerUserIds,
                         title: "Booking đã bị hủy",
-                        content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận hủy.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Booking có ID: #${cancelId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận hủy.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (customer && customer.user_id) {
-                    await this.sendNotification({
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: customer.user_id,
                         title: "Booking đã bị hủy",
-                        content: `Bạn đã hủy booking có ID: #${booking._id.toString().slice(-6)}. 
-                            Tiền cọc của bạn sẽ không được hoàn lại!`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id
-                    });
+                        content: `Bạn đã hủy booking có ID: #${cancelId}. Tiền cọc của bạn sẽ không được hoàn lại!`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
-
-                if (employee && employee.user_id) {
-                    await this.sendNotification({
+                if (employee?.user_id) {
+                    notifPromises.push(this.sendNotification({
                         userId: employee.user_id,
                         title: "Booking đã bị hủy",
-                        content: `Booking có ID: #${booking._id.toString().slice(-6)} từ khách hàng ${customer.full_name || 'N/A'} 
-                            đã xác nhận hủy.`,
-                        type: "booking",
-                        kind: "Booking",
-                        refId: booking._id,
-                    });
+                        content: `Booking có ID: #${cancelId} từ khách hàng ${customer.full_name || 'N/A'} đã xác nhận hủy.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
                 }
+                await Promise.all(notifPromises);
 
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
 
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
             return { success: true };
 
         } catch (err) {

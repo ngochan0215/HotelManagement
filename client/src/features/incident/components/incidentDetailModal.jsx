@@ -4,6 +4,8 @@ import { incidentApi } from "../../api/incidentApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import CreateCompensationModal from "./createCompensationModal.jsx";
+import Toast from "../../../components/toast.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
 
 export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const { user } = useAuth();
@@ -54,6 +56,8 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
   const [employees, setEmployees] = useState([]);
   const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
   const [showCompensation, setShowCompensation] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const isManager = user?.role === "manager" || user?.role === "admin";
 
@@ -118,56 +122,84 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
       };
 
       await incidentApi.updateIncident(incidentData._id, payload);
-      alert("Cập nhật thành công!");
+      setToast({ message: "Cập nhật thành công!", type: "success" });
       onUpdated?.();
       onClose();
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
     }
   };
 
   const handleAssign = async () => {
-    if (!assignee) return alert("Vui lòng chọn người xử lý");
+    if (!assignee) {
+      setToast({ message: "Vui lòng chọn người xử lý", type: "error" });
+      return;
+    }
     try {
         await incidentApi.assignIncident(incidentData._id, {
             assignee_id: assignee,
             note: processingNote,
         });
-        alert("Đã phân công xử lý sự cố");
+        setToast({ message: "Đã phân công xử lý sự cố", type: "success" });
         onUpdated?.();
         onClose();
     } catch (err) {
-        alert(err.response?.data?.message || "Lỗi phân công");
+        setToast({ message: err.response?.data?.message || "Lỗi phân công", type: "error" });
     }
   };
 
   const handleResolve = async () => {
-    if(!processingNote) return alert("Vui lòng nhập kết quả xử lý vào ghi chú.");
-    if(!window.confirm("Xác nhận đã khắc phục xong sự cố?")) return;
-
-    try {
-        await incidentApi.resolveIncident(incidentData._id, { note: processingNote });
-        alert("Đã báo cáo hoàn thành!");
-        onUpdated?.();
-        onClose();
-    } catch (err) {
-        alert("Lỗi: " + (err.response?.data?.message || err.message));
+    if (!processingNote) {
+      setToast({ message: "Vui lòng nhập kết quả xử lý vào ghi chú.", type: "error" });
+      return;
     }
+    setConfirmState({
+      open: true,
+      title: "Xác nhận hoàn thành",
+      message: "Xác nhận đã khắc phục xong sự cố?",
+      onConfirm: async () => {
+        setConfirmState({ open: false, title: "", message: "", onConfirm: null });
+        try {
+          await incidentApi.resolveIncident(incidentData._id, { note: processingNote });
+          setToast({ message: "Đã báo cáo hoàn thành!", type: "success" });
+          onUpdated?.();
+          onClose();
+        } catch (err) {
+          setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
+        }
+      }
+    });
   };
 
   const handleClose = async () => {
-      if(!window.confirm("Xác nhận đóng sự cố này?")) return;
-      try {
+    setConfirmState({
+      open: true,
+      title: "Đóng hồ sơ",
+      message: "Xác nhận đóng sự cố này?",
+      onConfirm: async () => {
+        setConfirmState({ open: false, title: "", message: "", onConfirm: null });
+        try {
           await incidentApi.closeIncident(incidentData._id, { note: processingNote });
-          alert("Đã đóng hồ sơ thành công!");
+          setToast({ message: "Đã đóng hồ sơ thành công!", type: "success" });
           onUpdated?.();
           onClose();
-      } catch (err) {
-          alert("Lỗi: " + (err.response?.data?.message || err.message));
+        } catch (err) {
+          setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
+        }
       }
+    });
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    <ConfirmModal
+      open={confirmState.open}
+      title={confirmState.title}
+      message={confirmState.message}
+      onConfirm={confirmState.onConfirm}
+      onCancel={() => setConfirmState({ open: false, title: "", message: "", onConfirm: null })}
+    />
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
@@ -367,5 +399,6 @@ export default function IncidentDetailModal({ incident, onClose, onUpdated }) {
         />
       )}
     </div>
+    </>
   );
 }

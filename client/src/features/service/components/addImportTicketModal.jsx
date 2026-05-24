@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiSave, FiChevronDown } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState([]);
   const isUpdateMode = !!ticket;
+  const [toast, setToast] = useState(null);
 
   const [importDate, setImportDate] = useState(new Date().toISOString().split('T')[0]);
   const [goodsList, setGoodsList] = useState([
@@ -58,7 +60,7 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
     e.preventDefault();
 
     if (goodsList.some(item => !item.service_id || item.import_quantity <= 0 || item.import_price <= 0)) {
-      alert("Vui lòng điền đầy đủ thông tin sản phẩm, giá và số lượng > 0");
+      setToast({ message: "Vui lòng điền đầy đủ thông tin sản phẩm, giá và số lượng > 0", type: "error" });
       return;
     }
 
@@ -75,21 +77,23 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
 
       if (isUpdateMode) {
         await serviceApi.updateGoodTicket(ticket._id, payload);
-        alert("Cập nhật phiếu nhập thành công!");
+        setToast({ message: "Cập nhật phiếu nhập thành công!", type: "success" });
       } else {
         await serviceApi.createGoodTicket(payload);
-        alert("Tạo phiếu nhập thành công!");
+        setToast({ message: "Tạo phiếu nhập thành công!", type: "success" });
       }
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
@@ -191,5 +195,6 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
         </form>
       </div>
     </div>
+    </>
   );
 }

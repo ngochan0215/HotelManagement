@@ -178,33 +178,26 @@ export class EquipmentInstallService {
         )];
 
 
+        const [employeeReply, handlerReply] = await Promise.all([
+            employeeIds.length > 0
+                ? this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: employeeIds })
+                : Promise.resolve({ success: true, employees: [] }),
+            handlerIds.length > 0
+                ? this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: handlerIds })
+                : Promise.resolve({ success: true, employees: [] }),
+        ]);
+
+        if (!employeeReply.success) throw new Error(employeeReply.message);
+        if (!handlerReply.success) throw new Error(handlerReply.message);
+
         let employeeMap = {};
         let handlerMap = {};
 
-        if (employeeIds.length > 0) {
-            const reply = await this.eventBus.safeRequest(
-                EMPLOYEE_EVENTS.GET_INFO,
-                { employee_ids: employeeIds }
-            );
-            if(!reply.success)
-                throw new Error(reply.message);
-
-            for (const emp of reply.employees) {
-                employeeMap[emp._id.toString()] = emp;
-            }
+        for (const emp of employeeReply.employees) {
+            employeeMap[emp._id.toString()] = emp;
         }
-
-        if (handlerIds.length > 0) {
-            const reply = await this.eventBus.safeRequest(
-                EMPLOYEE_EVENTS.GET_INFO,
-                { employee_ids: handlerIds }
-            );
-            if(!reply.success)
-                throw new Error(reply.message);
-
-            for (const emp of reply.employees) {
-                handlerMap[emp._id.toString()] = emp;
-            }
+        for (const emp of handlerReply.employees) {
+            handlerMap[emp._id.toString()] = emp;
         }
 
         const results = list.map(install => ({
@@ -330,9 +323,11 @@ export class EquipmentInstallService {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: room_id, install_date.");
             }
     
-            const employee = await this.getEmployeeByUserId(employeeUserId);
-            const targetRoom = await this.getRoomById(room_id);
-                
+            const [employee, targetRoom] = await Promise.all([
+                this.getEmployeeByUserId(employeeUserId),
+                this.getRoomById(room_id),
+            ]);
+
             const sourceQuery = {
                 status: "in-stock",
                 condition: { $in: ["new", "good"] },
@@ -396,39 +391,36 @@ export class EquipmentInstallService {
                 handled_by: handled_by || handledByEmployee?._id || null
             });
                 
-            // send notifications 
+            // send notifications
             try {
-                // send noti for handled employee
+                const adminUserIds = await this.getManagersUserIds();
+                const notifPromises = [];
                 if (handledByEmployee && handledByEmployee.user_id) {
                     const roomText = ` phòng ${targetRoom.room_number}`;
-                    
-                    await this.sendNotification({
+                    notifPromises.push(this.sendNotification({
                         userId: handledByEmployee.user_id,
                         title: "Công việc lắp đặt thiết bị mới",
                         content: `Bạn được gán phiếu lắp đặt thiết bị${roomText} #${install._id.toString().slice(-6)}`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: install._id,
-                    });
+                    }));
                 }
-        
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: "Phiếu lắp đặt mới",
                         content: `Có phiếu lắp đặt thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
                         type: "system",
                         kind: "InstallTicket",
                         refId: install._id
-                    });
+                    }));
                 }
-
+                await Promise.all(notifPromises);
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
-            
+
             return install;
     
         } catch (error) {
@@ -445,9 +437,11 @@ export class EquipmentInstallService {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: from_room_id, install_date.");
             }
 
-            const employee = await this.getEmployeeByUserId(employeeUserId);
-            const sourceRoom = await this.getRoomById(from_room_id);
-            
+            const [employee, sourceRoom] = await Promise.all([
+                this.getEmployeeByUserId(employeeUserId),
+                this.getRoomById(from_room_id),
+            ]);
+
             const sourceQuery = {
                 status: "in-use",
                 room_id: from_room_id
@@ -504,37 +498,34 @@ export class EquipmentInstallService {
             });
 
             try {
-                // send noti for handled employee
+                const adminUserIds = await this.getManagersUserIds();
+                const notifPromises = [];
                 if (handledByEmployee && handledByEmployee.user_id) {
                     const roomText = ` phòng ${sourceRoom.room_number}`;
-                    
-                    await this.sendNotification({
+                    notifPromises.push(this.sendNotification({
                         userId: handledByEmployee.user_id,
                         title: "Công việc tháo dỡ thiết bị mới",
                         content: `Bạn được gán phiếu tháo dỡ thiết bị${roomText} #${install._id.toString().slice(-6)}`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: install._id,
-                    });
+                    }));
                 }
-        
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                        await this.sendNotificationsToUsers({
-                            userIds: adminUserIds,
-                            title: "Phiếu tháo dỡ thiết bị mới",
-                            content: `Có phiếu tháo dỡ thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
-                            type: "system",
-                            kind: "InstallTicket",
-                            refId: install._id
-                        });
-                    }
-
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: adminUserIds,
+                        title: "Phiếu tháo dỡ thiết bị mới",
+                        content: `Có phiếu tháo dỡ thiết bị mới #${install._id.toString().slice(-6)} được tạo${handledByEmployee ? ` và đã gán cho ${handledByEmployee.full_name}` : ''}`,
+                        type: "system",
+                        kind: "InstallTicket",
+                        refId: install._id
+                    }));
+                }
+                await Promise.all(notifPromises);
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
-            
+
             return install;
     
         } catch (error) {
@@ -941,8 +932,10 @@ export class EquipmentInstallService {
                 if (handled_by !== undefined && install_ticket.handled_by) {
                     const updatedTicket = await this.InstallTicket.findById(install_ticket._id)
 
-                    const room = await this.getRoomById(install_ticket.room_id);
-                    const employee = await this.getEmployeeById(install_ticket.handled_by);
+                    const [room, employee] = await Promise.all([
+                        this.getRoomById(install_ticket.room_id),
+                        this.getEmployeeById(install_ticket.handled_by),
+                    ]);
 
                     if (employee.user_id) {
                         const roomText = updatedTicket.room_id ? ` phòng ${room.room_number}` : "";
@@ -984,8 +977,10 @@ export class EquipmentInstallService {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
 
-            const room = await this.getRoomById(installTicket.room_id);
-            const employee = installTicket.handled_by ? await this.getEmployeeById(installTicket.handled_by) : null;
+            const [room, employee] = await Promise.all([
+                this.getRoomById(installTicket.room_id),
+                installTicket.handled_by ? this.getEmployeeById(installTicket.handled_by) : Promise.resolve(null),
+            ]);
         
             if (!["pending", "assigned", "waiting_confirm"].includes(installTicket.status)) {
                 throw new Error("Chỉ được xóa phiếu lắp đặt ở trạng thái pending, assigned hoặc waiting_confirm.");
@@ -1081,30 +1076,29 @@ export class EquipmentInstallService {
             const technicianUserId = employee.user_id || null;
                 
             try {
+                const adminUserIds = await this.getManagersUserIds();
+                const notifPromises = [];
                 if (technicianUserId) {
-                    await this.sendNotification({
+                    notifPromises.push(this.sendNotification({
                         userId: technicianUserId,
                         title: `Phiếu ${typeText} thiết bị đã bị hủy`,
                         content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy.`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: installTicket._id
-                    });
+                    }));
                 }
-
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: `Phiếu ${typeText} thiết bị đã bị hủy`,
                         content: `Phiếu ${typeText} thiết bị${roomText} #${shortTicketId} đã bị hủy${technicianName ? ` (đã gán cho ${technicianName})` : ''}.`,
                         type: "system",
                         kind: "InstallTicket",
                         refId: installTicket._id
-                    });
+                    }));
                 }
-            
+                await Promise.all(notifPromises);
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
@@ -1265,37 +1259,39 @@ export class EquipmentInstallService {
             
             // send notifications
             try {
-                const room = await this.getRoomById(ticket.room_id);
-                const employee = await this.getEmployeeById(ticket.handled_by);
-        
+                const [room, handler, adminUserIds] = await Promise.all([
+                    this.getRoomById(ticket.room_id),
+                    this.getEmployeeById(ticket.handled_by),
+                    this.getManagersUserIds(),
+                ]);
+
                 const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = employee.full_name || "Nhân viên";
+                const technicianName = handler.full_name || "Nhân viên";
 
-                if (employee.user_id) {
-                    await this.sendNotification({
-                        userId: employee.user_id,
+                const notifPromises = [];
+                if (handler.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: handler.user_id,
                         title: "Công việc đã được xác nhận",
                         content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
-
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: "Đã xác nhận công việc",
                         content: `Đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} của ${technicianName}.`,
                         type: "system",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
-                
+                await Promise.all(notifPromises);
+
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
@@ -1314,9 +1310,10 @@ export class EquipmentInstallService {
                 throw new Error("ID phiếu lắp đặt không hợp lệ.");
             }
 
-            const employee = await this.getEmployeeByUserId(userId);
-        
-            const ticket = await this.InstallTicket.findById(ticketId);
+            const [employee, ticket] = await Promise.all([
+                this.getEmployeeByUserId(userId),
+                this.InstallTicket.findById(ticketId),
+            ]);
             if (!ticket) {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
@@ -1348,41 +1345,43 @@ export class EquipmentInstallService {
 
             // send notifications
             try {
-                const room = await this.getRoomById(ticket.room_id);
-                const employee = await this.getEmployeeById(ticket.handled_by);
-            
+                const [room, handler, adminUserIds] = await Promise.all([
+                    this.getRoomById(ticket.room_id),
+                    this.getEmployeeById(ticket.handled_by),
+                    this.getManagersUserIds(),
+                ]);
+
                 const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = employee.full_name || "Nhân viên";
+                const technicianName = handler.full_name || "Nhân viên";
 
-                if (employee.user_id) {
-                    await this.sendNotification({
-                        userId: employee.user_id,
+                const notifPromises = [];
+                if (handler.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: handler.user_id,
                         title: "Đã xác nhận bắt đầu công việc",
                         content: `Phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)} đã được admin xác nhận hoàn thành.`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
-
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: "Nhân viên đã bắt đầu công việc",
                         content: `${technicianName} đã xác nhận bắt đầu phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}`,
                         type: "system",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
+                await Promise.all(notifPromises);
 
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
-        
+
             return { data: { install_id: ticket._id, started_at: ticket.started_at } };
 
         } catch (error) {
@@ -1397,9 +1396,10 @@ export class EquipmentInstallService {
                 throw new Error("ID phiếu lắp đặt không hợp lệ.");
             }
 
-            const employee = await this.getEmployeeByUserId(userId);
-
-            const ticket = await this.InstallTicket.findById(ticketId);
+            const [employee, ticket] = await Promise.all([
+                this.getEmployeeByUserId(userId),
+                this.InstallTicket.findById(ticketId),
+            ]);
             if (!ticket) {
                 throw new Error("Không tìm thấy phiếu lắp đặt thiết bị.");
             }
@@ -1430,47 +1430,44 @@ export class EquipmentInstallService {
             await ticket.save();
 
             try {
-                const room = await this.getRoomById(ticket.room_id);
-                const employee = await this.getEmployeeById(ticket.handled_by);
-            
+                const [room, handler, adminUserIds] = await Promise.all([
+                    this.getRoomById(ticket.room_id),
+                    this.getEmployeeById(ticket.handled_by),
+                    this.getManagersUserIds(),
+                ]);
+
                 const roomText = ticket.room_id ? ` phòng ${room.room_number}` : "";
                 const typeText = ticket.type === 'uninstall' ? 'tháo dỡ' : 'lắp đặt';
-                const technicianName = employee.full_name || "Nhân viên";
+                const technicianName = handler.full_name || "Nhân viên";
 
-                if (employee.user_id) {
-                    await this.sendNotification({
-                        userId: employee.user_id,
+                const notifPromises = [];
+                if (handler.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: handler.user_id,
                         title: "Đã xác nhận hoàn thành công việc",
                         content: `Bạn đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Đang chờ admin xác nhận.`,
                         type: "equipment",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
-
-                // send noti for admin
-                const adminUserIds = await this.getManagersUserIds();
                 if (adminUserIds.length > 0) {
-                    await this.sendNotificationsToUsers({
+                    notifPromises.push(this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: "Nhân viên đã xác nhận hoàn thành công việc",
                         content: `${technicianName} đã xác nhận hoàn thành phiếu ${typeText} thiết bị${roomText} #${ticket._id.toString().slice(-6)}. Vui lòng xác nhận`,
                         type: "system",
                         kind: "InstallTicket",
                         refId: ticket._id
-                    });
+                    }));
                 }
+                await Promise.all(notifPromises);
 
             } catch (notifError) {
                 console.error("Error sending notification:", notifError);
             }
 
-            return { data: 
-                {
-                    install_id: ticket._id,
-                    completed_at: ticket.completed_at
-                } 
-            };
+            return { data: { install_id: ticket._id, completed_at: ticket.completed_at } };
         
         } catch (error) {
             console.log("Error in employee mark complete install ticket: ", error.message);

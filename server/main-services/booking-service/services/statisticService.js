@@ -1,4 +1,5 @@
 ﻿import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from "../../../shared/config/pdf.js";
 import { formatCurrency, formatDate, addFooter, addHeader, addTable }
     from "../../../shared/config/pdf.js";
@@ -20,6 +21,10 @@ export class BookingStatisticService {
 
     getCancellationReasonStats = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("stat:cancel_reason", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { fromDate, toDate, cancelledBy } = query;
             const match = {};
 
@@ -64,6 +69,7 @@ export class BookingStatisticService {
                 };
             });
 
+            await cache.set(cacheKey, result, 60);
             return result;
 
         } catch (error) {
@@ -74,6 +80,9 @@ export class BookingStatisticService {
     
     getWeeklyRevenue = async () => {
         try {
+            const cached = await cache.get("stat:weekly_revenue");
+            if (cached) return cached;
+
             const now = new Date();
             const { start: currentStart, end: currentEnd } = getWeekRange(now);
         
@@ -142,11 +151,13 @@ export class BookingStatisticService {
             const revenueChangePercent =
             totalLast === 0 ? 100 : (((totalCurrent - totalLast) / totalLast) * 100).toFixed(1);
         
-            return {
+            const weeklyRevenue = {
                 revenue: Math.round(totalCurrent * 1000),
                 revenueChangePercent: Number(revenueChangePercent),
                 revenueChart
             };
+            await cache.set("stat:weekly_revenue", weeklyRevenue, 60);
+            return weeklyRevenue;
 
         } catch (err) {
             console.log("Error in getting weekly revenue: ", err.message);
@@ -156,8 +167,11 @@ export class BookingStatisticService {
 
     getWeeklyBookings = async () => {
         try {
+            const cached = await cache.get("stat:weekly_bookings");
+            if (cached) return cached;
+
             const now = new Date();
-        
+
             const { start: curStart, end: curEnd } = getWeekRange(now);
             const lastWeekDate = new Date(now);
             lastWeekDate.setDate(now.getDate() - 7);
@@ -220,11 +234,13 @@ export class BookingStatisticService {
         
             const percentChange = totalLast === 0 ? 100 : (((totalCurrent - totalLast) / totalLast) * 100).toFixed(1);
         
-            return {
+            const weeklyBookings = {
                 total: totalCurrent,
                 percentChange: Number(percentChange),
                 chart
             };
+            await cache.set("stat:weekly_bookings", weeklyBookings, 60);
+            return weeklyBookings;
 
         } catch (err) {
             console.log("Error in getting weekly bookings: ", err.message);
@@ -234,6 +250,9 @@ export class BookingStatisticService {
 
     getMonthlyBookings = async () => {
       try {
+        const cached = await cache.get("stat:monthly_bookings");
+        if (cached) return cached;
+
         const now = new Date();
     
         const { start: curStart, end: curEnd } = getMonthRange(now);
@@ -288,11 +307,13 @@ export class BookingStatisticService {
         const percentChange = totalLast === 0 ? 100 : 
             (((totalCurrent - totalLast) / totalLast) * 100).toFixed(1);
     
-        return {
+        const monthlyBookings = {
           total: totalCurrent,
           percentChange: Number(percentChange),
           chart
         };
+        await cache.set("stat:monthly_bookings", monthlyBookings, 120);
+        return monthlyBookings;
 
       } catch (err) {
         console.log("Error in getting monthly booking: ", err.message);

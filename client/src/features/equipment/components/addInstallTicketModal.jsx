@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiAlertCircle, FiZap } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { roomApi } from "../../api/roomApi.js";
+import Toast from "../../../components/toast.jsx";
 
 const CONDITION_MAP = {
   new: "Mới",
@@ -22,6 +23,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
   const [items, setItems] = useState([{ id: "", quantity: 1 }]);
   const [loading, setLoading] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -210,13 +212,13 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedRoomId) {
-        alert("Vui lòng chọn phòng.");
+        setToast({ message: "Vui lòng chọn phòng.", type: "error" });
         return;
     }
 
     for (const item of items) {
         if (!item.id) {
-            alert("Vui lòng chọn thiết bị ở tất cả các dòng.");
+            setToast({ message: "Vui lòng chọn thiết bị ở tất cả các dòng.", type: "error" });
             return;
         }
     }
@@ -263,7 +265,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         };
 
         await equipmentApi.createInstallTicket(payload);
-        alert("Tạo phiếu lắp đặt thành công!");
+        setToast({ message: "Tạo phiếu lắp đặt thành công!", type: "success" });
       } else {
         // Tạo phiếu tháo dỡ
         const payload = {
@@ -275,13 +277,13 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
         console.log("PAYLOAd IN CREATING UNINSTALL TICKET: ", payload);
         await equipmentApi.createUninstallTicket(payload);
-        alert("Tạo phiếu tháo dỡ thành công!");
+        setToast({ message: "Tạo phiếu tháo dỡ thành công!", type: "success" });
       }
-      
+
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
@@ -299,12 +301,12 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
   const handleSmartSuggestions = async () => {
     if (!selectedRoomId) {
-      alert("Vui lòng chọn phòng trước!");
+      setToast({ message: "Vui lòng chọn phòng trước!", type: "error" });
       return;
     }
 
     if (mode !== 'install') {
-      alert("Gợi ý thông minh chỉ áp dụng cho chế độ lắp đặt!");
+      setToast({ message: "Gợi ý thông minh chỉ áp dụng cho chế độ lắp đặt!", type: "error" });
       return;
     }
 
@@ -333,25 +335,24 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
         if (suggestedItems.length > 0) {
           setItems(suggestedItems);
-          const summary = res.suggestions.map(s => 
-            `• ${s.category_name}: ${s.suggested_quantity || s.needed_quantity} ${s.category_unit || 'cái'} (${s.reason})`
-          ).join('\n');
-          alert(`Đã gợi ý ${suggestedItems.length} loại thiết bị cần lắp đặt cho phòng ${res.room_number || ''}:\n\n${summary}`);
+          setToast({ message: `Đã gợi ý ${suggestedItems.length} loại thiết bị cần lắp đặt cho phòng ${res.room_number || ''}.`, type: "success" });
         } else {
-          alert("Không tìm thấy thiết bị gợi ý trong kho. Vui lòng kiểm tra lại.");
+          setToast({ message: "Không tìm thấy thiết bị gợi ý trong kho. Vui lòng kiểm tra lại.", type: "info" });
         }
       } else {
-        alert(res.message || "Phòng này đã có đủ thiết bị mặc định hoặc loại phòng này không có danh sách thiết bị mặc định.");
+        setToast({ message: res.message || "Phòng này đã có đủ thiết bị mặc định.", type: "info" });
       }
     } catch (error) {
       console.error("Error fetching smart suggestions:", error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoadingSuggestions(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="bg-gray-50 border-b border-gray-100">
@@ -531,5 +532,6 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
 
       </div>
     </div>
+    </>
   );
 }

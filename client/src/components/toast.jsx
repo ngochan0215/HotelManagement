@@ -18,7 +18,7 @@ const Toast = ({ message, type = "success", onClose }) => {
   const style = config[type] || config.success;
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-4 px-6 py-4 bg-white rounded-xl shadow-2xl border-l-4 ${style.border} animate-slide-in-right min-w-[300px]`}>
+    <div className={`fixed top-5 right-5 z-[9999] flex items-center gap-4 px-6 py-4 bg-white rounded-xl shadow-2xl border-l-4 ${style.border} animate-slide-in-right min-w-[300px]`}>
       <div className={`${style.color} ${style.bg} p-2 rounded-full`}>
         {style.icon}
       </div>

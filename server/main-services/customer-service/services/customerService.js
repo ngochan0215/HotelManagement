@@ -1,5 +1,6 @@
 ﻿import mongoose from "mongoose";
 import ExcelJS from "exceljs";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 import PDFDocument from "pdfkit";
 
 import { Jimp } from "jimp";
@@ -26,6 +27,10 @@ export class CustomerService {
 
     getAllCustomers = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("customer:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { loyalty, min_points, max_points, min_booking_count, max_booking_count, status } = query;
             let filter = {};
 
@@ -49,30 +54,44 @@ export class CustomerService {
                 .select("-updated_at -created_at -__v")
                 .lean();
 
-            if (!customers.length) return { total: 0, customers: [] };
+            if (!customers.length) {
+                await cache.set(cacheKey, { total: 0, customers: [] }, 300);
+                return { total: 0, customers: [] };
+            }
 
             const userIds = customers.map(c => c.user_id);
 
-            const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds });
-            if (!reply.success) {
-                throw new Error(reply.message);
+            // Check per-user info cache first; only call event bus for uncached users
+            const userInfoMap = {};
+            const uncachedIds = [];
+            for (const uid of userIds) {
+                const hit = await cache.get(`user:info:${uid}`);
+                if (hit) {
+                    userInfoMap[uid.toString()] = hit;
+                } else {
+                    uncachedIds.push(uid);
+                }
             }
 
-            const userMap = new Map(
-                reply.users.map(u => [u._id.toString(), u])
-            );
+            if (uncachedIds.length > 0) {
+                const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds: uncachedIds });
+                if (!reply.success) throw new Error(reply.message);
 
-            const result = customers.map(customer => {
-                const user = userMap.get(customer.user_id.toString());
-                return {
-                    ...customer,
-                    user: user
-                        ? { email: user.email, system_role: user.system_role, avatar: user.avatar, isBanned: user.isBanned }
-                        : null,
-                };
-            });
+                await Promise.all(reply.users.map(async u => {
+                    const info = { email: u.email, system_role: u.system_role, avatar: u.avatar, isBanned: u.isBanned };
+                    await cache.set(`user:info:${u._id}`, info, 60);
+                    userInfoMap[u._id.toString()] = info;
+                }));
+            }
 
-            return { total: result.length, customers: result };
+            const result = customers.map(customer => ({
+                ...customer,
+                user: userInfoMap[customer.user_id.toString()] || null,
+            }));
+
+            const listResponse = { total: result.length, customers: result };
+            await cache.set(cacheKey, listResponse, 300);
+            return listResponse;
 
         } catch (error) {
             console.log("Error fetching customers:", error);
@@ -81,6 +100,10 @@ export class CustomerService {
     };
 
     getCustomerById = async (customerId) => {
+        const cacheKey = `customer:one:${customerId}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
         const customer = await this.Customer.findById(customerId)
             .select("-__v -created_at -updated_at -createdAt -updatedAt")
             .lean();
@@ -92,7 +115,7 @@ export class CustomerService {
         const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
         if (!reply.success) {
             throw new Error(reply.message);
-        } else {  
+        } else {
             customer.user = {
                 email: reply.user.email,
                 system_role: reply.user.system_role,
@@ -100,7 +123,8 @@ export class CustomerService {
                 isBanned: reply.user.isBanned
             };
         }
-        
+
+        await cache.set(cacheKey, customer, 300);
         return customer;
     };
 
@@ -186,6 +210,11 @@ export class CustomerService {
             if (CCCD !== undefined) customer.CCCD = CCCD;
 
             await customer.save();
+            await Promise.all([
+                cache.del(`customer:one:${id}`),
+                cache.del(`customer:user:${customer.user_id}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
             return customer;
 
         } catch (error) {
@@ -221,16 +250,21 @@ export class CustomerService {
             await customer.save();
 
             const reply = await this.eventBus.safeRequest(
-                USER_EVENTS.UPDATE_USER, 
-                { 
-                    userId: customer.user_id, 
-                    payload: { isBanned: true } 
+                USER_EVENTS.UPDATE_USER,
+                {
+                    userId: customer.user_id,
+                    payload: { isBanned: true }
                 }
             );
             if (!reply.success) {
                 throw new Error(reply.message);
             }
 
+            await Promise.all([
+                cache.del(`customer:one:${id}`),
+                cache.del(`customer:user:${customer.user_id}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
             return { success: true };
         } catch (error) {
             console.log("Ban customer unsuccessfully for error: " + error.message);
@@ -261,16 +295,21 @@ export class CustomerService {
             await customer.save();
 
             const reply = await this.eventBus.safeRequest(
-                USER_EVENTS.UPDATE_USER, 
-                { 
-                    userId: customer.user_id, 
-                    payload: { isBanned: false } 
+                USER_EVENTS.UPDATE_USER,
+                {
+                    userId: customer.user_id,
+                    payload: { isBanned: false }
                 }
             );
             if (!reply.success) {
                 throw new Error(reply.message);
             }
 
+            await Promise.all([
+                cache.del(`customer:one:${id}`),
+                cache.del(`customer:user:${customer.user_id}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
             return { success: true };
 
         } catch (error) {
@@ -306,16 +345,19 @@ export class CustomerService {
         customer.points = after;
         await customer.save();
 
-        await this.PointsLog.create(
-            {
-                customer_id,
-                points_change: points,
-                points_before: before,
-                points_after: after,
-                reason,
-            },
-        );
+        await this.PointsLog.create({
+            customer_id,
+            points_change: points,
+            points_before: before,
+            points_after: after,
+            reason,
+        });
 
+        await Promise.all([
+            cache.del(`customer:one:${customer_id}`),
+            cache.del(`customer:user:${customer.user_id}`),
+            cache.delByPattern("customer:list:*"),
+        ]);
         return { before, after, change: points };
     };
 
@@ -339,14 +381,26 @@ export class CustomerService {
         if (customer.loyalty !== newTier) {
             customer.loyalty = newTier;
             await customer.save();
+            await Promise.all([
+                cache.del(`customer:one:${customer_id}`),
+                cache.del(`customer:user:${customer.user_id}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
         }
 
         return newTier;
     };
 
     async getCustomerByUserId (user_id) {
-        return this.Customer.findOne({ user_id })
+        const cacheKey = `customer:user:${user_id}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
+        const customer = await this.Customer.findOne({ user_id })
             .select("-created_at -updated_at -__v -createdAt -updatedAt");
+
+        if (customer) await cache.set(cacheKey, customer, 300);
+        return customer;
     }
 
     async generateCustomerReport (from, to) {
@@ -354,12 +408,10 @@ export class CustomerService {
             const start = new Date(from);
             const end = new Date(to);
         
-            const customers = await this.Customer.find().lean();
-        
-            const replyBookings = await this.eventBus.safeRequest(
-                BOOKING_EVENTS.GET_BOOKINGS_CUSTOMER_REPORT,
-                { start, end }
-            );
+            const [customers, replyBookings] = await Promise.all([
+                this.Customer.find().lean(),
+                this.eventBus.safeRequest(BOOKING_EVENTS.GET_BOOKINGS_CUSTOMER_REPORT, { start, end }),
+            ]);
             if (!replyBookings.success) throw new Error(replyBookings.message);
 
             const bookings = replyBookings.bookings;
@@ -815,12 +867,13 @@ export class CustomerService {
 
             const { phone_number, CCCD } = customer;
 
-            const existingPhone = await this.Customer.findOne({ phone_number });
+            const [existingPhone, existingCCCD] = await Promise.all([
+                this.Customer.findOne({ phone_number }),
+                this.Customer.findOne({ CCCD }),
+            ]);
             if (existingPhone) {
                 throw new Error("Số điện thoại đã tồn tại.");
             }
-
-            const existingCCCD = await this.Customer.findOne({ CCCD });
             if (existingCCCD) {
                 throw new Error("Số căn cước công dân đã tồn tại.");
             }
@@ -830,7 +883,7 @@ export class CustomerService {
                 ...customer
             });
 
-            //console.log("Create customer successfully.");
+            await cache.delByPattern("customer:list:*");
             return the_customer;
 
         } catch (error) {

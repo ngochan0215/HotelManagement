@@ -1,5 +1,6 @@
 ﻿import mongoose from 'mongoose';
 import { CUSTOMER_EVENTS } from '../../../shared/events/customerEvents.js';
+import { cache, makeCacheKey } from '../../../shared/utils/cache.js';
 
 export class VoucherService {
     constructor({ Voucher, eventBus }) {
@@ -20,10 +21,11 @@ export class VoucherService {
                 throw new Error("Số lượt sử dụng tối đa phải >= 1");
             }
 
-            const existingCode = await this.Voucher.findOne({ code: code.toUpperCase() });
+            const [existingCode, existingName] = await Promise.all([
+                this.Voucher.findOne({ code: code.toUpperCase() }),
+                this.Voucher.findOne({ name }),
+            ]);
             if (existingCode) throw new Error("Mã voucher đã tồn tại.");
-
-            const existingName = await this.Voucher.findOne({ name });
             if (existingName) throw new Error("Tên voucher đã tồn tại.");
 
             this.validateDiscount(discount);
@@ -57,6 +59,7 @@ export class VoucherService {
                 status
             });
 
+            await cache.delByPattern("voucher:list:*");
             return newVoucher;
 
         } catch (err) {
@@ -67,7 +70,11 @@ export class VoucherService {
 
     async getAllVouchers(query = {}) {
         try {
-            const { status, type, code, name, min_order_value, 
+            const cacheKey = makeCacheKey("voucher:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
+            const { status, type, code, name, min_order_value,
                 customer_tier, date, day, hour } = query;
 
             const filter = {};
@@ -106,6 +113,7 @@ export class VoucherService {
                 .sort({ priority: -1, created_at: -1 })
                 .lean();
 
+            await cache.set(cacheKey, vouchers, 180);
             return vouchers;
 
         } catch (err) {
@@ -116,10 +124,16 @@ export class VoucherService {
 
     async getVoucherById(voucherId) {
         try {
+            const cacheKey = `voucher:one:${voucherId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const voucher = await this.Voucher.findById(voucherId)
                 .select("-__v -created_at -updated_at");
 
             if (!voucher) throw new Error("Không tìm thấy voucher");
+
+            await cache.set(cacheKey, voucher, 180);
             return voucher;
 
         } catch (err) {
@@ -135,23 +149,18 @@ export class VoucherService {
 
             const now = new Date();
 
-            if (payload.code) {
-                const exist = await this.Voucher.findOne({
-                    code: payload.code.toUpperCase(),
-                    _id: { $ne: voucherId }
-                });
-                if (exist) throw new Error("Mã voucher đã tồn tại.");
-                voucher.code = payload.code.toUpperCase();
-            }
-
-            if (payload.name) {
-                const exist = await this.Voucher.findOne({
-                    name: payload.name,
-                    _id: { $ne: voucherId }
-                });
-                if (exist) throw new Error("Tên voucher đã tồn tại.");
-                voucher.name = payload.name;
-            }
+            const [existingCode, existingName] = await Promise.all([
+                payload.code
+                    ? this.Voucher.findOne({ code: payload.code.toUpperCase(), _id: { $ne: voucherId } })
+                    : Promise.resolve(null),
+                payload.name
+                    ? this.Voucher.findOne({ name: payload.name, _id: { $ne: voucherId } })
+                    : Promise.resolve(null),
+            ]);
+            if (existingCode) throw new Error("Mã voucher đã tồn tại.");
+            if (payload.code) voucher.code = payload.code.toUpperCase();
+            if (existingName) throw new Error("Tên voucher đã tồn tại.");
+            if (payload.name) voucher.name = payload.name;
 
             if (payload.description !== undefined) {
                 voucher.description = payload.description;
@@ -207,6 +216,10 @@ export class VoucherService {
             }
 
             await voucher.save();
+            await Promise.all([
+                cache.del(`voucher:one:${voucherId}`),
+                cache.delByPattern("voucher:list:*"),
+            ]);
             return voucher;
 
         } catch (err) {
@@ -226,6 +239,10 @@ export class VoucherService {
             }
 
             await this.Voucher.findByIdAndDelete(voucherId);
+            await Promise.all([
+                cache.del(`voucher:one:${voucherId}`),
+                cache.delByPattern("voucher:list:*"),
+            ]);
             return { success: true };
 
         } catch (err) {
@@ -242,6 +259,10 @@ export class VoucherService {
             voucher.is_active = false;
             voucher.status = "finished";
             await voucher.save();
+            await Promise.all([
+                cache.del(`voucher:one:${voucherId}`),
+                cache.delByPattern("voucher:list:*"),
+            ]);
 
             return { success: true };
 
@@ -351,6 +372,7 @@ export class VoucherService {
 
             const uniqueCodes = [...new Set(voucherCodes.map(c => c.toUpperCase()))];
             const redeemed = [];
+            const affectedIds = [];
 
             for (const code of uniqueCodes) {
                 const voucher = await this.Voucher.findOne({ code });
@@ -373,7 +395,13 @@ export class VoucherService {
 
                 await voucher.save();
                 redeemed.push(code);
+                affectedIds.push(voucher._id.toString());
             }
+
+            await Promise.all([
+                ...affectedIds.map(id => cache.del(`voucher:one:${id}`)),
+                cache.delByPattern("voucher:list:*"),
+            ]);
 
             return { success: true, redeemed };
 
@@ -393,6 +421,7 @@ export class VoucherService {
 
             const uniqueCodes = [...new Set(voucherCodes.map(c => c.toUpperCase()))];
             const finalized = [];
+            const affectedIds = [];
 
             for (const code of uniqueCodes) {
                 const voucher = await this.Voucher.findOne({ code });
@@ -430,7 +459,13 @@ export class VoucherService {
 
                 await voucher.save();
                 finalized.push(code);
+                affectedIds.push(voucher._id.toString());
             }
+
+            await Promise.all([
+                ...affectedIds.map(id => cache.del(`voucher:one:${id}`)),
+                cache.delByPattern("voucher:list:*"),
+            ]);
 
             return { success: true, finalized };
 
@@ -450,6 +485,7 @@ export class VoucherService {
 
             const uniqueCodes = [...new Set(voucherCodes.map(c => c.toUpperCase()))];
             const released = [];
+            const affectedIds = [];
 
             for (const code of uniqueCodes) {
                 const voucher = await this.Voucher.findOne({ code });
@@ -486,7 +522,13 @@ export class VoucherService {
 
                 await voucher.save();
                 released.push(code);
+                affectedIds.push(voucher._id.toString());
             }
+
+            await Promise.all([
+                ...affectedIds.map(id => cache.del(`voucher:one:${id}`)),
+                cache.delByPattern("voucher:list:*"),
+            ]);
 
             return { success: true, released };
 

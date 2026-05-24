@@ -1,5 +1,6 @@
 ﻿import bcrypt from "bcrypt";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 const CCCD_REGEX = /^[0-9]{12}$/;
 const PHONE_REGEX = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
@@ -29,12 +30,13 @@ export class EmployeeService {
 
             const { phone_number, CCCD, position } = employee;
 
-            const existingPhone = await this.Employee.findOne({ phone_number });
+            const [existingPhone, existingCCCD] = await Promise.all([
+                this.Employee.findOne({ phone_number }),
+                this.Employee.findOne({ CCCD }),
+            ]);
             if (existingPhone) {
                 throw new Error("Số điện thoại đã tồn tại.");
             }
-
-            const existingCCCD = await this.Employee.findOne({ CCCD });
             if (existingCCCD) {
                 throw new Error("Số căn cước công dân đã tồn tại.");
             }
@@ -48,7 +50,7 @@ export class EmployeeService {
                 ...employee
             });
 
-            //console.log("Create employee successfully.");
+            await cache.delByPattern("emp:list:*");
             return the_employee;
 
         } catch (error) {
@@ -58,6 +60,10 @@ export class EmployeeService {
     }
 
     async getAllEmployees (query = {}){
+        const cacheKey = makeCacheKey("emp:list", query);
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
         const { position, status, min_salary, max_salary, min_year, max_year } = query;
 
         const filter = {};
@@ -80,7 +86,10 @@ export class EmployeeService {
         let employees = await this.Employee.find(filter)
             .select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
 
-        if (!employees.length) return { count: 0, employees: [] };
+        if (!employees.length) {
+            await cache.set(cacheKey, { count: 0, employees: [] }, 300);
+            return { count: 0, employees: [] };
+        }
 
         const userIds = employees.map(e => e.user_id).filter(Boolean);
 
@@ -103,41 +112,40 @@ export class EmployeeService {
             };
         });
 
-        return { count: result.length, employees: result };
+        const listResponse = { count: result.length, employees: result };
+        await cache.set(cacheKey, listResponse, 300);
+        return listResponse;
     };
 
     async getEmployeeById (employeeId) {
+        const cacheKey = `emp:one:${employeeId}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
         const employee = await this.Employee.findById(employeeId)
             .select("-__v -created_at -updated_at -createdAt -updatedAt");
-            //.populate("user_id", "email system_role avatar -_id");
 
         if (!employee) {
             throw new Error("Không tìm thấy nhân viên.");
         }
 
-        // let user = null;
-        // const reply = await this.eventBus.safeRequest(
-        //     USER_EVENTS.GET_USER_INFO, 
-        //     { userId: employee.user_id }
-        // );
-        // if (reply.found) {
-        //     user = reply.user;
-        // } else {
-        //     throw new Error(reply.message);
-        // }
-        
+        await cache.set(cacheKey, employee, 300);
         return employee;
     };
 
     async getEmployeeByUserId (employeeUserId) {
+        const cacheKey = `emp:user:${employeeUserId}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
         const employee = await this.Employee.findOne({ user_id: employeeUserId })
             .select("-__v -created_at -updated_at -createdAt -updatedAt");
-            //.populate("user_id", "email system_role avatar -_id");
 
         if (!employee) {
             throw new Error("Không tìm thấy nhân viên.");
         }
-        
+
+        await cache.set(cacheKey, employee, 300);
         return employee;
     };
 
@@ -253,7 +261,14 @@ export class EmployeeService {
         if (fixed_salary) employee.fixed_salary = fixed_salary;
 
         await employee.save();
-        
+        await Promise.all([
+            cache.del(`emp:one:${employeeId}`),
+            cache.del(`emp:user:${employee.user_id}`),
+            cache.del(`emp:profile:${employee.user_id}`),
+            cache.del("emp:technicians"),
+            cache.del("emp:housekeepers"),
+            cache.delByPattern("emp:list:*"),
+        ]);
         return employee;
     };
 
@@ -282,6 +297,10 @@ export class EmployeeService {
 
             employee.user_id = reply.user._id;
             await employee.save();
+            await Promise.all([
+                cache.del(`emp:one:${employeeId}`),
+                cache.delByPattern("emp:list:*"),
+            ]);
             return reply.user;
 
         } catch (error) {
@@ -330,6 +349,9 @@ export class EmployeeService {
 
     async getAvailableTechnicians () {
         try {
+            const cached = await cache.get("emp:technicians");
+            if (cached) return cached;
+
             // // Tìm tất cả nhân viên kỹ thuật
             // const technicians = await Employee.find({ 
             //     position: "technician",
@@ -381,8 +403,10 @@ export class EmployeeService {
                 user_id: tech.user_id
             }));
 
-            return { count: result.length, technicians: result };
-    
+            const techResponse = { count: result.length, technicians: result };
+            await cache.set("emp:technicians", techResponse, 60);
+            return techResponse;
+
         } catch (error) {
             console.log("Error in getting available techinicians: ", error.message);
             throw error; 
@@ -391,11 +415,15 @@ export class EmployeeService {
 
     async getAvailableHousekeepers () {
         try {
-            const housekeepers = await this.Employee.find({ 
+            const cached = await cache.get("emp:housekeepers");
+            if (cached) return cached;
+
+            const housekeepers = await this.Employee.find({
                 position: "housekeeper",
                 status: "working"
             }).select("-created_at -updated_at -__v");
-    
+
+            await cache.set("emp:housekeepers", housekeepers, 60);
             return housekeepers;
     
         } catch (error) {
@@ -439,35 +467,79 @@ export class EmployeeService {
             throw new Error(reply.message);
         }
 
+        await Promise.all([
+            cache.del(`emp:one:${employeeId}`),
+            cache.del(`emp:user:${employee.user_id}`),
+            cache.del(`emp:profile:${employee.user_id}`),
+            cache.delByPattern("emp:list:*"),
+        ]);
         return { success: true };
     };
 
-    async getMyProfile (userId) {
-        const employee = await this.Employee.findOne({ user_id: userId })
-            .select("-createdAt -updatedAt -created_at -updated_at -__v")
-            .lean();
+    async updateMyProfile (userId, updateData) {
+        const { phone_number, date_birth, bank_shortName, account_number } = updateData;
 
-         if (!employee) {
+        const employee = await this.Employee.findOne({ user_id: userId })
+            .select("-__v -created_at -updated_at -createdAt -updatedAt");
+        if (!employee) {
             throw new Error("Không tìm thấy hồ sơ nhân viên.");
         }
 
-        let user_info = null;
-        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId });
-        if(!reply.success)
+        if (phone_number !== undefined) {
+            if (!PHONE_REGEX.test(phone_number)) {
+                throw new Error("Số điện thoại không hợp lệ.");
+            }
+            if (phone_number !== employee.phone_number) {
+                const existPhone = await this.Employee.findOne({ phone_number });
+                if (existPhone) {
+                    throw new Error("Số điện thoại đã tồn tại.");
+                }
+            }
+            employee.phone_number = phone_number;
+        }
+
+        if (date_birth !== undefined) employee.date_birth = date_birth;
+        if (bank_shortName !== undefined) employee.bank_shortName = bank_shortName;
+        if (account_number !== undefined) employee.account_number = account_number;
+
+        await employee.save();
+        await Promise.all([
+            cache.del(`emp:one:${employee._id}`),
+            cache.del(`emp:user:${userId}`),
+            cache.del(`emp:profile:${userId}`),
+            cache.delByPattern("emp:list:*"),
+        ]);
+        return employee;
+    };
+
+    async getMyProfile (userId) {
+        const cacheKey = `emp:profile:${userId}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
+        const [employee, reply] = await Promise.all([
+            this.Employee.findOne({ user_id: userId })
+                .select("-createdAt -updatedAt -created_at -updated_at -__v")
+                .lean(),
+            this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId }),
+        ]);
+
+        if (!employee) {
+            throw new Error("Không tìm thấy hồ sơ nhân viên.");
+        }
+        if (!reply.success) {
             throw new Error(reply.message);
-        
-        user_info = {
+        }
+
+        const user_info = {
             email: reply.user.email,
             system_role: reply.user.system_role,
             avatar: reply.user.avatar,
             isBanned: reply.user.isBanned,
-        }
+        };
 
-        const profile = {
-            ...employee,
-            user_info
-        }
-
+        const profile = { ...employee, user_info };
+        await cache.set(cacheKey, profile, 300);
         return profile;
     };
 

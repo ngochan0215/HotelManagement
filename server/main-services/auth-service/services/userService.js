@@ -71,84 +71,105 @@ export class UserService {
     }
 
     changePasswordService = async (userId, oldPassword, newPassword) => {
-        const user = await this.User.findById(userId).select("+password");
-        if (!user) 
-            throw new Error("Không tìm thấy người dùng.");
+        try {
+            const user = await this.User.findById(userId).select("+password");
+            if (!user) 
+                throw new Error("Không tìm thấy người dùng.");
 
-        const isMatch = await bcrypt.compare(oldPassword, user.password);
-        if (!isMatch) 
-            throw new Error("Mật khẩu cũ không đúng.");
+            const isMatch = await bcrypt.compare(oldPassword, user.password);
+            if (!isMatch) 
+                throw new Error("Mật khẩu cũ không đúng.");
 
-        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
-        if (!regex.test(newPassword)) {
-            throw new Error("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, thường, số và ký tự đặc biệt.");
+            const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
+            if (!regex.test(newPassword)) {
+                throw new Error("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, thường, số và ký tự đặc biệt.");
+            }
+
+            const hashed = await bcrypt.hash(newPassword, 10);
+            user.password = hashed;
+            await user.save();
+        } catch (error) {
+            console.log("Change password failed for error: " + error.message);
+            throw error;
         }
-
-        const hashed = await bcrypt.hash(newPassword, 10);
-        user.password = hashed;
-        await user.save();
     };
 
     sendChangeEmailService = async (userId, newEmail) => {
-        const user = await this.User.findById(userId);
-        if (!user) 
-            throw new Error("Không tìm thấy người dùng.");
+        try {
+            const user = await this.User.findById(userId);
+            if (!user) 
+                throw new Error("Không tìm thấy người dùng.");
 
-        const emailExists = await this.User.findOne({
-            email: newEmail,
-            _id: { $ne: user._id }
-        });
+            const emailExists = await this.User.findOne({
+                email: newEmail,
+                _id: { $ne: user._id }
+            });
 
-        if (emailExists) 
-            throw new Error("Email đã được sử dụng.");
+            if (emailExists) 
+                throw new Error("Email đã được sử dụng.");
 
-        const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+            const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
 
-        user.emailChangeOtp = otp;
-        user.emailChangeNew = newEmail;
-        user.emailChangeExpires = Date.now() + 10 * 60 * 1000;
+            user.emailChangeOtp = otp;
+            user.emailChangeNew = newEmail;
+            user.emailChangeExpires = Date.now() + 10 * 60 * 1000;
 
-        await user.save();
-        await this.mailService.sendVerificationEmail(newEmail, otp);
+            await user.save();
+            await this.mailService.sendVerificationEmail(newEmail, otp);
+
+        } catch (error) {
+            console.log("Send change email OTP failed for error: " + error.message);
+            throw error;
+        }
     };
 
     verifyChangeEmailService = async (userId, otp) => {
-        const user = await this.User.findById(userId);
-        if (!user) 
-            throw new Error("Không tìm thấy người dùng.");
+        try {
+            const user = await this.User.findById(userId);
+            if (!user) 
+                throw new Error("Không tìm thấy người dùng.");
 
-        if (
-            !user.emailChangeOtp ||
-            user.emailChangeOtp !== otp ||
-            user.emailChangeExpires < Date.now()
-        ) {
-            throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
+            if (
+                !user.emailChangeOtp ||
+                user.emailChangeOtp !== otp ||
+                user.emailChangeExpires < Date.now()
+            ) {
+                throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
+            }
+
+            user.email = user.emailChangeNew;
+            user.emailChangeOtp = undefined;
+            user.emailChangeNew = undefined;
+            user.emailChangeExpires = undefined;
+
+            await user.save();
+
+            return user.email;
+        } catch (error) {
+            console.log("Verify change email OTP failed for error: " + error.message);
+            throw error;
         }
-
-        user.email = user.emailChangeNew;
-        user.emailChangeOtp = undefined;
-        user.emailChangeNew = undefined;
-        user.emailChangeExpires = undefined;
-
-        await user.save();
-
-        return user.email;
     };
 
     updateAvatarService = async (userId, avatarUrl) => {
-        if (!avatarUrl) 
-            throw new Error("Không có file.");
+        try {
+            if (!avatarUrl) 
+                throw new Error("Không có file.");
 
-        const updatedUser = await this.User.findByIdAndUpdate(
-            userId,
-            { avatar: avatarUrl },
-            { new: true }
-        );
+            const updatedUser = await this.User.findByIdAndUpdate(
+                userId,
+                { avatar: avatarUrl },
+                { new: true }
+            );
 
-        if (!updatedUser) 
-            throw new Error("Không tìm thấy người dùng.");
+            if (!updatedUser) 
+                throw new Error("Không tìm thấy người dùng.");
 
-        return updatedUser.avatar;
+            return updatedUser.avatar;
+        } catch (error) {
+            console.log("Update avatar failed for error: " + error.message);
+            throw error;
+        }
     };
 
     async setRole({ userId, newRole }) {

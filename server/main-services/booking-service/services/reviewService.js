@@ -1,5 +1,6 @@
 ﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 const EDIT_LIMIT_HOURS = 48;
 
@@ -182,6 +183,11 @@ export class ReviewService {
                 reviewedCategoryIds.map((category_id) => this.updateRoomCategoryRating(category_id))
             );
 
+            await Promise.all([
+                cache.del(`review:customer:${customerId}`),
+                cache.del("review:stats"),
+                cache.delByPattern("review:list:*"),
+            ]);
             return review;
 
         } catch (error) {
@@ -196,12 +202,18 @@ export class ReviewService {
                 throw new Error("ID Khách hàng không hợp lệ");
             }
 
+            const cacheKey = `review:customer:${customerId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const reviews = await this.Review.find({
                 customer_id: customerId,
                 is_visible: true
             }).sort({ created_at: -1 });
 
-            return { total: reviews.length, data: reviews };
+            const result = { total: reviews.length, data: reviews };
+            await cache.set(cacheKey, result, 300);
+            return result;
 
         } catch (error) {
             console.log("Error in getting customer own reviews: ", error);
@@ -323,6 +335,12 @@ export class ReviewService {
                 );
             }
 
+            await Promise.all([
+                cache.del(`review:one:${reviewId}`),
+                cache.del(`review:customer:${customerId}`),
+                cache.del("review:stats"),
+                cache.delByPattern("review:list:*"),
+            ]);
             return review;
 
         } catch (error) {
@@ -346,6 +364,11 @@ export class ReviewService {
             review.note = note || "";
 
             await review.save();
+            await Promise.all([
+                cache.del(`review:one:${reviewId}`),
+                cache.del("review:stats"),
+                cache.delByPattern("review:list:*"),
+            ]);
             return review;
 
         } catch (error) {
@@ -356,6 +379,10 @@ export class ReviewService {
 
     async getAllReviews (query = {}) {
         try {
+            const cacheKey = makeCacheKey("review:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { is_visible, general_rating, customer_id, page = 1, limit = 10, search } = query;
             const filter = {};
 
@@ -387,7 +414,7 @@ export class ReviewService {
 
             const total = await this.Review.countDocuments(filter);
 
-            return { 
+            const listResponse = {
                 reviews,
                 pagination: {
                     page: parseInt(page),
@@ -396,6 +423,8 @@ export class ReviewService {
                     totalPages: Math.ceil(total / parseInt(limit)),
                 }
             };
+            await cache.set(cacheKey, listResponse, 300);
+            return listResponse;
 
         } catch (error) {
             console.log("Error in getting all reviews for admin:", error);
@@ -405,6 +434,9 @@ export class ReviewService {
 
     async getReviewStatistics () {
         try {
+            const cached = await cache.get("review:stats");
+            if (cached) return cached;
+
             const totalReviews = await this.Review.countDocuments();
             const visibleReviews = await this.Review.countDocuments({ is_visible: true });
             const hiddenReviews = await this.Review.countDocuments({ is_visible: false });
@@ -431,7 +463,7 @@ export class ReviewService {
                 is_visible: true,
             });
 
-            return {
+            const stats = {
                 total: totalReviews,
                 visible: visibleReviews,
                 hidden: hiddenReviews,
@@ -442,9 +474,11 @@ export class ReviewService {
                     acc[item._id] = item.count;
                     return acc;
                 }, {}),
-                
+
                 recent: recentReviews
-            }
+            };
+            await cache.set("review:stats", stats, 300);
+            return stats;
 
         } catch (error) {
             console.log("Error getting review statistics:", error);
@@ -458,9 +492,14 @@ export class ReviewService {
                 throw new Error("ID Đánh giá không hợp lệ.");
             }
 
+            const cacheKey = `review:one:${reviewId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const review = await this.Review.findById(reviewId);
             if (!review) throw new Error("Không tìm thấy đánh giá.");
 
+            await cache.set(cacheKey, review, 300);
             return review;
 
         } catch (error) {

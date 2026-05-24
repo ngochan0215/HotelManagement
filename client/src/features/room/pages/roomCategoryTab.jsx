@@ -52,6 +52,7 @@ export default function RoomCategoryTab() {
   const loadCategories = async () => {
     try {
       const data = await roomApi.getAllCategories();
+      console.log("Loaded room categories:", data);
       setCategories(data);
     } catch (error) {
       console.error("Lỗi tải loại phòng:", error);

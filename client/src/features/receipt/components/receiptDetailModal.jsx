@@ -1,13 +1,18 @@
-import React, { useRef } from "react";
+import React, { useState, useRef } from "react";
 import { FiX, FiPrinter, FiTag } from "react-icons/fi";
+import Toast from "../../../components/toast.jsx";
 
 export default function ReceiptDetailModal({ receipt, onClose }) {
   const printRef = useRef();
+  const [toast, setToast] = useState(null);
   const handlePrint = () => {
     const printContent = printRef.current.innerHTML;
     const printWindow = window.open('', '', 'height=800,width=800');
 
-    if(!printWindow) return alert("Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.");
+    if(!printWindow) {
+      setToast({ message: "Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.", type: "error" });
+      return;
+    }
 
     printWindow.document.write('<html><head><title>Hóa Đơn - ' + receipt._id + '</title>');
     printWindow.document.write('<script src="https://cdn.tailwindcss.com"></script>');
@@ -34,6 +39,8 @@ export default function ReceiptDetailModal({ receipt, onClose }) {
   if (!receipt) return null;
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
@@ -164,5 +171,6 @@ export default function ReceiptDetailModal({ receipt, onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

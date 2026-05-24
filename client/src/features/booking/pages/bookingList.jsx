@@ -57,7 +57,7 @@ export default function BookingList() {
   if (!employeeId && user?.token) {
       try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
   }
-  if (!employeeId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+  if (!employeeId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
 
   const [bookings, setBookings] = useState([]);
   const [roomsList, setRoomsList] = useState([]);
@@ -105,6 +105,7 @@ export default function BookingList() {
   const html5QrCodeRef = useRef(null);
   const scanTimeoutRef = useRef(null);
   const scanAttemptsRef = useRef(0);
+  const payosPollingRef = useRef(null);
 
   const [confirmState, setConfirmState] = useState({
       open: false, title: "", message: "", confirmText: "Đồng ý", type: "danger", onConfirm: null
@@ -129,13 +130,11 @@ export default function BookingList() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      // Cleanup QR scanner
       if (html5QrCodeRef.current) {
         html5QrCodeRef.current.stop().catch(() => {});
       }
-      if (scanTimeoutRef.current) {
-        clearTimeout(scanTimeoutRef.current);
-      }
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      if (payosPollingRef.current) clearInterval(payosPollingRef.current);
     };
   }, []);
 
@@ -271,10 +270,37 @@ export default function BookingList() {
       const bookingsData = Array.isArray(bookRes.result) ? bookRes.result : [];
       setBookings(bookingsData);
       setCustomersList(custRes.customers || []);
-      
+
       // Kiểm tra cleaningTask cho các phòng đã checkout
       await checkCleaningTasks(bookingsData);
     } catch (error) { console.error(error); }
+  };
+
+  // Poll GET /bookings/:id every 4s until booking leaves "pending" (PayOS deposit confirmed)
+  const startPayOSPolling = (bookingId) => {
+    if (payosPollingRef.current) clearInterval(payosPollingRef.current);
+    let attempts = 0;
+    const maxAttempts = 75; // 75 × 4s ≈ 5 minutes
+
+    payosPollingRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        clearInterval(payosPollingRef.current);
+        payosPollingRef.current = null;
+        return;
+      }
+      try {
+        const res = await bookingApi.getBookingById(bookingId);
+        if (res?.booking?.status && res.booking.status !== "pending") {
+          clearInterval(payosPollingRef.current);
+          payosPollingRef.current = null;
+          fetchData();
+          setToast({ type: "success", message: "Thanh toán tiền cọc thành công! Đơn đặt phòng đã được xác nhận." });
+        }
+      } catch {
+        // silently ignore polling errors
+      }
+    }, 4000);
   };
   
   const checkCleaningTasks = async (bookings) => {
@@ -652,14 +678,14 @@ export default function BookingList() {
         console.log("Payment link response:", paymentRes);
         
         if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
-          // Mở link thanh toán trong tab mới
           window.open(paymentRes.data.checkoutUrl, '_blank');
-          setToast({ 
-            message: "Đã tạo đơn đặt phòng. Vui lòng thanh toán tiền cọc để hoàn tất.", 
-            type: "info" 
+          setToast({
+            message: "Đã tạo đơn đặt phòng. Vui lòng thanh toán tiền cọc để hoàn tất.",
+            type: "info"
           });
           setIsModalOpen(false);
           fetchData();
+          startPayOSPolling(bookingId); // auto-refresh when payment confirmed
         } else {
           throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
         }
@@ -886,12 +912,12 @@ export default function BookingList() {
       const paymentRes = await paymentApi.createPaymentLink(employeeId, paymentData);
       
       if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
-        // Mở link thanh toán trong tab mới
         window.open(paymentRes.data.checkoutUrl, '_blank');
-        setToast({ 
-          message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.", 
-          type: "info" 
+        setToast({
+          message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán tiền cọc trong cửa sổ mới.",
+          type: "info"
         });
+        startPayOSPolling(bookingId); // auto-refresh when payment confirmed
       } else {
         throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
       }
@@ -963,12 +989,17 @@ export default function BookingList() {
       onConfirm: async () => {
         try {
           const res = await bookingApi.checkoutBookingDetail(bid, did);
+          setConfirmState(p => ({...p, open: false}));
           if (res.success && res.data && res.data.room_log_id) {
             setCleaningData(res.data);
             setShowAssignHousekeeperModal(true);
           }
-          fetchData();
-          setConfirmState(p => ({...p, open: false}));
+          // Optimistic: immediately mark this room as checked_out in local state
+          setBookings(prev => prev.map(b => {
+            if (b._id !== bid) return b;
+            return { ...b, rooms: b.rooms?.map(r => r._id === did ? { ...r, status: "checked_out" } : r) };
+          }));
+          fetchData(); // background sync for full fresh data
         } catch(e) { setToast({ type: "error", message: "Lỗi: " + e.message }); }
       }
     });

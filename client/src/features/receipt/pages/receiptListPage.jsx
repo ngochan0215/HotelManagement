@@ -73,13 +73,14 @@ export default function ReceiptList() {
   if (!userId && user?.token) {
     try { userId = jwtDecode(user.token).userId; } catch (err) {}
   }
-  if (!userId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+  if (!userId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
 
   const fetchReceipts = async () => {
     setLoading(true);
     try {
       const params = { keyword, status, payment, from_date: fromDate, to_date: toDate };
       const res = await receiptApi.getAllReceipts(params);
+      console.log("Fetched receipts:", res);
       setReceipts(res.receipts || []);
     } catch (err) {
       console.error(err);
@@ -252,7 +253,7 @@ export default function ReceiptList() {
                                 </td>
                                 <td className="py-4 px-6 font-bold text-gray-800">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        {item.booking_id?.customer_id?.full_name || "Khách vãng lai"}
+                                        {item.booking?.customer_info.full_name || "Khách vãng lai"}
                                         {item.discount_snapshot && item.discount_snapshot.discount_amount > 0 && (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold" title={`Khuyến mãi: ${item.discount_snapshot.name || item.discount_snapshot.code}`}>
                                                 <FiTag size={10}/>

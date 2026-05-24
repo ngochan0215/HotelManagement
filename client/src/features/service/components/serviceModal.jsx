@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiSave, FiImage, FiChevronDown } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [toast, setToast] = useState(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previewImages, setPreviewImages] = useState([]);
 
@@ -102,16 +104,16 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
 
           if (initialData) {
               await serviceApi.updateService(initialData._id, data);
-              alert("Cập nhật thành công!");
+              setToast({ message: "Cập nhật thành công!", type: "success" });
           } else {
               await serviceApi.createService(data);
-              alert("Thêm mới thành công!");
+              setToast({ message: "Thêm mới thành công!", type: "success" });
           }
           onSuccess();
           onClose();
       } catch (error) {
           console.error("Submit Error:", error.response?.data);
-          alert("Lỗi: " + (error.response?.data?.message || error.message));
+          setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
       } finally {
           setLoading(false);
       }
@@ -120,6 +122,8 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
   if (!isOpen) return null;
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
 
@@ -268,5 +272,6 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
         </form>
       </div>
     </div>
+    </>
   );
 }

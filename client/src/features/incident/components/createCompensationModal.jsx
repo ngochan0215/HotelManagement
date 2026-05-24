@@ -3,10 +3,12 @@ import { FiX, FiDollarSign, FiMapPin, FiCalendar, FiPackage, FiEdit2 } from "rea
 import { incidentApi } from "../../api/incidentApi.js";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function CreateCompensationModal({ incident, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [loadingEquipments, setLoadingEquipments] = useState(false);
+  const [toast, setToast] = useState(null);
   const [note, setNote] = useState(incident?.description || "");
   const [equipments, setEquipments] = useState([]);
   const [bookingInfo, setBookingInfo] = useState(null);
@@ -117,10 +119,11 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
         const booking = allBookings.find(b => String(b._id) === String(incident.booking_id));
         
         if (booking) {
+          console.log("Found booking for incident:", booking);
           setBookingInfo({
             booking_id: booking._id,
             booking_code: booking.code || booking._id.toString().slice(-6),
-            room_number: incident.room_id?.room_number || "N/A"
+            room_number: booking.rooms?.[0]?.room_info?.room_number || "N/A"
           });
         }
       } catch (err) {
@@ -129,8 +132,7 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
     };
 
     fetchBookingInfo();
-    // console.log("BOOKING INFO: ", bookingInfo);
-    // console.log("INCIDENT: ", incident);
+
   }, [incident, isCustomer]);
 
   // Cập nhật penalty_fee khi thay đổi rate hoặc resolution
@@ -171,15 +173,18 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
     e.preventDefault();
 
     if (isEquipmentIncident && equipments.length === 0) {
-      return alert("Vui lòng chờ tải thông tin thiết bị hoặc kiểm tra lại sự cố.");
+      setToast({ message: "Vui lòng chờ tải thông tin thiết bị hoặc kiểm tra lại sự cố.", type: "error" });
+      return;
     }
 
     if (isEquipmentIncident && equipments.some(eq => !eq.broken_state || !eq.resolution || eq.penalty_fee <= 0)) {
-      return alert("Vui lòng điền đầy đủ thông tin cho tất cả thiết bị.");
+      setToast({ message: "Vui lòng điền đầy đủ thông tin cho tất cả thiết bị.", type: "error" });
+      return;
     }
 
     if (!isEquipmentIncident && (!totalFee || totalFee <= 0)) {
-      return alert("Vui lòng nhập số tiền bồi thường hợp lệ.");
+      setToast({ message: "Vui lòng nhập số tiền bồi thường hợp lệ.", type: "error" });
+      return;
     }
 
     setLoading(true);
@@ -213,18 +218,20 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
         await incidentApi.createCompensationTicket(incident._id, payload);
       }
 
-      alert("Đã tạo phiếu bồi thường thành công!");
+      setToast({ message: "Đã tạo phiếu bồi thường thành công!", type: "success" });
       onSuccess?.();
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 bg-red-50 flex justify-between items-center">
@@ -260,7 +267,11 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
                     <FiMapPin size={14} className="text-gray-400" />
                     <span className="text-gray-600">Phòng:</span>
                     <span className="font-bold text-gray-800">
-                      {incident.room_id?.room_number || bookingInfo?.room_number || "N/A"}
+                      {
+                        incident.rooms?.[0]?.room_info?.room_number ||
+                        bookingInfo?.room_number ||
+                        "N/A"
+                      }
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -443,5 +454,6 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
         </form>
       </div>
     </div>
+    </>
   );
 }

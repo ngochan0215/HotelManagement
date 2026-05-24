@@ -93,6 +93,15 @@ export class EmployeeController {
         }
     };
 
+    updateMyProfile = async (req, res) => {
+        try {
+            const employee = await this.employeeService.updateMyProfile(req.user.userId, req.body);
+            return res.status(200).json(employee);
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     checkInShift = async (req, res) => {
         try {
             const attendance = await this.employeeService.checkInShift(req.user.userId, req.params.scheduleId);

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { FiX, FiDollarSign, FiCheckCircle, FiInfo, FiExternalLink, FiTag } from "react-icons/fi";
+import Toast from "../../../components/toast.jsx";
 import { jwtDecode } from "jwt-decode";
 import { receiptApi } from "../../api/receiptApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
@@ -9,13 +10,14 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
   const [method, setMethod] = useState("cash");
   const [loading, setLoading] = useState(false);
   const [creatingPaymentLink, setCreatingPaymentLink] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const { user } = useAuth();
   let userId = user?._id;
   if (!userId && user?.token) {
     try { userId = jwtDecode(user.token).userId; } catch (err) {}
   }
-  if (!userId) return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+  if (!userId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={onClose} />;
 
   const handleConfirm = async () => {
     // Nếu là chuyển khoản, tạo payment link PayOS
@@ -40,14 +42,14 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
         if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
           // Mở link thanh toán trong tab mới
           window.open(paymentRes.data.checkoutUrl, '_blank');
-          alert("Đã tạo link thanh toán PayOS. Vui lòng thanh toán trong cửa sổ mới. Hệ thống sẽ tự động cập nhật khi thanh toán thành công.");
+          setToast({ message: "Đã tạo link thanh toán PayOS. Vui lòng thanh toán trong cửa sổ mới.", type: "success" });
           onSuccess?.();
           onClose();
         } else {
           throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
         }
       } catch (error) {
-        alert("Lỗi: " + (error.response?.data?.error || error.message));
+        setToast({ message: "Lỗi: " + (error.response?.data?.error || error.message), type: "error" });
       } finally {
         setCreatingPaymentLink(false);
       }
@@ -62,11 +64,11 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
         payment: method
       });
 
-      alert(`Đã xác nhận thu ${receipt.amount_due?.toLocaleString()}đ thành công!`);
+      setToast({ message: `Đã xác nhận thu ${receipt.amount_due?.toLocaleString()}đ thành công!`, type: "success" });
       onSuccess?.();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
@@ -86,6 +88,8 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
   const discountAmount = discountSnapshot?.discount_amount || 0;
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
@@ -214,5 +218,6 @@ export default function ConfirmPaymentModal({ receipt, onClose, onSuccess }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

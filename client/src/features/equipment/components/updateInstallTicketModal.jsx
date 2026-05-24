@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FiX, FiPlus, FiTrash2, FiAlertCircle } from "react-icons/fi";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { roomApi } from "../../api/roomApi.js";
+import Toast from "../../../components/toast.jsx";
 
 const CONDITION_MAP = {
   new: "Mới",
@@ -24,6 +25,7 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
   const [items, setItems] = useState([{ id: "", quantity: 1 }]);
   const [loading, setLoading] = useState(false);
   const [ticketDetails, setTicketDetails] = useState([]);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -137,14 +139,13 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedRoomId) {
-        alert("Vui lòng chọn phòng.");
+        setToast({ message: "Vui lòng chọn phòng.", type: "error" });
         return;
     }
 
     // Validate items nếu có
     const validItems = items.filter(item => item.id);
     if (validItems.length === 0) {
-        // Cho phép cập nhật mà không thay đổi thiết bị
         const payload = {
           install_date: installDate,
           room_id: selectedRoomId,
@@ -154,11 +155,11 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
         setLoading(true);
         try {
           await equipmentApi.updateInstallTicket(ticket._id, payload);
-          alert("Cập nhật phiếu thành công!");
+          setToast({ message: "Cập nhật phiếu thành công!", type: "success" });
           onSuccess();
           onClose();
         } catch (error) {
-          alert("Lỗi: " + (error.response?.data?.message || error.message));
+          setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
         } finally {
           setLoading(false);
         }
@@ -167,7 +168,7 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
 
     for (const item of validItems) {
         if (!item.id) {
-            alert("Vui lòng chọn thiết bị ở tất cả các dòng.");
+            setToast({ message: "Vui lòng chọn thiết bị ở tất cả các dòng.", type: "error" });
             return;
         }
     }
@@ -190,11 +191,11 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
       };
 
       await equipmentApi.updateInstallTicket(ticket._id, payload);
-      alert("Cập nhật phiếu thành công!");
+      setToast({ message: "Cập nhật phiếu thành công!", type: "success" });
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
@@ -211,6 +212,8 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="bg-gray-50 border-b border-gray-100">
@@ -358,5 +361,6 @@ export default function UpdateInstallTicketModal({ ticket, onClose, onSuccess })
 
       </div>
     </div>
+    </>
   );
 }

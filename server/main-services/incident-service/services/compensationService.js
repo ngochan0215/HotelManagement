@@ -4,6 +4,8 @@ import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class CompensateService {
     constructor({ CompensateTicket, CompensateDetail, Incident, IncidentLog, eventBus }) 
@@ -39,6 +41,58 @@ export class CompensateService {
             throw new Error(reply.message || "Không tìm thấy thiết bị.");
         
         return reply.equipment;
+    };
+
+    populateEquipmentDetails = async (tickets) => {
+        const isArray = Array.isArray(tickets);
+        const list = isArray ? tickets : [tickets];
+
+        const allEquipmentIds = [...new Set(
+            list.flatMap(t =>
+                (t.compensation_details || [])
+                    .map(d => d.equipment_id?.toString())
+                    .filter(Boolean)
+            )
+        )];
+
+        if (allEquipmentIds.length === 0)
+            return isArray ? list : list[0];
+
+        const eqReply = await this.eventBus.safeRequest(
+            EQUIPMENT_EVENTS.CHECK_EQUIPMENTS_EXISTS,
+            { equipmentIds: allEquipmentIds }
+        );
+
+        if (!eqReply.success)
+            return isArray ? list : list[0];
+
+        const equipments = eqReply.equipments || [];
+
+        // CHECK_EQUIPMENTS_EXISTS already populates category_id with {name, unit, price}
+        // so category data is available directly on each equipment object
+        const equipmentMap = {};
+        for (const eq of equipments) {
+            const cat = eq.category_id; // populated object, not a raw id
+            equipmentMap[eq._id.toString()] = {
+                _id: eq._id,
+                condition: eq.condition,
+                status: eq.status,
+                name: cat?.name || null,
+                price: cat?.price || null,
+            };
+        }
+
+        const results = list.map(ticket => ({
+            ...ticket,
+            compensation_details: (ticket.compensation_details || []).map(detail => ({
+                ...detail,
+                equipment_info: detail.equipment_id
+                    ? (equipmentMap[detail.equipment_id.toString()] || null)
+                    : null,
+            })),
+        }));
+
+        return isArray ? results : results[0];
     };
 
     populateReporterAndCauser = async (incidents) => {
@@ -263,6 +317,12 @@ export class CompensateService {
         
             incident.compensation_status = "pending";
             await incident.save();
+            await Promise.all([
+                cache.del(`incident:one:${incidentId}`),
+                cache.delByPattern("incident:list:*"),
+                cache.delByPattern("incident:tasks:*"),
+                cache.delByPattern("compensate:list:*"),
+            ]);
 
             return ticket;
 
@@ -330,7 +390,13 @@ export class CompensateService {
         
             incident.compensation_status = "pending";
             await incident.save();
-            
+            await Promise.all([
+                cache.del(`incident:one:${incidentId}`),
+                cache.delByPattern("incident:list:*"),
+                cache.delByPattern("incident:tasks:*"),
+                cache.delByPattern("compensate:list:*"),
+            ]);
+
             return ticket;
 
         } catch (err) {
@@ -341,6 +407,13 @@ export class CompensateService {
     
     async getAllCompensateTickets (query = {}) {
         try {
+            const cacheKey = makeCacheKey("compensate:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) {
+                console.log("cache hit for getAllCompensateTickets");
+                return cached;
+            }
+
             const { status, incident_id } = query;
             const filter = {};
 
@@ -366,49 +439,51 @@ export class CompensateService {
     
             const incidents = compensations.map(t => t.incident_id).filter(Boolean);
 
-            const populatedIncidents = await this.populateRoom(incidents);
-            const finalIncidents = await this.populateReporterAndCauser(populatedIncidents);
-            
-            // Map incident_id -> populated incident
+            // All three populate steps + receipt checks are independent — run in parallel
+            const [roomPopulated, peoplePopulated, receiptChecks, equipPopulated] = await Promise.all([
+                this.populateRoom(incidents),
+                this.populateReporterAndCauser(incidents),
+                Promise.all(
+                    compensations.map(async (ticket) => {
+                        if (!ticket.booking_id)
+                            return { isInReceipt: false, receiptStatus: null };
+
+                        const reply = await this.eventBus.safeRequest(
+                            PAYMENT_EVENTS.GET_RECEIPT_BY_BOOKING,
+                            {
+                                booking_id: ticket.booking_id.toString(),
+                                compensate_ticket_id: ticket._id.toString()
+                            }
+                        );
+
+                        if (!reply.success)
+                            return { isInReceipt: false, receiptStatus: null };
+
+                        const { receipt, receiptByBooking } = reply;
+                        if (receipt)
+                            return { isInReceipt: true, receiptStatus: receipt.status };
+
+                        return {
+                            isInReceipt: !!receiptByBooking,
+                            receiptStatus: receiptByBooking?.status || null,
+                        };
+                    })
+                ),
+                this.populateEquipmentDetails(compensations),
+            ]);
+
+            // Build incident map merging room_info + reporter/causer info (both arrays preserve input order)
             const incidentMap = {};
-            for (const inc of finalIncidents) {
-                incidentMap[inc._id.toString()] = inc;
+            for (let i = 0; i < incidents.length; i++) {
+                const merged = {
+                    ...roomPopulated[i],
+                    reporter_info: peoplePopulated[i].reporter_info,
+                    causer_info: peoplePopulated[i].causer_info,
+                };
+                incidentMap[merged._id.toString()] = merged;
             }
 
-            // Check receipt song song cho tất cả tickets
-            const receiptChecks = await Promise.all(
-                compensations.map(async (ticket) => {
-                    if (!ticket.booking_id) 
-                        return { 
-                            isInReceipt: false, 
-                            receiptStatus: null 
-                        };
-
-                    // const receipt = await this.Receipt.findOne({
-                    //     booking_id: ticket.booking_id,
-                    //     compensate_ticket_id: ticket._id
-                    // }).select("status").lean();
-
-                    if (receipt) 
-                        return { 
-                            isInReceipt: true, 
-                            receiptStatus: receipt.status 
-                        };
-
-                    // const receiptByBooking = await this.Receipt.findOne({
-                    //     booking_id: ticket.booking_id,
-                    //     compensate_fee: { $gt: 0 },
-                    //     status: { $in: ["pending", "half-paid"] }
-                    // }).select("status").lean();
-
-                    return {
-                        isInReceipt: !!receiptByBooking,
-                        receiptStatus: receiptByBooking?.status || null,
-                    };
-                })
-            );
-
-            const result = compensations.map((ticket, i) => {
+            const response = equipPopulated.map((ticket, i) => {
                 const inc = incidentMap[ticket.incident_id?._id?.toString() || ticket.incident_id?.toString()];
                 const { isInReceipt, receiptStatus } = receiptChecks[i];
 
@@ -424,9 +499,10 @@ export class CompensateService {
                 };
             });
 
-            return result;
-    
-        } catch (error) { 
+            await cache.set(cacheKey, response, 300);
+            return response;
+
+        } catch (error) {
             console.log("Error in getting all compensation tickets: ", error.message);
             throw error;
         }
@@ -434,6 +510,10 @@ export class CompensateService {
     
     async getCompensateTicketById (ticketId) {
         try {
+            const cacheKey = `compensate:one:${ticketId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const compensation = await this.CompensateTicket.findById(ticketId)
                 .select("-__v")
                 .populate({
@@ -457,24 +537,27 @@ export class CompensateService {
                 throw new Error("Không tìm thấy phiếu đền bù.");
         
             const incident = compensation.incident_id;
-            let finalIncident = null;
 
-            if (incident) {
-                const withRoom = await this.populateRoom(incident);
-                const withAll = await this.populateReporterAndCauser(withRoom);
-                finalIncident = {
-                    ...withAll,
-                    reporter_name: withAll.reporter_info?.full_name || null,
-                    causer_name: withAll.causer_info?.full_name || null,
-                };
-            }
+            // Run all three populate steps in parallel — they are independent
+            const [withRoom, withPeople, withEquip] = await Promise.all([
+                incident ? this.populateRoom(incident) : Promise.resolve(null),
+                incident ? this.populateReporterAndCauser(incident) : Promise.resolve(null),
+                this.populateEquipmentDetails(compensation),
+            ]);
 
-            return {
-                data: {
-                    ...compensation,
-                    incident_id: finalIncident,
-                },
-            };
+            const finalIncident = incident ? {
+                ...withRoom,
+                reporter_info: withPeople.reporter_info,
+                causer_info: withPeople.causer_info,
+                reporter_name: withPeople.reporter_info?.full_name || null,
+                causer_name: withPeople.causer_info?.full_name || null,
+            } : null;
+
+            const enriched = { ...withEquip, incident_id: finalIncident };
+
+            const response = { data: enriched };
+            await cache.set(cacheKey, response, 600);
+            return response;
 
         } catch (error) {
             console.log("Error in getting compensate ticket: ", error.message);
@@ -540,6 +623,10 @@ export class CompensateService {
         
             Object.assign(ticket, updates);
             await ticket.save();
+            await Promise.all([
+                cache.del(`compensate:one:${ticketId}`),
+                cache.delByPattern("compensate:list:*"),
+            ]);
 
             return ticket;
 
@@ -566,13 +653,20 @@ export class CompensateService {
         
             ticket.status = "paid";
             await ticket.save();
-        
+
             const oldStatus = incident.status;
             incident.status = "closed";
             incident.compensation_status = "done";
             incident.closed_at = new Date();
             await incident.save();
-        
+            await Promise.all([
+                cache.del(`compensate:one:${ticketId}`),
+                cache.delByPattern("compensate:list:*"),
+                cache.del(`incident:one:${incident._id}`),
+                cache.delByPattern("incident:list:*"),
+                cache.delByPattern("incident:tasks:*"),
+            ]);
+
             await this.IncidentLog.create({
                 incident_id: incident._id, 
                 action: "compensation_paid_closed", 

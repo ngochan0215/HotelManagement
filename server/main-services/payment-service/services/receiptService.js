@@ -1,6 +1,7 @@
 ﻿import mongoose from "mongoose";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import * as helpers from "./paymentHelpers.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class ReceiptService {
     constructor({ Receipt, Transaction, eventBus, sendNotification, sendNotificationsToUsers }) {
@@ -57,6 +58,7 @@ export class ReceiptService {
             note: note || "",
         });
 
+        await cache.delByPattern("receipt:list:*");
         return receipt;
     };
 
@@ -156,8 +158,10 @@ export class ReceiptService {
                 throw new Error("Phương thức thanh toán không hợp lệ. Chỉ chấp nhận tiền mặt hoặc chuyển khoản.");
             }
 
-            const employee = await this.findEmployeeByUserId(employeeUserId);
-            const booking = await this.findBookingById(booking_id);
+            const [employee, booking] = await Promise.all([
+                this.findEmployeeByUserId(employeeUserId),
+                this.findBookingById(booking_id),
+            ]);
 
             let discountSnapshot = null;
             let discountId = null;
@@ -252,8 +256,9 @@ export class ReceiptService {
                 note,
             });
 
+            await cache.delByPattern("receipt:list:*");
             return receipt;
-        
+
         } catch (err) {
             console.log("Error in creating receipt: ", err.message);
             throw err;
@@ -261,17 +266,23 @@ export class ReceiptService {
     };
     
     getReceiptById = async (receiptId) => {
-        try {        
+        try {
             if (!mongoose.Types.ObjectId.isValid(receiptId)) {
                 throw new Error("ID Hoá đơn không hợp lệ.");
             }
-        
+
+            const cacheKey = `receipt:one:${receiptId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const receipt = await this.Receipt.findById(receiptId).lean();
             if (!receipt) {
                 throw new Error("Không tìm thấy hóa đơn.");
             }
-        
-            return await this.enrichReceipts(receipt);
+
+            const enriched = await this.enrichReceipts(receipt);
+            await cache.set(cacheKey, enriched, 120);
+            return enriched;
 
         } catch (err) {
             console.log("Error in getting receipt by ID: ", err.message);
@@ -281,6 +292,10 @@ export class ReceiptService {
     
     getAllReceipts = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("receipt:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { status, payment, booking_id, from_date, to_date, keyword } = query;
             const filter = {};
         
@@ -314,8 +329,10 @@ export class ReceiptService {
                 );
             }
 
-            return { total: result.length, receipts: result };
-        
+            const response = { total: result.length, receipts: result };
+            await cache.set(cacheKey, response, 60);
+            return response;
+
         } catch (err) {
             console.log("Error in getting all receipts: ", err.message);
             throw err;
@@ -350,11 +367,15 @@ export class ReceiptService {
                 throw new Error("Hóa đơn đã hủy không thể cập nhật được nữa.");
             }
 
-            const booking = await this.findBookingById(receipt.booking_id);
-            const receiptEmployee = await this.findEmployeeById(receipt.employee_id);
-            const adminUserIds = await this.findAdminsByIds();
-            const bookingEmployee = await this.findEmployeeById(booking.handled_by);
-            const customer = await this.findCustomerById(booking.customer_id);
+            const [booking, receiptEmployee, adminUserIds] = await Promise.all([
+                this.findBookingById(receipt.booking_id),
+                this.findEmployeeById(receipt.employee_id),
+                this.findAdminsByIds(),
+            ]);
+            const [bookingEmployee, customer] = await Promise.all([
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]);
 
             if (status === "paid" && !receipt.paid_at) {
                 receipt.paid_at = new Date();
@@ -408,7 +429,12 @@ export class ReceiptService {
             receipt.payment = payment;
             receipt.status = status;
             await receipt.save();
-        
+
+            await Promise.all([
+                cache.del(`receipt:one:${receiptId}`),
+                cache.delByPattern("receipt:list:*"),
+            ]);
+
             // send notifications
             try {
                 const statusLabels = {
@@ -497,6 +523,10 @@ export class ReceiptService {
             }
         
             const updatedReceipt = await this.updateReceiptAfterCheckout(receipt.booking_id);
+            await Promise.all([
+                cache.del(`receipt:one:${receiptId}`),
+                cache.delByPattern("receipt:list:*"),
+            ]);
             return updatedReceipt;
 
         } catch (error) {
@@ -514,12 +544,13 @@ export class ReceiptService {
                 throw new Error("Phương thức thanh toán không hợp lệ. Chỉ chấp nhận tiền mặt hoặc chuyển khoản.");
             }
         
-            const employee = await this.findEmployeeByUserId(employeeUserId);
+            const [employee, receipt] = await Promise.all([
+                this.findEmployeeByUserId(employeeUserId),
+                this.Receipt.findById(receiptId),
+            ]);
             if (!employee) {
                 throw new Error("Không tìm thấy nhân viên.");
             }
-        
-            const receipt = await this.Receipt.findById(receiptId);
             if (!receipt)
                 throw new Error("Không tìm thấy hóa đơn.");
         
@@ -535,11 +566,20 @@ export class ReceiptService {
             receipt.payment = payment;
             receipt.paid_at = new Date();
             await receipt.save();
-        
-            const booking = await this.findBookingById(receipt.booking_id);
-            const bookingEmployee = await this.findEmployeeById(booking.handled_by);
-            const customer = await this.findCustomerById(booking.customer_id);
-            const receiptEmployee = await this.findEmployeeById(receipt.employee_id);
+
+            await Promise.all([
+                cache.del(`receipt:one:${receiptId}`),
+                cache.delByPattern("receipt:list:*"),
+            ]);
+
+            const [booking, receiptEmployee] = await Promise.all([
+                this.findBookingById(receipt.booking_id),
+                this.findEmployeeById(receipt.employee_id),
+            ]);
+            const [bookingEmployee, customer] = await Promise.all([
+                this.findEmployeeById(booking.handled_by),
+                this.findCustomerById(booking.customer_id),
+            ]);
             
             const rewardPoints = Math.floor(receipt.final_amount / 10000);
             // await updateCustomerPoints({

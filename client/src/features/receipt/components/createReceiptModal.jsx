@@ -3,12 +3,15 @@ import { FiX, FiCheckCircle, FiAlertCircle, FiSearch, FiDollarSign } from "react
 import { receiptApi } from "../../api/receiptApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
 import { incidentApi } from "../../api/incidentApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function CreateReceiptModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [toast, setToast] = useState(null);
 
   const [bookings, setBookings] = useState([]);
+  const [bookedIds, setBookedIds] = useState(new Set());
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [relatedCompensations, setRelatedCompensations] = useState([]);
   const [selectedCompensateId, setSelectedCompensateId] = useState("");
@@ -18,8 +21,22 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await bookingApi.getAllBookings();
-        setBookings(res.bookings || []);
+        const [bookingsRes, receiptsRes] = await Promise.all([
+          bookingApi.getAllBookings(),
+          receiptApi.getAllReceipts(),
+        ]);
+        setBookings(bookingsRes.bookings || []);
+
+        const ids = new Set(
+          (receiptsRes.receipts || [])
+            .filter(r => r.status !== "cancelled")
+            .map(r => {
+              const bid = r.booking_id;
+              return (typeof bid === "object" ? bid?._id : bid)?.toString();
+            })
+            .filter(Boolean)
+        );
+        setBookedIds(ids);
       } catch (err) {
         console.error(err);
       } finally {
@@ -53,7 +70,10 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
   };
 
   const handleSubmit = async () => {
-    if (!selectedBooking) return alert("Vui lòng chọn đơn đặt phòng!");
+    if (!selectedBooking) {
+      setToast({ message: "Vui lòng chọn đơn đặt phòng!", type: "error" });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -65,11 +85,11 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
       };
 
       await receiptApi.createReceipt(payload);
-      alert("Xuất hóa đơn thành công!");
+      setToast({ message: "Xuất hóa đơn thành công!", type: "success" });
       onSuccess?.();
       onClose();
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
     } finally {
       setLoading(false);
     }
@@ -88,6 +108,8 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
 
@@ -100,7 +122,7 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
 
         <div className="p-6 space-y-5 overflow-y-auto">
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Chọn Khách hàng / Phòng</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Chọn Đơn đặt phòng</label>
                 <div className="relative">
                     <select
                         className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:border-indigo-500 bg-white"
@@ -108,10 +130,12 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
                         value={selectedBooking?._id || ""}
                         disabled={loading}
                     >
-                        <option value="">-- Chọn Booking --</option>
-                        {bookings.map(b => (
+                        <option value="">-- Chọn đơn đặt phòng --</option>
+                        {bookings
+                            .filter(b => !["expired", "cancelled"].includes(b.status) && !bookedIds.has(b._id.toString()))
+                            .map(b => (
                             <option key={b._id} value={b._id}>
-                                Phòng {b.room_id?.room_number || "N/A"} - {b.customer_name} ({b.status})
+                                #{b._id.toString().slice(-6).toUpperCase()} — {b.customer_info?.full_name} ({b.status})
                             </option>
                         ))}
                     </select>
@@ -199,5 +223,6 @@ export default function CreateReceiptModal({ onClose, onSuccess }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

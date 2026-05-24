@@ -42,8 +42,7 @@ export default function ServiceListTab() {
   if (!userId && user?.token) {
     try { userId = jwtDecode(user.token).userId; } catch (err) {}
   }
-  if (!userId) 
-    return alert("Phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+  if (!userId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
   const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
   
   useEffect(() => {

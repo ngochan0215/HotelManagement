@@ -16,6 +16,7 @@ export class EquipmentEventHandler {
             [EQUIPMENT_EVENTS.GET_CATEGORIES_INFO]: this.getEquipmentCategoriesInfo.bind(this),
             [EQUIPMENT_EVENTS.UPDATE_LOG]: this.updateEquipmentLog.bind(this),
             [EQUIPMENT_EVENTS.CREATE_LOG]: this.createEquipmentLog.bind(this),
+            [EQUIPMENT_EVENTS.UPDATE_INTERNAL]: this.updateEquipmentInternal.bind(this),
             [EQUIPMENT_EVENTS.GET_ALL_INSTALL_TICKETS]: this.getAllInstallTickets.bind(this),
             [EQUIPMENT_EVENTS.GET_ALL_IMPORT_TICKETS]: this.getAllImportTickets.bind(this),
         }

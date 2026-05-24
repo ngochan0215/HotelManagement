@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { equipmentApi } from "../../api/equipmentApi.js";
 import { FiX, FiPlus, FiTrash2, FiSave, FiAlertCircle } from "react-icons/fi";
+import Toast from "../../../components/toast.jsx";
 
 export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const isUpdateMode = !!ticket;
+  const [toast, setToast] = useState(null);
 
   const [formData, setFormData] = useState({
     import_date: new Date().toISOString().split("T")[0],
@@ -81,7 +83,7 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
     setLoading(true);
     try {
         if (formData.items.some(i => !i.category_id)) {
-            alert("Vui lòng chọn loại thiết bị cho tất cả các dòng!");
+            setToast({ message: "Vui lòng chọn loại thiết bị cho tất cả các dòng!", type: "error" });
             setLoading(false);
             return;
         }
@@ -104,13 +106,15 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
         onSuccess();
         onClose();
     } catch (err) {
-        alert("Lỗi: " + (err.response?.data?.message || err.message));
+        setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
     } finally {
         setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
       <div className="bg-white rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
@@ -239,5 +243,6 @@ export default function AddImportTicketModal({ ticket, onClose, onSuccess }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -22,18 +22,27 @@ export const userApi = {
   },
 
   updateProfile: async (data) => {
-      const my = await axios.get(`${EMPLOYEES_BASE}/my-profile`, getAuthHeader());
-      const emp = my.data;
-      const id = emp._id;
       const payload = {};
       if (data.phone != null) payload.phone_number = data.phone;
       if (data.dob != null) payload.date_birth = data.dob;
-      const res = await axios.patch(`${EMPLOYEES_BASE}/${id}`, payload, getAuthHeader());
+      if (data.bank_shortName != null) payload.bank_shortName = data.bank_shortName;
+      if (data.account_number != null) payload.account_number = data.account_number;
+      const res = await axios.patch(`${EMPLOYEES_BASE}/my-profile`, payload, getAuthHeader());
       return res.data;
   },
 
   changePassword: async (data) => {
     const res = await axios.patch(`${USERS_BASE}/change-password`, data, getAuthHeader());
+    return res.data;
+  },
+
+  sendChangeEmailOtp: async (newEmail) => {
+    const res = await axios.post(`${USERS_BASE}/change-email/send-otp`, { newEmail }, getAuthHeader());
+    return res.data;
+  },
+
+  verifyChangeEmail: async (otp) => {
+    const res = await axios.post(`${USERS_BASE}/change-email/verify-otp`, { otp }, getAuthHeader());
     return res.data;
   },
 

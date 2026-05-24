@@ -2,6 +2,7 @@
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import * as helpers from "./paymentHelpers.js";
+import { cache } from "../../../shared/utils/cache.js";
 
 export class TransactionService {
     constructor({ Receipt, Transaction, payOSpayin, eventBus,
@@ -157,10 +158,14 @@ export class TransactionService {
 
     getPaymentDetail = async (bookingId) => {
         try {
+            const cacheKey = `payment:detail:${bookingId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             let transaction = null;
-            
+
             if (!isNaN(bookingId)) {
-                transaction = await this.Transaction.findOne({ 
+                transaction = await this.Transaction.findOne({
                     $or: [
                         { booking_code: Number(bookingId) },
                         { order_code: Number(bookingId) }
@@ -169,8 +174,10 @@ export class TransactionService {
             } else {
                 transaction = await this.Transaction.findOne({ booking_id: bookingId }).lean();
             }
-            
-            return await this.enrichTransactionDetail(transaction);
+
+            const detail = await this.enrichTransactionDetail(transaction);
+            if (detail) await cache.set(cacheKey, detail, 60);
+            return detail;
 
         } catch (error) {
             console.log("Error in getting payment detail: ", error.message);
@@ -466,6 +473,11 @@ export class TransactionService {
             }
         
             const enrichedTxn = await this.enrichTransactionDetail(transaction);
+            await Promise.all([
+                cache.delByPattern("payment:detail:*"),
+                receipt ? cache.del(`receipt:one:${receipt._id}`) : Promise.resolve(),
+                cache.delByPattern("receipt:list:*"),
+            ]);
             return { transaction: enrichedTxn, receipt };
         } catch (error) {
             console.log("Error in processing payment as succeeded: ", error.message);
@@ -504,8 +516,13 @@ export class TransactionService {
             }
         
             const enrichedTxn = await this.enrichTransactionDetail(transaction);
+            await Promise.all([
+                cache.delByPattern("payment:detail:*"),
+                receipt ? cache.del(`receipt:one:${receipt._id}`) : Promise.resolve(),
+                cache.delByPattern("receipt:list:*"),
+            ]);
             return { transaction: enrichedTxn, receipt };
-    
+
         } catch (error) {
             console.log("Error in processing payment as failed: ", error.message);
             throw error;

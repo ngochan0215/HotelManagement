@@ -140,32 +140,31 @@ export async function enrichReceipts(eventBus, receipts) {
     const plain = list.map(r => (typeof r.toObject === "function" ? r.toObject() : { ...r }));
 
     const bookingIds = [...new Set(plain.map(r => r.booking_id?.toString()).filter(Boolean))];
-    let bookings = [];
-    if (bookingIds.length) {
-        const reply = await eventBus.safeRequest(
-            BOOKING_EVENTS.GET_BOOKINGS_BY_IDS,
-            { bookingIds }
-        );
-        bookings = reply.success ? (reply.bookings || []) : [];
-    }
+    const employeeIds = [...new Set(plain.map(r => r.employee_id?.toString()).filter(Boolean))];
+    const ticketIds = [...new Set(plain.map(r => r.compensate_ticket_id?.toString()).filter(Boolean))];
 
+    const [bookingReply, empReply, ticketEntries] = await Promise.all([
+        bookingIds.length
+            ? eventBus.safeRequest(BOOKING_EVENTS.GET_BOOKINGS_BY_IDS, { bookingIds })
+            : Promise.resolve({ success: true, bookings: [] }),
+        employeeIds.length
+            ? eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: employeeIds })
+            : Promise.resolve({ success: true, employees: [] }),
+        Promise.all(ticketIds.map(async (tid) => {
+            const rep = await eventBus.safeRequest(INCIDENT_EVENTS.GET_COMPENSATION_BY_ID, { ticketId: tid });
+            return [tid, rep.success ? rep.ticket : null];
+        })),
+    ]);
+
+    const bookings = bookingReply.success ? (bookingReply.bookings || []) : [];
     const enrichedBookings = bookings.length ? await populateBookingPeople(eventBus, bookings) : [];
     const bookingById = {};
     for (const b of enrichedBookings) {
         bookingById[b._id.toString()] = b;
     }
 
-    const employeeIds = [...new Set(plain.map(r => r.employee_id?.toString()).filter(Boolean))];
-    let employees = [];
-    if (employeeIds.length) {
-        const replyEmp = await eventBus.safeRequest(
-            EMPLOYEE_EVENTS.GET_INFO,
-            { employee_ids: employeeIds }
-        );
-        employees = replyEmp.employees || [];
-    }
     const empMap = {};
-    for (const e of employees) {
+    for (const e of (empReply.employees || [])) {
         empMap[e._id.toString()] = e;
     }
 
@@ -174,10 +173,7 @@ export async function enrichReceipts(eventBus, receipts) {
     )];
     let users = [];
     if (userIds.length) {
-        const replyUsers = await eventBus.safeRequest(
-            USER_EVENTS.GET_USERS_INFO,
-            { userIds }
-        );
+        const replyUsers = await eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds });
         users = replyUsers.users || [];
     }
     const userMap = {};
@@ -185,18 +181,6 @@ export async function enrichReceipts(eventBus, receipts) {
         userMap[u._id.toString()] = u;
     }
 
-    const ticketIds = [...new Set(
-        plain.map(r => r.compensate_ticket_id?.toString()).filter(Boolean)
-    )];
-    const ticketEntries = await Promise.all(
-        ticketIds.map(async (tid) => {
-            const rep = await eventBus.safeRequest(
-                INCIDENT_EVENTS.GET_COMPENSATION_BY_ID,
-                { ticketId: tid }
-            );
-            return [tid, rep.success ? rep.ticket : null];
-        })
-    );
     const ticketMap = Object.fromEntries(ticketEntries);
 
     const merged = plain.map(r => {

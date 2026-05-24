@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
   FiPlus, FiSearch, FiPhone, FiMapPin, FiCreditCard, FiX, FiEdit, FiLock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader,
-  FiChevronLeft, FiChevronRight
+  FiChevronLeft, FiChevronRight, FiCamera, FiUpload
 } from "react-icons/fi";
+import { Html5Qrcode } from "html5-qrcode";
 
 import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
@@ -72,8 +73,62 @@ export default function CustomerPage() {
     phone_number: "", nationality: "Vietnam", CCCD: ""
   });
 
+  // QR / ID scan states
+  const [qrScanning, setQrScanning] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const html5QrCodeRef = useRef(null);
+  const scanTimeoutRef = useRef(null);
+
   useEffect(() => {
     fetchCustomers();
+  }, []);
+
+  // Init camera QR scanner once overlay is shown
+  useEffect(() => {
+    if (!showQrScanner || !qrScanning || html5QrCodeRef.current) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById("cust-qr-reader");
+      if (!el || html5QrCodeRef.current) return;
+      try {
+        const scanner = new Html5Qrcode("cust-qr-reader");
+        html5QrCodeRef.current = scanner;
+        scanTimeoutRef.current = setTimeout(() => {
+          showToast("Chưa quét được mã QR. Vui lòng kiểm tra ánh sáng.", "info");
+        }, 15000);
+        scanner.start(
+          { facingMode: "environment" },
+          { fps: 15, qrbox: { width: 280, height: 280 } },
+          async (decoded) => {
+            if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+            await handleQRScanned(decoded, null);
+            await scanner.stop();
+            setQrScanning(false);
+            setShowQrScanner(false);
+            html5QrCodeRef.current = null;
+          },
+          () => {}
+        ).catch((err) => {
+          setQrError(err.message || "Không thể khởi động camera");
+          setQrScanning(false);
+          setShowQrScanner(false);
+          showToast("Không thể khởi động camera. Vui lòng tải ảnh lên.", "error");
+        });
+      } catch (err) {
+        setQrError(err.message || "Lỗi khởi tạo scanner");
+        setQrScanning(false);
+        setShowQrScanner(false);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [showQrScanner, qrScanning]);
+
+  useEffect(() => {
+    return () => {
+      if (html5QrCodeRef.current) html5QrCodeRef.current.stop().catch(() => {});
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -88,8 +143,8 @@ export default function CustomerPage() {
     setLoading(true);
     try {
       const res = await customerApi.getAllCustomers();
-      console.log("get all customers: ", res);
       setCustomers(res.customers || []);
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -119,18 +174,102 @@ export default function CustomerPage() {
     setIsModalOpen(true);
   };
 
+  const stopQRScanner = async () => {
+    if (html5QrCodeRef.current) {
+      await html5QrCodeRef.current.stop().catch(() => {});
+      html5QrCodeRef.current = null;
+    }
+    if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+    setQrScanning(false);
+    setShowQrScanner(false);
+  };
+
+  const startQRScanning = async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      setQrError(null);
+      setShowQrScanner(true);
+      setQrScanning(true);
+    } catch {
+      showToast("Không thể truy cập camera. Vui lòng tải ảnh lên.", "error");
+    }
+  };
+
+  const handleQRFileUpload = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { showToast("Vui lòng chọn file ảnh.", "error"); return; }
+    if (file.size > 5 * 1024 * 1024) { showToast("File quá lớn (tối đa 5MB).", "error"); return; }
+    await handleQRScanned(null, file);
+  };
+
+  const handleQRScanned = async (decodedText = null, imageFile = null) => {
+    try {
+      setQrLoading(true);
+      setQrError(null);
+
+      let result;
+      if (imageFile) {
+        result = await customerApi.scanQRCode(imageFile);
+      } else if (decodedText) {
+        // Try to parse raw QR text from Vietnamese CCCD chip
+        try {
+          const parts = decodedText.split("|");
+          if (parts.length >= 7) {
+            result = {
+              success: true,
+              data: { cccd: parts[0], fullName: parts[2], dateOfBirth: parts[3] }
+            };
+          }
+        } catch { /* fall through */ }
+        if (!result) result = await customerApi.scanQRCode(new Blob([decodedText]));
+      }
+
+      if (result?.success && result.data) {
+        const d = result.data;
+        const updated = { ...formData };
+        if (d.cccd) updated.CCCD = d.cccd;
+        if (d.fullName) updated.full_name = d.fullName;
+        if (d.dateOfBirth) {
+          let dob = d.dateOfBirth.trim();
+          if (/^\d{8}$/.test(dob)) {
+            dob = `${dob.substring(4, 8)}-${dob.substring(2, 4)}-${dob.substring(0, 2)}`;
+          } else if (dob.includes("/")) {
+            const p = dob.split("/");
+            if (p.length === 3) dob = `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+          }
+          updated.date_birth = dob;
+        }
+        setFormData(updated);
+        showToast("Đã đọc thông tin từ căn cước thành công!", "success");
+      } else {
+        throw new Error(result?.message || "Không thể đọc thông tin từ ảnh.");
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Có lỗi xảy ra khi xử lý ảnh.";
+      setQrError(msg);
+      showToast(msg, "error");
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
   const handleDeleteAction = (id) => {
     setConfirmState({
       open: true,
       title: "Khóa tài khoản khách hàng?",
       message: "Bạn có chắc muốn KHÓA khách hàng này không? Họ sẽ không thể đặt phòng mới.",
       onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, open: false }));
+        // Optimistic update
+        setCustomers(prev => prev.map(c => c._id === id ? { ...c, status: "banned" } : c));
         try {
           await customerApi.banCustomer(id);
           showToast("Đã khóa khách hàng thành công.", "success");
-          fetchCustomers();
-          setConfirmState(prev => ({ ...prev, open: false }));
         } catch (error) {
+          // Rollback on failure
+          fetchCustomers();
           showToast(error.response?.data?.message || error.message, "error");
         }
       }
@@ -144,18 +283,33 @@ export default function CustomerPage() {
 
     try {
       if (editingCustomer) {
-        const payload = { ...formData };
-        await customerApi.updateCustomer(editingCustomer._id, payload);
+        await customerApi.updateCustomer(editingCustomer._id, { ...formData });
+        // Optimistic update
+        setCustomers(prev => prev.map(c =>
+          c._id === editingCustomer._id
+            ? { ...c, ...formData, user: { ...(c.user || {}), email: formData.email } }
+            : c
+        ));
         showToast("Cập nhật thông tin thành công!", "success");
       } else {
-        const randomPart = Math.floor(1000 + Math.random() * 9000);
-        const autoPassword = `Customer@${randomPart}`;
-        const payload = { ...formData, password: autoPassword };
-        await customerApi.registerCustomer(payload);
+        const autoPassword = `Customer@${Math.floor(1000 + Math.random() * 9000)}`;
+        await customerApi.registerCustomer({ ...formData, password: autoPassword });
+        // Optimistic prepend with known data; background fetch will replace with server data
+        const optimistic = {
+          _id: `pending-${Date.now()}`,
+          full_name: formData.full_name,
+          phone_number: formData.phone_number,
+          CCCD: formData.CCCD,
+          nationality: formData.nationality,
+          date_birth: formData.date_birth,
+          points: 10, loyalty: "bronze", status: "active", booking_count: 0,
+          user: { email: formData.email }
+        };
+        setCustomers(prev => [optimistic, ...prev]);
         showToast("Thêm khách hàng mới thành công!", "success");
       }
       setIsModalOpen(false);
-      fetchCustomers();
+      fetchCustomers(); // background sync to get real _id and complete data
     } catch (error) {
       showToast(error.response?.data?.message || error.message, "error");
     } finally {
@@ -438,6 +592,23 @@ export default function CustomerPage() {
       </div>
 
 
+      {/* Camera QR scanner overlay — above the modal */}
+      {showQrScanner && (
+        <div className="fixed inset-0 bg-black/75 z-[60] flex flex-col items-center justify-center">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-4 shadow-2xl w-[360px]">
+            <div className="flex justify-between w-full items-center">
+              <span className="font-bold text-gray-800">Đưa căn cước vào khung</span>
+              <button type="button" onClick={stopQRScanner} className="p-1 rounded-full hover:bg-gray-100"><FiX size={20}/></button>
+            </div>
+            <div id="cust-qr-reader" style={{ width: "300px", minHeight: "300px" }} />
+            <p className="text-xs text-gray-500 text-center">Đặt mã QR trên căn cước công dân vào vùng quét</p>
+            <button type="button" onClick={stopQRScanner} className="w-full py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium">
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl w-[600px] shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -447,6 +618,38 @@ export default function CustomerPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+                {/* QR scan section — create mode only */}
+                {!editingCustomer && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-600">Nhập thông tin nhanh từ ảnh căn cước:</p>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={startQRScanning}
+                        disabled={qrLoading}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-indigo-300 text-indigo-600 hover:bg-indigo-50 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FiCamera size={16}/> Quét QR căn cước
+                      </button>
+                      <label className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition text-sm font-medium cursor-pointer ${qrLoading ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}>
+                        <FiUpload size={16}/> Tải ảnh căn cước
+                        <input type="file" accept="image/*" className="hidden" onChange={handleQRFileUpload} disabled={qrLoading} />
+                      </label>
+                    </div>
+                    {qrLoading && (
+                      <div className="flex items-center gap-2 text-indigo-600 text-sm bg-indigo-50 rounded-lg px-3 py-2">
+                        <FiLoader className="animate-spin" size={15}/> Đang xử lý ảnh căn cước...
+                      </div>
+                    )}
+                    {qrError && (
+                      <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        {qrError}
+                      </div>
+                    )}
+                    <div className="border-t border-gray-100 pt-2" />
+                  </div>
+                )}
+
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                     <input type="email" required

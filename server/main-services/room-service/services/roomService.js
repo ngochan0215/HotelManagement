@@ -590,6 +590,11 @@ export class RoomService {
             const room = new this.Room({ category_id, room_number, room_status: room_status || "new" });
             await room.save();
 
+            await Promise.all([
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
+
             const populatedRoom = await this.Room.findById(room._id)
             .populate("category_id", "category_name description max_adults max_children price")
             .select("-__v -created_at -updated_at");
@@ -607,6 +612,10 @@ export class RoomService {
             const { category_id, room_status, room_number,
                 page = 1, limit = 10, sort_by = "room_number", order = "asc"
              } = query;
+
+            const cacheKey = makeCacheKey("room:rooms", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const filter = {};
             const now = new Date();
@@ -677,7 +686,7 @@ export class RoomService {
                 }
             }
 
-            return {
+            const response = {
                 data: rooms,
 
                 pagination: {
@@ -690,6 +699,9 @@ export class RoomService {
                 }
             };
 
+            await cache.set(cacheKey, response, 60);
+            return response;
+
         } catch (err) {
             console.log("Error in getAllRoomsService:", err);
             throw err;
@@ -700,9 +712,13 @@ export class RoomService {
         try {
             if (!mongoose.Types.ObjectId.isValid(id))
                 throw new Error("ID không hợp lệ!");
-        
+
+            const cacheKey = `room:room:${id}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const now = new Date();
-        
+
             const room = await this.Room.findById(id)
                 .populate("category_id", "category_name description max_adults max_children price")
                 .populate({
@@ -717,10 +733,11 @@ export class RoomService {
                     select: "status start_time end_time note",
                 })
                 .select("-__v -created_at -updated_at");
-        
+
             if (!room)
                 throw new Error("Không tìm thấy phòng!")
-        
+
+            await cache.set(cacheKey, room, 60);
             return room;
 
         } catch (err) {
@@ -771,17 +788,15 @@ export class RoomService {
             if (!mongoose.Types.ObjectId.isValid(roomId))
                 throw new Error("ID phòng không hợp lệ!");
         
-            const reply = await this.eventBus.safeRequest(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: userId }
-            );
+            const [reply, room] = await Promise.all([
+                this.eventBus.safeRequest(EMPLOYEE_EVENTS.CHECK_EXISTS_USERID, { employee_user_id: userId }),
+                this.Room.findById(roomId),
+            ]);
             if (!reply.success) {
                 throw new Error(reply.message || "Không tìm thấy nhân viên tương ứng với user ID!");
             }
             const employee = reply.employee;
-        
-            const room = await this.Room.findById(roomId);
-            if (!room) 
+            if (!room)
                 throw new Error("Không tìm thấy phòng!");
         
             if (category_id) {
@@ -869,7 +884,11 @@ export class RoomService {
         
             await room.save();
 
-            await cache.delByPattern("room:available:*");
+            await Promise.all([
+                cache.del(`room:room:${roomId}`),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
 
             // Populate roomStatusLog (virtual field tham chiếu RoomLog) để frontend có thể hiển thị
             const nowForPopulate = new Date();
@@ -921,7 +940,13 @@ export class RoomService {
             }
         
             await this.Room.findByIdAndDelete(roomId);
-        
+
+            await Promise.all([
+                cache.del(`room:room:${roomId}`),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
+
             return { success: true };
 
         } catch (err) {
@@ -964,9 +989,15 @@ export class RoomService {
         
             room.room_status = "available";
             await room.save();
-            
+
+            await Promise.all([
+                cache.del(`room:room:${roomId}`),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
+
             return { success: true };
-        
+
         } catch (error) {
             console.log("Error in completeCleaning:", error);
             throw error;
@@ -1008,9 +1039,15 @@ export class RoomService {
         
             room.room_status = "available";
             await room.save();
-                
+
+            await Promise.all([
+                cache.del(`room:room:${roomId}`),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
+
             return { success: true };
-        
+
         } catch (error) {
             console.log("Error in completeMaintenance:", error);
             throw error;
@@ -1283,6 +1320,10 @@ export class RoomService {
     updateRoomInternal = async (filter, updateData, options = {}) => {
         try {
             const result = await this.Room.updateMany(filter, { $set: updateData }, options);
+            await Promise.all([
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
             return result;
         } catch (err) {
             console.log("Error in updateRoomInternal:", err);

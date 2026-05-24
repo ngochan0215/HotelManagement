@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { FiX, FiRefreshCw, FiUser, FiMapPin, FiDollarSign, FiAlertCircle, FiCalendar, FiPackage, FiCheckCircle } from "react-icons/fi";
 import { incidentApi } from "../../api/incidentApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function CompensationDetailModal({ ticketId, onClose }) {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -16,7 +18,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
         }
       } catch (error) {
         console.error("Error fetching compensation ticket:", error);
-        alert("Lỗi: " + (error.response?.data?.message || error.message));
+        setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
       } finally {
         setLoading(false);
       }
@@ -89,6 +91,8 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
 
   if (loading) {
     return (
+      <>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-hidden">
           <div className="p-8 text-center">
@@ -97,6 +101,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -123,6 +128,8 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
   const compensationDetails = ticket.compensation_details || [];
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
@@ -257,7 +264,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
                       <div>
                         <span className="text-xs text-gray-500">Thiết bị:</span>
                         <p className="font-semibold text-gray-800">
-                          {detail.equipment_id?.category_id?.name || "N/A"}
+                          {detail.equipment_info?.name || "N/A"}
                         </p>
                       </div>
                       <div>
@@ -323,5 +330,6 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

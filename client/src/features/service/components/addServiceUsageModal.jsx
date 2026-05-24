@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { FiX, FiPlus, FiTrash2, FiSave, FiChevronDown, FiDollarSign } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function AddServiceUsageModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [activeBookings, setActiveBookings] = useState([]);
   const [services, setServices] = useState([]);
+  const [toast, setToast] = useState(null);
 
   const [selectedBookingId, setSelectedBookingId] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
@@ -68,11 +70,11 @@ export default function AddServiceUsageModal({ onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedBookingId || !selectedCustomerId) {
-      alert("Vui lòng chọn phòng/khách hàng.");
+      setToast({ message: "Vui lòng chọn phòng/khách hàng.", type: "error" });
       return;
     }
     if (usageList.some(i => !i.service_id || i.quantity <= 0)) {
-      alert("Vui lòng chọn dịch vụ và số lượng > 0");
+      setToast({ message: "Vui lòng chọn dịch vụ và số lượng > 0", type: "error" });
       return;
     }
 
@@ -89,17 +91,19 @@ export default function AddServiceUsageModal({ onClose, onSuccess }) {
       };
 
       await serviceApi.createServiceUsage(payload);
-      alert("Ghi nhận sử dụng dịch vụ thành công!");
+      setToast({ message: "Ghi nhận sử dụng dịch vụ thành công!", type: "success" });
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-orange-50 rounded-t-xl">
@@ -216,5 +220,6 @@ export default function AddServiceUsageModal({ onClose, onSuccess }) {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { FiX, FiPlus, FiTrash2, FiSave, FiChevronDown, FiDollarSign } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [services, setServices] = useState([]);
   const [usageData, setUsageData] = useState(null);
+  const [toast, setToast] = useState(null);
 
   const [usageList, setUsageList] = useState([
     { service_id: "", quantity: 1 }
@@ -36,7 +38,7 @@ export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess })
         }
       } catch (err) {
         console.error(err);
-        alert("Lỗi khi tải dữ liệu: " + (err.response?.data?.message || err.message));
+        setToast({ message: "Lỗi khi tải dữ liệu: " + (err.response?.data?.message || err.message), type: "error" });
       } finally {
         setInitialLoading(false);
       }
@@ -69,7 +71,7 @@ export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess })
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (usageList.some(i => !i.service_id || i.quantity <= 0)) {
-      alert("Vui lòng chọn dịch vụ và số lượng > 0");
+      setToast({ message: "Vui lòng chọn dịch vụ và số lượng > 0", type: "error" });
       return;
     }
 
@@ -84,11 +86,11 @@ export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess })
       };
 
       await serviceApi.updateServiceUsage(usageId, payload);
-      alert("Cập nhật phiếu sử dụng dịch vụ thành công!");
+      setToast({ message: "Cập nhật phiếu sử dụng dịch vụ thành công!", type: "success" });
       onSuccess();
       onClose();
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ message: "Lỗi: " + (error.response?.data?.message || error.message), type: "error" });
     } finally {
       setLoading(false);
     }
@@ -106,6 +108,8 @@ export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess })
   }
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b flex justify-between items-center bg-indigo-50 rounded-t-xl">
@@ -210,5 +214,6 @@ export default function UpdateServiceUsageModal({ usageId, onClose, onSuccess })
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 ﻿import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import mongoose from "mongoose";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 const MAP_ROLE = {
     manager: "Quản lý",
@@ -194,6 +195,10 @@ export class ScheduleService {
 
     async getScheduleById (scheduleId) {
         try {
+            const cacheKey = `schedule:one:${scheduleId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const schedule = await this.Schedule.findById(scheduleId)
                 .select("-__v -created_at -updated_at")
                 .populate("employee_id", "full_name phone_number")
@@ -204,6 +209,7 @@ export class ScheduleService {
                 throw new Error("Không tìm thấy lịch làm việc.");
             }
 
+            await cache.set(cacheKey, schedule, 120);
             return schedule;
 
         } catch (error) {
@@ -214,6 +220,10 @@ export class ScheduleService {
 
     async getContractById(contractId, query = {}) {
         try {
+            const cacheKey = makeCacheKey(`contract:one:${contractId}`, query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { status, work_date } = query;
 
             const contract = await this.ScheduleContract.findById(contractId)
@@ -303,7 +313,7 @@ export class ScheduleService {
                 by_week[weekKey].by_weekday = sortedByWeekday;
             }
 
-            return {
+            const contractResponse = {
                 contract: {
                     _id:        contract._id,
                     status:     contract.status,
@@ -332,6 +342,8 @@ export class ScheduleService {
                 total_schedules: schedules.length,
                 by_week,
             };
+            await cache.set(cacheKey, contractResponse, 120);
+            return contractResponse;
 
         } catch (error) {
             console.log("Error while fetching contract by ID:", error);
@@ -416,6 +428,11 @@ export class ScheduleService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await Promise.all([
+                cache.delByPattern(`contract:one:${contractId}:*`),
+                cache.delByPattern("schedule:my:*"),
+                cache.delByPattern("schedule:pending:*"),
+            ]);
             return {
                 contract: updatedContract,
                 updated_count:  pendingSchedules.length,
@@ -469,6 +486,7 @@ export class ScheduleService {
 
             const shift = await this.Shift.create({ work_day, shift_type, begin_time, end_time, required_staff });
 
+            await cache.delByPattern("shift:list:*");
             return shift;
 
         } catch (error) {
@@ -479,6 +497,10 @@ export class ScheduleService {
     
     async getAllShifts(query = {}) {
         try {
+            const cacheKey = makeCacheKey("shift:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { work_day, shift_type } = query;
 
             const filter = {};
@@ -506,7 +528,9 @@ export class ScheduleService {
                 return a.begin_time.localeCompare(b.begin_time);
             });
 
-            return { count: shifts.length, shifts };
+            const shiftsResponse = { count: shifts.length, shifts };
+            await cache.set(cacheKey, shiftsResponse, 600);
+            return shiftsResponse;
 
         } catch (error) {
             console.log("Error while fetching shifts:", error);
@@ -516,11 +540,16 @@ export class ScheduleService {
 
     async getShiftById(shiftId) {
         try {
+            const cacheKey = `shift:one:${shiftId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const shift = await this.Shift.findById(shiftId)
                 .select("-__v -created_at -updated_at");
 
             if (!shift) throw new Error("Không tìm thấy ca làm.");
 
+            await cache.set(cacheKey, shift, 600);
             return shift;
 
         } catch (error) {
@@ -590,6 +619,10 @@ export class ScheduleService {
                 { new: true, runValidators: true }
             );
 
+            await Promise.all([
+                cache.del(`shift:one:${shiftId}`),
+                cache.delByPattern("shift:list:*"),
+            ]);
             return updated;
 
         } catch (error) {
@@ -628,6 +661,10 @@ export class ScheduleService {
 
             await this.Shift.findByIdAndDelete(shiftId);
 
+            await Promise.all([
+                cache.del(`shift:one:${shiftId}`),
+                cache.delByPattern("shift:list:*"),
+            ]);
             return { success: true };
 
         } catch (error) {
@@ -779,6 +816,10 @@ export class ScheduleService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await Promise.all([
+                cache.delByPattern("schedule:my:*"),
+                cache.delByPattern("schedule:pending:*"),
+            ]);
             return { contract, schedules: createdSchedules };
 
         } catch (err) {
@@ -789,6 +830,10 @@ export class ScheduleService {
 
     async viewMySchedule(employeeUserId, query = {}) {
         try {
+            const cacheKey = makeCacheKey(`schedule:my:${employeeUserId}`, query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { work_date, status, shift_type } = query;
 
             const employee = await this.Employee.findOne({ user_id: employeeUserId });
@@ -903,12 +948,14 @@ export class ScheduleService {
                 by_week[weekKey].by_weekday = sortedByWeekday;
             }
 
-            return {
+            const myScheduleResponse = {
                 contract,
                 total_weeks: Object.keys(by_week).length,
                 total_schedules: schedules.length,
                 by_week,
             };
+            await cache.set(cacheKey, myScheduleResponse, 120);
+            return myScheduleResponse;
 
         } catch (error) {
             console.log("Error while employee fetching schedule:", error);
@@ -974,6 +1021,10 @@ export class ScheduleService {
                 { new: true }
             );
 
+            await Promise.all([
+                cache.del(`schedule:one:${scheduleId}`),
+                cache.delByPattern("schedule:my:*"),
+            ]);
             return updated;
 
         } catch (error) {
@@ -1037,7 +1088,12 @@ export class ScheduleService {
                 console.error("Error sending notification:", notifError);
             }
 
-            return { 
+            await Promise.all([
+                cache.del(`schedule:one:${scheduleId}`),
+                cache.delByPattern("schedule:my:*"),
+                cache.delByPattern("schedule:pending:*"),
+            ]);
+            return {
                 success: true,
                 has_contract: !!schedule.contract_id,
                 contract_id: schedule.contract_id,
@@ -1126,6 +1182,11 @@ export class ScheduleService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await Promise.all([
+                cache.delByPattern(`contract:one:${contractId}:*`),
+                cache.delByPattern("schedule:my:*"),
+                cache.delByPattern("schedule:pending:*"),
+            ]);
             return {
                 success: true,
                 cancelled_schedules_count: cancelledCount,
@@ -1311,6 +1372,10 @@ export class ScheduleService {
     // views pending schedules on manager's schedule management screen
     async getPendingScheduleRequests(query = {}) {
         try {
+            const cacheKey = makeCacheKey("schedule:pending", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { role } = query;
 
             const contractFilter = { status: "pending" };
@@ -1370,10 +1435,9 @@ export class ScheduleService {
                 })
             );
 
-            return {
-                count: requests.length,
-                requests,
-            };
+            const pendingResponse = { count: requests.length, requests };
+            await cache.set(cacheKey, pendingResponse, 60);
+            return pendingResponse;
 
         } catch (error) {
             console.log("Error while fetching pending schedule requests:", error);

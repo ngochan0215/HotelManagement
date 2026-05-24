@@ -1,5 +1,6 @@
 ﻿import mongoose from 'mongoose';
 import { CUSTOMER_EVENTS } from '../../../shared/events/customerEvents.js';
+import { cache, makeCacheKey } from '../../../shared/utils/cache.js';
 
 export class DiscountService {
     constructor({ Discount, eventBus }) {
@@ -48,6 +49,7 @@ export class DiscountService {
                 status
             });
 
+            await cache.delByPattern("discount:list:*");
             return newDiscount;
 
         } catch (err) {
@@ -58,7 +60,11 @@ export class DiscountService {
 
     async getAllDiscounts(query = {}) {
         try {
-            const { status, type, name, min_order_value, date, day, hour, 
+            const cacheKey = makeCacheKey("discount:list", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
+            const { status, type, name, min_order_value, date, day, hour,
                 page = 1, limit = 10 } = query;
 
             const filter = {};
@@ -103,6 +109,7 @@ export class DiscountService {
                 .sort({ priority: -1, created_at: -1 })
                 .lean();
 
+            await cache.set(cacheKey, discounts, 300);
             return discounts;
 
         } catch (err) {
@@ -113,12 +120,18 @@ export class DiscountService {
 
     async getDiscountById (discountId) {
         try {
+            const cacheKey = `discount:one:${discountId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const discount = await this.Discount.findById(discountId)
                 .select("-__v -created_at -updated_at");
-            
+
             if (!discount) {
                 throw new Error("Không tìm thấy discount");
             }
+
+            await cache.set(cacheKey, discount, 300);
             return discount;
 
         } catch (err) {
@@ -140,6 +153,10 @@ export class DiscountService {
             }
 
             await this.Discount.findByIdAndDelete(discountId);
+            await Promise.all([
+                cache.del(`discount:one:${discountId}`),
+                cache.delByPattern("discount:list:*"),
+            ]);
             return { success: true };
 
         } catch (err) {
@@ -157,6 +174,10 @@ export class DiscountService {
             discount.is_active = false;
             discount.status = "finished";
             await discount.save();
+            await Promise.all([
+                cache.del(`discount:one:${discountId}`),
+                cache.delByPattern("discount:list:*"),
+            ]);
 
             return { success: true };
 
@@ -242,9 +263,13 @@ export class DiscountService {
             }
 
             await discount.save();
+            await Promise.all([
+                cache.del(`discount:one:${discountId}`),
+                cache.delByPattern("discount:list:*"),
+            ]);
             return discount;
 
-        } catch (err) { 
+        } catch (err) {
             console.log("Error updating discount:", err);
             throw err;
         }

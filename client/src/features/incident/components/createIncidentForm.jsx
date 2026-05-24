@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { FiMapPin, FiCalendar, FiPackage } from "react-icons/fi";
+import Toast from "../../../components/toast.jsx";
 import { incidentApi } from "../../api/incidentApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
 import { roomApi } from "../../api/roomApi.js";
@@ -109,6 +110,7 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
   const [employees, setEmployees] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
   
   // State cho booking/phòng của khách hàng và thiết bị
   const [customerBookings, setCustomerBookings] = useState([]);
@@ -300,16 +302,16 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.description || !form.type || !form.severity) {
-      alert("Vui lòng điền đầy đủ thông tin mô tả, loại và mức độ.");
+      setToast({ message: "Vui lòng điền đầy đủ thông tin mô tả, loại và mức độ.", type: "error" });
       return;
     }
     if (form.caused_by !== "other" && !form.causer_id) {
-      alert("Vui lòng chọn người gây ra sự cố.");
+      setToast({ message: "Vui lòng chọn người gây ra sự cố.", type: "error" });
       return;
     }
     if (form.caused_by !== "other" && form.causer_id.toString().startsWith("temp_")) {
-        alert("Lỗi dữ liệu hệ thống: Không lấy được ID khách hàng. Vui lòng báo bộ phận kỹ thuật (Backend) sửa API getAllCustomers.");
-        return;
+      setToast({ message: "Lỗi dữ liệu hệ thống: Không lấy được ID khách hàng. Vui lòng báo bộ phận kỹ thuật sửa API getAllCustomers.", type: "error" });
+      return;
     }
 
     setLoading(true);
@@ -326,13 +328,15 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
       onSuccess?.();
       onClose();
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.message || err.message));
+      setToast({ message: "Lỗi: " + (err.response?.data?.message || err.message), type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white w-full max-w-2xl shadow-lg border border-gray-200 flex flex-col max-h-[90vh]">
 
@@ -592,5 +596,6 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
