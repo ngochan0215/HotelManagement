@@ -275,150 +275,74 @@ export class DiscountService {
         }
     };
 
-    // async checkDiscountAvailability(discount, customerId, orderValue) {
-    //     const now = new Date();
-        
-    //     if (!discount.is_active) 
-    //         return { available: false, reason: "Khuyến mãi chưa được kích hoạt" };
-    //     if (now < discount.begin_date) 
-    //         return { available: false, reason: "Khuyến mãi chưa bắt đầu" };
-    //     if (now > discount.end_date) 
-    //         return { available: false, reason: "Khuyến mãi đã kết thúc" };
-        
-    //     const conditions = discount.conditions || {};
-        
-    //     // if (conditions.rule_type === "FIRST_BOOKING") {
-    //     //     const hasPreviousBooking = await this.Booking.exists({
-    //     //         customer_id: customerId,
-    //     //         status: { $in: ["confirmed", "in_progress", "completed"] }
-    //     //     });
-    //     //     if (hasPreviousBooking) {
-    //     //         throw new Error("Chỉ áp dụng cho khách hàng chưa có đơn hàng nào trước đây");
-    //     //     }
-    //     // }
-        
-    //     if (conditions.rule_type === "MIN_ORDER_VALUE" && conditions.min_order_value) {
-    //         if (orderValue < conditions.min_order_value) {
-    //             throw new Error(`Chỉ áp dụng cho đơn hàng có giá trị tối thiểu ${conditions.min_order_value.toLocaleString("vi-VN")}đ`);
-    //         }
-    //     }
-        
-    //     if (conditions.customer_tiers && conditions.customer_tiers.length > 0) {
-    //         const reply = await this.eventBus.safeRequest(
-    //             CUSTOMER_EVENTS.CHECK_EXISTS,
-    //             { customerId }
-    //         );
-    //         if (!reply.success) {
-    //             throw new Error(reply.message);
-    //         }
+async getAvailableDiscounts(query = {}) {
+        try {
+            const { customer_id, order_value } = query;
 
-    //         const customer = reply.customer;
-    //         const customerTier = this.mapLoyaltyToTier(customer.loyalty || "bronze", customer.booking_count || 0);
+            if (!customer_id) {
+                const err = new Error("Thiếu customer_id");
+                err.status = 400;
+                throw err;
+            }
 
-    //         if (!conditions.customer_tiers.includes(customerTier)) {
-    //             const tierNames = { NEW: "Mới", LOYAL: "Thân thiết", VIP: "VIP" };
-    //             const allowedTiers = conditions.customer_tiers.map(t => tierNames[t] || t).join(", ");
-    //             throw new Error(`Chỉ áp dụng cho khách hàng hạng: ${allowedTiers}`);
-    //         }
-    //     }
-        
-    //     if (conditions.days_of_week && conditions.days_of_week.length > 0) {
-    //         const dayOfWeek = now.getDay();
-    //         if (!conditions.days_of_week.includes(dayOfWeek)) {
-    //             const dayNames = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
-    //             const validDays = conditions.days_of_week.map(d => dayNames[d]).join(", ");
-    //             throw new Error(`Chỉ áp dụng vào các ngày: ${validDays}`);
-    //         }
-    //     }
-        
-    //     if (conditions.hours_range) {
-    //         const { from, to } = conditions.hours_range;
-    //         const hour = now.getHours();
-    //         if (hour < from || hour > to) {
-    //             throw new Error(`Chỉ áp dụng vào khung giờ: ${from}:00 - ${to}:00`);
-    //         }
-    //     }
-        
-    //     // Kiểm tra task_ids (nếu có, có thể bỏ qua hoặc check sau)
-    //     // task_ids thường dùng cho SEASONAL, có thể check sau nếu cần
-        
-    //     return { available: true };
-    // };
+            const orderValue = order_value ? parseFloat(order_value) : 0;
+            const now = new Date();
 
-    // async getAvailableDiscounts(query = {}) {
-    //     try {
-    //         const { customer_id, order_value } = query;
-            
-    //         if (!customer_id) {
-    //             throw new Error("Thiếu customer_id");
-    //         }
-            
-    //         const orderValue = order_value ? parseFloat(order_value) : 0;
-    //         const now = new Date();
-            
-    //         const discounts = await this.Discount.find({
-    //             is_active: true,
-    //             begin_date: { $lte: now },
-    //             end_date: { $gte: now }
-    //         })
-    //             .select("-__v")
-    //             .sort({ priority: -1, created_at: -1 })
-    //             .lean();
-            
-    //         const discountsWithAvailability = await Promise.all(
-    //             discounts.map(async (discount) => {
-    //                 const availability = await this.checkDiscountAvailability( discount, customer_id, orderValue );
-                
-    //                 // calculate discount amount for display
-    //                 let discountAmount = 0;
-    //                 let discountText = "";
-                    
-    //                 if (availability.available && orderValue > 0) {
-    //                     if (discount.discount.type === "PERCENT") {
-    //                         discountAmount = Math.round(orderValue * discount.discount.value / 100);
-    //                         if (discount.discount.max_discount && discountAmount > discount.discount.max_discount) {
-    //                             discountAmount = discount.discount.max_discount;
-    //                         }
-    //                         discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
-    //                     } else {
-    //                         discountAmount = discount.discount.value;
-    //                         discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
-    //                     }
-    //                 } else {
-    //                     if (discount.discount.type === "PERCENT") {
-    //                         discountText = `Giảm ${discount.discount.value}%${discount.discount.max_discount ? ` (tối đa ${discount.discount.max_discount.toLocaleString("vi-VN")}đ)` : ""}`;
-    //                     } else {
-    //                         discountText = `Giảm ${discount.discount.value.toLocaleString("vi-VN")}đ`;
-    //                     }
-    //                 }
-                    
-    //                 return {
-    //                     id: discount._id.toString(),
-    //                     code: discount.code,
-    //                     name: discount.name,
-    //                     description: discount.description || "",
-    //                     discount_type: discount.discount.type,
-    //                     discount_value: discount.discount.value,
-    //                     max_discount: discount.discount.max_discount,
-    //                     discount_text: discountText,
-    //                     discount_amount: discountAmount,
-    //                     priority: discount.priority || 1,
-    //                     begin_date: discount.begin_date,
-    //                     end_date: discount.end_date,
-    //                     conditions: discount.conditions || {},
-    //                     is_available: availability.available,
-    //                     availability_reason: availability.reason || null
-    //                 };
-    //             })
-    //         );
-            
-    //         return discountsWithAvailability;
-            
-    //     } catch (err) {
-    //         console.error("Error getting available discounts:", err);
-    //         throw err;
-    //     }
-    // };
+            const discounts = await this.Discount.find({
+                is_active: true,
+                begin_date: { $lte: now },
+                end_date: { $gte: now }
+            })
+                .select("-__v")
+                .sort({ priority: -1, created_at: -1 })
+                .lean();
+
+            const discountsWithAvailability = discounts.map((discount) => {
+                const conditions = discount.conditions || {};
+                let isAvailable = this.checkDiscountConditions(discount, orderValue);
+                let availabilityReason = null;
+
+                if (!isAvailable) {
+                    const rule = conditions.rule_type;
+                    if (rule === "MIN_BOOKING_VALUE" && conditions.min_order_value) {
+                        availabilityReason = `Chỉ áp dụng cho đơn hàng từ ${conditions.min_order_value.toLocaleString("vi-VN")}đ`;
+                    } else if (rule === "SEASONAL") {
+                        availabilityReason = "Không áp dụng vào thời điểm này";
+                    } else {
+                        availabilityReason = "Không đáp ứng điều kiện khuyến mãi";
+                    }
+                }
+
+                const discountAmount = isAvailable && orderValue > 0
+                    ? this.calculateSavings(discount.discount, orderValue)
+                    : 0;
+
+                return {
+                    id: discount._id.toString(),
+                    code: discount.code || null,
+                    name: discount.name,
+                    description: discount.description || "",
+                    discount_type: discount.discount.type,
+                    discount_value: discount.discount.value,
+                    max_discount: discount.discount.max_discount || null,
+                    discount_text: this.formatDiscountText(discount.discount),
+                    discount_amount: discountAmount,
+                    priority: discount.priority || 1,
+                    begin_date: discount.begin_date,
+                    end_date: discount.end_date,
+                    conditions,
+                    is_available: isAvailable,
+                    availability_reason: availabilityReason,
+                };
+            });
+
+            return discountsWithAvailability;
+
+        } catch (err) {
+            console.error("Error getting available discounts:", err);
+            throw err;
+        }
+    };
 
     // called by booking service — returns top 2 discounts ranked by priority then savings
     

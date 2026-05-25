@@ -27,7 +27,7 @@ export const notifyGoodTickets = async () => {
     const managerIds = await getManagerIds();
 
     const expiredTickets = await GoodTicket.find({
-        status: ["waiting_confirm", "pending"],
+        status: { $in: ["waiting_confirm", "pending"] },
         import_date: { $lt: start },
     });
 
@@ -97,7 +97,7 @@ export const notifyServiceUsageTickets = async () => {
     const dueDetails = await UsageDetail.find({
         status: "pending",
         use_from: { $ne: null, $lte: now },
-        $or: [{ end_at: null }, { end_at: { $gte: now } }],
+        $or: [{ finish_at: null }, { finish_at: { $gte: now } }],
     }).select("_id ticket_id");
 
     const dueDetailIds = dueDetails.map((d) => d._id);

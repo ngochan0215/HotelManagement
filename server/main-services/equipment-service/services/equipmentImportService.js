@@ -367,7 +367,13 @@ export class EquipmentImportService {
         
                 await this.EquipmentCategory.updateOne(
                     { _id: item.category_id },
-                    { $inc: { storage_quantity: item.import_quantity } }
+                    { $inc: 
+                        { 
+                        
+                            storage_quantity: item.import_quantity,
+                            total_quantity: item.import_quantity 
+                        } 
+                    }
                 );
             }
         
@@ -386,7 +392,7 @@ export class EquipmentImportService {
     
     getOutOfStockCategories = async () => {
         try {
-            const outOfStockCategories = await this.EquipmentCategory.find({ storage_quantity: { $lte: 10 } })
+            const outOfStockCategories = await this.EquipmentCategory.find({ storage_quantity: { $lt: 10 } })
                 .select("_id name description unit price storage_quantity");
 
             return { categories: outOfStockCategories, count: outOfStockCategories.length };
@@ -429,7 +435,7 @@ export class EquipmentImportService {
                 });
             } else {
                 outOfStockCategories = await this.EquipmentCategory.find({
-                    storage_quantity: 0
+                    storage_quantity: { $lt: 10 }
                 });
     
                 if (outOfStockCategories.length === 0) {

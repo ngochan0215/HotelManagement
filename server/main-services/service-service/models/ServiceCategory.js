@@ -4,7 +4,9 @@ import mongoose from "mongoose";
 const ServiceCategorySchema = new mongoose.Schema(
     {
         name: { type: String, required: true },
+
         description: { type: String },
+        
         images: [ { type: String } ]
     },
     {

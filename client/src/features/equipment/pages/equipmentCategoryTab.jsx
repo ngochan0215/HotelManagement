@@ -27,7 +27,6 @@ export default function EquipmentCategoryTab() {
   // Auto create import ticket states
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [outOfStockCategories, setOutOfStockCategories] = useState([]);
-  const [allCategoriesForPreview, setAllCategoriesForPreview] = useState([]);
   const [previewItems, setPreviewItems] = useState([]);
   const [previewFormData, setPreviewFormData] = useState({
     import_date: "",
@@ -59,8 +58,14 @@ export default function EquipmentCategoryTab() {
       const cats = (catRes && Array.isArray(catRes.categories)) ? catRes.categories : [];
       const eqs = (eqRes && Array.isArray(eqRes.data)) ? eqRes.data : [];
 
+      console.log("Loaded categories:", cats);
+      console.log("Loaded equipments:", eqs);
+
       const processedCategories = cats.map(cat => {
-        const items = eqs.filter(e => e.category_id?._id === cat._id || e.category_id === cat._id);
+        const items = eqs.filter(e =>
+          (e.category_id?._id?.toString() === cat._id?.toString()) ||
+          (e.category_id?.toString() === cat._id?.toString())
+        );
         return {
           ...cat,
           total_count: cat.total_quantity || 0,
@@ -207,33 +212,28 @@ export default function EquipmentCategoryTab() {
   // Auto create import ticket handlers
   const handleOpenPreview = async () => {
     try {
-      const [outOfStockRes, allCatsRes] = await Promise.all([
-        equipmentApi.getOutOfStockCategories(),
-        equipmentApi.getAllCategories()
-      ]);
-      
-      if (outOfStockRes.success && outOfStockRes.categories && outOfStockRes.categories.length > 0) {
-        setOutOfStockCategories(outOfStockRes.categories);
-        setAllCategoriesForPreview(allCatsRes.categories || []);
-        
-        // Tạo preview items với giá trị mặc định
+      const res = await equipmentApi.getOutOfStockCategories();
+
+      if (res.success && res.categories && res.categories.length > 0) {
+        setOutOfStockCategories(res.categories);
+
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const formattedDate = tomorrow.toISOString().split('T')[0];
-        
-        const items = outOfStockRes.categories.map(cat => ({
+
+        const items = res.categories.map(cat => ({
           category_id: cat._id,
           category_name: cat.name,
           category_price: cat.price,
           import_quantity: previewFormData.default_quantity,
           import_price: Math.round(cat.price * previewFormData.default_price_percent)
         }));
-        
+
         setPreviewItems(items);
         setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
         setShowPreviewModal(true);
       } else {
-        setToast({ type: "info", message: "Không có thiết bị nào hết tồn kho (số lượng = 0)." });
+        setToast({ type: "info", message: "Tất cả danh mục thiết bị đều đủ số lượng trong kho (≥ 10)." });
       }
     } catch (error) {
       console.error("Error fetching out of stock categories:", error);
@@ -266,20 +266,12 @@ export default function EquipmentCategoryTab() {
       return;
     }
 
-    // Kiểm tra xem category đã có trong danh sách chưa
-    const existingIds = previewItems.map(item => item.category_id);
-    if (existingIds.includes(selectedCategoryToAdd)) {
-      setToast({ type: "info", message: "Thiết bị này đã có trong phiếu nhập!" });
-      return;
-    }
-
-    // Tìm category được chọn
-    const categoryToAdd = allCategoriesForPreview.find(cat => cat._id === selectedCategoryToAdd);
+    const categoryToAdd = outOfStockCategories.find(cat => cat._id === selectedCategoryToAdd);
     if (!categoryToAdd) {
       setToast({ type: "error", message: "Không tìm thấy danh mục được chọn!" });
       return;
     }
-    
+
     const newItem = {
       category_id: categoryToAdd._id,
       category_name: categoryToAdd.name,
@@ -287,14 +279,14 @@ export default function EquipmentCategoryTab() {
       import_quantity: previewFormData.default_quantity,
       import_price: Math.round(categoryToAdd.price * previewFormData.default_price_percent)
     };
-    
+
     setPreviewItems([...previewItems, newItem]);
-    setSelectedCategoryToAdd(""); // Reset selection
+    setSelectedCategoryToAdd("");
   };
 
   const getAvailableCategoriesForAdd = () => {
     const existingIds = previewItems.map(item => item.category_id);
-    return allCategoriesForPreview.filter(cat => !existingIds.includes(cat._id));
+    return outOfStockCategories.filter(cat => !existingIds.includes(cat._id));
   };
 
   const handleConfirmCreate = async () => {

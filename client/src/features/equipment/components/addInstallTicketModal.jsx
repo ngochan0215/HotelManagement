@@ -87,9 +87,8 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
         try {
             let res;
             if (mode === 'install') {
-                // Chỉ lấy thiết bị khả dụng: in-stock, condition=new/good, room_id=null
-                // Lưu ý: Backend sẽ filter thêm, nhưng FE cũng nên filter để hiển thị chính xác
-                res = await equipmentApi.getAllEquipments({ status: 'in-stock' });
+                // Lấy toàn bộ thiết bị trong kho (không phân trang) để đảm bảo tất cả danh mục xuất hiện trong dropdown
+                res = await equipmentApi.getAllEquipments({ status: 'in-stock', limit: 1000 });
                 const eqs = (res.data || []).filter(eq =>
                     (eq.condition === 'new' || eq.condition === 'good') &&
                     !eq.room_id // room_id phải null
@@ -317,20 +316,12 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
       if (res.success && res.suggestions && res.suggestions.length > 0) {
         // Chuyển đổi suggestions thành items format
         const suggestedItems = res.suggestions.map(suggestion => {
-          // Tìm category_id trong dropdownOptions
           const option = dropdownOptions.find(opt => opt.value === suggestion.category_id);
-          if (option) {
-            // Sử dụng suggested_quantity (đã tính toán min(needed, available))
-            // Nhưng vẫn giới hạn theo stockMap nếu có
-            const maxQuantity = stockMap[suggestion.category_id] || suggestion.suggested_quantity || suggestion.needed_quantity;
-            const finalQuantity = Math.min(suggestion.suggested_quantity || suggestion.needed_quantity, maxQuantity);
-            
-            return {
-              id: suggestion.category_id,
-              quantity: finalQuantity
-            };
-          }
-          return null;
+          if (!option) return null;
+          return {
+            id: suggestion.category_id,
+            quantity: suggestion.suggested_quantity
+          };
         }).filter(item => item !== null);
 
         if (suggestedItems.length > 0) {

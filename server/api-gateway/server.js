@@ -111,7 +111,7 @@ app.use(
 );
 
 app.use(
-  "/service",
+  "/services",
   createProxyMiddleware({
     target: "http://service-service:3012",
     changeOrigin: true

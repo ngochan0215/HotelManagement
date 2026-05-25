@@ -95,8 +95,11 @@ export const equipmentApi = {
     return res.data;
   },
 
-  deleteImportTicket: async (id) => {
-    const res = await axios.delete(`${TICKETS_BASE}/import/${id}`, getAuthHeader());
+  deleteImportTicket: async (id, force = false) => {
+    const res = await axios.delete(`${TICKETS_BASE}/import/${id}`, {
+      ...getAuthHeader(),
+      params: force ? { force: "true" } : {}
+    });
     return res.data;
   },
 
@@ -113,10 +116,7 @@ export const equipmentApi = {
   },
 
   getSmartInstallSuggestions: async (room_id) => {
-    const res = await axios.get(`${TICKETS_BASE}/install/smart-suggestions`, {
-      ...getAuthHeader(),
-      params: { room_id }
-    });
+    const res = await axios.get(`${TICKETS_BASE}/install/smart-suggestions/${room_id}`, getAuthHeader());
     return res.data;
   },
 

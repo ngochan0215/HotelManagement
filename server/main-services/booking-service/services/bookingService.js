@@ -174,7 +174,7 @@ export class BookingService {
                 { $set: { status: "confirmed" } },
             );
 
-            console.log(`Booking ${booking_id} đã được xác nhận thành công.`);
+            console.log(`FUCK YOU: Booking ${booking_id} đã được xác nhận thành công.`);
             await Promise.all([
                 cache.del(`booking:one:${booking_id}`),
                 cache.delByPattern("booking:list:*"),
@@ -1583,7 +1583,7 @@ export class BookingService {
                 handled_by: userId || null,
             });
 
-            const details = await this.BookingDetail.find({ booking_id: bookingId }).lean();
+            const details = await this.BookingDetail.find({ booking_id: bookingId });
             const roomIds = details.map(bd => bd.room_id);
             
             const replyUpdateLog = await this.eventBus.safeRequest(

@@ -46,8 +46,8 @@ export default function EquipmentTicketTab() {
         equipmentApi.getAllInstallTickets()
       ]);
 
-      console.log("install tickets: ", resInstall);
-      console.log("import tickets: ", resImport);
+      // console.log("install tickets: ", resInstall);
+      // console.log("import tickets: ", resImport);
 
       setImports(resImport.tickets || []);
       setInstalls(resInstall.installs || []);
@@ -147,15 +147,23 @@ export default function EquipmentTicketTab() {
     });
   };
 
-  const handleDeleteImport = (id) => {
+  const handleDeleteImport = (ticket) => {
+    const detailCount = ticket.import_details?.length || 0;
+    const hasDetails = detailCount > 0;
+    const detailList = hasDetails
+      ? ticket.import_details.map(d => `${d.category_id?.name || "Không xác định"} (x${d.import_quantity})`).join(", ")
+      : "";
+
     setConfirmState({
       open: true,
       title: "Hủy phiếu nhập",
-      message: "Bạn có chắc chắn muốn hủy phiếu nhập này?",
+      message: hasDetails
+        ? `Phiếu này có ${detailCount} chi tiết nhập. Xác nhận sẽ xóa toàn bộ các chi tiết này. Bạn có chắc chắn muốn tiếp tục?`
+        : "Bạn có chắc chắn muốn hủy phiếu nhập này?",
       onConfirm: async () => {
         setConfirmState(s => ({ ...s, open: false }));
         try {
-          await equipmentApi.deleteImportTicket(id);
+          await equipmentApi.deleteImportTicket(ticket._id, hasDetails);
           setToast({ type: "success", message: "Đã hủy phiếu nhập thành công!" });
           fetchTickets();
         } catch (err) {
@@ -382,22 +390,12 @@ export default function EquipmentTicketTab() {
         />
       )}
       {showUpdateImportModal && selectedImportTicket && (
-        <AddImportTicketModal 
+        <AddImportTicketModal
           ticket={selectedImportTicket}
           onClose={() => {
             setShowUpdateImportModal(false);
             setSelectedImportTicket(null);
-          }} 
-          onSuccess={fetchTickets}
-        />
-      )}
-      {showUpdateImportModal && selectedImportTicket && (
-        <AddImportTicketModal 
-          ticket={selectedImportTicket}
-          onClose={() => {
-            setShowUpdateImportModal(false);
-            setSelectedImportTicket(null);
-          }} 
+          }}
           onSuccess={fetchTickets}
         />
       )}
@@ -697,8 +695,8 @@ export default function EquipmentTicketTab() {
                                                 <FiEdit className="w-3 h-3" />
                                                 Cập nhật
                                             </button>
-                                            <button 
-                                                onClick={() => handleDeleteImport(item._id)} 
+                                            <button
+                                                onClick={() => handleDeleteImport(item)}
                                                 className="text-red-600 hover:text-red-800 font-bold text-xs border border-red-200 px-2 py-1 rounded hover:bg-red-50 transition flex items-center gap-1"
                                             >
                                                 <FiTrash2 className="w-3 h-3" />

@@ -215,9 +215,6 @@ services:
     environment:
       DB_URL: ${SERVICE_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
-      REDIS_URL: ${REDIS_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      FOOD_CATEGORY_ID: ${FOOD_CATEGORY_ID}
     volumes:
       - ./shared:/shared
       - ./main-services/service-service:/app

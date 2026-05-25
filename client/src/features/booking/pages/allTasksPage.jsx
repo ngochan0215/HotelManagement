@@ -5,6 +5,7 @@ import {
   FiMapPin, FiInfo, FiUser, FiClock, FiTool, FiAlertTriangle, FiPackage, FiTruck, FiCheckSquare, FiUserPlus, FiCheck
 } from 'react-icons/fi';
 import { bookingApi } from '../../api/bookingApi.js';
+import { equipmentApi } from '../../api/equipmentApi.js';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import Sidebar from "../../../components/sidebar.jsx";
@@ -71,6 +72,15 @@ const STATUS_MAP = {
   closed: { label: 'Đã đóng', color: 'bg-gray-100 text-gray-700' },
 
   cancelled: { label: 'Đã hủy', color: 'bg-gray-200 text-gray-600' }
+};
+
+const getStatusInfo = (task) => {
+  if (task.task_type === 'install' && task.status === 'waiting_confirm') {
+    return task.completed_at
+      ? { label: 'Chờ duyệt', color: 'bg-orange-100 text-orange-700' }
+      : { label: 'Đang thực hiện', color: 'bg-blue-100 text-blue-700' };
+  }
+  return STATUS_MAP[task.status] || { label: task.status, color: 'bg-gray-100 text-gray-600' };
 };
 
 export default function AllTasksPage() {
@@ -312,7 +322,7 @@ export default function AllTasksPage() {
                           <tr><td colSpan="6" className="py-20 text-center text-slate-400 font-bold opacity-50">Không có dữ liệu</td></tr>
                       ) : currentTasks.map((task) => {
                           const typeInfo = TASK_TYPES[task.task_type] || TASK_TYPES.cleaning;
-                          const statusInfo = STATUS_MAP[task.status] || { label: task.status, color: 'bg-gray-100 text-gray-600' };
+                          const statusInfo = getStatusInfo(task);
 
                           return (
                             <tr key={task._id} className="hover:bg-slate-50 transition-colors group">
@@ -377,6 +387,29 @@ export default function AllTasksPage() {
                                         </button>
                                       )}
                                     </>
+                                  )}
+                                  {task.task_type === 'install' && task.status === 'waiting_confirm' && task.completed_at && isManager && (
+                                    <button
+                                      onClick={() => setConfirmState({
+                                        open: true,
+                                        title: "Xác nhận hoàn tất lắp đặt",
+                                        message: "Xác nhận nghiệm thu phiếu lắp đặt/tháo dỡ thiết bị này?",
+                                        onConfirm: async () => {
+                                          setConfirmState(s => ({ ...s, open: false }));
+                                          try {
+                                            await equipmentApi.confirmInstallTicket(task._id);
+                                            setToast({ type: "success", message: "Xác nhận nghiệm thu thành công!" });
+                                            fetchTasks();
+                                          } catch (error) {
+                                            setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+                                          }
+                                        }
+                                      })}
+                                      className="p-2 bg-green-50 rounded-xl text-green-600 hover:bg-green-100 transition-all shadow-sm active:scale-90"
+                                      title="Xác nhận nghiệm thu lắp đặt"
+                                    >
+                                      <FiCheck size={16} />
+                                    </button>
                                   )}
                                   <button onClick={() => handleViewDetail(task)} className="p-3 bg-slate-100 rounded-2xl text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-90">
                                     <FiEye size={18} />
@@ -449,6 +482,8 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
   const handleConfirmCleaning = () => {
     setLocalConfirm({
       open: true,
+      title: "Xác nhận hoàn tất",
+      message: "Xác nhận hoàn tất dọn dẹp cho phòng này?",
       onConfirm: async () => {
         setLocalConfirm(s => ({ ...s, open: false }));
         setConfirming(true);
@@ -468,9 +503,10 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
 
   const needsAssignment = task.task_type === 'cleaning' && (!task.handled_by || (typeof task.handled_by === "object" && !task.handled_by?._id));
   const canConfirm = task.task_type === 'cleaning' && task.status === 'completed' && isManager;
+  const canConfirmInstall = task.task_type === 'install' && task.status === 'waiting_confirm' && !!task.completed_at && isManager;
 
   const typeConfig = TASK_TYPES[task.task_type] || TASK_TYPES.cleaning;
-  const statusConfig = STATUS_MAP[task.status] || { label: task.status, color: 'bg-gray-100' };
+  const statusConfig = getStatusInfo(task);
   const renderSpecificDetails = () => {
     if (task.task_type === 'install') {
         const isInstall = task.type === 'install';
@@ -736,6 +772,35 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
               )}
             </>
           )}
+          {canConfirmInstall && (
+            <button
+              onClick={() => {
+                setLocalConfirm({
+                  open: true,
+                  title: "Xác nhận nghiệm thu",
+                  message: "Xác nhận nghiệm thu phiếu lắp đặt/tháo dỡ thiết bị này?",
+                  onConfirm: async () => {
+                    setLocalConfirm(s => ({ ...s, open: false }));
+                    setConfirming(true);
+                    try {
+                      await equipmentApi.confirmInstallTicket(task._id);
+                      setToast({ type: "success", message: "Xác nhận nghiệm thu thành công!" });
+                      onRefresh();
+                      onClose();
+                    } catch (error) {
+                      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
+                    } finally {
+                      setConfirming(false);
+                    }
+                  }
+                });
+              }}
+              disabled={confirming}
+              className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <FiCheckCircle size={16}/> {confirming ? 'Đang xác nhận...' : 'Nghiệm thu lắp đặt'}
+            </button>
+          )}
           <button onClick={onClose} className="w-full py-3 bg-white text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:text-slate-800 hover:bg-slate-100 transition-all border border-slate-200">
             Đóng cửa sổ
           </button>
@@ -743,8 +808,8 @@ function TaskDetailModal({ task, onClose, onRefresh, isManager, onAssignCleaning
       </div>
       <ConfirmModal
         open={localConfirm.open}
-        title="Xác nhận hoàn tất"
-        message="Xác nhận hoàn tất dọn dẹp cho phòng này?"
+        title={localConfirm.title || "Xác nhận"}
+        message={localConfirm.message || "Bạn có chắc chắn muốn thực hiện thao tác này?"}
         confirmText="Xác nhận"
         cancelText="Hủy"
         onConfirm={localConfirm.onConfirm}

@@ -8,108 +8,163 @@ const getAuthHeader = (isMultipart = false) => {
   return {
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": isMultipart
-        ? "multipart/form-data"
-        : "application/json",
+      "Content-Type": isMultipart ? "multipart/form-data" : "application/json",
     },
   };
 };
 
 export const serviceApi = {
+  // --- SERVICES ---
+
   getAllServices: async (params) => {
-    const res = await axios.get(`${BASE_URL}/all`, {
-      params,
-      ...getAuthHeader(),
-    });
+    const res = await axios.get(`${BASE_URL}/`, { params, ...getAuthHeader() });
+    return res.data;
+  },
+
+  getServiceById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
   },
 
   createService: async (formData) => {
-    const res = await axios.post(`${BASE_URL}/add`, formData, getAuthHeader(true));
+    const res = await axios.post(`${BASE_URL}/`, formData, getAuthHeader(true));
     return res.data;
   },
 
   updateService: async (id, formData) => {
-    const res = await axios.patch(`${BASE_URL}/update/${id}`, formData, getAuthHeader(true));
+    const res = await axios.patch(`${BASE_URL}/${id}`, formData, getAuthHeader(true));
     return res.data;
   },
 
   deleteService: async (id) => {
-    const res = await axios.delete(`${BASE_URL}/delete/${id}`, getAuthHeader());
+    const res = await axios.delete(`${BASE_URL}/${id}`, getAuthHeader());
     return res.data;
   },
 
-  getAllCategories: async () => {
-    const res = await axios.get(`${BASE_URL}/category/all`, getAuthHeader());
+  // --- SERVICE CATEGORIES ---
+
+  getAllCategories: async (params) => {
+    const res = await axios.get(`${BASE_URL}/categories`, { params, ...getAuthHeader() });
+    return res.data;
+  },
+
+  getServicesByCategoryId: async (id) => {
+    const res = await axios.get(`${BASE_URL}/categories/${id}`, getAuthHeader());
     return res.data;
   },
 
   createCategory: async (formData) => {
-    const res = await axios.post(`${BASE_URL}/category/add`, formData, getAuthHeader(true));
+    const res = await axios.post(`${BASE_URL}/categories`, formData, getAuthHeader(true));
     return res.data;
   },
 
   updateCategory: async (id, formData) => {
-    const res = await axios.patch(`${BASE_URL}/category/update/${id}`, formData, getAuthHeader(true));
+    const res = await axios.patch(`${BASE_URL}/categories/${id}`, formData, getAuthHeader(true));
     return res.data;
   },
 
-  deleteCategory: async (id) => {
-    const res = await axios.delete(`${BASE_URL}/category/delete/${id}`, getAuthHeader());
+  deleteCategory: async (id, force = false) => {
+    const res = await axios.delete(`${BASE_URL}/categories/${id}`, {
+      ...getAuthHeader(),
+      params: force ? { force: "true" } : {},
+    });
     return res.data;
   },
 
-    getOutOfStockServices: async () => {
-      const res = await axios.get(`${BASE_URL}/import/out-of-stock`, getAuthHeader());
-      return res.data;
-    },
-    createGoodTicket: async (data) => {
-      const res = await axios.post(`${BASE_URL}/import/add`, data, getAuthHeader());
-      return res.data;
-    },
-    autoCreateGoodTicket: async (data = {}) => {
-      const res = await axios.post(`${BASE_URL}/import/auto-create`, data, getAuthHeader());
-      return res.data;
-    },
-    getAllGoodTickets: async () => {
-      const res = await axios.get(`${BASE_URL}/import/all`, getAuthHeader());
-      return res.data;
-    },
-    confirmGoodTicket: async (id) => {
-      const res = await axios.post(`${BASE_URL}/import/${id}/confirm`, {}, getAuthHeader());
-      return res.data;
-    },
+  // --- IMPORT TICKETS (GOOD TICKETS) ---
 
-    getAllServiceUsage: async (params = {}) => {
-      const res = await axios.get(`${BASE_URL}/usage/all`, { ...getAuthHeader(), params });
-      return res.data;
-    },
-    createServiceUsage: async (data) => {
-      const res = await axios.post(`${BASE_URL}/usage/add`, data, getAuthHeader());
-      return res.data;
-    },
-    confirmServiceUsage: async (id) => {
-      const res = await axios.post(`${BASE_URL}/usage/${id}/confirm`, {}, getAuthHeader());
-      return res.data;
-    },
-    cancelServiceUsage: async (id) => {
-      const res = await axios.post(`${BASE_URL}/usage/${id}/cancel`, {}, getAuthHeader());
-      return res.data;
-    },
-    getServiceUsageById: async (id) => {
-      const res = await axios.get(`${BASE_URL}/usage/${id}`, getAuthHeader());
-      return res.data;
-    },
-    updateServiceUsage: async (id, data) => {
-      const res = await axios.patch(`${BASE_URL}/usage/${id}/update`, data, getAuthHeader());
-      return res.data;
-    },
-    updateGoodTicket: async (id, data) => {
-      const res = await axios.patch(`${BASE_URL}/import/${id}`, data, getAuthHeader());
-      return res.data;
-    },
-    deleteGoodTicket: async (id) => {
-      const res = await axios.delete(`${BASE_URL}/import/${id}`, getAuthHeader());
-      return res.data;
-    },
+  getAllGoodTickets: async (params) => {
+    const res = await axios.get(`${BASE_URL}/import-tickets`, { params, ...getAuthHeader() });
+    return res.data;
+  },
+
+  getGoodTicketById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/import-tickets/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  getOutOfStockServices: async () => {
+    const res = await axios.get(`${BASE_URL}/import-tickets/out-of-stock`, getAuthHeader());
+    return res.data;
+  },
+
+  createGoodTicket: async (data) => {
+    const res = await axios.post(`${BASE_URL}/import-tickets`, data, getAuthHeader());
+    return res.data;
+  },
+
+  autoCreateGoodTicket: async (data = {}) => {
+    const res = await axios.post(`${BASE_URL}/import-tickets/auto-create`, data, getAuthHeader());
+    return res.data;
+  },
+
+  updateGoodTicket: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/import-tickets/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  deleteGoodTicket: async (id, force = false) => {
+    const res = await axios.delete(`${BASE_URL}/import-tickets/${id}`, {
+      ...getAuthHeader(),
+      params: force ? { force: "true" } : {},
+    });
+    return res.data;
+  },
+
+  confirmGoodTicket: async (id) => {
+    const res = await axios.post(`${BASE_URL}/import-tickets/${id}/confirm`, {}, getAuthHeader());
+    return res.data;
+  },
+
+  // --- SERVICE USAGE TICKETS ---
+
+  getAllServiceUsage: async (params = {}) => {
+    const res = await axios.get(`${BASE_URL}/usage-tickets/all`, { ...getAuthHeader(), params });
+    return res.data;
+  },
+
+  getServiceUsageById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/usage-tickets/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  createServiceUsage: async (data) => {
+    const res = await axios.post(`${BASE_URL}/usage-tickets`, data, getAuthHeader());
+    return res.data;
+  },
+
+  updateServiceUsage: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/usage-tickets/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  deleteServiceUsage: async (id, force = false) => {
+    const res = await axios.delete(`${BASE_URL}/usage-tickets/${id}`, {
+      ...getAuthHeader(),
+      params: force ? { force: "true" } : {},
+    });
+    return res.data;
+  },
+
+  confirmServiceUsage: async (id) => {
+    const res = await axios.post(`${BASE_URL}/usage-tickets/${id}/confirm`, {}, getAuthHeader());
+    return res.data;
+  },
+
+  cancelServiceUsage: async (id) => {
+    const res = await axios.post(`${BASE_URL}/usage-tickets/${id}/cancel`, {}, getAuthHeader());
+    return res.data;
+  },
+
+  // --- USAGE DETAILS ---
+
+  confirmUsageDetail: async (id) => {
+    const res = await axios.post(`${BASE_URL}/usage-details/${id}/confirm`, {}, getAuthHeader());
+    return res.data;
+  },
+
+  cancelUsageDetail: async (id) => {
+    const res = await axios.post(`${BASE_URL}/usage-details/${id}/cancel`, {}, getAuthHeader());
+    return res.data;
+  },
 };
