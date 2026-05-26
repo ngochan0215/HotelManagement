@@ -31,7 +31,8 @@ export default function ServiceTicketTab() {
   const [editingUsageId, setEditingUsageId] = useState(null);
   const [editingImportId, setEditingImportId] = useState(null);
 
-  const isManager = (user?.role || localStorage.getItem("role") || "").toLowerCase() === "manager";
+  const userRole = (user?.role || localStorage.getItem("role") || "").toLowerCase();
+  const isManager = userRole === "manager" || userRole === "admin";
   const [toast, setToast] = useState(null);
   const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
@@ -91,101 +92,6 @@ export default function ServiceTicketTab() {
   const indexOfFirstImport = indexOfLastImport - itemsPerPage;
   const currentImports = filteredImports.slice(indexOfFirstImport, indexOfLastImport);
   const totalImportPages = Math.ceil(filteredImports.length / itemsPerPage);
-
-  // Auto create import ticket handlers
-  const handleOpenPreview = async () => {
-    try {
-      const res = await serviceApi.getOutOfStockServices();
-      if (res.success && res.services && res.services.length > 0) {
-        setOutOfStockServices(res.services);
-        
-        // Tạo preview items với giá trị mặc định
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const formattedDate = tomorrow.toISOString().split('T')[0];
-        
-        const items = res.services.map(service => ({
-          service_id: service._id,
-          service_name: service.name,
-          service_price: service.price,
-          service_unit: service.unit,
-          import_quantity: previewFormData.default_quantity,
-          import_price: Math.round(service.price * previewFormData.default_price_percent)
-        }));
-        
-        setPreviewItems(items);
-        setPreviewFormData(prev => ({ ...prev, import_date: formattedDate }));
-        setShowPreviewModal(true);
-      } else {
-        setToast({ type: "info", message: "Không có sản phẩm nào hết tồn kho (số lượng = 0)." });
-      }
-    } catch (error) {
-      console.error("Error fetching out of stock services:", error);
-      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
-    }
-  };
-
-  const handleUpdatePreviewItem = (index, field, value) => {
-    const updated = [...previewItems];
-    if (field === 'import_quantity') {
-      updated[index].import_quantity = parseInt(value) || 0;
-    } else if (field === 'import_price') {
-      updated[index].import_price = parseInt(value) || 0;
-    }
-    setPreviewItems(updated);
-  };
-
-  const handleConfirmCreate = async () => {
-    if (!previewFormData.import_date) {
-      setToast({ type: "error", message: "Vui lòng chọn ngày nhập!" });
-      return;
-    }
-
-    if (previewItems.length === 0) {
-      setToast({ type: "error", message: "Không có sản phẩm nào để tạo phiếu nhập!" });
-      return;
-    }
-
-    for (let i = 0; i < previewItems.length; i++) {
-      const item = previewItems[i];
-      if (!item.import_quantity || item.import_quantity <= 0) {
-        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Số lượng nhập phải > 0` });
-        return;
-      }
-      if (!item.import_price || item.import_price <= 0) {
-        setToast({ type: "error", message: `Sản phẩm "${item.service_name}": Giá nhập phải > 0` });
-        return;
-      }
-    }
-
-    setCreating(true);
-    try {
-      const goods_list = previewItems.map(item => ({
-        service_id: item.service_id,
-        import_quantity: item.import_quantity,
-        import_price: item.import_price
-      }));
-
-      const res = await serviceApi.autoCreateGoodTicket({
-        import_date: previewFormData.import_date,
-        goods_list: goods_list
-      });
-
-      if (res.success) {
-        setToast({ type: "success", message: res.message || `Đã tạo phiếu nhập thành công cho ${res.items_count || 0} loại sản phẩm!` });
-        setShowPreviewModal(false);
-        setPreviewItems([]);
-        fetchTickets();
-      } else {
-        setToast({ type: "error", message: "Lỗi: " + (res.message || "Không thể tạo phiếu nhập") });
-      }
-    } catch (error) {
-      console.error("Error creating import ticket:", error);
-      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const renderPagination = (currentPage, totalPages, setPage) => {
     if (totalPages <= 1) return null;

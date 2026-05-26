@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { FiX, FiSave, FiImage } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
+import Toast from "../../../components/toast.jsx";
 
 export default function ServiceCategoryModal({ isOpen, onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previewImages, setPreviewImages] = useState([]);
+  const [toast, setToast] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -38,7 +40,7 @@ export default function ServiceCategoryModal({ isOpen, onClose, onSuccess, initi
     e.preventDefault();
 
     if (!formData.name.trim()) {
-      alert("Vui lòng nhập tên danh mục!");
+      setToast({ type: "error", message: "Vui lòng nhập tên danh mục!" });
       return;
     }
 
@@ -53,17 +55,17 @@ export default function ServiceCategoryModal({ isOpen, onClose, onSuccess, initi
 
       if (initialData?._id) {
         await serviceApi.updateCategory(initialData._id, data);
-        alert("Cập nhật danh mục thành công!");
+        setToast({ type: "success", message: "Cập nhật danh mục thành công!" });
       } else {
         await serviceApi.createCategory(data);
-        alert("Thêm danh mục thành công!");
+        setToast({ type: "success", message: "Thêm danh mục thành công!" });
       }
 
       onSuccess?.();
       onClose?.();
     } catch (error) {
       console.error("Category Submit Error:", error.response?.data || error);
-      alert("Lỗi: " + (error.response?.data?.message || error.message));
+      setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     } finally {
       setLoading(false);
     }
@@ -72,6 +74,8 @@ export default function ServiceCategoryModal({ isOpen, onClose, onSuccess, initi
   if (!isOpen) return null;
 
   return (
+    <>
+    {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50">
@@ -162,5 +166,6 @@ export default function ServiceCategoryModal({ isOpen, onClose, onSuccess, initi
         </form>
       </div>
     </div>
+    </>
   );
 }

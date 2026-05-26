@@ -58,13 +58,22 @@ export class EquipmentService {
 
     getAllEquipmentCategories = async (query = {}) => {
         try {
-            const cacheKey = makeCacheKey("equipment:categories", query);
-            const cached = await cache.get(cacheKey);
-            if (cached) return cached;
-
             const { min_price, max_price, min_storage, max_storage,
                 page = 1, limit = 10, sort_by = "created_at", order = "desc"
             } = query;
+
+            const cacheKey = makeCacheKey("equipment:categories", {
+                min_price: min_price || null,
+                max_price: max_price || null,
+                min_storage: min_storage || null,
+                max_storage: max_storage || null,
+                page: Number(page),
+                limit: Number(limit),
+                sort_by,
+                order,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             let filter = {};
 
@@ -268,7 +277,9 @@ export class EquipmentService {
                 }
             }
 
-            return { 
+            await cache.delByPattern("equipment:categories:*");
+
+            return {
                 total_categories: updatedCount,
                 updated_categories: results.length,
                 details: results

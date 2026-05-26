@@ -38,6 +38,7 @@ export default function AddServiceUsageModal({ onClose, onSuccess }) {
   const handleSelectBooking = (bookingId) => {
     setSelectedBookingId(bookingId);
     const booking = activeBookings.find(b => b._id === bookingId);
+    console.log("Selected booking:", booking);
     if (booking) {
       setSelectedCustomerId(booking.customer_id?._id || booking.customer_id);
     } else {
@@ -128,7 +129,7 @@ export default function AddServiceUsageModal({ onClose, onSuccess }) {
                             <option value="">-- Chọn phòng --</option>
                             {activeBookings.map(b => (
                                 <option key={b._id} value={b._id}>
-                                Phòng {b.rooms?.[0]?.room_id?.room_number || "..."} - {b.customer_id?.full_name}
+                                Phòng {b.rooms?.[0]?.room_info?.room_number || "..."} - {b.customer_info?.full_name}
                                 </option>
                             ))}
                         </select>

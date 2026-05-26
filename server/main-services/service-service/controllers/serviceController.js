@@ -3,6 +3,7 @@
 export class ServiceController {
     constructor() {
         this.service = container.serviceService;
+        this.additionalService = container.additionalService;
     }
 
     //---- SERVICE CATEGORY ----//
@@ -246,7 +247,7 @@ export class ServiceController {
 
     confirmUsageDetail = async (req, res) => {
         try {
-            await this.service.confirmUsageDetail(req.params.id, req.user.userId);
+            await this.service.confirmUsageDetail(req.params.id, req.user.userId, req.body);
             return res.status(200).json({ success: true, message: "Xác nhận sử dụng dịch vụ thành công" });
         } catch (err) {
             return res.status(err.status || 400).json({ success: false, message: err.message });
@@ -257,6 +258,107 @@ export class ServiceController {
         try {
             await this.service.cancelUsageDetail(req.params.id, req.user.userId);
             return res.status(200).json({ success: true, message: "Hủy dịch vụ thành công" });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    //---- SERVICE ASSET ----//
+    getAllAssetsServices = async (req, res) => {
+        try {
+            const assets = await this.additionalService.getAllAssets(req.query);
+            return res.status(200).json({ success: true, total: assets.length, assets });
+        } catch (err) {
+            return res.status(err.status || 500).json({ success: false, message: err.message });
+        }
+    };
+
+    getAssetServiceById = async (req, res) => {
+        try {
+            const asset = await this.additionalService.getAssetById(req.params.id);
+            return res.status(200).json({ success: true, asset });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    createAssetService = async (req, res) => {
+        try {
+            const asset = await this.additionalService.createAsset(req.body);
+            return res.status(201).json({ success: true, message: "Thêm tài sản cho thuê thành công.", asset });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    updateAssetService = async (req, res) => {
+        try {
+            const asset = await this.additionalService.updateAsset(req.params.id, req.body);
+            return res.status(200).json({ success: true, message: "Cập nhật tài sản thành công.", asset });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    deleteAssetService = async (req, res) => {
+        try {
+            await this.additionalService.deleteAsset(req.params.id);
+            return res.status(200).json({ success: true, message: "Xóa tài sản thành công." });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    //---- SERVICE SLOT ----//
+    getAllSlotsServices = async (req, res) => {
+        try {
+            const slots = await this.additionalService.getAllSlots(req.query);
+            return res.status(200).json({ success: true, total: slots.length, slots });
+        } catch (err) {
+            return res.status(err.status || 500).json({ success: false, message: err.message });
+        }
+    };
+
+    getSlotServiceById = async (req, res) => {
+        try {
+            const slot = await this.additionalService.getSlotById(req.params.id);
+            return res.status(200).json({ success: true, slot });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    createSlotService = async (req, res) => {
+        try {
+            const slot = await this.additionalService.createSlot(req.body, req.user.userId);
+            return res.status(201).json({ success: true, message: "Tạo slot dịch vụ thành công.", slot });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    updateSlotService = async (req, res) => {
+        try {
+            const slot = await this.additionalService.updateSlot(req.params.id, req.body);
+            return res.status(200).json({ success: true, message: "Cập nhật slot thành công.", slot });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    deleteSlotService = async (req, res) => {
+        try {
+            await this.additionalService.deleteSlot(req.params.id);
+            return res.status(200).json({ success: true, message: "Xóa slot thành công." });
+        } catch (err) {
+            return res.status(err.status || 400).json({ success: false, message: err.message });
+        }
+    };
+
+    closeSlotService = async (req, res) => {
+        try {
+            await this.additionalService.closeSlot(req.params.id);
+            return res.status(200).json({ success: true, message: "Đã đóng slot dịch vụ." });
         } catch (err) {
             return res.status(err.status || 400).json({ success: false, message: err.message });
         }

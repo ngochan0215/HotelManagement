@@ -1,6 +1,7 @@
 ﻿import bcrypt from "bcrypt";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { cache } from "../../../shared/utils/cache.js";
 
 export class UserService {
     constructor({ User, mailService, eventBus, sendNotification }) {
@@ -144,6 +145,12 @@ export class UserService {
 
             await user.save();
 
+            await Promise.all([
+                cache.del(`emp:user:${userId}`),
+                cache.del(`emp:profile:${userId}`),
+                cache.del(`user:info:${userId}`),
+            ]);
+
             return user.email;
         } catch (error) {
             console.log("Verify change email OTP failed for error: " + error.message);
@@ -162,8 +169,14 @@ export class UserService {
                 { new: true }
             );
 
-            if (!updatedUser) 
+            if (!updatedUser)
                 throw new Error("Không tìm thấy người dùng.");
+
+            await Promise.all([
+                cache.del(`emp:user:${userId}`),
+                cache.del(`emp:profile:${userId}`),
+                cache.del(`user:info:${userId}`),
+            ]);
 
             return updatedUser.avatar;
         } catch (error) {

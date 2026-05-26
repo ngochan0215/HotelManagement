@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/config/mongoose.js";
 
 const usageDetailSchema = new mongoose.Schema(
   {
@@ -10,7 +10,6 @@ const usageDetailSchema = new mongoose.Schema(
 
     confirmed_by: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
       default: null,
     },
 
@@ -48,8 +47,21 @@ const usageDetailSchema = new mongoose.Schema(
       default: null,
     },
 
+    asset_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceAsset",
+      default: null,
+    },
+
+    slot_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceSlot",
+      default: null,
+    },
+
     current_price: { type: Number, required: true },
-    unit: { type: String, enum: ["unit", "hour", "day"], default: "unit" },
+
+    unit: { type: String, enum: ["unit", "hour", "day", "item"], default: "unit" },
 
     total_fee: {
       type: Number,

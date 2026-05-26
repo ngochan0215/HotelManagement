@@ -1,6 +1,7 @@
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 
 export async function findCustomerById(eventBus, customerId) {
     const reply = await eventBus.safeRequest(CUSTOMER_EVENTS.CHECK_EXISTS, { customerId });
@@ -114,6 +115,16 @@ export async function enrichServiceUsages(eventBus, serviceUsages) {
     });
 }
 
+export async function findEmployeesByIds(eventBus, employeeIds) {
+    if (!employeeIds?.length) return {};
+    const reply = await eventBus.safeRequest(EMPLOYEE_EVENTS.GET_INFO, { employee_ids: employeeIds });
+    const map = {};
+    for (const emp of reply.employees || []) {
+        map[emp._id.toString()] = { _id: emp._id, full_name: emp.full_name };
+    }
+    return map;
+}
+
 export async function enrichSingleServiceUsage(eventBus, serviceUsage) {
     const bookingId = serviceUsage.booking_id?.toString?.() || serviceUsage.booking_id;
     const customerId = serviceUsage.customer_id?.toString?.() || serviceUsage.customer_id;
@@ -126,11 +137,25 @@ export async function enrichSingleServiceUsage(eventBus, serviceUsage) {
         findBookingDetailsByBookingId(eventBus, bookingId),
     ]);
 
-    const rooms = details.map((bd) => ({
-        room_id: bd.room_id?._id || bd.room_id,
-        room_number: bd.room_id?.room_number ?? bd.room_number ?? "N/A",
-        status: bd.status,
-    }));
+    const roomIds = [...new Set(details.map((bd) => (bd.room_id?._id || bd.room_id)?.toString?.()).filter(Boolean))];
+
+    let roomMap = {};
+    if (roomIds.length > 0) {
+        const roomReply = await eventBus.safeRequest(ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: roomIds }).catch(() => ({ success: false }));
+        for (const room of roomReply.rooms || []) {
+            roomMap[room._id.toString()] = room;
+        }
+    }
+
+    const rooms = details.map((bd) => {
+        const roomId = (bd.room_id?._id || bd.room_id)?.toString?.();
+        const roomInfo = roomMap[roomId];
+        return {
+            room_id: roomId,
+            room_number: roomInfo?.room_number ?? "N/A",
+            status: bd.status,
+        };
+    });
 
     return {
         service_usage: {

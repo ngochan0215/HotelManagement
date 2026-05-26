@@ -379,11 +379,18 @@ export class ReviewService {
 
     async getAllReviews (query = {}) {
         try {
-            const cacheKey = makeCacheKey("review:list", query);
+            const { is_visible, general_rating, customer_id, page = 1, limit = 10, search } = query;
+
+            const cacheKey = makeCacheKey("review:list", {
+                is_visible: is_visible || null,
+                general_rating: general_rating || null,
+                customer_id: customer_id || null,
+                page: Number(page),
+                limit: Number(limit),
+                search: search || null,
+            });
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
-
-            const { is_visible, general_rating, customer_id, page = 1, limit = 10, search } = query;
             const filter = {};
 
             if (is_visible) filter.is_visible = is_visible;

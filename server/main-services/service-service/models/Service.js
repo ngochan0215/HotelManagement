@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/config/mongoose.js";
 
 // bảng dịch vụ
 const serviceSchema = new mongoose.Schema(
@@ -13,8 +13,14 @@ const serviceSchema = new mongoose.Schema(
         
         price: { type: Number, required: true },
         
-        storage_quantity: { type: Number, min: 1 },
+        storage_quantity: { type: Number, min: 0, default: 0 },
+
+        total_quantity: { type: Number, min: 0, default: 0 },
+
+        total_sold: { type: Number, min: 0, default: 0 },
         
+        service_type: { type: String, enum: ["product", "rental", "experience"], default: "product", required: true },
+
         status: { type: String, enum: ["active", "inactive"], default: "active" },
         
         images: [ { type: String } ]

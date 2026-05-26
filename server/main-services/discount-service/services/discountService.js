@@ -60,12 +60,22 @@ export class DiscountService {
 
     async getAllDiscounts(query = {}) {
         try {
-            const cacheKey = makeCacheKey("discount:list", query);
-            const cached = await cache.get(cacheKey);
-            if (cached) return cached;
-
             const { status, type, name, min_order_value, date, day, hour,
                 page = 1, limit = 10 } = query;
+
+            const cacheKey = makeCacheKey("discount:list", {
+                status: status || null,
+                type: type || null,
+                name: name || null,
+                min_order_value: min_order_value || null,
+                date: date || null,
+                day: day || null,
+                hour: hour || null,
+                page: Number(page),
+                limit: Number(limit),
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const filter = {};
 

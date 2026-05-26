@@ -44,10 +44,7 @@ export const cache = {
     async delByPattern(pattern) {
         try {
             const c = await getClient();
-            const keys = [];
-            for await (const key of c.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-                keys.push(key);
-            }
+            const keys = await c.keys(pattern);
             if (keys.length) await c.del(keys);
         } catch (err) {
             console.warn("[CACHE] delByPattern error:", err.message);

@@ -1,22 +1,22 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/config/mongoose.js";
 
 const serviceUsageSchema = new mongoose.Schema(
   {
+    // customer
     customer_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer",
       required: true,
     },
 
+    // booking
     booking_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
       required: true,
     },
 
+    // employee
     employee_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
       required: true,
     },
 

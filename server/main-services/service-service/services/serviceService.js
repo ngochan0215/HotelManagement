@@ -1,16 +1,18 @@
 import mongoose from "mongoose";
-import { FOOD_CATEGORY_ID } from "../constants/serviceConstants.js";
 import * as svcHelpers from "./serviceHelpers.js";
-import { cache } from "../../../shared/utils/cache.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class ServiceService {
-    constructor({ Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, UsageDetail, eventBus, sendNotificationsToUsers }) {
+    constructor({ Service, ServiceCategory, GoodImport, GoodTicket, ServiceUsage, 
+        UsageDetail, additionalService, eventBus, sendNotificationsToUsers }) {
         this.Service = Service;
         this.ServiceCategory = ServiceCategory;
         this.GoodImport = GoodImport;
         this.GoodTicket = GoodTicket;
         this.ServiceUsage = ServiceUsage;
         this.UsageDetail = UsageDetail;
+
+        this.additionalService = additionalService;
         this.eventBus = eventBus;
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
@@ -105,7 +107,7 @@ export class ServiceService {
 
     async getAllServiceCategories({ page = 1, limit = 50, search } = {}) {
         try {
-            const cacheKey = `svc_cat:all:${JSON.stringify([page, limit, search])}`;
+            const cacheKey = `svc_cat:all:${JSON.stringify([Number(page), Number(limit), search || null])}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -190,7 +192,7 @@ export class ServiceService {
 
     async getServiceById(id) {
         try {
-             const cacheKey = `svc:one:${id}`;
+            const cacheKey = `svc:one:${id}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -207,7 +209,7 @@ export class ServiceService {
 
     async getAllServices({ category_id, status, min_quantity, max_quantity, min_price, max_price, page = 1, limit = 50 } = {}) {
         try {
-            const cacheKey = `svc:list:${JSON.stringify([category_id, status, min_quantity, max_quantity, min_price, max_price, page, limit])}`;
+            const cacheKey = `svc:list:${JSON.stringify([category_id || null, status || null, min_quantity || null, max_quantity || null, min_price || null, max_price || null, Number(page), Number(limit)])}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -246,7 +248,7 @@ export class ServiceService {
         }
     }
 
-    async updateService(id, { name, description, unit, price }, files) {
+    async updateService(id, { name, description, unit, price, service_type }, files) {
         try {
             const service = await this.Service.findById(id);
             if (!service) 
@@ -268,6 +270,7 @@ export class ServiceService {
             if (description) service.description = description;
             if (unit) service.unit = unit;
             if (price) service.price = price;
+            if (service_type) service.service_type = service_type;
             if (files?.length > 0) service.images = files.map(f => f.path);
 
             await service.save();
@@ -356,6 +359,7 @@ export class ServiceService {
             }));
 
             await this.GoodImport.insertMany(detailDocs);
+            await cache.delByPattern("ticket:list:*");
             return { ticket, total_items: detailDocs.length };
 
         } catch (error) {
@@ -366,6 +370,15 @@ export class ServiceService {
 
     async getAllGoodTickets({ employee_id, min_import_date, max_import_date, status } = {}) {
         try {
+            const cacheKey = makeCacheKey("ticket:list", {
+                employee_id: employee_id || null,
+                min_import_date: min_import_date || null,
+                max_import_date: max_import_date || null,
+                status: status || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const filter = {};
 
             if (employee_id) {
@@ -382,18 +395,30 @@ export class ServiceService {
             if (status) filter.status = status;
 
             const tickets = await this.GoodTicket.find(filter)
-                .populate("employee_id", "full_name")
                 .sort({ import_date: -1 })
-                .select("-__v -created_at -updated_at");
+                .select("-__v -created_at -updated_at")
+                .lean();
 
-            return Promise.all(
+            const employeeIds = [...new Set(tickets.map(t => t.employee_id?.toString()).filter(Boolean))];
+            const employeeMap = await svcHelpers.findEmployeesByIds(this.eventBus, employeeIds);
+
+            const result = await Promise.all(
                 tickets.map(async (t) => {
                     const details = await this.GoodImport.find({ ticket_id: t._id })
                         .populate("service_id", "name")
-                        .select("-__v -created_at -updated_at -ticket_id");
-                    return { ...t.toObject(), details };
+                        .select("-__v -created_at -updated_at -ticket_id")
+                        .lean();
+                    const empId = t.employee_id?.toString();
+                    return {
+                        ...t,
+                        employee_id: employeeMap[empId] || { _id: t.employee_id },
+                        details,
+                    };
                 })
             );
+
+            await cache.set(cacheKey, result, 300);
+            return result;
         } catch (error) {
             console.error("Error fetching good tickets:", error);
             throw error;
@@ -402,17 +427,32 @@ export class ServiceService {
 
     async getGoodTicketById(id) {
         try {
+            const cacheKey = `ticket:one:${id}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const ticket = await this.GoodTicket.findById(id)
                 .select("-__v -created_at -updated_at")
-                .populate("employee_id", "full_name");
+                .lean();
 
             if (!ticket) throw new Error("Không tìm thấy phiếu nhập.");
 
-            const details = await this.GoodImport.find({ ticket_id: ticket._id })
+            const [details, employeeMap] = await Promise.all([
+                this.GoodImport.find({ ticket_id: ticket._id })
                 .populate("service_id", "name price")
-                .select("-__v -created_at -updated_at -ticket_id");
+                    .select("-__v -created_at -updated_at -ticket_id")
+                    .lean(),
+                svcHelpers.findEmployeesByIds(this.eventBus, [ticket.employee_id?.toString()].filter(Boolean)),
+            ]);
 
-            return { ...ticket.toObject(), details };
+            const empId = ticket.employee_id?.toString();
+            const result = {
+                ...ticket,
+                employee_id: employeeMap[empId] || { _id: ticket.employee_id },
+                details,
+            };
+            await cache.set(cacheKey, result, 300);
+            return result;
         } catch (error) {
             console.error("Error fetching good ticket by ID:", error);
             throw error;
@@ -421,7 +461,12 @@ export class ServiceService {
 
     async getOutOfStockServices() {
         try {
-            return this.Service.find({
+            const cacheKey = "svc:outofstock";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
+            const services = await this.Service.find({
+                service_type: "product",
                 $or: [
                     { storage_quantity: { $lte: 10 } },
                     { storage_quantity: { $exists: false } },
@@ -429,6 +474,8 @@ export class ServiceService {
                 ],
             }).select("_id name description unit price storage_quantity status");
 
+            await cache.set(cacheKey, services, 60);
+            return services;
         } catch (error) {
             console.error("Error fetching out-of-stock services:", error);
             throw error;
@@ -462,8 +509,13 @@ export class ServiceService {
                 const services = await this.Service.find({ _id: { $in: serviceIds } });
                 if (services.length !== serviceIds.length)
                     throw new Error("Có sản phẩm không tồn tại trong hệ thống.");
+                
+                const nonProduct = services.filter(s => s.service_type !== "product");
+                if (nonProduct.length > 0)
+                    throw new Error(`Chỉ dịch vụ loại 'product' mới có thể tạo phiếu nhập: ${nonProduct.map(s => s.name).join(", ")}`);
             } else {
                 const outOfStock = await this.Service.find({
+                    service_type: "product",
                     $or: [
                         { storage_quantity: { $lte: 10 } },
                         { storage_quantity: { $exists: false } },
@@ -504,10 +556,10 @@ export class ServiceService {
                 throw new Error(`Đã có phiếu nhập đang chờ cho ngày ${importDate.toISOString().split("T")[0]}. Vui lòng cập nhật phiếu đó hoặc chọn ngày khác.`);
 
             const isToday = importDate.getTime() === today.getTime();
-            const ticket = await this.GoodTicket.create({ 
-                employee_id: employee._id, 
-                import_date: importDate, 
-                status: isToday ? "pending" : "waiting_confirm" 
+            const ticket = await this.GoodTicket.create({
+                employee_id: employee._id,
+                import_date: importDate,
+                status: isToday ? "waiting_confirm" : "pending"
             });
 
             const detailDocs = items.map(item => ({
@@ -518,6 +570,10 @@ export class ServiceService {
             }));
 
             await this.GoodImport.insertMany(detailDocs);
+            await Promise.all([
+                cache.delByPattern("ticket:list:*"),
+                cache.del("svc:outofstock"),
+            ]);
 
             return { ticket: ticket, total_items: detailDocs.length, import_date: importDate, items_count: items.length, ticket_id: ticket._id };
         } catch (error) {
@@ -586,6 +642,10 @@ export class ServiceService {
                 );
             }
 
+            await Promise.all([
+                cache.del(`ticket:one:${id}`),
+                cache.delByPattern("ticket:list:*"),
+            ]);
             return ticket;
         } catch (error) {
             console.error("Error updating good ticket:", error);
@@ -614,7 +674,10 @@ export class ServiceService {
 
             await this.GoodImport.deleteMany({ ticket_id: ticket._id });
             await ticket.deleteOne();
-
+            await Promise.all([
+                cache.del(`ticket:one:${id}`),
+                cache.delByPattern("ticket:list:*"),
+            ]);
         } catch (error) {
             console.error("Error deleting good ticket:", error);
             throw error;
@@ -656,10 +719,12 @@ export class ServiceService {
             await ticket.save();
 
             await Promise.all([
+                cache.del(`ticket:one:${id}`),
+                cache.delByPattern("ticket:list:*"),
+                cache.del("svc:outofstock"),
                 ...updatedServiceIds.map(sid => cache.del(`svc:one:${sid}`)),
                 cache.delByPattern("svc:list:*"),
             ]);
-
         } catch (error) {
             console.error("Error confirming good ticket:", error);
             throw error;
@@ -703,27 +768,41 @@ export class ServiceService {
                     throw new Error(`quantity phải >= 1 tại phần tử thứ ${i + 1}.`);
             }
 
-            const serviceUsage = await this.ServiceUsage.create({ 
-                booking_id, customer_id, employee_id: userId, total_fee: 0 
+            const serviceUsage = await this.ServiceUsage.create({
+                booking_id, customer_id, employee_id: userId, total_fee: 0
             });
 
             let totalUsageFee = 0;
-            const usageDetailsData = services.map(item => {
+            const usageDetailsData = [];
+
+            for (const item of services) {
                 const svc = serviceMap[item.service_id.toString()];
-                const itemTotal = item.quantity * svc.price;
-                totalUsageFee += itemTotal;
-                
-                return {
-                    ticket_id: serviceUsage._id,
-                    service_id: item.service_id,
-                    quantity: item.quantity,
-                    use_from: item.use_from ? new Date(item.use_from) : new Date(),
-                    finish_at: item.finish_at ? new Date(item.finish_at) : null,
-                    current_price: svc.price,
-                    total_fee: itemTotal,
-                    status: "waiting_confirm",
-                };
-            });
+                let detailData;
+
+                if (svc.service_type === "rental") {
+                    detailData = await this.additionalService.prepareRentalDetail(item, serviceUsage._id, svc);
+                } else if (svc.service_type === "experience") {
+                    detailData = await this.additionalService.prepareExperienceDetail(item, serviceUsage._id, svc);
+                } else {
+                    // product — existing behaviour
+                    const qty = Number(item.quantity);
+                    const itemTotal = qty * svc.price;
+                    detailData = {
+                        ticket_id: serviceUsage._id,
+                        service_id: item.service_id,
+                        quantity: qty,
+                        use_from: item.use_from ? new Date(item.use_from) : new Date(),
+                        finish_at: item.finish_at ? new Date(item.finish_at) : null,
+                        current_price: svc.price,
+                        unit: svc.unit,
+                        total_fee: itemTotal,
+                        status: "waiting_confirm",
+                    };
+                }
+
+                totalUsageFee += detailData.total_fee;
+                usageDetailsData.push(detailData);
+            }
 
             await this.UsageDetail.insertMany(usageDetailsData);
 
@@ -731,6 +810,7 @@ export class ServiceService {
             await serviceUsage.save();
 
             await this.recalcServiceUsageStatus(serviceUsage._id);
+            await cache.delByPattern("usage:list:*");
             return { service_usage: serviceUsage, usage_details: usageDetailsData };
 
         } catch (error) {
@@ -741,6 +821,15 @@ export class ServiceService {
 
     async getAllServiceUsage({ employee_id, customer_id, booking_id, status } = {}) {
         try {
+            const cacheKey = makeCacheKey("usage:list", {
+                employee_id: employee_id || null,
+                customer_id: customer_id || null,
+                booking_id: booking_id || null,
+                status: status || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const filter = {};
 
             if (employee_id) {
@@ -753,13 +842,13 @@ export class ServiceService {
             if (customer_id) {
                 if (!mongoose.Types.ObjectId.isValid(customer_id))
                     throw new Error("customer_id không hợp lệ");
-                
+
                 filter.customer_id = customer_id;
             }
             if (booking_id) {
                 if (!mongoose.Types.ObjectId.isValid(booking_id))
                     throw new Error("booking_id không hợp lệ");
-                
+
                 filter.booking_id = booking_id;
             }
 
@@ -770,7 +859,9 @@ export class ServiceService {
                 .sort({ createdAt: -1 })
                 .lean();
 
-            return svcHelpers.enrichServiceUsages(this.eventBus, serviceUsages);
+            const result = await svcHelpers.enrichServiceUsages(this.eventBus, serviceUsages);
+            await cache.set(cacheKey, result, 120);
+            return result;
         } catch (error) {
             console.error("Error fetching service usages:", error);
             throw error;
@@ -782,8 +873,12 @@ export class ServiceService {
             if (!mongoose.Types.ObjectId.isValid(id))
                 throw new Error("service_usage_id không hợp lệ");
 
+            const cacheKey = `usage:one:${id}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const serviceUsage = await this.ServiceUsage.findById(id).select("-__v -created_at -updated_at");
-            if (!serviceUsage) 
+            if (!serviceUsage)
                 throw new Error("Không tìm thấy phiếu sử dụng dịch vụ");
 
             const [enriched, usageDetails] = await Promise.all([
@@ -794,7 +889,9 @@ export class ServiceService {
                     .sort({ use_from: 1 }),
             ]);
 
-            return { service_usage: enriched.service_usage, usage_details: usageDetails, rooms: enriched.rooms };
+            const result = { service_usage: enriched.service_usage, usage_details: usageDetails, rooms: enriched.rooms };
+            await cache.set(cacheKey, result, 120);
+            return result;
         } catch (error) {
             console.error("Error fetching service usage by ID:", error);
             throw error;
@@ -819,7 +916,10 @@ export class ServiceService {
 
             await this.UsageDetail.deleteMany({ ticket_id: serviceUsage._id });
             await this.ServiceUsage.deleteOne({ _id: serviceUsage._id });
-
+            await Promise.all([
+                cache.del(`usage:one:${id}`),
+                cache.delByPattern("usage:list:*"),
+            ]);
         } catch (error) {
             console.error("Error deleting service usage:", error);
             throw error;
@@ -887,6 +987,10 @@ export class ServiceService {
             await serviceUsage.save();
 
             await this.recalcServiceUsageStatus(serviceUsage._id);
+            await Promise.all([
+                cache.del(`usage:one:${id}`),
+                cache.delByPattern("usage:list:*"),
+            ]);
             return { service_usage: serviceUsage, usage_details: usageDetailsData };
         } catch (error) {
             console.error("Error updating service usage:", error);
@@ -944,16 +1048,15 @@ export class ServiceService {
 
             const serviceIds = usageDetails.map(d => d.service_id);
             const services = await this.Service.find({ _id: { $in: serviceIds } });
-            
+
             const serviceMap = {};
             services.forEach(s => { serviceMap[s._id.toString()] = s; });
 
             for (const detail of usageDetails) {
                 const svc = serviceMap[detail.service_id.toString()];
-                
                 if (!svc) throw new Error("Dịch vụ không tồn tại");
-                
-                if (svc.category_id.toString() === FOOD_CATEGORY_ID && svc.storage_quantity < detail.quantity)
+
+                if (svc.service_type === "product" && svc.storage_quantity < detail.quantity)
                     throw new Error(`Không đủ tồn kho cho dịch vụ ${svc.name}`);
             }
 
@@ -965,25 +1068,29 @@ export class ServiceService {
                 detail.confirmed_by = employee._id;
                 await detail.save();
 
-                if (svc.category_id.toString() === FOOD_CATEGORY_ID) {
+                if (svc.service_type === "product") {
                     foodServiceIds.push(svc._id.toString());
-
                     await this.Service.updateOne(
                         { _id: svc._id, storage_quantity: { $gte: detail.quantity } },
                         { $inc: { storage_quantity: -detail.quantity } }
                     );
+                } else if (svc.service_type === "rental") {
+                    await this.additionalService.confirmRentalDetail(detail);
                 }
+                // experience: no side effect needed
             }
 
-            await this.recalcServiceUsageStatus(serviceUsage._id, );
+            await this.recalcServiceUsageStatus(serviceUsage._id);
 
-            if (foodServiceIds.length > 0) {
-                await Promise.all([
+            await Promise.all([
+                cache.del(`usage:one:${id}`),
+                cache.delByPattern("usage:list:*"),
+                ...(foodServiceIds.length > 0 ? [
                     ...foodServiceIds.map(sid => cache.del(`svc:one:${sid}`)),
                     cache.delByPattern("svc:list:*"),
-                ]);
-            }
-
+                    cache.del("svc:outofstock"),
+                ] : []),
+            ]);
         } catch (error) {
             console.error("Error confirming service usage:", error);
             throw error;
@@ -1019,53 +1126,66 @@ export class ServiceService {
             }
 
             await this.recalcServiceUsageStatus(serviceUsage._id);
+            await Promise.all([
+                cache.del(`usage:one:${id}`),
+                cache.delByPattern("usage:list:*"),
+            ]);
         } catch (error) {
             console.error("Error cancelling service usage:", error);
             throw error;
         }
     }
 
-    async confirmUsageDetail(id, employeeUserId) {
+    async confirmUsageDetail(id, employeeUserId, extraData = {}) {
         try {
             if (!mongoose.Types.ObjectId.isValid(id))
                 throw new Error("usage_detail_id không hợp lệ");
 
             const employee = await svcHelpers.findEmployeeByUserId(this.eventBus, employeeUserId);
 
-            let foodServiceId = null;
-        
             const usageDetail = await this.UsageDetail.findById(id);
             if (!usageDetail) throw new Error("Không tìm thấy usage detail");
 
-            const serviceUsage = await this.ServiceUsage.findById(usageDetail.ticket_id);
             if (usageDetail.status !== "waiting_confirm")
                 throw new Error("Chỉ có thể xác nhận khi trạng thái là waiting_confirm");
+
+            const serviceUsage = await this.ServiceUsage.findById(usageDetail.ticket_id);
+            const svc = await this.Service.findById(usageDetail.service_id);
+            if (!svc) throw new Error("Dịch vụ không tồn tại");
 
             usageDetail.status = "completed";
             usageDetail.confirmed_at = new Date();
             usageDetail.confirmed_by = employee._id;
             await usageDetail.save();
 
-            const svc = await this.Service.findById(usageDetail.service_id);
-            if (svc.category_id.toString() === FOOD_CATEGORY_ID) {
+            let productServiceId = null;
+
+            if (svc.service_type === "product") {
                 if (svc.storage_quantity < usageDetail.quantity)
                     throw new Error("Số lượng tồn kho không đủ");
-                
-                foodServiceId = svc._id.toString();
+
+                productServiceId = svc._id.toString();
                 await this.Service.updateOne(
                     { _id: svc._id, storage_quantity: { $gte: usageDetail.quantity } },
                     { $inc: { storage_quantity: -usageDetail.quantity } }
                 );
+            } else if (svc.service_type === "rental") {
+                const { condition, notes } = extraData;
+                await this.additionalService.confirmRentalDetail(usageDetail, { condition, notes });
             }
+            // experience: no side effect
 
             await this.recalcServiceUsageStatus(serviceUsage._id);
 
-            if (foodServiceId) {
-                await Promise.all([
-                    cache.del(`svc:one:${foodServiceId}`),
+            await Promise.all([
+                cache.del(`usage:one:${usageDetail.ticket_id}`),
+                cache.delByPattern("usage:list:*"),
+                ...(productServiceId ? [
+                    cache.del(`svc:one:${productServiceId}`),
                     cache.delByPattern("svc:list:*"),
-                ]);
-            }
+                    cache.del("svc:outofstock"),
+                ] : []),
+            ]);
         } catch (error) {
             console.error("Error confirming usage detail:", error);
             throw error;
@@ -1078,11 +1198,12 @@ export class ServiceService {
                 throw new Error("usage_detail_id không hợp lệ");
 
             const employee = await svcHelpers.findEmployeeByUserId(this.eventBus, employeeUserId);
-            const serviceUsage = await this.ServiceUsage.findById(usageDetail.ticket_id);
-            
+
             const usageDetail = await this.UsageDetail.findById(id);
-            if (!usageDetail) 
+            if (!usageDetail)
                 throw new Error("Không tìm thấy usage detail");
+
+            const serviceUsage = await this.ServiceUsage.findById(usageDetail.ticket_id);
 
             if (usageDetail.status === "completed")
                 throw new Error("Không thể hủy dịch vụ đã hoàn thành");
@@ -1094,8 +1215,20 @@ export class ServiceService {
             usageDetail.confirmed_by = employee._id;
             await usageDetail.save();
 
-            await this.recalcServiceUsageStatus(serviceUsage._id);
+            const svc = await this.Service.findById(usageDetail.service_id);
+            if (svc) {
+                if (svc.service_type === "rental") {
+                    await this.additionalService.cancelRentalDetail(usageDetail);
+                } else if (svc.service_type === "experience") {
+                    await this.additionalService.cancelExperienceDetail(usageDetail);
+                }
+            }
 
+            await this.recalcServiceUsageStatus(serviceUsage._id);
+            await Promise.all([
+                cache.del(`usage:one:${usageDetail.ticket_id}`),
+                cache.delByPattern("usage:list:*"),
+            ]);
         } catch (error) {
             console.error("Error cancelling usage detail:", error);
             throw error;

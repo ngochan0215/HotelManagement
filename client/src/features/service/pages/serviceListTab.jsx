@@ -46,12 +46,13 @@ export default function ServiceListTab() {
   if (!userId) return <Toast message="Phiên làm việc hết hạn. Vui lòng đăng nhập lại!" type="error" onClose={() => {}} />;
   const userRole = (user?.role || localStorage.getItem("role") || "").toLowerCase();
   const isManager = userRole === "manager" || userRole === "admin";
+  const isAdmin = userRole === "admin";
   
   useEffect(() => {
-    console.log("🔍 Debug ServiceListTab:");
-    console.log("- user?.role:", user?.role);
-    console.log("- localStorage role:", localStorage.getItem("role"));
-    console.log("- isManager:", isManager);
+    // console.log("🔍 Debug ServiceListTab:");
+    // console.log("- user?.role:", user?.role);
+    // console.log("- localStorage role:", localStorage.getItem("role"));
+    // console.log("- isManager:", isManager);
   }, [user, isManager]);
   
   useEffect(() => {

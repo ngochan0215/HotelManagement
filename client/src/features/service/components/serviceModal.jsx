@@ -14,6 +14,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
     name: "",
     category_id: "",
     unit: "item",
+    service_type: "product",
     price: 0,
     description: "",
     status: "active"
@@ -23,11 +24,16 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
       { value: 'item', label: 'Cái / Chiếc' },
       { value: 'can', label: 'Lon' },
       { value: 'bottle', label: 'Chai' },
-      { value: 'box', label: 'Hộp' },
       { value: 'portion', label: 'Phần / Suất' },
       { value: 'hour', label: 'Giờ' },
       { value: 'day', label: 'Ngày' },
-      { value: 'ticket', label: 'Vé' }
+      { value: 'ticket', label: 'Vé' },
+  ];
+
+  const serviceTypeOptions = [
+      { value: 'product', label: 'Sản phẩm (có tồn kho)' },
+      { value: 'rental', label: 'Cho thuê' },
+      { value: 'experience', label: 'Trải nghiệm / Dịch vụ' },
   ];
 
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
           name: initialData.name || "",
           category_id: initialData.category_id?._id || initialData.category_id || "",
           unit: initialData.unit || "item",
+          service_type: initialData.service_type || "product",
           price: initialData.price || 0,
           description: initialData.description || "",
           status: initialData.status || "active"
@@ -63,6 +70,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
       name: "",
       category_id: "",
       unit: "item",
+      service_type: "product",
       price: 0,
       description: "",
       status: "active"
@@ -87,6 +95,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
           data.append("name", formData.name.trim());
           data.append("category_id", formData.category_id);
           data.append("unit", formData.unit);
+          data.append("service_type", formData.service_type);
           const priceValue = Math.round(Number(formData.price));
           data.append("price", priceValue);
           data.append("description", formData.description || "");
@@ -196,6 +205,21 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
                         </select>
                         <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
                     </div>
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loại dịch vụ <span className="text-red-500">*</span></label>
+                <div className="relative">
+                    <select
+                        required
+                        className="w-full appearance-none border border-gray-300 rounded-lg p-2.5 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white cursor-pointer transition"
+                        value={formData.service_type}
+                        onChange={(e) => setFormData({...formData, service_type: e.target.value})}
+                    >
+                        {serviceTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
                 </div>
             </div>
 

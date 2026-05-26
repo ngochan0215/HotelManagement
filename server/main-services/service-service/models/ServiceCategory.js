@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../../../shared/config/mongoose.js";
 
 // bảng loại dịch vụ
 const ServiceCategorySchema = new mongoose.Schema(

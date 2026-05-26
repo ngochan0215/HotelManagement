@@ -137,7 +137,8 @@ export class ReceiptService {
                 receipt.note = newNote;
             }
         
-            receipt.save();
+            await receipt.save();
+            await cache.del(`receipt:one:${receipt._id}`);
             return receipt;
 
         } catch (error) {

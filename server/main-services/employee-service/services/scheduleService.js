@@ -1024,6 +1024,7 @@ export class ScheduleService {
             await Promise.all([
                 cache.del(`schedule:one:${scheduleId}`),
                 cache.delByPattern("schedule:my:*"),
+                cache.delByPattern("schedule:pending:*"),
             ]);
             return updated;
 

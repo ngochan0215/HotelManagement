@@ -126,7 +126,11 @@ export class RoomService {
                 await category.save();
             }
 
-            await cache.delByPattern("room:categories:*");
+            await Promise.all([
+                cache.delByPattern("room:categories:*"),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
 
             return category;
         } catch (err) {
@@ -157,7 +161,11 @@ export class RoomService {
             await this.RoomCategory.findByIdAndDelete(id);
             await this.DefaultEquipment.deleteMany({ category_id: id });
 
-            await cache.delByPattern("room:categories:*");
+            await Promise.all([
+                cache.delByPattern("room:categories:*"),
+                cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:available:*"),
+            ]);
 
             return { success: true };
         } catch (err) {
@@ -168,12 +176,22 @@ export class RoomService {
     
     getAllRoomCategoriesService = async (query = {}) => {
         try {
-            const cacheKey = makeCacheKey("room:categories", query);
-            const cached = await cache.get(cacheKey);
-            if (cached) return cached;
-
             const { page = 1, limit = 10, keyword, sort_by = "created_at", order = "dsc",
                 min_price, max_price, max_adults, max_children } = query;
+
+            const cacheKey = makeCacheKey("room:categories", {
+                page: Number(page),
+                limit: Number(limit),
+                keyword: keyword || null,
+                sort_by,
+                order,
+                min_price: min_price || null,
+                max_price: max_price || null,
+                max_adults: max_adults || null,
+                max_children: max_children || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const filter = {};
 
@@ -411,7 +429,6 @@ export class RoomService {
     getAvailableRoomCategoriesService = async (query = {}) => {
         try {
             const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
-            console.log("Received query in getAvailableRoomCategoriesService:", query);
 
             if (!checkin || !checkout) {
                 throw new Error("Phải điền thời gian nhận và trả phòng.");
@@ -613,7 +630,15 @@ export class RoomService {
                 page = 1, limit = 10, sort_by = "room_number", order = "asc"
              } = query;
 
-            const cacheKey = makeCacheKey("room:rooms", query);
+            const cacheKey = makeCacheKey("room:rooms", {
+                category_id: category_id || null,
+                room_status: room_status || null,
+                room_number: room_number || null,
+                page: Number(page),
+                limit: Number(limit),
+                sort_by,
+                order,
+            });
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -1254,13 +1279,18 @@ export class RoomService {
         try {
             const { average_rating, review_count } = updateData;
 
-            const updated = await this.RoomCategory.findByIdAndUpdate(categoryId, 
+            const updated = await this.RoomCategory.findByIdAndUpdate(categoryId,
                 {
                     average_rating: Math.round(average_rating * 10) / 10,
                     review_count: review_count,
                 },
                 { new: true, runValidators: true }
             );
+
+            await Promise.all([
+                cache.delByPattern("room:categories:*"),
+                cache.delByPattern("room:rooms:*"),
+            ]);
 
             return updated;
 
@@ -1322,6 +1352,7 @@ export class RoomService {
             const result = await this.Room.updateMany(filter, { $set: updateData }, options);
             await Promise.all([
                 cache.delByPattern("room:rooms:*"),
+                cache.delByPattern("room:room:*"),
                 cache.delByPattern("room:available:*"),
             ]);
             return result;

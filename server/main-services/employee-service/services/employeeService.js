@@ -50,7 +50,11 @@ export class EmployeeService {
                 ...employee
             });
 
-            await cache.delByPattern("emp:list:*");
+            await Promise.all([
+                cache.delByPattern("emp:list:*"),
+                cache.del("emp:technicians"),
+                cache.del("emp:housekeepers"),
+            ]);
             return the_employee;
 
         } catch (error) {
@@ -299,6 +303,8 @@ export class EmployeeService {
             await employee.save();
             await Promise.all([
                 cache.del(`emp:one:${employeeId}`),
+                cache.del(`emp:user:${employee.user_id}`),
+                cache.del(`emp:profile:${employee.user_id}`),
                 cache.delByPattern("emp:list:*"),
             ]);
             return reply.user;
@@ -471,6 +477,8 @@ export class EmployeeService {
             cache.del(`emp:one:${employeeId}`),
             cache.del(`emp:user:${employee.user_id}`),
             cache.del(`emp:profile:${employee.user_id}`),
+            cache.del("emp:technicians"),
+            cache.del("emp:housekeepers"),
             cache.delByPattern("emp:list:*"),
         ]);
         return { success: true };

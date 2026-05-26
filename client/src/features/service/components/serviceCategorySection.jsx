@@ -2,10 +2,14 @@ import React, { useState } from "react";
 import { FiPlus, FiEdit, FiTrash2 } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceCategoryModal from "./serviceCategoryModal.jsx";
+import ConfirmModal from "../../../components/confirmModal.jsx";
+import Toast from "../../../components/toast.jsx";
 
 export default function ServiceCategorySection({ categories = [], canManage = false, onRefresh }) {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState({ open: false, title: "", message: "", onConfirm: null });
 
   const handleCreateCategory = () => {
     setEditingCategory(null);
@@ -17,16 +21,42 @@ export default function ServiceCategorySection({ categories = [], canManage = fa
     setIsCategoryModalOpen(true);
   };
 
-  const handleDeleteCategory = async (id, name) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa danh mục "${name}" không?`)) return;
-
-    try {
-      await serviceApi.deleteCategory(id);
-      alert("Đã xóa danh mục thành công!");
-      onRefresh?.();
-    } catch (error) {
-      alert("Lỗi xóa danh mục: " + (error.response?.data?.message || error.message));
-    }
+  const handleDeleteCategory = (id, name) => {
+    setConfirmState({
+      open: true,
+      title: "Xóa danh mục",
+      message: `Bạn có chắc chắn muốn xóa danh mục "${name}" không?`,
+      onConfirm: async () => {
+        setConfirmState(s => ({ ...s, open: false }));
+        try {
+          await serviceApi.deleteCategory(id);
+          setToast({ type: "success", message: "Đã xóa danh mục thành công!" });
+          onRefresh?.();
+        } catch (error) {
+          const serverMsg = error.response?.data?.message || error.message;
+          const hasChildren = error.response?.status === 400 && serverMsg?.includes("dịch vụ");
+          if (hasChildren) {
+            setConfirmState({
+              open: true,
+              title: "Danh mục có dịch vụ kèm theo",
+              message: `Bạn có muốn xóa toàn bộ danh mục và các dịch vụ bên trong không?`,
+              onConfirm: async () => {
+                setConfirmState(s => ({ ...s, open: false }));
+                try {
+                  await serviceApi.deleteCategory(id, true);
+                  setToast({ type: "success", message: "Đã xóa danh mục và toàn bộ dịch vụ kèm theo!" });
+                  onRefresh?.();
+                } catch (forceErr) {
+                  setToast({ type: "error", message: "Lỗi xóa: " + (forceErr.response?.data?.message || forceErr.message) });
+                }
+              },
+            });
+          } else {
+            setToast({ type: "error", message: "Lỗi xóa danh mục: " + serverMsg });
+          }
+        }
+      }
+    });
   };
 
   return (
@@ -108,6 +138,18 @@ export default function ServiceCategorySection({ categories = [], canManage = fa
         onSuccess={onRefresh}
         initialData={editingCategory}
       />
+      {confirmState.open && (
+        <ConfirmModal
+          open={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText="Xóa"
+          cancelText="Hủy"
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        />
+      )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </>
   );
 }

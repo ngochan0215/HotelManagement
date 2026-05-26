@@ -385,6 +385,243 @@ POST /bookings/:id/checkout
 
 ---
 
+---
+
+## Implemented Patterns (Active in Codebase)
+
+### 9. Cache-Aside Pattern — Service & Category Lists (service-service)
+
+> **Status: Implemented and active** in `server/main-services/service-service/services/serviceService.js`  
+> **Cache utility:** `server/shared/utils/cache.js` (Redis via `node-redis` v5)
+
+---
+
+#### What Problem Does It Solve?
+
+Every time a user opens the service management page, the frontend calls `GET /services` and `GET /services/categories`. Without caching, every single request hits MongoDB — which involves a network call, query planning, disk I/O, and serialization. For a list that changes rarely (categories stay the same for days; service definitions change only when managers update them), this is wasteful.
+
+Redis sits between the application and MongoDB as an in-memory store. Reads from Redis are ~0.1ms. Reads from MongoDB (with network) are typically 5–50ms. For lists that are read hundreds of times per day but written to once or twice, caching dramatically reduces database load and response times.
+
+---
+
+#### The Pattern: Cache-Aside (Lazy Loading)
+
+"Cache-Aside" means **the application code manages the cache manually** — it is not automatic. The database and Redis have no direct connection. The service decides when to read from cache, when to skip it, and when to invalidate it.
+
+There are two flows:
+
+**READ flow (cache-aside read)**
+```
+Request comes in
+  │
+  ├─ cache.get(key) ──► HIT?  ──► return cached data immediately (fast path)
+  │                               no DB query at all
+  │
+  └─ MISS ──► query MongoDB
+           ──► cache.set(key, data, TTL)   ← store for future reads
+           ──► return data to caller
+```
+
+**WRITE flow (invalidate on mutation)**
+```
+Create / Update / Delete triggers
+  │
+  ├─ write to MongoDB (source of truth)
+  │
+  └─ cache.del / cache.delByPattern   ← wipe the affected cache keys
+                                         next READ will miss → refetch fresh data
+```
+
+The key rule: **on write, you delete the cache — you never update it directly.** This is safer than updating: if the write partially fails, you don't risk caching inconsistent data.
+
+---
+
+#### How It Is Implemented Here
+
+**`getAllServiceCategories` — the READ side**
+
+```js
+// serviceService.js
+async getAllServiceCategories({ page = 1, limit = 50, search } = {}) {
+    // 1. Build a deterministic cache key from the query params
+    const cacheKey = `svc_cat:all:${JSON.stringify([Number(page), Number(limit), search || null])}`;
+
+    // 2. Try the cache first
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;  // ← fast path, MongoDB not touched
+
+    // 3. Cache miss — go to MongoDB
+    const [categories, total] = await Promise.all([
+        this.ServiceCategory.find(q).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+        this.ServiceCategory.countDocuments(q),
+    ]);
+
+    const result = { categories, total, page: Number(page), limit: Number(limit) };
+
+    // 4. Store in Redis for 600 seconds (10 minutes)
+    await cache.set(cacheKey, result, 600);
+    return result;
+}
+```
+
+**`createServiceCategory` — the WRITE side**
+
+```js
+async createServiceCategory({ name, description }, files) {
+    // ... validation ...
+
+    await category.save();  // write to MongoDB
+
+    // Invalidate ALL cached category lists — any page, any search term
+    await cache.delByPattern("svc_cat:all:*");
+
+    return category;
+}
+```
+
+---
+
+#### Cache Key Design
+
+Cache keys encode all the parameters that make two responses different. If page 1 and page 2 return different results, they must have different cache keys.
+
+```
+Key format:  svc_cat:all:[page, limit, search]
+
+Examples:
+  svc_cat:all:[1,50,null]          ← default, no search
+  svc_cat:all:[2,50,null]          ← page 2
+  svc_cat:all:[1,50,"spa"]         ← search for "spa"
+  svc_cat:by:64f3a2...             ← category detail by ID
+  svc:list:[null,null,null,null,null,null,1,50]   ← all services, no filters
+  svc:one:64f3a2...                ← single service by ID
+```
+
+**Namespacing with prefixes** (`svc_cat:`, `svc:`) makes it easy to invalidate by group. `delByPattern("svc_cat:all:*")` wipes every page/search combination in one call, without needing to know which exact keys exist.
+
+**Important — type consistency in keys:**  
+Express query params are always **strings** (`req.query` returns `{ page: "1", limit: "50" }`), but function default values are **numbers** (`page = 1, limit = 50`). Without normalization, the same logical request could produce two different cache keys:
+
+```
+GET /categories              → page=1 (number, default)  → key: svc_cat:all:[1,50,null]
+GET /categories?page=1       → page="1" (string)         → key: svc_cat:all:["1",50,null]
+```
+
+These are different strings, so they'd be stored as separate cache entries. The fix: always coerce to `Number(page)` before building the key, so both paths produce the same key.
+
+---
+
+#### Cache Invalidation Strategy
+
+Different operations invalidate different scopes:
+
+| Operation | Invalidates |
+|---|---|
+| `createServiceCategory` | `svc_cat:all:*` — all list caches |
+| `updateServiceCategory` | `svc_cat:all:*` + `svc_cat:by:{id}` |
+| `deleteServiceCategory` | `svc_cat:all:*` + `svc_cat:by:{id}` + `svc:list:*` |
+| `createService` | `svc:list:*` + `svc_cat:by:{category_id}` |
+| `updateService` | `svc:one:{id}` + `svc:list:*` + `svc_cat:by:{category_id}` |
+| `confirmGoodTicket` | `svc:one:{id}` (per updated service) + `svc:list:*` |
+
+The principle: **invalidate the minimum necessary scope**. Deleting more than needed is safe but wasteful (causes unnecessary DB queries on next read). Deleting less than needed causes stale data bugs.
+
+---
+
+#### The `delByPattern` Implementation and the SCAN vs KEYS Decision
+
+This is the function that enables wildcard invalidation. It had a critical performance bug.
+
+**`cache.js` — the utility**
+
+```js
+// server/shared/utils/cache.js
+export const cache = {
+    async get(key) { ... },
+    async set(key, value, ttlSeconds = 300) { ... },
+    async del(...keys) { ... },
+
+    async delByPattern(pattern) {
+        try {
+            const c = await getClient();
+            const keys = await c.keys(pattern);   // ← ONE command to Redis
+            if (keys.length) await c.del(keys);
+        } catch (err) {
+            console.warn("[CACHE] delByPattern error:", err.message);
+        }
+    },
+};
+```
+
+**Why not use `SCAN`?**
+
+The original implementation used `scanIterator` (the Redis `SCAN` command):
+
+```js
+// ❌ OLD — what caused the ~1 minute delay
+for await (const key of c.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+    keys.push(key);
+}
+```
+
+`SCAN` is a cursor-based command. Redis does NOT return all matching keys in one shot — it returns a batch of ~100 keys per call, hands back a cursor, and you call `SCAN` again with that cursor, repeating until the cursor reaches 0.
+
+```
+Round-trip 1:  SCAN cursor=0    MATCH svc_cat:all:* COUNT 100
+               → scans 100 random keys, finds 0 matches, returns cursor=3841
+
+Round-trip 2:  SCAN cursor=3841 MATCH svc_cat:all:* COUNT 100
+               → scans 100 more keys, finds 0 matches, returns cursor=7102
+
+...
+
+Round-trip N:  SCAN cursor=9201 MATCH svc_cat:all:* COUNT 100
+               → scans 100 keys, finds 1 match, returns cursor=0 (done!)
+```
+
+In a development environment where all microservices share one Redis instance, there can be tens of thousands of keys (bookings, rooms, employees, equipment, cleaning tasks, etc.). With `COUNT: 100`, finding a handful of `svc_cat:all:*` keys could require hundreds of round-trips — each one a network call. With any network latency, this can take seconds or even minutes.
+
+**The fix — use `KEYS`:**
+
+```js
+// ✅ NEW — single round-trip
+const keys = await c.keys(pattern);
+```
+
+`KEYS pattern` is a single Redis command that returns all matching keys at once. Redis scans its keyspace entirely in one go, in C code, and returns the result in a single response. One network round-trip instead of hundreds.
+
+**Trade-off to be aware of:**  
+`KEYS` blocks Redis while scanning — no other commands can execute during this. For a very large Redis instance (millions of keys), this blocking could cause latency spikes for other services. `SCAN` was designed specifically to avoid this. However, for a system at this scale (a hotel management system with a few thousand keys), `KEYS` is significantly faster and the blocking duration is negligible (sub-millisecond at this keyspace size).
+
+**When to revisit this:** If the Redis instance grows to hundreds of thousands of keys and you start seeing latency spikes in unrelated services during cache invalidation, switch back to `scanIterator` and investigate why SCAN was slow (likely a very large shared keyspace — at that point, consider separating Redis instances per service).
+
+---
+
+#### TTL (Time-To-Live) as a Safety Net
+
+Every cache entry has a TTL — an expiry time after which Redis automatically deletes it:
+
+```js
+await cache.set(cacheKey, result, 600);  // expires after 600 seconds (10 minutes)
+```
+
+The TTL serves as a **fallback safety net**, not the primary invalidation mechanism. If `delByPattern` somehow fails silently (errors are caught and only warned), the cache will eventually self-correct when the TTL expires. Without TTL, a failed invalidation would serve stale data forever.
+
+Choose TTL based on how stale data can be tolerated:
+- Category/service lists → 600s (10 min): these change rarely, stale data is low risk
+- Availability/stock data → 30–60s: this changes frequently, stale data has business impact
+- Per-user session data → 300s: balanced
+
+---
+
+#### What This Pattern Does NOT Do
+
+- It does **not** keep Redis and MongoDB in sync automatically — the application code is responsible.
+- It does **not** handle concurrent writes gracefully (two simultaneous creates could both miss cache and both write to DB). For this system's scale, this is acceptable.
+- It does **not** cache write-heavy data (e.g., `ServiceUsage` records are not cached, since they change constantly).
+
+---
+
 ## Integration Order (Recommended)
 
 | Priority | Pattern              | Effort | Impact |
