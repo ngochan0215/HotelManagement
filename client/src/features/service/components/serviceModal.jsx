@@ -221,6 +221,16 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
                     </select>
                     <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
                 </div>
+                {formData.service_type === "rental" && (
+                    <p className="mt-2 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                        Sau khi lưu, vào danh sách dịch vụ và nhấn <strong>Tài sản</strong> trên hàng này để thêm các vật dụng cho thuê cụ thể (xe đạp, dụng cụ...).
+                    </p>
+                )}
+                {formData.service_type === "experience" && (
+                    <p className="mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        Sau khi lưu, vào danh sách dịch vụ và nhấn <strong>Slot</strong> trên hàng này để tạo các khung lịch (ngày, giờ, sức chứa) để khách đăng ký.
+                    </p>
+                )}
             </div>
 
             <div>

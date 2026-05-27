@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiImage, FiList, FiChevronDown,
-  FiChevronLeft, FiChevronRight, FiZap, FiCheck, FiX
+  FiChevronLeft, FiChevronRight, FiZap, FiCheck, FiX, FiPackage, FiCalendar
 } from "react-icons/fi";
 import { serviceApi } from "../../api/serviceApi.js";
 import ServiceModal from "../components/serviceModal.jsx";
 import ServiceCategorySection from "../components/serviceCategorySection.jsx";
+import ServiceAssetModal from "../components/serviceAssetModal.jsx";
+import ServiceSlotModal from "../components/serviceSlotModal.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
@@ -19,7 +21,11 @@ export default function ServiceListTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterServiceType, setFilterServiceType] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
+
+  const [assetModalService, setAssetModalService] = useState(null);
+  const [slotModalService, setSlotModalService] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
@@ -61,7 +67,7 @@ export default function ServiceListTab() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterCategory, filterStatus, sortOrder]);
+  }, [searchTerm, filterCategory, filterStatus, filterServiceType, sortOrder]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -229,6 +235,10 @@ export default function ServiceListTab() {
         result = result.filter(item => item.status === filterStatus);
     }
 
+    if (filterServiceType !== "all") {
+        result = result.filter(item => item.service_type === filterServiceType);
+    }
+
     result.sort((a, b) => {
         if (sortOrder === 'newest') return new Date(b.created_at || 0) - new Date(a.created_at || 0);
         if (sortOrder === 'oldest') return new Date(a.created_at || 0) - new Date(b.created_at || 0);
@@ -350,14 +360,14 @@ export default function ServiceListTab() {
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
                 <input
                     type="text"
-                    placeholder="Tìm tên dịch vụ, món ăn..."
+                    placeholder="Tìm tên dịch vụ, sản phẩm..."
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-0 transition"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 w-full min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 w-full min-w-0">
                 <div className="relative w-full min-w-0">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiFilter className="text-gray-500" size={16} /></div>
                     <select className="appearance-none w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:border-indigo-500 focus:ring-0 cursor-pointer hover:border-indigo-300 transition shadow-sm" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
@@ -367,37 +377,20 @@ export default function ServiceListTab() {
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><FiChevronDown className="text-gray-400" size={16} /></div>
                 </div>
 
+                {/* Service type filter */}
                 <div className="flex flex-nowrap items-center gap-1 bg-gray-100 p-1 rounded-xl h-[46px] w-full min-w-0 overflow-hidden">
-                    <button 
-                        onClick={() => setFilterStatus("all")} 
-                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                            filterStatus === "all" 
-                                ? "bg-white text-indigo-600 shadow-sm" 
-                                : "text-gray-500 hover:text-gray-700"
-                        }`}
-                    >
-                        Tất cả
-                    </button>
-                    <button 
-                        onClick={() => setFilterStatus("active")} 
-                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                            filterStatus === "active" 
-                                ? "bg-white text-green-600 shadow-sm" 
-                                : "text-gray-500 hover:text-gray-700"
-                        }`}
-                    >
-                        Hoạt động
-                    </button>
-                    <button 
-                        onClick={() => setFilterStatus("inactive")} 
-                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                            filterStatus === "inactive" 
-                                ? "bg-white text-red-600 shadow-sm" 
-                                : "text-gray-500 hover:text-gray-700"
-                        }`}
-                    >
-                        Ngưng
-                    </button>
+                    {[["all","Tất cả","text-indigo-600"],["product","Sản phẩm","text-blue-600"],["rental","Cho thuê","text-purple-600"],["experience","Trải nghiệm","text-green-600"]].map(([val, label, activeColor]) => (
+                        <button key={val} onClick={() => setFilterServiceType(val)}
+                            className={`flex-1 px-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterServiceType === val ? `bg-white ${activeColor} shadow-sm` : "text-gray-500 hover:text-gray-700"}`}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex flex-nowrap items-center gap-1 bg-gray-100 p-1 rounded-xl h-[46px] w-full min-w-0 overflow-hidden">
+                    <button onClick={() => setFilterStatus("all")} className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${filterStatus === "all" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Tất cả</button>
+                    <button onClick={() => setFilterStatus("active")} className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${filterStatus === "active" ? "bg-white text-green-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Hoạt động</button>
+                    <button onClick={() => setFilterStatus("inactive")} className={`flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${filterStatus === "inactive" ? "bg-white text-red-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Ngưng</button>
                 </div>
 
                 <div className="relative min-w-[180px]">
@@ -422,7 +415,7 @@ export default function ServiceListTab() {
                         <th className="py-3">Tên Dịch vụ</th>
                         <th className="py-3">Danh mục</th>
                         <th className="py-3 text-right">Đơn giá</th>
-                        <th className="py-3 text-center">Tồn kho</th>
+                        <th className="py-3 text-center">Kho / Tài nguyên</th>
                         <th className="py-3 text-center">Trạng thái</th>
                         {isManager && <th className="py-3 text-right pr-4">Hành động</th>}
                     </tr>
@@ -449,7 +442,11 @@ export default function ServiceListTab() {
                                 </div>
                             </td>
                             <td className="py-3 font-bold text-gray-800">
-                                {item.name}
+                                <div className="flex items-center gap-2">
+                                    {item.name}
+                                    {item.service_type === "rental" && <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 whitespace-nowrap">Cho thuê</span>}
+                                    {item.service_type === "experience" && <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Trải nghiệm</span>}
+                                </div>
                                 <div className="text-xs text-gray-400 font-normal truncate max-w-[150px]">{item.description}</div>
                             </td>
                             <td className="py-3 text-gray-600">
@@ -459,7 +456,19 @@ export default function ServiceListTab() {
                                 {item.price?.toLocaleString()}<span className="text-gray-400 font-normal text-xs ml-1">/{item.unit}</span>
                             </td>
                             <td className="py-3 text-center font-medium">
-                                {item.storage_quantity > 0 ? <span className="text-emerald-600">{item.storage_quantity}</span> : <span className="text-red-400">0</span>}
+                                {item.service_type === "rental" ? (
+                                    isManager
+                                        ? <button onClick={() => setAssetModalService(item)} className="flex items-center gap-1 text-xs text-purple-600 font-semibold hover:bg-purple-50 px-2 py-1 rounded mx-auto transition"><FiPackage size={12}/> Tài sản</button>
+                                        : <span className="text-xs text-purple-500 font-semibold">Thuê đồ</span>
+                                ) : item.service_type === "experience" ? (
+                                    isManager
+                                        ? <button onClick={() => setSlotModalService(item)} className="flex items-center gap-1 text-xs text-green-600 font-semibold hover:bg-green-50 px-2 py-1 rounded mx-auto transition"><FiCalendar size={12}/> Slot</button>
+                                        : <span className="text-xs text-green-500 font-semibold">Theo slot</span>
+                                ) : (
+                                    item.storage_quantity > 0
+                                        ? <span className="text-emerald-600">{item.storage_quantity}</span>
+                                        : <span className="text-red-400">0</span>
+                                )}
                             </td>
                             <td className="py-3 text-center">
                                 {item.status === 'active' ? <span className="px-2 py-1 text-xs font-bold text-green-600 bg-green-50 rounded-full">Hoạt động</span> : <span className="px-2 py-1 text-xs font-bold text-red-600 bg-red-50 rounded-full">Ngưng</span>}
@@ -487,6 +496,14 @@ export default function ServiceListTab() {
 
         {isManager && (
             <ServiceModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} initialData={editingService} />
+        )}
+
+        {assetModalService && (
+            <ServiceAssetModal service={assetModalService} onClose={() => setAssetModalService(null)} />
+        )}
+
+        {slotModalService && (
+            <ServiceSlotModal service={slotModalService} onClose={() => setSlotModalService(null)} />
         )}
 
         {confirmState.open && (

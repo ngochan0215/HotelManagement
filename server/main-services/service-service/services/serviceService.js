@@ -155,7 +155,7 @@ export class ServiceService {
     }
 
     //---- SERVICE ----//
-    async createService({ category_id, name, description, unit, price }, files) {
+    async createService({ category_id, name, description, unit, price, service_type }, files) {
         try {
             if (!category_id || !name || !price || !description)
                 throw new Error("Yêu cầu nhập đầy đủ thông tin.");
@@ -167,15 +167,15 @@ export class ServiceService {
                 throw new Error("Đơn giá dịch vụ phải là số nguyên lớn hơn 0.");
 
             const category = await this.ServiceCategory.findById(category_id);
-            if (!category) 
+            if (!category)
                 throw new Error("Không tìm thấy danh mục dịch vụ.");
 
             const existing = await this.Service.findOne({ category_id, name });
-            if (existing) 
+            if (existing)
                 throw new Error("Đã tồn tại dịch vụ có cùng tên cho danh mục dịch vụ này.");
 
             const images = files?.length > 0 ? files.map(f => f.path) : [];
-            const service = new this.Service({ category_id, name, description, unit, price, images });
+            const service = new this.Service({ category_id, name, description, unit, price, images, service_type: service_type || "product" });
             
             await service.save();
             await Promise.all([
@@ -359,7 +359,7 @@ export class ServiceService {
             }));
 
             await this.GoodImport.insertMany(detailDocs);
-            await cache.delByPattern("ticket:list:*");
+            await cache.delByPattern("svc_ticket:list:*");
             return { ticket, total_items: detailDocs.length };
 
         } catch (error) {
@@ -370,12 +370,19 @@ export class ServiceService {
 
     async getAllGoodTickets({ employee_id, min_import_date, max_import_date, status } = {}) {
         try {
-            const cacheKey = makeCacheKey("ticket:list", {
-                employee_id: employee_id || null,
-                min_import_date: min_import_date || null,
-                max_import_date: max_import_date || null,
-                status: status || null,
-            });
+            const cacheKey = `svc_ticket:list:${JSON.stringify([ 
+                employee_id || null, 
+                min_import_date || null, 
+                max_import_date || null, 
+                status || null 
+            ])}`;
+
+            // const cacheKey = makeCacheKey("ticket:list", {
+            //     employee_id: employee_id || null,
+            //     min_import_date: min_import_date || null,
+            //     max_import_date: max_import_date || null,
+            //     status: status || null,
+            // });
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -402,20 +409,26 @@ export class ServiceService {
             const employeeIds = [...new Set(tickets.map(t => t.employee_id?.toString()).filter(Boolean))];
             const employeeMap = await svcHelpers.findEmployeesByIds(this.eventBus, employeeIds);
 
-            const result = await Promise.all(
-                tickets.map(async (t) => {
-                    const details = await this.GoodImport.find({ ticket_id: t._id })
-                        .populate("service_id", "name")
-                        .select("-__v -created_at -updated_at -ticket_id")
-                        .lean();
+            const allDetails = await this.GoodImport.find({ ticket_id: { $in: tickets.map(t => t._id) } })
+                .populate("service_id", "name")
+                .select("-__v -created_at -updated_at -ticket_id")
+                .lean();
+
+            const detailsByTicket = {};
+            for (const d of allDetails) {
+                const tid = d.ticket_id.toString();
+                const { ticket_id, ...rest } = d;
+                (detailsByTicket[tid] ??= []).push(rest);
+            }
+
+            const result = tickets.map(t => {
                     const empId = t.employee_id?.toString();
                     return {
                         ...t,
                         employee_id: employeeMap[empId] || { _id: t.employee_id },
-                        details,
+                    details: detailsByTicket[t._id.toString()] || [],
                     };
-                })
-            );
+            });
 
             await cache.set(cacheKey, result, 300);
             return result;

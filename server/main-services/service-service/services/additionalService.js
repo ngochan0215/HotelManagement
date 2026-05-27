@@ -142,8 +142,8 @@ export class AdditionalService {
 
         // Atomic: only sets to in_use if currently available and belongs to this service
         const asset = await this.ServiceAsset.findOneAndUpdate(
-            { _id: asset_id, service_id: svc._id, status: "available" },
-            { $set: { status: "in_use" } },
+            { _id: asset_id, service_id: svc._id, status: "in-stock" },
+            { $set: { status: "in-use" } },
             { new: true }
         );
 
@@ -183,7 +183,7 @@ export class AdditionalService {
             if (!asset) return;
 
             // Damaged asset goes to maintenance instead of available
-            asset.status = condition === "damaged" ? "maintenance" : "available";
+            asset.status = condition === "damaged" ? "maintenance" : "in-stock";
             if (condition) asset.condition = condition;
             if (notes !== undefined) asset.notes = notes;
             await asset.save();
@@ -200,7 +200,7 @@ export class AdditionalService {
 
             await this.ServiceAsset.findByIdAndUpdate(
                 usageDetail.asset_id,
-                { $set: { status: "available" } }
+                { $set: { status: "in-stock" } }
             );
         } catch (error) {
             console.error("Error cancelling rental detail:", error);

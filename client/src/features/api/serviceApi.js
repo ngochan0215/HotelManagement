@@ -156,6 +156,53 @@ export const serviceApi = {
     return res.data;
   },
 
+  // --- ASSETS & SLOTS ---
+
+  getAssets: async (params) => {
+    const res = await axios.get(`${BASE_URL}/assets`, { params, ...getAuthHeader() });
+    return res.data.assets || [];
+  },
+
+  createAsset: async (data) => {
+    const res = await axios.post(`${BASE_URL}/assets`, data, getAuthHeader());
+    return res.data;
+  },
+
+  updateAsset: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/assets/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  deleteAsset: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/assets/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  getSlots: async (params) => {
+    const res = await axios.get(`${BASE_URL}/slots`, { params, ...getAuthHeader() });
+    return res.data.slots || [];
+  },
+
+  createSlot: async (data) => {
+    const res = await axios.post(`${BASE_URL}/slots`, data, getAuthHeader());
+    return res.data;
+  },
+
+  updateSlot: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/slots/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  deleteSlot: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/slots/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  closeSlot: async (id) => {
+    const res = await axios.post(`${BASE_URL}/slots/${id}/close`, {}, getAuthHeader());
+    return res.data;
+  },
+
   // --- USAGE DETAILS ---
 
   confirmUsageDetail: async (id) => {
