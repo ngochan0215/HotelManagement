@@ -3,6 +3,7 @@ import Sidebar from "../../../components/sidebar.jsx";
 import Topbar from "../../../components/topbar.jsx";
 import { roomApi } from "../../api/roomApi.js";
 import { bookingApi } from "../../api/bookingApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -16,6 +17,9 @@ export default function Dashboard() {
   const [roomStatus, setRoomStatus] = useState(null);
   const [topRoomTypes, setTopRoomTypes] = useState([]);
   const [cancelReasons, setCancelReasons] = useState([]);
+
+  const { user } = useAuth();
+  console.log("Decoded employeeId from token:", user?.token);
 
   useEffect(() => {
     const fetchData = async () => {

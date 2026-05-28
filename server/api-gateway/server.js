@@ -118,6 +118,14 @@ app.use(
   })
 );
 
+app.use(
+  "/attractions",
+  createProxyMiddleware({
+    target: "http://attraction-service:3013",
+    changeOrigin: true
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

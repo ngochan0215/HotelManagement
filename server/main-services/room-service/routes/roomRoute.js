@@ -10,7 +10,7 @@ router.get("/by-category", controller.getRoomsByCategory);
 
 router.get("/:id", controller.getRoomById);
 router.post("/", verifyToken, isAdmin, controller.createRoom);
-router.patch("/:id", verifyToken, isAdmin, controller.updateRoom);
+router.patch("/:id", verifyToken, isManager, controller.updateRoom);
 router.delete("/:id", verifyToken, isAdmin, controller.deleteRoom);
 
 router.post("/:id/cleaning/complete", verifyToken, isEmployee, controller.completeCleaning);

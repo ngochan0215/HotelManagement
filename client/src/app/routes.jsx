@@ -21,6 +21,7 @@ import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
+import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   const { user } = useAuth();
@@ -156,6 +157,8 @@ export default function AppRoutes() {
 
       {/* CÁC TRANG CHUNG */}
       <Route path="/promotions" element={<ProtectedRoute allowed={['receptionist', 'customer_service']}><DiscountPage /></ProtectedRoute>} />
+
+      <Route path="/attractions" element={<AttractionPage />} />
 
       <Route path="/payment/success" element={<PaymentResultPage />} />
       <Route path="/payment/cancel" element={<PaymentResultPage />} />

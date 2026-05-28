@@ -18,11 +18,22 @@ const getStaffUserIds = async () => {
     return reply.receptionists.map((e) => e.user_id).filter(Boolean);
 };
 
+// Returns [start, end] as UTC Date objects representing the boundaries of
+// the current calendar day in Vietnam time (UTC+7), regardless of server TZ.
+const getVietnamDayBounds = () => {
+    const OFFSET_MS = 7 * 60 * 60 * 1000; // UTC+7
+    const nowVN = new Date(Date.now() + OFFSET_MS);
+    // midnight Vietnam = today in VN calendar at 00:00 VN = previous UTC day 17:00
+    const startUTC = new Date(
+        Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate()) - OFFSET_MS
+    );
+    const endUTC = new Date(startUTC.getTime() + 24 * 60 * 60 * 1000 - 1);
+    return [startUTC, endUTC];
+};
+
 export const notifyGoodTickets = async () => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
+    try {
+    const [start, end] = getVietnamDayBounds();
 
     const managerIds = await getManagerIds();
 
@@ -77,9 +88,13 @@ export const notifyGoodTickets = async () => {
             }
         }
     }
+    } catch (err) {
+        console.error("[JOB] notifyGoodTickets failed:", err.message);
+    }
 };
 
 export const notifyServiceUsageTickets = async () => {
+  try {
     const now = new Date();
 
     const expiredDetails = await UsageDetail.find({
@@ -143,10 +158,16 @@ export const notifyServiceUsageTickets = async () => {
     for (const ticketId of affectedTicketIds) {
         await container.serviceService.recalcServiceUsageStatus(ticketId);
     }
+  } catch (err) {
+      console.error("[JOB] notifyServiceUsageTickets failed:", err.message);
+  }
 };
 
-export const startGoodTicketJob = () =>
-    cron.schedule("0 0 * * *", notifyGoodTickets, { timezone: "Asia/Ho_Chi_Minh" });
+export const startGoodTicketJob = () => {
+    // backfill: catch any tickets that transitioned while the service was down
+    notifyGoodTickets().catch(err => console.error("[JOB] startup backfill failed:", err.message));
+    return cron.schedule("0 0 * * *", notifyGoodTickets, { timezone: "Asia/Ho_Chi_Minh" });
+};
 
 export const startServiceUsageJob = () =>
     cron.schedule("*/15 * * * *", notifyServiceUsageTickets, { timezone: "Asia/Ho_Chi_Minh" });

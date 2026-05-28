@@ -9,6 +9,7 @@ import AddImportTicketModal from "../components/addImportTicketModal.jsx";
 import AddServiceUsageModal from "../components/addServiceUsageModal.jsx";
 import ServiceUsageDetailModal from "../components/serviceUsageDetailModal.jsx";
 import UpdateServiceUsageModal from "../components/updateServiceUsageModal.jsx";
+import ImportTicketDetailModal from "../components/importTicketDetailModal.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
 
@@ -30,6 +31,7 @@ export default function ServiceTicketTab() {
   const [selectedUsageId, setSelectedUsageId] = useState(null);
   const [editingUsageId, setEditingUsageId] = useState(null);
   const [editingImportId, setEditingImportId] = useState(null);
+  const [selectedImportId, setSelectedImportId] = useState(null);
 
   const userRole = (user?.role || localStorage.getItem("role") || "").toLowerCase();
   const isManager = userRole === "manager" || userRole === "admin";
@@ -278,6 +280,7 @@ export default function ServiceTicketTab() {
       {showUsageModal && <AddServiceUsageModal onClose={() => setShowUsageModal(false)} onSuccess={fetchTickets} />}
       {selectedUsageId && <ServiceUsageDetailModal usageId={selectedUsageId} onClose={() => setSelectedUsageId(null)} />}
       {editingUsageId && <UpdateServiceUsageModal usageId={editingUsageId} onClose={() => setEditingUsageId(null)} onSuccess={fetchTickets} />}
+      {selectedImportId && <ImportTicketDetailModal ticketId={selectedImportId} onClose={() => setSelectedImportId(null)} />}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
@@ -585,19 +588,23 @@ export default function ServiceTicketTab() {
                             <td className="px-4 py-3 text-center">{renderStatus(item.status)}</td>
                             <td className="px-4 py-3 text-right">
                                 <div className="flex justify-end gap-2">
+                                    <button
+                                        onClick={() => setSelectedImportId(item._id)}
+                                        className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm"
+                                        title="Xem chi tiết"
+                                    >
+                                        <FiEye /> Chi tiết
+                                    </button>
                                     {item.status === 'waiting_confirm' ? (
                                         <button
                                             onClick={() => handleConfirmImport(item._id)}
-                                            className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-blue-700 shadow-sm"
+                                            className="inline-flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-green-700 shadow-sm"
                                             title="Xác nhận nhập kho"
                                         >
                                             <FiCheckCircle /> Nhập kho
                                         </button>
-                                    ) : item.status === 'completed' ? (
-                                        <span className="text-gray-300 text-xs italic">---</span>
-                                    ) : item.status === 'expired' || item.status === 'cancelled' ? (
-                                        <span className="text-red-300 text-xs italic">Đã hết hạn</span>
-                                    ) : canUpdateOrDeleteImport(item) ? (
+                                    ) : item.status === 'completed' || item.status === 'expired' || item.status === 'cancelled' ? null
+                                    : canUpdateOrDeleteImport(item) ? (
                                         <>
                                             <button
                                                 onClick={() => {
@@ -617,9 +624,7 @@ export default function ServiceTicketTab() {
                                                 <FiXCircle /> Xóa
                                             </button>
                                         </>
-                                    ) : (
-                                        <span className="text-gray-300 text-xs italic">Chưa đến ngày nhập</span>
-                                    )}
+                                    ) : null}
                                 </div>
                             </td>
                         </tr>

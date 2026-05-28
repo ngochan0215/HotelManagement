@@ -57,7 +57,8 @@ export default function BookingList() {
   const { user } = useAuth();
   let employeeId = user?._id;
   if (!employeeId && user?.token) {
-      try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
+    try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
+    console.log("Decoded employeeId from token:", user?.token, "=>", employeeId);
   }
 
   const [bookings, setBookings] = useState([]);

@@ -224,6 +224,24 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  attraction-service:
+    build: ./main-services/attraction-service
+    container_name: attraction-service
+    ports:
+      - "3013:3013"
+    environment:
+      DB_URL: ${ATTRACTION_DB_URL}
+      REDIS_URL: ${REDIS_URL}
+      OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY}
+      HOTEL_LAT: ${HOTEL_LAT}
+      HOTEL_LNG: ${HOTEL_LNG}
+      HOTEL_SEARCH_RADIUS_M: ${HOTEL_SEARCH_RADIUS_M}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/attraction-service:/app
+      - /app/node_modules
+    command: npm run dev
+
   api-gateway:
     # this service acts as the entry point for clients
     build: ./api-gateway
@@ -245,3 +263,4 @@ services:
       - payment-service
       - cleaning-service
       - service-service
+      - attraction-service

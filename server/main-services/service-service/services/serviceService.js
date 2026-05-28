@@ -440,7 +440,7 @@ export class ServiceService {
 
     async getGoodTicketById(id) {
         try {
-            const cacheKey = `ticket:one:${id}`;
+            const cacheKey = `svc_ticket:one:${id}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -584,7 +584,7 @@ export class ServiceService {
 
             await this.GoodImport.insertMany(detailDocs);
             await Promise.all([
-                cache.delByPattern("ticket:list:*"),
+                cache.delByPattern("svc_ticket:list:*"),
                 cache.del("svc:outofstock"),
             ]);
 
@@ -656,8 +656,8 @@ export class ServiceService {
             }
 
             await Promise.all([
-                cache.del(`ticket:one:${id}`),
-                cache.delByPattern("ticket:list:*"),
+                cache.del(`svc_ticket:one:${id}`),
+                cache.delByPattern("svc_ticket:list:*"),
             ]);
             return ticket;
         } catch (error) {
@@ -688,8 +688,8 @@ export class ServiceService {
             await this.GoodImport.deleteMany({ ticket_id: ticket._id });
             await ticket.deleteOne();
             await Promise.all([
-                cache.del(`ticket:one:${id}`),
-                cache.delByPattern("ticket:list:*"),
+                cache.del(`svc_ticket:one:${id}`),
+                cache.delByPattern("svc_ticket:list:*"),
             ]);
         } catch (error) {
             console.error("Error deleting good ticket:", error);
@@ -732,8 +732,8 @@ export class ServiceService {
             await ticket.save();
 
             await Promise.all([
-                cache.del(`ticket:one:${id}`),
-                cache.delByPattern("ticket:list:*"),
+                cache.del(`svc_ticket:one:${id}`),
+                cache.delByPattern("svc_ticket:list:*"),
                 cache.del("svc:outofstock"),
                 ...updatedServiceIds.map(sid => cache.del(`svc:one:${sid}`)),
                 cache.delByPattern("svc:list:*"),
