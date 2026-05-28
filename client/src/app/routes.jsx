@@ -20,7 +20,13 @@ import ReceiptPage from '../features/receipt/pages/receiptListPage.jsx';
 import StatisticsPage from '../features/statistics/pages/statisticsPage.jsx';
 import QrScannerPage from '../features/qr/pages/qrScannerPage.jsx';
 import PaymentResultPage from '../features/payment/pages/paymentResultPage.jsx';
-import ProfilePage from '../features/auth/pages/profilePage.jsx';
+import LandingPage from '../features/customer-portal/pages/landingPage.jsx';
+import RoomsPage from '../features/customer-portal/pages/roomsPage.jsx';
+import RoomDetailPage from '../features/customer-portal/pages/roomDetailPage.jsx';
+import BookingPage from '../features/customer-portal/pages/bookingPage.jsx';
+import MyBookingsPage from '../features/customer-portal/pages/myBookingsPage.jsx';
+import CustomerAccountPage from '../features/customer-portal/pages/customerAccountPage.jsx';
+import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } from '../features/auth/utils/roleRedirect.js';
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
@@ -29,22 +35,15 @@ const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const role = (user.role || localStorage.getItem("role") || "").toLowerCase();
-  const position = (user.position || localStorage.getItem("position") || "").toLowerCase();
+  const { role, position } = getAuthIdentity(user);
 
-  if (excludeManager && (role === 'manager' || role === 'admin')) return <Navigate to="/dashboard" replace />;
-  if ((role === 'manager' || role === 'admin') && !excludeManager) return children;
+  if (excludeManager && isAdminRole(role)) return <Navigate to="/dashboard" replace />;
+  if (isAdminRole(role) && !excludeManager) return children;
 
   if (allowed && allowed.length > 0) {
     const allowedLower = allowed.map(p => p.toLowerCase());
     if (!allowedLower.includes(position)) {
-      let redirectPath = "/login";
-      if (position === 'receptionist') redirectPath = "/room-calendar";
-      else if (position === 'technician' || position === 'housekeeper') redirectPath = "/my-work";
-      else if (position === 'accountant') redirectPath = "/invoices";
-      else redirectPath = "/profile";
-
-      return <Navigate to={redirectPath} replace />;
+      return <Navigate to={getRoleRedirectPath({ role, position })} replace />;
     }
   }
 
@@ -64,6 +63,16 @@ function WorkPageRouter() {
   return <Navigate to="/dashboard" replace />;
 }
 
+function CustomerProfileRoute() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const { role } = getAuthIdentity(user);
+  if (isCustomerRole(role)) return <CustomerAccountPage />;
+
+  return <Navigate to={getRoleRedirectPath(user)} replace />;
+}
+
 export default function AppRoutes() {
   const { user, isLoading } = useAuth();
 
@@ -79,26 +88,26 @@ export default function AppRoutes() {
   }
 
   const getHomePath = () => {
-    if (!user) return "/login";
-    const position = (user.position || "").toLowerCase();
-    if (user.role === 'manager' || user.role === 'admin') return "/dashboard";
-    if (position === 'receptionist') return "/room-calendar";
-    if (position === 'technician' || position === 'housekeeper') return "/my-work";
-    if (position === 'accountant') return "/invoices";
-    return "/profile";
+    if (!user) return "/hotel";
+    return getRoleRedirectPath(user);
   };
 
   return (
     <Routes>
+      <Route path="/hotel" element={<LandingPage />} />
+      <Route path="/hotel/rooms" element={<RoomsPage />} />
+      <Route path="/hotel/rooms/:roomId" element={<RoomDetailPage />} />
+      <Route path="/hotel/book" element={<BookingPage />} />
+      <Route path="/hotel/bookings" element={<MyBookingsPage />} />
+      <Route path="/hotel/account" element={<CustomerAccountPage />} />
+
       <Route path="/" element={<Navigate to={getHomePath()} replace />} />
       <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
 
-      <Route path="/profile" element={
-        <ProtectedRoute allowed={[]}> <ProfilePage /> </ProtectedRoute>
-      } />
+      <Route path="/profile" element={<CustomerProfileRoute />} />
 
       <Route path="/dashboard" element={
-        <ProtectedRoute allowed={['manager', 'admin']}> <Dashboard /> </ProtectedRoute>
+        <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>
       } />
       <Route path="/employees" element={
         <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
@@ -163,7 +172,7 @@ export default function AppRoutes() {
       <Route path="/payment/success" element={<PaymentResultPage />} />
       <Route path="/payment/cancel" element={<PaymentResultPage />} />
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/hotel" replace />} />
     </Routes>
   );
 }

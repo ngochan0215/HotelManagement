@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }) => {
 
           localStorage.setItem("token", data.token);
           localStorage.setItem("user_info", JSON.stringify(data.theUser));
+          localStorage.setItem("role", (fullUser.role || data.theUser?.role || data.theUser?.system_role || "").toLowerCase());
           localStorage.setItem("position", data.theUser.position || "");
         }
         return data;
@@ -74,6 +75,7 @@ export const AuthProvider = ({ children }) => {
 
           localStorage.setItem("token", data.token);
           localStorage.setItem("user_info", JSON.stringify(data.theUser));
+          localStorage.setItem("role", (fullUser.role || data.theUser?.role || data.theUser?.system_role || "").toLowerCase());
           localStorage.setItem("position", data.theUser.position || "");
         }
         return data;
@@ -86,6 +88,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       localStorage.removeItem("token");
       localStorage.removeItem("user_info");
+      localStorage.removeItem("role");
       localStorage.removeItem("position");
       window.location.href = "/login";
     };
