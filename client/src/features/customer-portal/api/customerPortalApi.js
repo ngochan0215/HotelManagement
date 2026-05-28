@@ -2,9 +2,6 @@ import axios from "axios";
 import API_BASE_URL from "../../../config/apiConfig.js";
 import { roomApi } from "../../api/roomApi.js";
 
-const MOCK_BOOKINGS_KEY = "customer_demo_bookings_v2";
-
-// TODO: Remove fallback room categories after the public room category API is guaranteed in all demo environments.
 const FALLBACK_ROOM_CATEGORIES = [
   {
     _id: "fallback-deluxe",
@@ -38,23 +35,14 @@ const FALLBACK_ROOM_CATEGORIES = [
   },
 ];
 
-const MOCK_ADD_ONS = [
-  { id: "airport-transfer", name: "Đưa đón sân bay", price: 320000, description: "Đón/trả sân bay riêng cho khách lưu trú." },
-  { id: "breakfast", name: "Ăn sáng", price: 180000, description: "Buffet sáng phục vụ mỗi khách / mỗi ngày." },
-  { id: "spa", name: "Spa thư giãn", price: 650000, description: "Liệu trình thư giãn 60 phút tại khách sạn." },
-  { id: "laundry", name: "Giặt ủi", price: 120000, description: "Gói giặt ủi nhanh trong ngày." },
-  { id: "decor", name: "Trang trí phòng", price: 450000, description: "Trang trí sinh nhật / kỷ niệm theo yêu cầu." },
-];
-
-const getMockBookings = () => {
-  // TODO: Replace localStorage booking store with real customer booking APIs.
-  const raw = localStorage.getItem(MOCK_BOOKINGS_KEY);
-  return raw ? JSON.parse(raw) : [];
+const getAuthConfig = () => {
+  const token = localStorage.getItem("token");
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 };
 
-const saveMockBookings = (bookings) => {
-  // TODO: Replace localStorage booking store with real customer booking APIs.
-  localStorage.setItem(MOCK_BOOKINGS_KEY, JSON.stringify(bookings));
+const mapApiError = (error, fallbackMessage) => {
+  const message = error?.response?.data?.message || error?.message;
+  throw new Error(message || fallbackMessage);
 };
 
 const calculateNights = (checkin, checkout) => {
@@ -169,44 +157,107 @@ export const customerPortalApi = {
   },
 
   async getBookingAddOns() {
-    // TODO: Replace mock add-ons with public service add-on API for booking flow.
-    return { services: MOCK_ADD_ONS, isFallback: true };
+    try {
+      const response = await axios.get(`${API_BASE_URL}/services`, {
+        params: { limit: 100 },
+        ...getAuthConfig(),
+      });
+      const rawServices = response.data?.services || [];
+      const services = rawServices.map((item) => ({
+        id: item._id,
+        name: item.name,
+        price: Number(item.price || 0),
+        description: item.description || "",
+      }));
+      return { services, isFallback: false };
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return { services: [], isFallback: true, reason: "Dịch vụ thêm yêu cầu quyền truy cập phù hợp." };
+      }
+      return { services: [], isFallback: true, reason: "Chưa tải được danh sách dịch vụ thêm." };
+    }
   },
 
   async createBooking(payload) {
-    // TODO: Replace localStorage fallback with POST /bookings/customer or POST /bookings/public.
-    const bookings = getMockBookings();
-    const booking = {
-      id: `DEMO-${Date.now()}`,
-      booking_code: `SE${Date.now().toString().slice(-6)}`,
-      createdAt: new Date().toISOString(),
-      status: "pending",
-      ...payload,
-    };
-    bookings.unshift(booking);
-    saveMockBookings(bookings);
-    return { success: true, bookingId: booking.booking_code, booking, isFallback: true };
-  },
-
-  async createDepositPayment(payload) {
-    // TODO: Integrate real customer deposit/payment API when public payment flow exists.
-    return {
-      success: true,
-      payment_reference: `PAY-${Date.now()}`,
-      isFallback: true,
-      ...payload,
-    };
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/bookings/customer`,
+        payload,
+        getAuthConfig(),
+      );
+      return {
+        success: true,
+        bookingId: response.data?.booking_id,
+        booking: response.data,
+        deposit: response.data?.deposit,
+        isFallback: false,
+      };
+    } catch (error) {
+      mapApiError(error, "Không thể tạo booking. Vui lòng thử lại.");
+    }
   },
 
   async lookupBookings({ bookingCode, email, phone }) {
-    // TODO: Integrate real endpoint: GET /bookings/public-lookup or /bookings/my-bookings.
-    const bookings = getMockBookings().filter((item) => {
-      const byCode = bookingCode ? (item.booking_code || item.id)?.toLowerCase() === bookingCode.toLowerCase() : true;
-      const byEmail = email ? item.customer_email?.toLowerCase() === email.toLowerCase() : true;
-      const byPhone = phone ? item.customer_phone === phone : true;
-      return byCode && byEmail && byPhone;
-    });
-    return { bookings, isFallback: true };
+    try {
+      const response = await axios.get(`${API_BASE_URL}/bookings/my`, {
+        params: { page: 1, limit: 50 },
+        ...getAuthConfig(),
+      });
+      const bookings = response.data?.bookings || [];
+      const filtered = bookings.filter((item) => {
+        const byCode = bookingCode ? String(item.booking_code || "").toLowerCase() === bookingCode.toLowerCase() : true;
+        const byEmail = email ? String(item.customer_email || "").toLowerCase() === email.toLowerCase() : true;
+        const byPhone = phone ? String(item.customer_phone || "") === phone : true;
+        return byCode && byEmail && byPhone;
+      });
+      return { bookings: filtered, isFallback: false };
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        throw new Error("Bạn cần đăng nhập tài khoản khách hàng để xem lịch sử đặt phòng.");
+      }
+      mapApiError(error, "Không thể tra cứu lịch sử đặt phòng lúc này.");
+    }
+  },
+
+  async getMyBookings(params = {}) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/bookings/my`, {
+        params,
+        ...getAuthConfig(),
+      });
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể tải danh sách đặt phòng.");
+    }
+  },
+
+  async getMyProfile() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/customers/me`, getAuthConfig());
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể tải hồ sơ khách hàng.");
+    }
+  },
+
+  async updateMyProfile(payload) {
+    try {
+      const response = await axios.patch(`${API_BASE_URL}/customers/me`, payload, getAuthConfig());
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể cập nhật hồ sơ khách hàng.");
+    }
+  },
+
+  async getAvailableDiscounts(orderValue = 0) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/discounts/available`, {
+        params: { orderValue },
+      });
+      return response.data?.discounts || [];
+    } catch {
+      return [];
+    }
   },
 
   calculateNights,

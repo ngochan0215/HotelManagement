@@ -1,24 +1,17 @@
 import { CalendarCheck, Gift, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import CustomerShell from "../components/customerShell.jsx";
+import { customerPortalApi } from "../api/customerPortalApi.js";
 import SharedAuthForm from "../components/sharedAuthForm.jsx";
 import { SectionHeader, StatusBadge } from "../components/sitePrimitives.jsx";
 
-const MOCK_BOOKINGS_KEY = "customer_demo_bookings_v2";
-
-function readCustomerBookings(email) {
-  try {
-    const raw = localStorage.getItem(MOCK_BOOKINGS_KEY);
-    const bookings = raw ? JSON.parse(raw) : [];
-    if (!email) return bookings;
-    return bookings.filter((booking) => booking.customer_email?.toLowerCase() === email.toLowerCase());
-  } catch {
-    return [];
-  }
-}
-
 export default function CustomerAccountPage() {
   const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   if (!user) {
     return (
@@ -30,14 +23,32 @@ export default function CustomerAccountPage() {
     );
   }
 
-  const bookings = readCustomerBookings(user.email);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [profileData, bookingData] = await Promise.all([
+          customerPortalApi.getMyProfile(),
+          customerPortalApi.getMyBookings({ page: 1, limit: 4 }),
+        ]);
+        setProfile(profileData);
+        setBookings(bookingData?.bookings || []);
+      } catch (e) {
+        setError(e.message || "Không thể tải hồ sơ khách hàng.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <CustomerShell>
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
         <div className="mb-8 flex flex-wrap items-center gap-3">
           <StatusBadge tone="warning">Tài khoản SE Hotel</StatusBadge>
-          <StatusBadge tone="info">{user.email}</StatusBadge>
+          <StatusBadge tone="info">{profile?.user?.email || user.email}</StatusBadge>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
@@ -45,7 +56,7 @@ export default function CustomerAccountPage() {
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-300 text-stone-950">
               <UserRound size={28} />
             </div>
-            <h1 className="mt-6 break-words text-3xl font-semibold">Xin chào, {user.name || "khách hàng SE Hotel"}</h1>
+            <h1 className="mt-6 break-words text-3xl font-semibold">Xin chào, {profile?.full_name || user.name || "khách hàng SE Hotel"}</h1>
             <p className="mt-3 text-sm leading-7 text-stone-300">
               Quản lý thông tin tài khoản, xem lại lịch sử đặt phòng và theo dõi ưu đãi dành riêng cho bạn.
             </p>
@@ -53,7 +64,7 @@ export default function CustomerAccountPage() {
             <div className="mt-7 grid gap-3 text-sm">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-stone-400">Email</p>
-                <p className="mt-1 break-words font-semibold">{user.email}</p>
+                <p className="mt-1 break-words font-semibold">{profile?.user?.email || user.email}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p className="text-stone-400">Vai trò</p>
@@ -70,6 +81,14 @@ export default function CustomerAccountPage() {
                 description="Những đặt phòng bạn thực hiện trên website SE Hotel sẽ được lưu để tra cứu nhanh."
               />
               <div className="mt-6 space-y-4">
+                {error ? (
+                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+                ) : null}
+                {loading ? (
+                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-sm leading-7 text-stone-600">
+                    Đang tải lịch sử đặt phòng...
+                  </div>
+                ) : null}
                 {bookings.length ? (
                   bookings.slice(0, 4).map((booking) => (
                     <article key={booking.id || booking.booking_code} className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
@@ -89,7 +108,7 @@ export default function CustomerAccountPage() {
                   ))
                 ) : (
                   <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-sm leading-7 text-stone-600">
-                    Bạn chưa có đặt phòng nào được lưu trên thiết bị này.
+                    Bạn chưa có đặt phòng nào trên tài khoản.
                   </div>
                 )}
               </div>

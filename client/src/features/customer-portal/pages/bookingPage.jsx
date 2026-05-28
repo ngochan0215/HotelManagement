@@ -5,6 +5,7 @@ import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
 import { AmenityPill, EmptyState, HotelImage, SectionHeader, StatusBadge } from "../components/sitePrimitives.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 const STEP_ITEMS = [
   "Xem lại",
@@ -23,6 +24,7 @@ function calculateAddOnTotal(selectedAddOns, nights) {
 }
 
 export default function BookingPage() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("roomId");
   const [rooms, setRooms] = useState([]);
@@ -46,20 +48,38 @@ export default function BookingPage() {
 
   useEffect(() => {
     const load = async () => {
+      const hasSearchCriteria = form.checkin && form.checkout;
       const [{ rooms: roomList }, { services }] = await Promise.all([
-        customerPortalApi.getRooms(),
+        hasSearchCriteria
+          ? customerPortalApi.searchRooms({
+            checkin: form.checkin,
+            checkout: form.checkout,
+            adults: form.adults,
+            children: form.children,
+          })
+          : customerPortalApi.getRooms(),
         customerPortalApi.getBookingAddOns(),
       ]);
       setRooms(roomList);
       setAddOns(services || []);
     };
-    load();
-  }, []);
+    load().catch(() => setError("Không thể tải thông tin đặt phòng. Vui lòng thử lại."));
+  }, [form.adults, form.checkin, form.checkout, form.children]);
+
+  useEffect(() => {
+    if (!user) return;
+    setForm((prev) => ({
+      ...prev,
+      customer_name: prev.customer_name || user.name || "",
+      customer_email: prev.customer_email || user.email || "",
+    }));
+  }, [user]);
 
   const selectedRoom = useMemo(() => rooms.find((room) => room._id === form.room_id), [rooms, form.room_id]);
   const nights = customerPortalApi.calculateNights(form.checkin, form.checkout);
   const roomTotal = Number(selectedRoom?.price || 0) * nights;
   const selectedAddOns = addOns.filter((item) => form.selected_add_ons.includes(item.id));
+  const selectedBookingRoomId = selectedRoom?.available_rooms?.[0]?.room_id || selectedRoom?.available_rooms?.[0]?._id || null;
   const addOnTotal = calculateAddOnTotal(selectedAddOns, nights);
   const estimatedTotal = roomTotal + addOnTotal;
   const depositAmount = calculateDeposit(estimatedTotal);
@@ -107,27 +127,22 @@ export default function BookingPage() {
     if (step === 3) {
       setSubmitting(true);
       try {
-        await customerPortalApi.createDepositPayment({
-          deposit_amount: depositAmount,
-          estimated_total: estimatedTotal,
-        });
+        if (!selectedBookingRoomId) {
+          setError("Phòng đã chọn hiện chưa có phòng trống cụ thể. Vui lòng quay lại danh sách phòng.");
+          return;
+        }
 
         const response = await customerPortalApi.createBooking({
           expected_checkin: form.checkin,
           expected_checkout: form.checkout,
           adults: Number(form.adults),
           children: Number(form.children),
-          room_ids: [form.room_id],
-          customer_name: form.customer_name,
-          customer_email: form.customer_email,
-          customer_phone: form.customer_phone,
-          special_request: form.special_request,
-          selected_add_ons: selectedAddOns,
-          estimated_total: estimatedTotal,
-          deposit_amount: depositAmount,
+          rooms: [{ room_id: selectedBookingRoomId }],
         });
         setResult(response);
         setStep(4);
+      } catch (e) {
+        setError(e.message || "Đặt phòng thất bại. Vui lòng thử lại.");
       } finally {
         setSubmitting(false);
       }

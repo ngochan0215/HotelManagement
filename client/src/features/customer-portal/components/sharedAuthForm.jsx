@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Mail, Phone, UserRound } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
@@ -25,14 +25,22 @@ function getLoginIdentity(response) {
   });
 }
 
-function Field({ label, icon: Icon, children }) {
+const PASSWORD_RULE_TEXT = "Ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.";
+
+function Field({ label, icon: Icon, children, required = false, hint = "", error = "", optional = false }) {
   return (
     <label className="grid gap-2 text-sm font-medium text-stone-700">
-      {label}
+      <span>
+        {label}{" "}
+        {required ? <span className="font-semibold text-red-600">*</span> : null}
+        {!required && optional ? <span className="text-stone-500">(không bắt buộc)</span> : null}
+      </span>
       <div className="relative">
         {Icon ? <Icon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" /> : null}
         {children}
       </div>
+      {hint ? <span className="text-xs text-stone-500">{hint}</span> : null}
+      {error ? <span className="text-xs font-medium text-red-600">{error}</span> : null}
     </label>
   );
 }
@@ -41,8 +49,10 @@ export default function SharedAuthForm({ embedded = false }) {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState("login");
-  const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [registerError, setRegisterError] = useState("");
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     full_name: "",
@@ -53,6 +63,32 @@ export default function SharedAuthForm({ embedded = false }) {
     CCCD: "",
     date_birth: "",
   });
+  const [registerErrors, setRegisterErrors] = useState({});
+  const registerInFlightRef = useRef(false);
+
+  const validateRegisterForm = () => {
+    const errors = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
+
+    if (!registerForm.full_name.trim()) errors.full_name = "Vui lòng nhập họ và tên.";
+    if (!registerForm.email.trim()) {
+      errors.email = "Vui lòng nhập email.";
+    } else if (!emailRegex.test(registerForm.email.trim())) {
+      errors.email = "Email không đúng định dạng.";
+    }
+    if (!registerForm.password) {
+      errors.password = "Vui lòng nhập mật khẩu.";
+    } else if (!passwordRegex.test(registerForm.password)) {
+      errors.password = PASSWORD_RULE_TEXT;
+    }
+    if (!registerForm.phone_number.trim()) errors.phone_number = "Vui lòng nhập số điện thoại.";
+    if (!registerForm.CCCD.trim()) errors.CCCD = "Vui lòng nhập CCCD.";
+    if (!registerForm.date_birth) errors.date_birth = "Vui lòng chọn ngày sinh.";
+
+    setRegisterErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const redirectAfterLogin = async (response) => {
     const { role, position } = getLoginIdentity(response);
@@ -78,7 +114,7 @@ export default function SharedAuthForm({ embedded = false }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setLoginLoading(true);
     setMessage("");
     try {
       const response = await login(credentials);
@@ -86,22 +122,35 @@ export default function SharedAuthForm({ embedded = false }) {
     } catch (error) {
       setMessage(getErrorMessage(error));
     } finally {
-      setLoading(false);
+      setLoginLoading(false);
     }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    if (registerLoading || registerInFlightRef.current) return;
+    registerInFlightRef.current = true;
+    setRegisterError("");
+    if (!validateRegisterForm()) {
+      setRegisterError("Vui lòng kiểm tra lại các trường bắt buộc.");
+      registerInFlightRef.current = false;
+      return;
+    }
+    setRegisterLoading(true);
     setMessage("");
     try {
       await customerApi.registerCustomer(registerForm);
       setMessage("Đăng ký thành công. Vui lòng đăng nhập để tiếp tục.");
       setTab("login");
     } catch (error) {
-      setMessage(error?.response?.data?.message || "Đăng ký thất bại.");
+      if (error?.isTimeout) {
+        setRegisterError(error.message);
+      } else {
+        setRegisterError(error?.message || "Đăng ký thất bại.");
+      }
     } finally {
-      setLoading(false);
+      setRegisterLoading(false);
+      registerInFlightRef.current = false;
     }
   };
 
@@ -154,8 +203,8 @@ export default function SharedAuthForm({ embedded = false }) {
                 </label>
                 <span className="font-medium text-stone-800">Quên mật khẩu</span>
               </div>
-              <button disabled={loading} className="mt-2 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
-                {loading ? "Đang xử lý..." : "Đăng nhập"}
+              <button disabled={loginLoading} className="mt-2 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
+                {loginLoading ? "Đang xử lý..." : "Đăng nhập"}
               </button>
               <p className="text-center text-sm text-stone-600">
                 Chưa có tài khoản?{" "}
@@ -166,29 +215,58 @@ export default function SharedAuthForm({ embedded = false }) {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="mt-7 grid gap-4 md:grid-cols-2">
-              <Field label="Họ và tên" icon={UserRound}>
-                <input value={registerForm.full_name} onChange={(e) => setRegisterForm((prev) => ({ ...prev, full_name: e.target.value }))} placeholder="Nguyễn Văn A" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2">
+                Các trường có dấu <span className="font-semibold text-red-600">*</span> là bắt buộc.
+              </p>
+              <Field label="Họ và tên" icon={UserRound} required error={registerErrors.full_name}>
+                <input value={registerForm.full_name} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, full_name: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, full_name: "" }));
+                }} placeholder="Ví dụ: Nguyễn Văn A" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
               </Field>
-              <Field label="Email" icon={Mail}>
-                <input type="email" value={registerForm.email} onChange={(e) => setRegisterForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="ban@email.com" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <Field label="Email" icon={Mail} required error={registerErrors.email}>
+                <input type="email" value={registerForm.email} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, email: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, email: "" }));
+                }} placeholder="Ví dụ: ban@email.com" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
               </Field>
-              <Field label="Mật khẩu" icon={KeyRound}>
-                <input type="password" value={registerForm.password} onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))} placeholder="Tạo mật khẩu" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <Field label="Mật khẩu" icon={KeyRound} required hint={PASSWORD_RULE_TEXT} error={registerErrors.password}>
+                <input type="password" value={registerForm.password} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, password: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, password: "" }));
+                }} placeholder="Nhập mật khẩu mạnh" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
               </Field>
-              <Field label="Số điện thoại" icon={Phone}>
-                <input value={registerForm.phone_number} onChange={(e) => setRegisterForm((prev) => ({ ...prev, phone_number: e.target.value }))} placeholder="09xxxxxxxx" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <Field label="Số điện thoại" icon={Phone} required hint="Ví dụ: 09xxxxxxxx hoặc +84xxxxxxxxx" error={registerErrors.phone_number}>
+                <input value={registerForm.phone_number} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, phone_number: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, phone_number: "" }));
+                }} placeholder="Ví dụ: 0912345678" className="w-full rounded-2xl border border-stone-200 px-11 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
               </Field>
-              <Field label="CCCD">
-                <input value={registerForm.CCCD} onChange={(e) => setRegisterForm((prev) => ({ ...prev, CCCD: e.target.value }))} placeholder="Số CCCD" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <Field label="CCCD" required hint="CCCD gồm 12 chữ số." error={registerErrors.CCCD}>
+                <input value={registerForm.CCCD} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, CCCD: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, CCCD: "" }));
+                }} placeholder="Ví dụ: 012345678901" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
               </Field>
-              <Field label="Ngày sinh">
-                <input type="date" value={registerForm.date_birth} onChange={(e) => setRegisterForm((prev) => ({ ...prev, date_birth: e.target.value }))} className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              <Field label="Ngày sinh" required hint="Bạn phải từ 18 tuổi trở lên." error={registerErrors.date_birth}>
+                <input type="date" value={registerForm.date_birth} onChange={(e) => {
+                  setRegisterForm((prev) => ({ ...prev, date_birth: e.target.value }));
+                  setRegisterErrors((prev) => ({ ...prev, date_birth: "" }));
+                }} className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+              </Field>
+              <Field label="Quốc tịch" optional>
+                <input value={registerForm.nationality} onChange={(e) => setRegisterForm((prev) => ({ ...prev, nationality: e.target.value }))} placeholder="Ví dụ: Vietnam" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
               </Field>
               <div className="md:col-span-2">
-                <button disabled={loading} className="inline-flex w-full items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
-                  {loading ? "Đang xử lý..." : "Tạo tài khoản khách hàng"}
+                <button type="submit" disabled={registerLoading} className="inline-flex w-full items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
+                  {registerLoading ? "Đang xử lý..." : "Tạo tài khoản khách hàng"}
                 </button>
               </div>
+              {registerError ? (
+                <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 md:col-span-2">
+                  {registerError}
+                </p>
+              ) : null}
             </form>
           )}
 

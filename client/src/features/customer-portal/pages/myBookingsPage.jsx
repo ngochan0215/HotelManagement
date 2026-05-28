@@ -4,6 +4,7 @@ import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
 import { EmptyState, HotelImage, SectionHeader, StatusBadge } from "../components/sitePrimitives.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
 
 function getStatusTone(status) {
   if (status === "confirmed" || status === "completed") return "success";
@@ -12,15 +13,28 @@ function getStatusTone(status) {
 }
 
 export default function MyBookingsPage() {
+  const { user } = useAuth();
   const [query, setQuery] = useState({ bookingCode: "", email: "", phone: "" });
   const [bookings, setBookings] = useState([]);
   const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLookup = async (e) => {
     e.preventDefault();
-    const res = await customerPortalApi.lookupBookings(query);
-    setBookings(res.bookings || []);
-    setSearched(true);
+    setLoading(true);
+    setError("");
+    try {
+      const res = await customerPortalApi.lookupBookings(query);
+      setBookings(res.bookings || []);
+      setSearched(true);
+    } catch (err) {
+      setError(err.message || "Không thể tra cứu đặt phòng.");
+      setBookings([]);
+      setSearched(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,14 +71,17 @@ export default function MyBookingsPage() {
                 <input value={query.phone} onChange={(e) => setQuery((prev) => ({ ...prev, phone: e.target.value }))} placeholder="09xxxxxxxx" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
               </label>
               <div className="md:col-span-2">
-                <button type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-stone-800">
+                <button disabled={loading} type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
                   <Search size={16} />
-                  Tra cứu đặt phòng
+                  {loading ? "Đang tra cứu..." : "Tra cứu đặt phòng"}
                 </button>
               </div>
             </form>
 
             <div className="mt-6 space-y-4">
+              {error ? (
+                <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+              ) : null}
               {bookings.map((item, index) => (
                 <article key={item.id || item._id} className="min-w-0 overflow-hidden rounded-[28px] border border-stone-200 bg-stone-50">
                   <div className="grid gap-0 lg:grid-cols-[minmax(0,0.32fr)_minmax(0,0.68fr)]">
@@ -105,8 +122,8 @@ export default function MyBookingsPage() {
 
               {!searched ? (
                 <EmptyState
-                  title="Sẵn sàng tra cứu đặt phòng"
-                  description="Nhập mã đặt phòng và email để xem lại trạng thái đơn."
+                  title={user ? "Sẵn sàng tra cứu đặt phòng" : "Bạn cần đăng nhập để xem lịch sử"}
+                  description={user ? "Nhập mã đặt phòng và email để xem lại trạng thái đơn." : "API hiện tại chỉ hỗ trợ khách hàng đã đăng nhập tra cứu booking của mình."}
                 />
               ) : null}
             </div>
