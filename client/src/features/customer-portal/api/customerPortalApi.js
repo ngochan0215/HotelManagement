@@ -159,16 +159,20 @@ export const customerPortalApi = {
   async getBookingAddOns() {
     try {
       const response = await axios.get(`${API_BASE_URL}/services`, {
-        params: { limit: 100 },
+        params: { limit: 100, status: "active", service_type: "rental,experience" },
         ...getAuthConfig(),
       });
-      const rawServices = response.data?.services || [];
+      const rawServices =
+        response.data?.services ||
+        response.data?.data?.services ||
+        response.data?.data ||
+        [];
       const services = rawServices.map((item) => ({
         id: item._id,
         name: item.name,
         price: Number(item.price || 0),
         description: item.description || "",
-      }));
+      })).filter((item) => item.id && item.name);
       return { services, isFallback: false };
     } catch (error) {
       if (error?.response?.status === 401 || error?.response?.status === 403) {

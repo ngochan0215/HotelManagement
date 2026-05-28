@@ -207,9 +207,29 @@ export class ServiceService {
         }
     }
 
-    async getAllServices({ category_id, status, min_quantity, max_quantity, min_price, max_price, page = 1, limit = 50 } = {}) {
+    async getAllServices({
+        category_id,
+        status,
+        service_type,
+        min_quantity,
+        max_quantity,
+        min_price,
+        max_price,
+        page = 1,
+        limit = 50
+    } = {}) {
         try {
-            const cacheKey = `svc:list:${JSON.stringify([category_id || null, status || null, min_quantity || null, max_quantity || null, min_price || null, max_price || null, Number(page), Number(limit)])}`;
+            const cacheKey = `svc:list:${JSON.stringify([
+                category_id || null,
+                status || null,
+                service_type || null,
+                min_quantity || null,
+                max_quantity || null,
+                min_price || null,
+                max_price || null,
+                Number(page),
+                Number(limit)
+            ])}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -221,6 +241,15 @@ export class ServiceService {
                 filter.category_id = category_id;
             }
             if (status) filter.status = status;
+            if (service_type) {
+                const types = String(service_type)
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+                if (types.length > 0) {
+                    filter.service_type = { $in: types };
+                }
+            }
             if (min_price || max_price) {
                 filter.price = {};
                 if (min_price) filter.price.$gte = Number(min_price);
