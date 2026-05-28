@@ -1,9 +1,16 @@
 import express from "express";
 import { BookingController } from "../controllers/bookingController.js";
-import { isManager, verifyToken, isEmployee } from "../../../shared/middleware/authMiddleware.js";
+import { isManager, verifyToken, isEmployee, isCustomer } from "../../../shared/middleware/authMiddleware.js";
 
 const router = express.Router();
 const controller = new BookingController();
+
+// customer self-service — must be before /:id
+router.post("/customer", verifyToken, isCustomer, controller.createCustomerBooking);
+router.patch("/customer/cancel/:id", verifyToken, isCustomer, controller.cancelCustomerBooking);
+router.patch("/customer/:bookingId/details/:detailId/cancel", verifyToken, isCustomer, controller.cancelCustomerBookingDetail);
+router.get("/my", verifyToken, isCustomer, controller.getMyBookings);
+router.get("/my/:id", verifyToken, isCustomer, controller.getMyBookingDetail);
 
 router.get("/", verifyToken, isEmployee, controller.getAllBookings);
 router.get("/:id", verifyToken, isEmployee, controller.getBookingDetail);

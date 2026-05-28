@@ -125,6 +125,58 @@ export class BookingController {
         }
     };
 
+    createCustomerBooking = async (req, res) => {
+        try {
+            const { booking, deposit } = await this.bookingService.createCustomerBooking(req.user.userId, req.body);
+            return res.status(201).json({
+                message: "Đặt phòng thành công.",
+                booking_id: booking._id,
+                deposit,
+            });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    cancelCustomerBooking = async (req, res) => {
+        try {
+            const { reason } = req.body;
+            await this.bookingService.cancelCustomerBooking(req.user.userId, req.params.id, reason);
+            return res.status(200).json({ message: "Đã hủy đặt phòng thành công." });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    cancelCustomerBookingDetail = async (req, res) => {
+        try {
+            const { bookingId, detailId } = req.params;
+            const { reason } = req.body;
+            await this.bookingService.cancelCustomerBookingDetail(req.user.userId, bookingId, detailId, reason);
+            return res.status(200).json({ message: "Đã hủy phòng thành công." });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    getMyBookings = async (req, res) => {
+        try {
+            const result = await this.bookingService.getMyBookings(req.user.userId, req.query);
+            return res.status(200).json(result);
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    getMyBookingDetail = async (req, res) => {
+        try {
+            const { booking, rooms } = await this.bookingService.getMyBookingDetail(req.user.userId, req.params.id);
+            return res.status(200).json({ booking, rooms });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     cancelBooking = async (req, res) => {
         try {
             const { id } = req.params;

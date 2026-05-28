@@ -27,10 +27,10 @@ const receiptSchema = new mongoose.Schema(
             discount_amount: Number,
         },
 
-        // employee
+        // employee (null for customer self-bookings)
         employee_id: {
             type: mongoose.Schema.Types.ObjectId,
-            required: true,
+            default: null,
         },
 
         // service usage

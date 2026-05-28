@@ -24,14 +24,18 @@ class Container {
             eventBus: this.eventBus
         });
 
-        this.discountEventHandler = new DiscountEventHandler(this.discountService, this.eventBus);
+        this.discountEventHandler = new DiscountEventHandler(this.discountService, this.voucherService, this.eventBus);
     }
 
     async init() {
         await this.eventBus.connect({
             queueName: "discount-service-events",
             bindEvents: [
-                DISCOUNT_EVENTS.CHECK_EXISTS
+                DISCOUNT_EVENTS.CHECK_EXISTS,
+                DISCOUNT_EVENTS.GET_ACTIVE_DISCOUNTS,
+                DISCOUNT_EVENTS.VALIDATE_VOUCHER,
+                DISCOUNT_EVENTS.REDEEM_VOUCHER,
+                DISCOUNT_EVENTS.RELEASE_VOUCHER,
             ]
         });
 

@@ -1326,7 +1326,7 @@ export class BookingService {
                     room_id: detail.room_id,
                     room_log_id: Array.isArray(replyInsertLog.roomLogs) ? replyInsertLog.roomLogs[0]?._id : replyInsertLog.roomLogs?._id,
                     booking_id: bookingId,
-                    note: `Dọn dẹp phòng sau checkout booking ${booking._id}`,
+                    note: `Dọn dẹp phòng sau checkout booking #${shortenId}`,
                 }
             );
             if (!replyCleaningTask.success) 
@@ -1710,6 +1710,659 @@ export class BookingService {
         } catch (err) {
             console.log("Error while cancelling booking: ", err.message);
             throw err;
+        }
+    };
+
+    findCustomerByUserId = async (userId) => {
+        const reply = await this.eventBus.safeRequest(
+            CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
+            { customer_user_id: userId }
+        );
+        if (!reply.found) {
+            const err = new Error("Không tìm thấy hồ sơ khách hàng.");
+            err.status = 404;
+            throw err;
+        }
+        return reply.customer;
+    };
+
+    // customer management 
+    
+    getMyBookings = async (userId, query = {}) => {
+        try {
+            const { status, page = 1, limit = 10 } = query;
+
+            const customer = await this.findCustomerByUserId(userId);
+
+            const filter = { customer_id: customer._id };
+            if (status) filter.status = status;
+
+            const skip = (Number(page) - 1) * Number(limit);
+
+            const [total, bookings] = await Promise.all([
+                this.Booking.countDocuments(filter),
+                this.Booking.find(filter)
+                    .sort({ created_at: -1 })
+                    .skip(skip)
+                    .limit(Number(limit))
+                    .select("-__v")
+                    .lean(),
+            ]);
+
+            if (bookings.length === 0) {
+                return { total, page: Number(page), limit: Number(limit), bookings: [] };
+            }
+
+            const bookingIds = bookings.map(b => b._id);
+            const bookingDetails = await this.BookingDetail.find({ booking_id: { $in: bookingIds } })
+                .select("-created_at -updated_at -__v")
+                .lean();
+
+            const populatedDetails = await this.populateRoom(bookingDetails);
+
+            const bookingDetailMap = {};
+            populatedDetails.forEach(detail => {
+                const key = detail.booking_id.toString();
+                if (!bookingDetailMap[key]) bookingDetailMap[key] = [];
+                bookingDetailMap[key].push(detail);
+            });
+
+            const result = bookings.map(booking => ({
+                ...booking,
+                rooms: bookingDetailMap[booking._id.toString()] || [],
+            }));
+
+            return { total, page: Number(page), limit: Number(limit), bookings: result };
+
+        } catch (error) {
+            console.log("Error in getMyBookings:", error.message);
+            throw error;
+        }
+    };
+
+    getMyBookingDetail = async (userId, bookingId) => {
+        try {
+            if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+                throw new Error("Booking ID không hợp lệ.");
+            }
+
+            const customer = await this.findCustomerByUserId(userId);
+
+            const [booking, bookingDetails] = await Promise.all([
+                this.Booking.findById(bookingId).select("-__v").lean(),
+                this.BookingDetail.find({ booking_id: bookingId })
+                    .select("-__v")
+                    .lean(),
+            ]);
+
+            if (!booking) {
+                throw new Error("Không tìm thấy booking.");
+            }
+
+            if (booking.customer_id.toString() !== customer._id.toString()) {
+                const err = new Error("Bạn không có quyền xem booking này.");
+                err.status = 403;
+                throw err;
+            }
+
+            const populatedDetails = await this.populateRoom(bookingDetails);
+
+            const rooms = populatedDetails.map(item => ({
+                detail_id: item._id,
+                room_id: item.room_info?._id,
+                room_number: item.room_info?.room_number,
+                room_status: item.room_info?.room_status,
+                category: item.room_info?.category ?? null,
+                expected_checkin: item.expected_checkin,
+                expected_checkout: item.expected_checkout,
+                actual_checkin: item.actual_checkin,
+                actual_checkout: item.actual_checkout,
+                base_fee: item.base_fee,
+                extra_fee: item.extra_fee,
+                status: item.status,
+                note: item.note,
+                cancellation_reason: item.cancellation_reason,
+            }));
+
+            return { booking, rooms };
+
+        } catch (error) {
+            console.log("Error in getMyBookingDetail:", error.message);
+            throw error;
+        }
+    };
+
+    createCustomerBooking = async (userId, data) => {
+        try {
+            const { expected_checkin, expected_checkout, adults, children, rooms, voucher_code } = data;
+
+            if (!expected_checkin || !expected_checkout || adults === undefined || children === undefined) {
+                throw new Error("Phải điền đầy đủ thông tin bắt buộc.");
+            }
+            if (!Array.isArray(rooms) || rooms.length === 0) {
+                throw new Error("Phải chọn ít nhất một phòng.");
+            }
+
+            const checkin = new Date(expected_checkin);
+            const checkout = new Date(expected_checkout);
+            const now = new Date();
+
+            if (checkin <= now) throw new Error("Ngày check-in phải là ngày trong tương lai.");
+            if (checkout <= checkin) throw new Error("Ngày check-out phải sau ngày check-in.");
+
+            const customer = await this.findCustomerByUserId(userId);
+
+            for (const room of rooms) {
+                if (!room.room_id || !mongoose.Types.ObjectId.isValid(room.room_id)) {
+                    throw new Error("ID phòng không hợp lệ.");
+                }
+            }
+
+            const roomIds = rooms.map(r => r.room_id);
+
+            // batch fetch room info (price + capacity)
+            const replyRooms = await this.eventBus.safeRequest(ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: roomIds });
+            if (!replyRooms.rooms || replyRooms.rooms.length !== roomIds.length) {
+                throw new Error("Một hoặc nhiều phòng không tồn tại.");
+            }
+
+            const roomInfoMap = {};
+            for (const room of replyRooms.rooms) {
+                roomInfoMap[room._id.toString()] = room;
+            }
+
+            // validate combined capacity
+            let totalMaxAdults = 0;
+            let totalMaxChildren = 0;
+            for (const roomId of roomIds) {
+                const room = roomInfoMap[roomId];
+                totalMaxAdults += room.category_id?.max_adults || 0;
+                totalMaxChildren += room.category_id?.max_children || 0;
+            }
+            if (Number(adults) > totalMaxAdults) {
+                throw new Error(`Số người lớn (${adults}) vượt quá sức chứa của các phòng đã chọn (${totalMaxAdults}).`);
+            }
+            if (Number(children) > totalMaxChildren) {
+                throw new Error(`Số trẻ em (${children}) vượt quá sức chứa của các phòng đã chọn (${totalMaxChildren}).`);
+            }
+
+            // batch conflict check via room logs
+            const replyBusyLogs = await this.eventBus.safeRequest(ROOM_EVENTS.FIND_ROOM_LOGS, {
+                filter: {
+                    room_id: { $in: roomIds },
+                    status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
+                    start_time: { $lt: checkout },
+                    $or: [{ end_time: { $gt: checkin } }, { end_time: null }],
+                },
+                opts: { limit: roomIds.length * 5 },
+            });
+            if (replyBusyLogs.roomLogs?.length > 0) {
+                const busyRoomIdStr = replyBusyLogs.roomLogs[0].room_id?.toString();
+                const busyRoom = roomInfoMap[busyRoomIdStr];
+                throw new Error(`Phòng ${busyRoom?.room_number || busyRoomIdStr} không còn trống trong khoảng thời gian đã chọn.`);
+            }
+
+            // calculate base fee
+            const nights = this.calcNights(expected_checkin, expected_checkout);
+            let baseRoomFee = 0;
+            const roomDetailInfos = [];
+            for (const roomId of roomIds) {
+                const room = roomInfoMap[roomId];
+                const pricePerNight = room.category_id?.price || 0;
+                const roomFee = pricePerNight * nights;
+                baseRoomFee += roomFee;
+                roomDetailInfos.push({ room_id: roomId, base_fee: roomFee });
+            }
+
+            // auto-apply best discount
+            let discountSnapshot = null;
+            let discountAmount = 0;
+            const replyDiscounts = await this.eventBus.safeRequest(DISCOUNT_EVENTS.GET_ACTIVE_DISCOUNTS, {
+                orderValue: baseRoomFee,
+            });
+            const bestDiscount = replyDiscounts.discounts?.[0] || null;
+            if (bestDiscount) {
+                discountAmount = bestDiscount.savings;
+                discountSnapshot = {
+                    discount_id: bestDiscount.id,
+                    name: bestDiscount.name,
+                    description: bestDiscount.description || "",
+                    discount_amount: discountAmount,
+                };
+            }
+
+            // validate voucher if provided
+            let voucherSnapshot = null;
+            let voucherAmount = 0;
+            if (voucher_code) {
+                const orderValueAfterDiscount = Math.max(baseRoomFee - discountAmount, 0);
+                const replyVoucher = await this.eventBus.safeRequest(DISCOUNT_EVENTS.VALIDATE_VOUCHER, {
+                    voucherCodes: [voucher_code],
+                    customerId: customer._id.toString(),
+                    orderValue: orderValueAfterDiscount,
+                });
+                if (!replyVoucher.success) throw new Error(replyVoucher.message || "Voucher không hợp lệ.");
+                const voucherInfo = replyVoucher.vouchers?.[0];
+                if (!voucherInfo) throw new Error(`Voucher "${voucher_code}" không hợp lệ.`);
+                voucherAmount = voucherInfo.savings;
+                voucherSnapshot = {
+                    voucher_id: voucherInfo.id,
+                    code: voucher_code.toUpperCase(),
+                    name: voucherInfo.name,
+                    description: voucherInfo.description || "",
+                    voucher_amount: voucherAmount,
+                };
+            }
+
+            const originalFee = baseRoomFee;
+            const totalFee = Math.max(baseRoomFee - discountAmount - voucherAmount, 0);
+            const deposit = Math.ceil(totalFee * 0.3);
+
+            const booking = await this.Booking.create({
+                customer_id: customer._id,
+                handled_by: null,
+                adults,
+                children,
+                deposit,
+                original_fee: originalFee,
+                total_fee: totalFee,
+                expected_checkin: checkin,
+                expected_checkout: checkout,
+                status: "pending",
+                isScheduled: true,
+                ...(discountSnapshot && { discount_snapshot: discountSnapshot }),
+                ...(voucherSnapshot && { voucher_snapshot: voucherSnapshot }),
+            });
+
+            const bookingDetails = roomDetailInfos.map(r => ({
+                booking_id: booking._id,
+                room_id: r.room_id,
+                expected_checkin: checkin,
+                expected_checkout: checkout,
+                base_fee: r.base_fee,
+                status: "reserved",
+            }));
+            await this.BookingDetail.insertMany(bookingDetails);
+
+            const shortenId = booking._id.toString().slice(-6);
+            await this.BookingStatusLog.create({
+                booking_id: booking._id,
+                status: "pending",
+                start_time: checkin,
+                expected_end_time: checkout,
+                handled_by: null,
+                note: "Đơn đặt phòng được tạo bởi khách hàng, đang chờ thanh toán cọc.",
+            });
+
+            const replyUpdateRoom = await this.eventBus.safeRequest(ROOM_EVENTS.UPDATE_ROOM_INFO, {
+                filter: { _id: { $in: roomIds } },
+                updateData: { start_time: checkin, end_time: checkout },
+            });
+            if (!replyUpdateRoom.success) throw new Error(replyUpdateRoom.message);
+
+            const roomLogs = bookingDetails.map(bd => ({
+                booking_id: booking._id,
+                room_id: bd.room_id,
+                status: "reserved",
+                start_time: checkin,
+                end_time: checkout,
+                expected_end_time: checkout,
+                note: `Phòng được giữ chỗ bởi booking #${shortenId} (khách tự đặt, chờ cọc)`,
+                handled_by: null,
+            }));
+            const replyInsertLog = await this.eventBus.safeRequest(ROOM_EVENTS.INSERT_ROOM_LOG, { data: roomLogs });
+            if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
+
+            const amountDue = Math.max(totalFee - deposit, 0);
+            const replyReceipt = await this.eventBus.safeRequest(PAYMENT_EVENTS.CREATE_RECEIPT, {
+                booking_id: booking._id,
+                employee_id: null,
+                discount_id: discountSnapshot?.discount_id || null,
+                discount_snapshot: discountSnapshot,
+                base_room_fee: originalFee,
+                total_fee: totalFee,
+                deposit_amount: deposit,
+                final_amount: totalFee,
+                amount_due: amountDue,
+                payment: "bank",
+                status: "pending",
+                note: "Hóa đơn tạo tự động khi khách tự đặt phòng, chờ thanh toán cọc.",
+            });
+            if (!replyReceipt.success) throw new Error(replyReceipt.message);
+
+            if (voucher_code) {
+                const replyRedeem = await this.eventBus.safeRequest(DISCOUNT_EVENTS.REDEEM_VOUCHER, {
+                    voucherCodes: [voucher_code],
+                    customerId: customer._id.toString(),
+                    bookingId: booking._id.toString(),
+                });
+                if (!replyRedeem.success) {
+                    console.warn(`[createCustomerBooking] Redeem voucher thất bại: ${replyRedeem.message}`);
+                }
+            }
+
+            await cache.delByPattern("booking:list:*");
+
+            Promise.all([
+                this.findManagersByIds(),
+                this.eventBus.safeRequest(EMPLOYEE_EVENTS.GET_RECEPTIONISTS, {}),
+            ]).then(([{ managerUserIds }, replyReceptionists]) => {
+                const receptionistsUserIds = replyReceptionists.found
+                    ? replyReceptionists.receptionists.employees.map(e => e.user_id) : [];
+                const notifPromises = [];
+                if (managerUserIds?.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: managerUserIds,
+                        title: "Đơn đặt phòng mới từ khách hàng",
+                        content: `Khách hàng ${customer.full_name || "N/A"} vừa đặt phòng (Booking #${shortenId}). Chờ xác nhận thanh toán cọc.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: customer.user_id,
+                        title: "Đặt phòng thành công",
+                        content: `Booking #${shortenId} đã được tạo. Vui lòng thanh toán cọc ${deposit.toLocaleString("vi-VN")}đ để hoàn tất đặt phòng.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                if (receptionistsUserIds.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: receptionistsUserIds,
+                        title: "Đơn đặt phòng mới",
+                        content: `Booking #${shortenId} mới từ khách hàng ${customer.full_name || "N/A"}. Chờ xác nhận cọc.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[createCustomerBooking] Notification error:", err.message));
+
+            return { booking, deposit };
+
+        } catch (error) {
+            console.log("Error in createCustomerBooking:", error.message);
+            throw error;
+        }
+    };
+
+    cancelCustomerBooking = async (userId, bookingId, reason) => {
+        try {
+            if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+                throw new Error("Booking ID không hợp lệ.");
+            }
+
+            const customer = await this.findCustomerByUserId(userId);
+
+            const booking = await this.Booking.findById(bookingId);
+            if (!booking) throw new Error("Không tìm thấy booking.");
+
+            if (booking.customer_id.toString() !== customer._id.toString()) {
+                const err = new Error("Bạn không có quyền hủy booking này.");
+                err.status = 403;
+                throw err;
+            }
+
+            if (!["pending", "confirmed"].includes(booking.status)) {
+                throw new Error("Không thể hủy booking ở trạng thái này.");
+            }
+
+            if (new Date() >= new Date(booking.expected_checkin)) {
+                throw new Error("Không thể hủy booking sau ngày check-in.");
+            }
+
+            const now = new Date();
+            const shortenId = bookingId.toString().slice(-6);
+
+            booking.status = "cancelled";
+            await booking.save();
+
+            await this.BookingStatusLog.findOneAndUpdate(
+                { booking_id: bookingId, end_time: null },
+                { $set: { end_time: now } }
+            );
+            await this.BookingStatusLog.create({
+                booking_id: bookingId,
+                status: "cancelled",
+                start_time: now,
+                end_time: null,
+                note: `Booking #${shortenId} bị hủy bởi khách hàng.`,
+                handled_by: null,
+            });
+
+            const details = await this.BookingDetail.find({ booking_id: bookingId });
+            const roomIds = details.map(bd => bd.room_id);
+
+            const replyUpdateLog = await this.eventBus.safeRequest(ROOM_EVENTS.UPDATE_ROOM_LOG, {
+                filter: {
+                    room_id: { $in: roomIds },
+                    start_time: { $lte: now },
+                    $or: [{ end_time: { $gte: now } }, { end_time: null }],
+                },
+                updateData: { end_time: now },
+            });
+            if (!replyUpdateLog.success) throw new Error(replyUpdateLog.message);
+
+            const availableRoomLogs = details.map(bd => ({
+                room_id: bd.room_id,
+                status: "available",
+                start_time: now,
+                end_time: null,
+                note: `Phòng được giải phóng sau khi booking #${shortenId} bị khách hủy.`,
+                handled_by: null,
+            }));
+            const replyInsertLog = await this.eventBus.safeRequest(ROOM_EVENTS.INSERT_ROOM_LOG, {
+                data: availableRoomLogs,
+            });
+            if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
+
+            const replyUpdateRoom = await this.eventBus.safeRequest(ROOM_EVENTS.UPDATE_ROOM_INFO, {
+                filter: { _id: { $in: roomIds } },
+                updateData: { start_time: now, end_time: now },
+            });
+            if (!replyUpdateRoom.success) throw new Error(replyUpdateRoom.message);
+
+            for (const d of details) {
+                d.status = "cancelled";
+                d.cancelled_at = now;
+                d.cancellation_reason = reason;
+                await d.save();
+
+                await this.BookingCancellation.create({
+                    booking_id: booking._id,
+                    room_id: d.room_id,
+                    user_id: userId,
+                    cancelled_by: "customer",
+                    reason,
+                    booking_status: booking.status,
+                });
+            }
+
+            // deduct points for cancellation
+            const replyPoints = await this.eventBus.safeRequest(CUSTOMER_EVENTS.UPDATE_POINTS, {
+                customer_id: customer._id,
+                points: -20,
+                reason: "Trừ 20 điểm vì hủy booking",
+            });
+            if (!replyPoints.success) console.warn(`[cancelCustomerBooking] Trừ điểm thất bại: ${replyPoints.message}`);
+
+            // release voucher lock if any
+            const voucherCode = booking.voucher_snapshot?.code;
+            if (voucherCode) {
+                const replyRelease = await this.eventBus.safeRequest(DISCOUNT_EVENTS.RELEASE_VOUCHER, {
+                    voucherCodes: [voucherCode],
+                    customerId: customer._id.toString(),
+                    bookingId: bookingId.toString(),
+                });
+                if (!replyRelease.success) {
+                    console.warn(`[cancelCustomerBooking] Release voucher thất bại: ${replyRelease.message}`);
+                }
+            }
+
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
+
+            Promise.all([this.findManagersByIds()]).then(([{ managerUserIds }]) => {
+                const notifPromises = [];
+                if (managerUserIds?.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: managerUserIds,
+                        title: "Booking bị khách hủy",
+                        content: `Khách hàng ${customer.full_name || "N/A"} đã hủy booking #${shortenId}.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: customer.user_id,
+                        title: "Đã hủy đặt phòng",
+                        content: `Booking #${shortenId} đã được hủy thành công. Tiền cọc sẽ không được hoàn lại.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[cancelCustomerBooking] Notification error:", err.message));
+
+            return { success: true };
+
+        } catch (error) {
+            console.log("Error in cancelCustomerBooking:", error.message);
+            throw error;
+        }
+    };
+
+    cancelCustomerBookingDetail = async (userId, bookingId, detailId, reason) => {
+        try {
+            if (!mongoose.Types.ObjectId.isValid(bookingId) || !mongoose.Types.ObjectId.isValid(detailId)) {
+                throw new Error("ID không hợp lệ.");
+            }
+
+            const customer = await this.findCustomerByUserId(userId);
+
+            const booking = await this.Booking.findById(bookingId);
+            if (!booking) throw new Error("Không tìm thấy booking.");
+
+            if (booking.customer_id.toString() !== customer._id.toString()) {
+                const err = new Error("Bạn không có quyền thao tác trên booking này.");
+                err.status = 403;
+                throw err;
+            }
+
+            if (!["pending", "confirmed"].includes(booking.status)) {
+                throw new Error("Không thể hủy phòng trong booking ở trạng thái này.");
+            }
+
+            const detail = await this.BookingDetail.findOne({ _id: detailId, booking_id: bookingId });
+            if (!detail) throw new Error("Không tìm thấy phòng trong booking.");
+
+            if (detail.status === "cancelled") throw new Error("Phòng này đã bị hủy trước đó.");
+
+            const now = new Date();
+            if (now >= new Date(detail.expected_checkin)) {
+                throw new Error("Không thể hủy phòng sau ngày check-in.");
+            }
+
+            detail.status = "cancelled";
+            detail.cancelled_at = now;
+            detail.cancellation_reason = reason;
+            await detail.save();
+
+            const replyUpdateLog = await this.eventBus.safeRequest(ROOM_EVENTS.UPDATE_ROOM_LOG, {
+                filter: {
+                    room_id: detail.room_id,
+                    start_time: { $lte: now },
+                    $or: [{ end_time: { $gte: now } }, { end_time: null }],
+                },
+                updateData: { end_time: now },
+            });
+            if (!replyUpdateLog.success) throw new Error(replyUpdateLog.message);
+
+            const replyInsertLog = await this.eventBus.safeRequest(ROOM_EVENTS.INSERT_ROOM_LOG, {
+                data: {
+                    room_id: detail.room_id,
+                    status: "available",
+                    start_time: now,
+                    end_time: null,
+                    note: `Phòng được giải phóng sau khi khách hủy 1 phòng từ booking #${bookingId.toString().slice(-6)}.`,
+                    handled_by: null,
+                },
+            });
+            if (!replyInsertLog.success) throw new Error(replyInsertLog.message);
+
+            await this.BookingCancellation.create({
+                booking_id: booking._id,
+                room_id: detail.room_id,
+                user_id: userId,
+                cancelled_by: "customer",
+                reason,
+                booking_status: booking.status,
+            });
+
+            // check if all rooms are now cancelled — if so, escalate to full booking cancel
+            const allDetails = await this.BookingDetail.find({ booking_id: bookingId });
+            const allCancelled = allDetails.every(d => d.status === "cancelled");
+
+            if (allCancelled) {
+                // reuse cancelCustomerBooking for the voucher release + points deduction + full status update
+                booking.status = "pending"; // reset so cancelCustomerBooking's guard passes
+                await booking.save();
+                return this.cancelCustomerBooking(userId, bookingId, reason);
+            }
+
+            // partial cancel: just update booking status if it changed
+            const newStatus = this.calculateBookingStatus(allDetails);
+            if (newStatus !== booking.status) {
+                booking.status = newStatus;
+                await booking.save();
+
+                await this.BookingStatusLog.findOneAndUpdate(
+                    { booking_id: bookingId, end_time: null },
+                    { $set: { end_time: now } }
+                );
+                await this.BookingStatusLog.create({
+                    booking_id: bookingId,
+                    status: newStatus,
+                    start_time: now,
+                    end_time: null,
+                    note: `Booking chuyển sang trạng thái ${newStatus} sau khi khách hủy một phòng.`,
+                    handled_by: null,
+                });
+            }
+
+            await Promise.all([
+                cache.del(`booking:one:${bookingId}`),
+                cache.delByPattern("booking:list:*"),
+            ]);
+
+            // fire-and-forget: notify managers
+            this.findManagersByIds().then(({ managerUserIds }) => {
+                const notifPromises = [];
+                const shortenId = bookingId.toString().slice(-6);
+                if (managerUserIds?.length > 0) {
+                    notifPromises.push(this.sendNotificationsToUsers({
+                        userIds: managerUserIds,
+                        title: "Khách hủy một phòng trong booking",
+                        content: `Khách hàng ${customer.full_name || "N/A"} đã hủy 1 phòng trong booking #${shortenId}.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                if (customer?.user_id) {
+                    notifPromises.push(this.sendNotification({
+                        userId: customer.user_id,
+                        title: "Đã hủy phòng thành công",
+                        content: `Bạn đã hủy 1 phòng trong booking #${shortenId} thành công.`,
+                        type: "booking", kind: "Booking", refId: booking._id,
+                    }));
+                }
+                return Promise.all(notifPromises);
+            }).catch(err => console.error("[cancelCustomerBookingDetail] Notification error:", err.message));
+
+            return { success: true };
+
+        } catch (error) {
+            console.log("Error in cancelCustomerBookingDetail:", error.message);
+            throw error;
         }
     };
 

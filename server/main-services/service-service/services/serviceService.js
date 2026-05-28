@@ -411,7 +411,7 @@ export class ServiceService {
 
             const allDetails = await this.GoodImport.find({ ticket_id: { $in: tickets.map(t => t._id) } })
                 .populate("service_id", "name")
-                .select("-__v -created_at -updated_at -ticket_id")
+                .select("-__v -created_at -updated_at")
                 .lean();
 
             const detailsByTicket = {};
@@ -426,7 +426,7 @@ export class ServiceService {
                     return {
                         ...t,
                         employee_id: employeeMap[empId] || { _id: t.employee_id },
-                    details: detailsByTicket[t._id.toString()] || [],
+                        details: detailsByTicket[t._id.toString()] || [],
                     };
             });
 

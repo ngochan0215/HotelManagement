@@ -1,12 +1,16 @@
 import express from "express";
 import { CustomerController } from "../controllers/customerController.js";
 import { uploadQRImage } from "../utils/uploadQrImage.js";
-import { isManager, verifyToken, isEmployee, isAdmin } from "../../../shared/middleware/authMiddleware.js";
+import { isManager, verifyToken, isEmployee, isAdmin, isCustomer } from "../../../shared/middleware/authMiddleware.js";
 
 const router = express.Router();
 const customerController = new CustomerController();
 
-// manager and customer 
+// customer self-service — must be before /:id
+router.get("/me", verifyToken, isCustomer, customerController.getMyProfile);
+router.patch("/me", verifyToken, isCustomer, customerController.updateMyProfile);
+
+// manager and employee
 router.get("/", verifyToken, isEmployee, customerController.getAllCustomers);
 router.get("/:id", verifyToken, isManager, customerController.getCustomerById);
 

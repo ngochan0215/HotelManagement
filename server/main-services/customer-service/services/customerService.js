@@ -1,11 +1,11 @@
 ﻿import mongoose from "mongoose";
 import ExcelJS from "exceljs";
-import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 import PDFDocument from "pdfkit";
 
 import { Jimp } from "jimp";
 import jsQR from "jsqr";
 
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 
@@ -832,8 +832,78 @@ export class CustomerService {
         };
     };
 
+    getMyProfile = async (userId) => {
+        const cacheKey = `customer:profile:${userId}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
+        const customer = await this.Customer.findOne({ user_id: userId })
+            .select("-__v -created_at -updated_at -createdAt -updatedAt")
+            .lean();
+
+        if (!customer) {
+            const err = new Error("Không tìm thấy hồ sơ khách hàng.");
+            err.status = 404;
+            throw err;
+        }
+
+        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+        if (reply.success) {
+            customer.user = {
+                email: reply.user.email,
+                avatar: reply.user.avatar,
+                system_role: reply.user.system_role,
+            };
+        }
+
+        await cache.set(cacheKey, customer, 300);
+        return customer;
+    };
+
+    updateMyProfile = async (userId, updateData) => {
+        const { full_name, date_birth, phone_number, nationality,
+            bank_shortName, account_number, BIN
+        } = updateData;
+
+        const customer = await this.Customer.findOne({ user_id: userId });
+        if (!customer) {
+            const err = new Error("Không tìm thấy hồ sơ khách hàng.");
+            err.status = 404;
+            throw err;
+        }
+
+        if (phone_number !== undefined) {
+            if (!PHONE_REGEX.test(phone_number)) {
+                throw new Error("Số điện thoại không hợp lệ.");
+            }
+            if (phone_number !== customer.phone_number) {
+                const existPhone = await this.Customer.findOne({ phone_number });
+                if (existPhone) throw new Error("Số điện thoại đã tồn tại.");
+            }
+        }
+
+        if (full_name !== undefined) customer.full_name = full_name;
+        if (date_birth !== undefined) customer.date_birth = date_birth;
+        if (phone_number !== undefined) customer.phone_number = phone_number;
+        if (nationality !== undefined) customer.nationality = nationality;
+        if (bank_shortName !== undefined) customer.bank_shortName = bank_shortName;
+        if (account_number !== undefined) customer.account_number = account_number;
+        if (BIN !== undefined) customer.BIN = BIN;
+
+        await customer.save();
+
+        await Promise.all([
+            cache.del(`customer:profile:${userId}`),
+            cache.del(`customer:one:${customer._id}`),
+            cache.del(`customer:user:${userId}`),
+            cache.delByPattern("customer:list:*"),
+        ]);
+
+        return customer;
+    };
+
     // communication
-    
+
     async getCustomersByIds (ids) {
         return this.Customer.find(
             { _id: { $in: ids } }

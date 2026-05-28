@@ -425,7 +425,9 @@ export class RoomService {
         return enrichedEquipments;
     };
     
-    // return list of available room categories with available rooms based on search criteria
+    // return list of available room categories with available rooms based on search criteria.
+    // capacity (adults/children) is NOT filtered here — it is validated at booking creation.
+    // this lets customers pick multiple rooms that combine to cover their group size.
     getAvailableRoomCategoriesService = async (query = {}) => {
         try {
             const { checkin, checkout, adults, children, minPrice, maxPrice } = query;
@@ -440,141 +442,136 @@ export class RoomService {
 
             const start = new Date(checkin);
             const end = new Date(checkout);
-        
-            if (start >= end) {
-                throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
-            }
-        
-            if (adults && (isNaN(Number(adults)) || Number(adults) < 1)) {
+
+            if (start >= end) throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
+            if (adults && (isNaN(Number(adults)) || Number(adults) < 1))
                 throw new Error("Số lượng người lớn không hợp lệ.");
-            }
-        
-            if (children && (isNaN(Number(children)) || Number(children) < 0)) {
+            if (children && (isNaN(Number(children)) || Number(children) < 0))
                 throw new Error("Số lượng trẻ em không hợp lệ.");
-            }
-        
-            // get active bookings 
+
+            // --- Step 1: collect busy room IDs from booking details ---
             const replyActiveBookings = await this.eventBus.safeRequest(
-                BOOKING_EVENTS.GET_ACTIVE_BOOKINGS,
-                {}
+                BOOKING_EVENTS.GET_ACTIVE_BOOKINGS, {}
             );
             if (!replyActiveBookings.success) throw new Error(replyActiveBookings.message);
 
-            const activeBookings = replyActiveBookings.activeBookings;
-            const activeBookingIds = activeBookings.map((b) => b._id);
+            const activeBookingIds = replyActiveBookings.activeBookings.map(b => b._id);
+            const busyFromBookings = new Set();
 
-            // get busy rooms from both bookings and room logs
-            const replyDetails = await this.eventBus.safeRequest(
-                BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
-                { 
-                    bookingIds: activeBookingIds,
-                    start: start,
-                    end: end
-                }
-            );
-            if (!replyDetails.success) throw new Error(replyDetails.message);
+            if (activeBookingIds.length > 0) {
+                const replyDetails = await this.eventBus.safeRequest(
+                    BOOKING_EVENTS.GET_DETAILS_BOOKING_IDS,
+                    { bookingIds: activeBookingIds, start, end }
+                );
+                if (!replyDetails.success) throw new Error(replyDetails.message);
+                replyDetails.details.forEach(d => busyFromBookings.add(d.room_id.toString()));
+            }
 
-            const busyBookingDetails = replyDetails.details;
-            const busyRoomIdsFromBookings = [
-                ...new Set(busyBookingDetails.map((b) => b.room_id.toString())),
-            ];
-        
-            const busyRoomLogs = await this.RoomLog.find({
+            // --- Step 2: collect busy room IDs from room logs (single query) ---
+            const busyLogs = await this.RoomLog.find({
                 status: { $in: ["booked", "occupied", "reserved"] },
                 start_time: { $lt: end },
                 $or: [{ end_time: { $gt: start } }, { end_time: null }],
-            }).select("room_id");
-        
-            const busyRoomIdsFromLogs = [
-                ...new Set(busyRoomLogs.map((log) => log.room_id.toString())),
-            ];
-        
-            const allBusyRoomIds = [
-                ...new Set([...busyRoomIdsFromBookings, ...busyRoomIdsFromLogs]),
-            ];
-        
-            // get all rooms that are not in busyRoomIds and not in maintenance/new status
-            const allRooms = await this.Room.find({
-                _id: { $nin: allBusyRoomIds },
-            }).select("_id category_id room_number room_status");
-        
-            const availableRooms = [];
-        
-            for (const room of allRooms) {
-                const conflictingLog = await this.RoomLog.findOne({
-                    room_id: room._id,
-                    status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
-                    start_time: { $lt: end },
-                    $or: [{ end_time: { $gt: start } }, { end_time: null }],
-                });
-        
-                if (!conflictingLog && !["maintenance", "new"].includes(room.room_status)) {
-                    if (room.room_status === "cleaning") {
-                        const cleaningLog = await this.RoomLog.findOne({
-                            room_id: room._id,
-                            status: "cleaning",
-                            start_time: { $lte: start },
-                            $or: [
-                                { end_time: { $lte: start } }, 
-                                { end_time: null }
-                            ],
-                        }).sort({ start_time: -1 });
-            
-                        if (!cleaningLog || (cleaningLog.end_time && cleaningLog.end_time <= start)) {
-                            availableRooms.push(room);
-                        }
+            }).select("room_id").lean();
 
-                    } else {
-                        availableRooms.push(room);
-                    }
-                }
+            const allBusyIds = new Set([
+                ...busyFromBookings,
+                ...busyLogs.map(l => l.room_id.toString()),
+            ]);
+
+            // --- Step 3: candidate rooms — exclude permanently unavailable statuses ---
+            const candidateRooms = await this.Room.find({
+                _id: { $nin: [...allBusyIds] },
+                room_status: { $nin: ["maintenance", "new"] },
+            }).select("_id category_id room_number room_status").lean();
+
+            if (candidateRooms.length === 0) {
+                await cache.set(availCacheKey, [], 60);
+                return [];
             }
-        
-            const roomsByCategory = {};
-        
-            for (const room of availableRooms) {
-                const categoryId = room.category_id.toString();
-        
-                if (!roomsByCategory[categoryId]) {
-                    roomsByCategory[categoryId] = [];
-                }
-        
-                roomsByCategory[categoryId].push({
-                    room_id: room._id,
-                    room_number: room.room_number,
-                });
+
+            const candidateIds = candidateRooms.map(r => r._id);
+
+            // --- Step 4: batch-check remaining conflict logs for all candidates (one query) ---
+            const conflictLogs = await this.RoomLog.find({
+                room_id: { $in: candidateIds },
+                status: { $in: ["booked", "occupied", "reserved", "maintenance"] },
+                start_time: { $lt: end },
+                $or: [{ end_time: { $gt: start } }, { end_time: null }],
+            }).select("room_id").lean();
+
+            const conflictingIds = new Set(conflictLogs.map(l => l.room_id.toString()));
+
+            // --- Step 5: batch-check latest cleaning log for cleaning-status rooms ---
+            const cleaningCandidates = candidateRooms.filter(
+                r => r.room_status === "cleaning" && !conflictingIds.has(r._id.toString())
+            );
+            const cleaningEndMap = new Map();
+
+            if (cleaningCandidates.length > 0) {
+                const cleaningIds = cleaningCandidates.map(r => r._id);
+                const latestCleaningLogs = await this.RoomLog.aggregate([
+                    { $match: { room_id: { $in: cleaningIds }, status: "cleaning" } },
+                    { $sort: { start_time: -1 } },
+                    { $group: { _id: "$room_id", end_time: { $first: "$end_time" } } },
+                ]);
+                latestCleaningLogs.forEach(l => cleaningEndMap.set(l._id.toString(), l.end_time));
             }
-        
-            const categoryIds = Object.keys(roomsByCategory);
-            const categories = await this.RoomCategory.find({
-                _id: { $in: categoryIds },
+
+            // --- Step 6: build final available room list ---
+            const availableRooms = candidateRooms.filter(room => {
+                if (conflictingIds.has(room._id.toString())) return false;
+
+                if (room.room_status === "cleaning") {
+                    const endTime = cleaningEndMap.get(room._id.toString());
+                    return endTime != null && new Date(endTime) <= start;
+                }
+
+                return true;
             });
-        
-            let result = categories
-                .filter((cat) => {
-                    if (adults && cat.max_adults < Number(adults)) return false;
-                    if (children && cat.max_children < Number(children)) return false;
-                    if (minPrice && cat.price < Number(minPrice)) return false;
-                    if (maxPrice && cat.price > Number(maxPrice)) return false;
-                    return true;
-                })
-                .map((cat) => ({
+
+            // --- Step 7: group by category ---
+            const roomsByCategory = {};
+            for (const room of availableRooms) {
+                const catId = room.category_id.toString();
+                if (!roomsByCategory[catId]) roomsByCategory[catId] = [];
+                roomsByCategory[catId].push({ room_id: room._id, room_number: room.room_number });
+            }
+
+            const categoryIds = Object.keys(roomsByCategory);
+            if (categoryIds.length === 0) {
+                await cache.set(availCacheKey, [], 60);
+                return [];
+            }
+
+            // --- Step 8: fetch categories with optional price filter in DB ---
+            const categoryFilter = { _id: { $in: categoryIds } };
+            if (minPrice) categoryFilter.price = { ...(categoryFilter.price || {}), $gte: Number(minPrice) };
+            if (maxPrice) categoryFilter.price = { ...(categoryFilter.price || {}), $lte: Number(maxPrice) };
+
+            const categories = await this.RoomCategory.find(categoryFilter)
+                .select("category_name price max_adults max_children description images average_rating")
+                .lean();
+
+            const result = categories
+                .map(cat => ({
                     category_id: cat._id,
                     name: cat.category_name,
                     price: cat.price,
-                    adults: cat.max_adults,
-                    children: cat.max_children,
+                    max_adults: cat.max_adults,
+                    max_children: cat.max_children,
                     description: cat.description,
-                    availableRooms:
-                        roomsByCategory[cat._id.toString()]?.length || 0,
+                    images: cat.images || [],
+                    average_rating: cat.average_rating || 0,
+                    available_count: roomsByCategory[cat._id.toString()]?.length || 0,
                     rooms: roomsByCategory[cat._id.toString()] || [],
                 }))
-                .filter((item) => item.availableRooms > 0)
+                .filter(item => item.available_count > 0)
                 .sort((a, b) => a.price - b.price);
 
             await cache.set(availCacheKey, result, 60);
-
             return result;
+
         } catch (error) {
             console.log("Error in getAvailableRoomCategoriesService:", error);
             throw error;

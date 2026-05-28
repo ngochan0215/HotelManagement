@@ -69,6 +69,32 @@ export class CustomerController {
         }
     };
 
+    getMyProfile = async (req, res) => {
+        try {
+            const customer = await this.customerService.getMyProfile(req.user.userId);
+            
+            return res.status(200).json(customer);
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    updateMyProfile = async (req, res) => {
+        try {
+            const customer = await this.customerService.updateMyProfile(req.user.userId, req.body);
+            
+            return res.status(200).json({
+                success: true,
+                message: "Cập nhật hồ sơ thành công.",
+                data: customer,
+            });
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     createCustomer = async (req, res) => {
         try {
             const customer = await this.customerService.createCustomer(req.params.userId, req.body);

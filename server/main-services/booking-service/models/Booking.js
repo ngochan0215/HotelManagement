@@ -47,12 +47,30 @@ const bookingSchema = new mongoose.Schema(
 
         children: { type: Number, required: true, min: 0 },
 
+        original_fee: { type: Number, default: 0, min: 0 },
+
         total_fee: { type: Number, required: true, min: 0, default: 0 },
-        
+
         deposit: { type: Number, default: 0, min: 0 },
 
+        // snapshotted at booking creation so history is always accurate
+        discount_snapshot: {
+            discount_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+            name: { type: String },
+            description: { type: String },
+            discount_amount: { type: Number, default: 0 },
+        },
+
+        voucher_snapshot: {
+            voucher_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+            code: { type: String },
+            name: { type: String },
+            description: { type: String },
+            voucher_amount: { type: Number, default: 0 },
+        },
+
         isScheduled: { type: Boolean, default: false },
-        
+
         isLateCheckin: { type: Boolean, default: false }
         
     },
@@ -61,6 +79,7 @@ const bookingSchema = new mongoose.Schema(
     }
 );
 
+bookingSchema.index({ customer_id: 1, created_at: -1 });
 bookingSchema.index({ created_at: 1 });
 bookingSchema.index({ expected_checkin: 1 });
 bookingSchema.index({ expected_checkout: 1 });
