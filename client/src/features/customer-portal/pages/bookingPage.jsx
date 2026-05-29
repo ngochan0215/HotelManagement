@@ -29,6 +29,8 @@ export default function BookingPage() {
   const roomId = searchParams.get("roomId");
   const [rooms, setRooms] = useState([]);
   const [addOns, setAddOns] = useState([]);
+  const [addOnsMessage, setAddOnsMessage] = useState("");
+  const [guestVerifyEmail, setGuestVerifyEmail] = useState("");
   const [step, setStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -49,7 +51,7 @@ export default function BookingPage() {
   useEffect(() => {
     const load = async () => {
       const hasSearchCriteria = form.checkin && form.checkout;
-      const [{ rooms: roomList }, { services }] = await Promise.all([
+      const [{ rooms: roomList }, { services, reason }] = await Promise.all([
         hasSearchCriteria
           ? customerPortalApi.searchRooms({
             checkin: form.checkin,
@@ -62,6 +64,7 @@ export default function BookingPage() {
       ]);
       setRooms(roomList);
       setAddOns(services || []);
+      setAddOnsMessage(reason || "");
     };
     load().catch(() => setError("Không thể tải thông tin đặt phòng. Vui lòng thử lại."));
   }, [form.adults, form.checkin, form.checkout, form.children]);
@@ -73,6 +76,11 @@ export default function BookingPage() {
       customer_name: prev.customer_name || user.name || "",
       customer_email: prev.customer_email || user.email || "",
     }));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setGuestVerifyEmail(user.email || "");
   }, [user]);
 
   const selectedRoom = useMemo(() => rooms.find((room) => room._id === form.room_id), [rooms, form.room_id]);
@@ -127,6 +135,15 @@ export default function BookingPage() {
     if (step === 3) {
       setSubmitting(true);
       try {
+        if (!user) {
+          if (!guestVerifyEmail.trim()) {
+            setError("Vui lòng nhập email để tiếp tục xác thực trước khi đặt phòng.");
+            return;
+          }
+          setError("Vui lòng đăng nhập hoặc tạo tài khoản để xác thực email trước khi xác nhận đặt phòng.");
+          return;
+        }
+
         if (!selectedBookingRoomId) {
           setError("Phòng đã chọn hiện chưa có phòng trống cụ thể. Vui lòng quay lại danh sách phòng.");
           return;
@@ -401,6 +418,11 @@ export default function BookingPage() {
                       );
                     })}
                   </div>
+                  {!addOns.length ? (
+                    <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-700">
+                      {addOnsMessage || "Hiện chưa có dịch vụ kèm theo khả dụng cho tài khoản này."}
+                    </div>
+                  ) : null}
                 </>
               ) : null}
 
@@ -424,6 +446,31 @@ export default function BookingPage() {
                   <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 text-sm leading-7 text-stone-600">
                     Khoản cọc giúp SE Hotel giữ phòng theo lịch lưu trú đã chọn. Nhân viên khách sạn sẽ hỗ trợ xác nhận chi tiết sau khi đặt phòng.
                   </div>
+                  {!user ? (
+                    <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                      <p className="text-sm font-semibold text-amber-900">Xác thực email trước khi đặt phòng</p>
+                      <p className="mt-2 text-sm leading-6 text-amber-800">
+                        Để tránh thất lạc giao dịch, vui lòng xác thực bằng tài khoản trước khi xác nhận đặt phòng.
+                      </p>
+                      <label className="mt-4 grid gap-2 text-sm font-medium text-stone-700">
+                        Email xác thực
+                        <input
+                          type="email"
+                          value={guestVerifyEmail}
+                          onChange={(e) => setGuestVerifyEmail(e.target.value)}
+                          placeholder="ban@email.com"
+                          className="h-12 w-full rounded-2xl border border-amber-300 bg-white px-4 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                          required
+                        />
+                      </label>
+                      <Link
+                        to={`/login?email=${encodeURIComponent(guestVerifyEmail || "")}`}
+                        className="mt-4 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+                      >
+                        Tiếp tục xác thực tài khoản
+                      </Link>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
 

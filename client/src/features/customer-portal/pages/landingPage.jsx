@@ -66,6 +66,8 @@ export default function LandingPage() {
     children: 0,
     roomType: "",
   });
+  const slidingServices = [...services, ...services];
+  const slidingAmenities = [...amenities, ...amenities];
 
   useEffect(() => {
     const load = async () => {
@@ -106,6 +108,38 @@ export default function LandingPage() {
 
   return (
     <CustomerShell>
+      <style>{`
+        @keyframes slideLeftLoop {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @keyframes slideRightLoop {
+          0% { transform: translateX(-50%); }
+          100% { transform: translateX(0); }
+        }
+        @keyframes fadeUpIn {
+          0% { opacity: 0; transform: translateY(18px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up-in {
+          animation: fadeUpIn 700ms ease both;
+        }
+        .fade-delay-1 { animation-delay: 120ms; }
+        .fade-delay-2 { animation-delay: 240ms; }
+        .hover-lift {
+          transition: transform 320ms ease, box-shadow 320ms ease;
+        }
+        .hover-lift:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 20px 40px rgba(28,25,23,0.14);
+        }
+        .hover-zoom-img {
+          transition: transform 520ms ease;
+        }
+        .hover-zoom-wrap:hover .hover-zoom-img {
+          transform: scale(1.05);
+        }
+      `}</style>
       <section className="overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_30%),linear-gradient(135deg,#1c1917_0%,#292524_46%,#92400e_100%)]">
         <div className="mx-auto max-w-7xl px-4 pb-12 pt-8 md:px-6 md:pb-16 md:pt-12">
           <div className="grid min-w-0 items-center gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
@@ -137,7 +171,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-10 min-w-0 overflow-hidden rounded-[32px] border border-white/70 bg-white/95 p-5 shadow-[0_25px_60px_rgba(28,25,23,0.18)] backdrop-blur md:mt-12 md:p-6">
-            <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.55fr)] lg:items-end">
+            <div className="grid min-w-0 gap-6 lg:grid-cols-1 lg:items-end">
               <form onSubmit={handleSearch} className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <label className="grid gap-2 text-sm font-medium text-stone-700">
                   Ngày nhận phòng
@@ -178,10 +212,6 @@ export default function LandingPage() {
                   </button>
                 </div>
               </form>
-              <div className="min-w-0 rounded-[28px] bg-amber-50 px-5 py-4 text-sm text-stone-700">
-                <p className="font-semibold text-stone-900">Ưu đãi đặt sớm</p>
-                <p className="mt-1 leading-6">Giữ phòng nhanh, xem rõ chi phí và nhận hỗ trợ từ SE Hotel khi cần.</p>
-              </div>
             </div>
           </div>
         </div>
@@ -207,14 +237,16 @@ export default function LandingPage() {
             {featuredRooms.map((room, index) => {
               const roomAmenities = deriveAmenities(room);
               return (
-                <article key={room._id} className="flex h-full min-w-0 flex-col overflow-hidden rounded-[30px] border border-stone-200 bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)]">
-                  <HotelImage
-                    src={room.images?.[0] || HOTEL_IMAGE_SETS.rooms[index % HOTEL_IMAGE_SETS.rooms.length]}
-                    alt={`Hình ảnh phòng ${room.category_name}`}
-                    ratio="wide"
-                    fallbackLabel={`Phòng ${room.category_name}`}
-                    className="shrink-0 rounded-none"
-                  />
+                <article key={room._id} className="hover-lift fade-up-in flex h-full min-w-0 flex-col overflow-hidden rounded-[30px] border border-stone-200 bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)]">
+                  <div className="hover-zoom-wrap overflow-hidden">
+                    <HotelImage
+                      src={room.images?.[0] || HOTEL_IMAGE_SETS.rooms[index % HOTEL_IMAGE_SETS.rooms.length]}
+                      alt={`Hình ảnh phòng ${room.category_name}`}
+                      ratio="wide"
+                      fallbackLabel={`Phòng ${room.category_name}`}
+                      className="hover-zoom-img shrink-0 rounded-none"
+                    />
+                  </div>
                   <div className="flex flex-1 flex-col space-y-4 p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -252,12 +284,15 @@ export default function LandingPage() {
           <div className="mb-8">
             <SectionHeader eyebrow="Dịch vụ khách sạn" title="Dịch vụ giúp kỳ nghỉ trọn vẹn hơn" description="Tận hưởng các lựa chọn tiện ích được chuẩn bị cho cả chuyến đi nghỉ dưỡng và công tác." />
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {services.map((service) => {
+          <div className="overflow-hidden rounded-[28px]">
+            <div className="flex w-[200%] gap-6" style={{ animation: "slideLeftLoop 32s linear infinite" }}>
+              {slidingServices.map((service, index) => {
               const ServiceIcon = service.icon;
               return (
-                <article key={service.title} className="overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
-                  <HotelImage src={service.image} alt={service.title} ratio="wide" fallbackLabel={service.title} className="rounded-none" />
+                <article key={`${service.title}-${index}`} className="hover-lift fade-up-in fade-delay-1 w-[calc(50%-1rem)] min-w-[280px] flex-1 overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm md:min-w-[320px]">
+                  <div className="hover-zoom-wrap overflow-hidden">
+                    <HotelImage src={service.image} alt={service.title} ratio="wide" fallbackLabel={service.title} className="hover-zoom-img rounded-none" />
+                  </div>
                   <div className="p-6">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
                       <ServiceIcon size={22} />
@@ -268,6 +303,7 @@ export default function LandingPage() {
                 </article>
               );
             })}
+            </div>
           </div>
         </div>
       </section>
@@ -276,13 +312,17 @@ export default function LandingPage() {
         <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <div className="min-w-0 rounded-[32px] border border-stone-200 bg-white p-7 shadow-sm">
             <SectionHeader eyebrow="Tiện nghi" title="Không gian lưu trú tinh tế" description="Từ phòng nghỉ đến khu thư giãn, mọi chi tiết được sắp đặt để khách cảm thấy thoải mái." />
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {amenities.map((item) => (
-                <div key={item.title} className="space-y-3">
-                  <HotelImage src={item.image} alt={item.title} ratio="square" fallbackLabel={item.title} />
-                  <p className="text-sm font-medium text-stone-800">{item.title}</p>
-                </div>
-              ))}
+            <div className="mt-6 overflow-hidden rounded-2xl">
+              <div className="flex w-[200%] gap-4" style={{ animation: "slideRightLoop 28s linear infinite" }}>
+                {slidingAmenities.map((item, index) => (
+                  <div key={`${item.title}-${index}`} className="hover-lift fade-up-in fade-delay-2 w-1/6 min-w-[180px] space-y-3">
+                    <div className="hover-zoom-wrap overflow-hidden rounded-2xl">
+                      <HotelImage src={item.image} alt={item.title} ratio="square" fallbackLabel={item.title} className="hover-zoom-img" />
+                    </div>
+                    <p className="text-sm font-medium text-stone-800">{item.title}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

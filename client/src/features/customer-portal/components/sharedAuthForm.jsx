@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Mail, Phone, UserRound } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import { customerApi } from "../../api/customerApi.js";
@@ -48,6 +48,7 @@ function Field({ label, icon: Icon, children, required = false, hint = "", error
 export default function SharedAuthForm({ embedded = false }) {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState("login");
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -64,7 +65,15 @@ export default function SharedAuthForm({ embedded = false }) {
     date_birth: "",
   });
   const [registerErrors, setRegisterErrors] = useState({});
+  const loginInFlightRef = useRef(false);
   const registerInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const queryEmail = searchParams.get("email");
+    if (!queryEmail) return;
+    setCredentials((prev) => ({ ...prev, email: prev.email || queryEmail }));
+    setRegisterForm((prev) => ({ ...prev, email: prev.email || queryEmail }));
+  }, [searchParams]);
 
   const validateRegisterForm = () => {
     const errors = {};
@@ -114,6 +123,8 @@ export default function SharedAuthForm({ embedded = false }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (loginLoading || loginInFlightRef.current) return;
+    loginInFlightRef.current = true;
     setLoginLoading(true);
     setMessage("");
     try {
@@ -123,6 +134,7 @@ export default function SharedAuthForm({ embedded = false }) {
       setMessage(getErrorMessage(error));
     } finally {
       setLoginLoading(false);
+      loginInFlightRef.current = false;
     }
   };
 
@@ -203,7 +215,7 @@ export default function SharedAuthForm({ embedded = false }) {
                 </label>
                 <span className="font-medium text-stone-800">Quên mật khẩu</span>
               </div>
-              <button disabled={loginLoading} className="mt-2 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
+              <button type="submit" disabled={loginLoading} className="mt-2 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
                 {loginLoading ? "Đang xử lý..." : "Đăng nhập"}
               </button>
               <p className="text-center text-sm text-stone-600">
