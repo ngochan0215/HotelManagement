@@ -22,8 +22,12 @@ export class AuthController {
 
     verifyEmail = async (req, res) => {
         try {
-            await this.authService.verifyEmail(req.user.userId, req.body.otp);
-            
+            const { userId, otp } = req.body;
+            if (!userId || !otp)
+                return res.status(400).json({ message: "Vui lòng cung cấp userId và otp." });
+
+            await this.authService.verifyEmail(userId, otp);
+
             res.status(200).json({ message: "Verify email successfully!" });
 
         } catch (err) {

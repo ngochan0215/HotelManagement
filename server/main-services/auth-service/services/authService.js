@@ -39,6 +39,10 @@ export class AuthService {
                 verifyEmailOtpExpires: isCustomer ? Date.now() + 5 * 60 * 1000 : null,
             });
 
+            if (isCustomer) {
+                await this.mailService.sendVerificationEmail(email, otp);
+            }
+
             return user;
         } catch (error) {
             console.log("Registration failed for error: " + error.message);
@@ -136,9 +140,12 @@ export class AuthService {
     };
 
     async verifyEmail (userId, otp) {
-        const user = await this.User.findById(userId).select("+password");
-        if (!user) 
+        const user = await this.User.findById(userId);
+        if (!user)
             throw new Error("Không tìm thấy người dùng.");
+
+        if (user.emailVerified)
+            return { success: true };
 
         if (!user.verifyEmailOtp || user.verifyEmailOtp !== otp || user.verifyEmailOtpExpires < Date.now()) {
             throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");

@@ -7,7 +7,7 @@ const authController = new AuthController();
 
 router.post("/create-account", authController.createAccount);
 router.post("/register", authController.register);
-router.post("/verify-email", verifyToken, authController.verifyEmail);
+router.post("/verify-email", authController.verifyEmail);
 router.post("/login", authController.login);
 router.post("/login-google", authController.loginGoogle);
 router.post("/forgot-password", authController.forgotPassword);
