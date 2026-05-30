@@ -231,11 +231,7 @@ services:
       - "3013:3013"
     environment:
       DB_URL: ${ATTRACTION_DB_URL}
-      REDIS_URL: ${REDIS_URL}
-      OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY}
-      HOTEL_LAT: ${HOTEL_LAT}
-      HOTEL_LNG: ${HOTEL_LNG}
-      HOTEL_SEARCH_RADIUS_M: ${HOTEL_SEARCH_RADIUS_M}
+      RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
       - ./main-services/attraction-service:/app

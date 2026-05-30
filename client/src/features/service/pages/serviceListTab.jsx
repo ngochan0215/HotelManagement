@@ -131,7 +131,7 @@ export default function ServiceListTab() {
           service_price: service.price,
           service_unit: service.unit,
           import_quantity: previewFormData.default_quantity,
-          import_price: Math.round(service.price * previewFormData.default_price_percent)
+          import_price: service.import_price > 0 ? service.import_price : Math.round(service.price * previewFormData.default_price_percent)
         }));
         
         setPreviewItems(items);
@@ -249,7 +249,7 @@ export default function ServiceListTab() {
     });
 
     return result;
-  }, [services, searchTerm, filterCategory, filterStatus, sortOrder]);
+  }, [services, searchTerm, filterCategory, filterStatus, filterServiceType, sortOrder]);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -444,6 +444,7 @@ export default function ServiceListTab() {
                             <td className="py-3 font-bold text-gray-800">
                                 <div className="flex items-center gap-2">
                                     {item.name}
+                                    {item.service_type === "product" && <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 whitespace-nowrap">Sản phẩm</span>}                                    
                                     {item.service_type === "rental" && <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 whitespace-nowrap">Cho thuê</span>}
                                     {item.service_type === "experience" && <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Trải nghiệm</span>}
                                 </div>

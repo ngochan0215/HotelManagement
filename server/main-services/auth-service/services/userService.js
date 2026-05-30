@@ -1,4 +1,4 @@
-﻿import bcrypt from "bcrypt";
+import bcrypt from "bcrypt";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { cache } from "../../../shared/utils/cache.js";
@@ -9,20 +9,27 @@ export class UserService {
         this.mailService = mailService;
         this.eventBus = eventBus;
         this.sendNotification = sendNotification;
-        
     }
 
     getAllUsers = async (query = {}) => {
-        const filter = {};
-        const { _id, email, system_role, isBanned } = query;
+        try {
+            const filter = {};
+            const { _id, email, system_role, isBanned } = query;
 
-        if (system_role != null) filter.system_role = system_role;
-        if (isBanned) filter.isBanned = isBanned;
-        if (email) filter.email = email;
-        if (_id) filter._id = _id;
+            if (system_role != null) filter.system_role = system_role;
+            if (isBanned) filter.isBanned = isBanned;
+            if (email) filter.email = email;
+            if (_id) filter._id = _id;
 
-        let users = this.User.find(filter).select("email system_role avatar isBanned");
-        return users;
+            let users = this.User.find(filter).select("email system_role avatar isBanned");
+            return users;
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     }
 
     async getUserProfile(userId) {
@@ -42,7 +49,7 @@ export class UserService {
                     CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
                     { customer_user_id: user._id }
                 );
-    
+
                 if (reply.found)
                     extraData = reply.customer;
 
@@ -51,7 +58,7 @@ export class UserService {
                     EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
                     { employee_user_id: user._id }
                 );
-    
+
                 if (reply.found)
                     extraData = reply.employee;
             }
@@ -68,17 +75,16 @@ export class UserService {
             err.status = status;
             throw err;
         }
-        
     }
 
     changePasswordService = async (userId, oldPassword, newPassword) => {
         try {
             const user = await this.User.findById(userId).select("+password");
-            if (!user) 
+            if (!user)
                 throw new Error("Không tìm thấy người dùng.");
 
             const isMatch = await bcrypt.compare(oldPassword, user.password);
-            if (!isMatch) 
+            if (!isMatch)
                 throw new Error("Mật khẩu cũ không đúng.");
 
             const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
@@ -98,7 +104,7 @@ export class UserService {
     sendChangeEmailService = async (userId, newEmail) => {
         try {
             const user = await this.User.findById(userId);
-            if (!user) 
+            if (!user)
                 throw new Error("Không tìm thấy người dùng.");
 
             const emailExists = await this.User.findOne({
@@ -106,7 +112,7 @@ export class UserService {
                 _id: { $ne: user._id }
             });
 
-            if (emailExists) 
+            if (emailExists)
                 throw new Error("Email đã được sử dụng.");
 
             const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
@@ -127,7 +133,7 @@ export class UserService {
     verifyChangeEmailService = async (userId, otp) => {
         try {
             const user = await this.User.findById(userId);
-            if (!user) 
+            if (!user)
                 throw new Error("Không tìm thấy người dùng.");
 
             if (
@@ -160,7 +166,7 @@ export class UserService {
 
     updateAvatarService = async (userId, avatarUrl) => {
         try {
-            if (!avatarUrl) 
+            if (!avatarUrl)
                 throw new Error("Không có file.");
 
             const updatedUser = await this.User.findByIdAndUpdate(
@@ -186,24 +192,24 @@ export class UserService {
     };
 
     async setRole({ userId, newRole }) {
-        try {    
+        try {
             if (!userId || !newRole) {
                 throw new Error("Thiếu userId hoặc newRole.");
             }
-    
+
             if (!["employee", "customer"].includes(newRole)) {
                 throw new Error("Role không hợp lệ.");
             }
-    
+
             const user = await this.User.findById(userId);
             if (!user) {
                 throw new Error("Không tìm thấy user.");
             }
-    
+
             if (user.system_role === newRole) {
                 throw new Error(`User đã là ${newRole}.`);
             }
-    
+
             user.system_role = newRole;
             await user.save();
 
@@ -217,7 +223,7 @@ export class UserService {
             });
 
             return { success: true };
-    
+
         } catch (err) {
             console.log("Admin setting new role failed for error: " + err.message);
             throw err;
@@ -226,28 +232,60 @@ export class UserService {
 
     // for communication with other services
     async findUserByEmail(email) {
-        return this.User.findOne({ email });
+        try {
+            return await this.User.findOne({ email });
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     }
-    
+
     async updateUser(userId, payload) {
-        return this.User.findByIdAndUpdate(userId, payload, { new: true });
+        try {
+            return await this.User.findByIdAndUpdate(userId, payload, { new: true });
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     }
 
     async getUserById (userId) {
-        const user = await this.User.findById(userId)
-            .select("email system_role avatar isBanned")
+        try {
+            const user = await this.User.findById(userId)
+                .select("email system_role avatar isBanned");
 
-        if (!user) {
-            throw new Error("User not found.");
+            if (!user) {
+                throw new Error("User not found.");
+            }
+
+            return user;
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
         }
-        
-        return user;
     };
 
     async getUsersByIds (userIds) {
-        const users = await this.User.find({ _id: { $in: userIds } })
-            .select("email system_role avatar isBanned");  
+        try {
+            const users = await this.User.find({ _id: { $in: userIds } })
+                .select("email system_role avatar isBanned");
 
-        return users;
+            return users;
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     }
 }

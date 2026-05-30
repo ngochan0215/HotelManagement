@@ -12,6 +12,8 @@ const serviceSchema = new mongoose.Schema(
         unit: { type: String, enum: ['hour', 'day', 'item', 'can', 'bottle', 'portion', 'ticket'], default: "hour" },
         
         price: { type: Number, required: true },
+
+        import_price: { type: Number, default: 0 },
         
         storage_quantity: { type: Number, min: 0, default: 0 },
 

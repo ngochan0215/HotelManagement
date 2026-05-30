@@ -64,9 +64,9 @@ export class EmployeeService {
     }
 
     async getAllEmployees (query = {}){
-        const cacheKey = makeCacheKey("emp:list", query);
-        const cached = await cache.get(cacheKey);
-        if (cached) return cached;
+        // const cacheKey = makeCacheKey("emp:list", query);
+        // const cached = await cache.get(cacheKey);
+        // if (cached) return cached;
 
         const { position, status, min_salary, max_salary, min_year, max_year } = query;
 
@@ -91,7 +91,7 @@ export class EmployeeService {
             .select("-__v -created_at -updated_at -createdAt -updatedAt").lean();
 
         if (!employees.length) {
-            await cache.set(cacheKey, { count: 0, employees: [] }, 300);
+            //await cache.set(cacheKey, { count: 0, employees: [] }, 300);
             return { count: 0, employees: [] };
         }
 
@@ -117,14 +117,14 @@ export class EmployeeService {
         });
 
         const listResponse = { count: result.length, employees: result };
-        await cache.set(cacheKey, listResponse, 300);
+        //await cache.set(cacheKey, listResponse, 300);
         return listResponse;
     };
 
     async getEmployeeById (employeeId) {
-        const cacheKey = `emp:one:${employeeId}`;
-        const cached = await cache.get(cacheKey);
-        if (cached) return cached;
+        // const cacheKey = `emp:one:${employeeId}`;
+        // const cached = await cache.get(cacheKey);
+        // if (cached) return cached;
 
         const employee = await this.Employee.findById(employeeId)
             .select("-__v -created_at -updated_at -createdAt -updatedAt");
@@ -133,14 +133,14 @@ export class EmployeeService {
             throw new Error("Không tìm thấy nhân viên.");
         }
 
-        await cache.set(cacheKey, employee, 300);
+        //await cache.set(cacheKey, employee, 300);
         return employee;
     };
 
     async getEmployeeByUserId (employeeUserId) {
-        const cacheKey = `emp:user:${employeeUserId}`;
-        const cached = await cache.get(cacheKey);
-        if (cached) return cached;
+        // const cacheKey = `emp:user:${employeeUserId}`;
+        // const cached = await cache.get(cacheKey);
+        // if (cached) return cached;
 
         const employee = await this.Employee.findOne({ user_id: employeeUserId })
             .select("-__v -created_at -updated_at -createdAt -updatedAt");
@@ -149,7 +149,7 @@ export class EmployeeService {
             throw new Error("Không tìm thấy nhân viên.");
         }
 
-        await cache.set(cacheKey, employee, 300);
+        //await cache.set(cacheKey, employee, 300);
         return employee;
     };
 
@@ -265,14 +265,14 @@ export class EmployeeService {
         if (fixed_salary) employee.fixed_salary = fixed_salary;
 
         await employee.save();
-        await Promise.all([
-            cache.del(`emp:one:${employeeId}`),
-            cache.del(`emp:user:${employee.user_id}`),
-            cache.del(`emp:profile:${employee.user_id}`),
-            cache.del("emp:technicians"),
-            cache.del("emp:housekeepers"),
-            cache.delByPattern("emp:list:*"),
-        ]);
+        // await Promise.all([
+        //     cache.del(`emp:one:${employeeId}`),
+        //     cache.del(`emp:user:${employee.user_id}`),
+        //     cache.del(`emp:profile:${employee.user_id}`),
+        //     cache.del("emp:technicians"),
+        //     cache.del("emp:housekeepers"),
+        //     cache.delByPattern("emp:list:*"),
+        // ]);
         return employee;
     };
 
@@ -355,8 +355,8 @@ export class EmployeeService {
 
     async getAvailableTechnicians () {
         try {
-            const cached = await cache.get("emp:technicians");
-            if (cached) return cached;
+            // const cached = await cache.get("emp:technicians");
+            // if (cached) return cached;
 
             // // Tìm tất cả nhân viên kỹ thuật
             // const technicians = await Employee.find({ 
@@ -410,7 +410,7 @@ export class EmployeeService {
             }));
 
             const techResponse = { count: result.length, technicians: result };
-            await cache.set("emp:technicians", techResponse, 60);
+            //await cache.set("emp:technicians", techResponse, 60);
             return techResponse;
 
         } catch (error) {

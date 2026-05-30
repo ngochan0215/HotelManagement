@@ -1,4 +1,4 @@
-﻿import bcrypt from "bcrypt";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
@@ -16,7 +16,7 @@ export class AuthService {
     async createUserAccount({ email, password, system_role }) {
         try {
             const existed = await this.User.findOne({ email });
-            if (existed) 
+            if (existed)
                 throw new Error("Email đã tồn tại");
 
             const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
@@ -52,7 +52,7 @@ export class AuthService {
 
     // for employee and customer signing up
     async register (data) {
-        const { email, password, date_birth, full_name, phone_number, nationality, 
+        const { email, password, date_birth, full_name, phone_number, nationality,
             position, fixed_salary, CCCD, system_role } = data;
 
         if (!email || !password || !date_birth || !full_name || !phone_number || !CCCD || !system_role) {
@@ -65,7 +65,7 @@ export class AuthService {
         }
 
         const dob = new Date(date_birth);
-        if (isNaN(dob.getTime())) 
+        if (isNaN(dob.getTime()))
             throw new Error("Ngày sinh không hợp lệ");
 
         let age = new Date().getFullYear() - dob.getFullYear();
@@ -78,12 +78,13 @@ export class AuthService {
             throw err;
         }
 
-        const user = await this.createUserAccount({ email, password, system_role });
-
+        let user = null;
         try {
+            user = await this.createUserAccount({ email, password, system_role });
+
             if (system_role === "customer") {
                 const reply = await this.eventBus.safeRequest(
-                    CUSTOMER_EVENTS.REGISTERED, 
+                    CUSTOMER_EVENTS.REGISTERED,
                     {
                         userId: user._id,
                         customer: {
@@ -93,10 +94,6 @@ export class AuthService {
                 );
 
                 if (!reply.success) {
-                    await this.User.deleteOne({ _id: user._id }).catch(err => {
-                        console.error("Rollback failed:", err);
-                    });
-
                     const err = new Error(reply.message || "Tạo khách hàng thất bại.");
                     err.status = 400;
                     throw err;
@@ -104,7 +101,7 @@ export class AuthService {
 
             } else if (system_role === "employee") {
                 const reply = await this.eventBus.safeRequest(
-                    EMPLOYEE_EVENTS.REGISTERED, 
+                    EMPLOYEE_EVENTS.REGISTERED,
                     {
                         userId: user._id,
                         employee: {
@@ -114,23 +111,21 @@ export class AuthService {
                 );
 
                 if (!reply.success) {
-                    await this.User.deleteOne({ _id: user._id }).catch(err => {
-                        console.error("Rollback failed:", err);
-                    });
-
                     const err = new Error(reply.message || "Tạo nhân viên thất bại.");
                     err.status = 400;
                     throw err;
                 }
             }
         } catch (error) {
-            await this.User.deleteOne({ _id: user._id }).catch(rollbackErr => {
-                console.error(`Rollback failed for deleting user ${user._id}:`, rollbackErr);
-            });
+            if (user) {
+                await this.User.deleteOne({ _id: user._id }).catch(rollbackErr => {
+                    console.error(`Rollback failed for deleting user ${user._id}:`, rollbackErr);
+                });
+            }
 
             const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || 500;
-            
+            const status = error.response?.status || error.status || 500;
+
             const err = new Error(message);
             err.status = status;
             throw err;
@@ -140,107 +135,130 @@ export class AuthService {
     };
 
     async verifyEmail (userId, otp) {
-        const user = await this.User.findById(userId);
-        if (!user)
-            throw new Error("Không tìm thấy người dùng.");
+        try {
+            const user = await this.User.findById(userId);
+            if (!user)
+                throw new Error("Không tìm thấy người dùng.");
 
-        if (user.emailVerified)
+            if (user.emailVerified)
+                return { success: true };
+
+            if (!user.verifyEmailOtp || user.verifyEmailOtp !== otp || user.verifyEmailOtpExpires < Date.now()) {
+                throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
+            }
+
+            user.emailVerified = true;
+            user.verifyEmailOtp = null;
+            user.verifyEmailOtpExpires = null;
+
+            await user.save();
             return { success: true };
-
-        if (!user.verifyEmailOtp || user.verifyEmailOtp !== otp || user.verifyEmailOtpExpires < Date.now()) {
-            throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
         }
-
-        user.emailVerified = true;
-        user.verifyEmailOtp = null;
-        user.verifyEmailOtpExpires = null;
-
-        await user.save();
-        return { success: true };
     };
 
     async login (email, password) {
-        const user = await this.User.findOne({ email });
-        if (!user) 
-            throw new Error("Tài khoản không tồn tại");
+        try {
+            const user = await this.User.findOne({ email });
+            if (!user)
+                throw new Error("Tài khoản không tồn tại");
 
-        if (!user.emailVerified) 
-            throw new Error("Email chưa được xác thực.");
+            if (!user.emailVerified)
+                throw new Error("Email chưa được xác thực.");
 
-        if (user.status === "inactive") 
-            throw new Error("Tài khoản đã ngừng hoạt động.");
-        if (user.status === "banned") 
-            throw new Error("Tài khoản đã bị ban.");
+            if (user.status === "inactive")
+                throw new Error("Tài khoản đã ngừng hoạt động.");
+            if (user.status === "banned")
+                throw new Error("Tài khoản đã bị ban.");
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) 
-            throw new Error("Sai mật khẩu");
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch)
+                throw new Error("Sai mật khẩu");
 
-        const { payload, fullName } = await this.buildTokenPayLoad(user);
+            const { payload, fullName } = await this.buildTokenPayLoad(user);
 
-        const token = jwt.sign(
-            payload, process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+            const token = jwt.sign(
+                payload, process.env.JWT_SECRET,
+                { expiresIn: "7d" }
+            );
 
-        return {
-            token,
-            theUser: {
-                _id: user._id,
-                name: fullName,
-                position: payload.position,
-                email: user.email,
-                role: user.system_role,
-                avatar: user.avatar
-            }
-        };
+            return {
+                token,
+                theUser: {
+                    _id: user._id,
+                    name: fullName,
+                    position: payload.position,
+                    email: user.email,
+                    role: user.system_role,
+                    avatar: user.avatar
+                }
+            };
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     };
 
     async buildTokenPayLoad(user) {
-        let fullName = "Người dùng";
-        let position = "";
-        let employeeId = null;
-        let customerId = null;
-        
-        if (user.system_role === "customer") {
-            const reply = await this.eventBus.safeRequest(
-                CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
-                { customer_user_id: user._id }
-            );
+        try {
+            let fullName = "Người dùng";
+            let position = "";
+            let employeeId = null;
+            let customerId = null;
 
-            if (reply.found) {
-                fullName = reply.customer.full_name;
-                customerId = reply.customer._id;
-            }
-        } else {
-            const reply = await this.eventBus.safeRequest(
-                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
-                { employee_user_id: user._id }
-            );
+            if (user.system_role === "customer") {
+                const reply = await this.eventBus.safeRequest(
+                    CUSTOMER_EVENTS.CHECK_EXISTS_USERID,
+                    { customer_user_id: user._id }
+                );
 
-            if (reply.found) {
-                fullName = reply.employee.full_name;
-                position = reply.employee.position;
-                employeeId = reply.employee._id;
+                if (reply.found) {
+                    fullName = reply.customer.full_name;
+                    customerId = reply.customer._id;
+                }
+            } else {
+                const reply = await this.eventBus.safeRequest(
+                    EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                    { employee_user_id: user._id }
+                );
+
+                if (reply.found) {
+                    fullName = reply.employee.full_name;
+                    position = reply.employee.position;
+                    employeeId = reply.employee._id;
+                }
             }
+
+            let payload = {
+                userId: user._id,
+                role: user.system_role
+            };
+
+            if (position) payload.position = position;
+            if (employeeId) payload.employeeId = employeeId;
+            if (customerId) payload.customerId = customerId;
+
+            return { payload, fullName };
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
         }
-
-        let payload = {
-            userId: user._id,
-            role: user.system_role
-        };
-
-        if (position) payload.position = position;
-        if (employeeId) payload.employeeId = employeeId;
-        if (customerId) payload.customerId = customerId;
-
-        return { payload, fullName };
     }
 
-    async loginGoogle (tokenGoogle) {
+    async loginGoogle (tokenGoogle, profileData = null) {
         try {
             const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-            // verify token with google
             const ticket = await client.verifyIdToken({
                 idToken: tokenGoogle,
                 audience: process.env.GOOGLE_CLIENT_ID
@@ -250,15 +268,73 @@ export class AuthService {
             const { email, name, picture, sub: googleId } = googlePayload;
 
             const user = await this.User.findOne({ email });
+
             if (!user) {
+                // First call: ask the client to collect missing fields
+                if (!profileData) {
+                    return {
+                        isNewUser: true,
+                        googleData: { email, name, picture, googleId }
+                    };
+                }
+
+                // Second call: complete registration with the supplied profile fields
+                const { phone_number, CCCD, date_birth, nationality } = profileData;
+
+                const randomAvatar = this.defaultAvatars[Math.floor(Math.random() * this.defaultAvatars.length)];
+                // Google already verified the email, so emailVerified = true and no OTP needed.
+                // Password is random and never exposed — the user always logs in via Google.
+                const randomPassword = `${Date.now()}-${Math.random().toString(36)}`;
+                const hashed = await bcrypt.hash(randomPassword, 10);
+
+                const newUser = await this.User.create({
+                    email,
+                    password: hashed,
+                    system_role: "customer",
+                    avatar: picture || randomAvatar,
+                    emailVerified: true,
+                });
+
+                const reply = await this.eventBus.safeRequest(
+                    CUSTOMER_EVENTS.REGISTERED,
+                    {
+                        userId: newUser._id,
+                        customer: {
+                            full_name: name,
+                            date_birth,
+                            phone_number,
+                            nationality: nationality || "Vietnam",
+                            CCCD,
+                        }
+                    }
+                );
+
+                if (!reply.success) {
+                    await this.User.deleteOne({ _id: newUser._id }).catch(rollbackErr => {
+                        console.error("Google registration rollback failed:", rollbackErr);
+                    });
+                    const err = new Error(reply.message || "Tạo khách hàng thất bại.");
+                    err.status = 400;
+                    throw err;
+                }
+
+                const { payload: newPayload, fullName: newFullName } = await this.buildTokenPayLoad(newUser);
+                const newToken = jwt.sign(newPayload, process.env.JWT_SECRET, { expiresIn: "7d" });
+
                 return {
-                    isNewUser: true,
-                    googleData: {
-                        email, name, picture, googleId
+                    token: newToken,
+                    theUser: {
+                        _id: newUser._id,
+                        name: newFullName,
+                        position: newPayload.position,
+                        email: newUser.email,
+                        role: newUser.system_role,
+                        avatar: newUser.avatar
                     }
                 };
             }
 
+            // Existing user — normal login
             const { payload, fullName } = await this.buildTokenPayLoad(user);
 
             const token = jwt.sign(
@@ -322,58 +398,87 @@ export class AuthService {
     // }
 
     async forgotPassword (email) {
-        const user = await this.User.findOne({ email });
-        if (!user) 
-            throw new Error("Không tìm thấy email.");
+        try {
+            const user = await this.User.findOne({ email });
+            if (!user)
+                throw new Error("Không tìm thấy email.");
 
-        const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
-        user.resetPasswordOtp = otp;
-        user.resetPasswordExpires = Date.now() + 5 * 60 * 1000;
+            const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+            user.resetPasswordOtp = otp;
+            user.resetPasswordExpires = Date.now() + 5 * 60 * 1000;
 
-        await user.save();
-        await this.mailService.sendResetPasswordEmail(email, otp);
+            await user.save();
+            await this.mailService.sendResetPasswordEmail(email, otp);
 
-        return { success: true };
+            return { success: true };
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     };
 
     async resetPassword (email, otp, newPassword) {
-        const user = await this.User.findOne({
-            email,
-            resetPasswordOtp: otp,
-            resetPasswordExpires: { $gt: Date.now() }
-        });
+        try {
+            const user = await this.User.findOne({
+                email,
+                resetPasswordOtp: otp,
+                resetPasswordExpires: { $gt: Date.now() }
+            });
 
-        if (!user) throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
+            if (!user) throw new Error("Mã OTP không hợp lệ hoặc đã hết hạn.");
 
-        const hashed = await bcrypt.hash(newPassword, 10);
+            const hashed = await bcrypt.hash(newPassword, 10);
 
-        user.password = hashed;
-        user.resetPasswordOtp = undefined;
-        user.resetPasswordExpires = undefined;
+            user.password = hashed;
+            user.resetPasswordOtp = undefined;
+            user.resetPasswordExpires = undefined;
 
-        await user.save();
-        return { success: true };
+            await user.save();
+            return { success: true };
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     };
 
     async adminResetPassword ({ userId, newPassword }) {
-        // console.log("USERID: ", userId);
-        // console.log("NEW PASSWORD: ", newPassword);
+        try {
+            const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
+            if (!regex.test(newPassword)) {
+                throw new Error("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, thường, số và ký tự đặc biệt.");
+            }
 
-        const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*#?&]).{8,}$/;
-        if (!regex.test(newPassword)) {
-            throw new Error("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, thường, số và ký tự đặc biệt.");
+            const user = await this.User.findById(userId);
+            if (!user) throw new Error("Không tìm thấy tài khoản người dùng.");
+
+            user.password = newPassword;
+
+            await user.save();
+            return true;
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
         }
-
-        const user = await this.User.findById(userId);
-        if (!user) throw new Error("Không tìm thấy tài khoản người dùng.");
-
-        user.password = newPassword;
-
-        await user.save();
-        return true;
     };
 
     async deleteUser(userId) {
-        return this.User.findByIdAndDelete(userId);
+        try {
+            return await this.User.findByIdAndDelete(userId);
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
     };
 }

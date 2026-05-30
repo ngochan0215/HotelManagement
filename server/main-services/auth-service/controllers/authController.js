@@ -49,9 +49,9 @@ export class AuthController {
 
     loginGoogle = async (req, res) => {
         try {
-            const { googleToken } = req.body;
+            const { googleToken, profileData } = req.body;
 
-            const result = await this.authService.loginGoogle(googleToken);
+            const result = await this.authService.loginGoogle(googleToken, profileData || null);
 
             res.status(200).json({ message: "Login with google successfully!", ...result });
 

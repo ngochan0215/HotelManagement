@@ -155,7 +155,7 @@ export class ServiceService {
     }
 
     //---- SERVICE ----//
-    async createService({ category_id, name, description, unit, price, service_type }, files) {
+    async createService({ category_id, name, description, unit, price, import_price, service_type }, files) {
         try {
             if (!category_id || !name || !price || !description)
                 throw new Error("Yêu cầu nhập đầy đủ thông tin.");
@@ -174,8 +174,12 @@ export class ServiceService {
             if (existing)
                 throw new Error("Đã tồn tại dịch vụ có cùng tên cho danh mục dịch vụ này.");
 
+            const parsedImportPrice = import_price && Number(import_price) > 0
+                ? Math.round(Number(import_price))
+                : Math.round(Number(price) / 1.2);
+
             const images = files?.length > 0 ? files.map(f => f.path) : [];
-            const service = new this.Service({ category_id, name, description, unit, price, images, service_type: service_type || "product" });
+            const service = new this.Service({ category_id, name, description, unit, price, import_price: parsedImportPrice, images, service_type: service_type || "product" });
             
             await service.save();
             await Promise.all([
@@ -277,10 +281,10 @@ export class ServiceService {
         }
     }
 
-    async updateService(id, { name, description, unit, price, service_type }, files) {
+    async updateService(id, { name, description, unit, price, import_price, service_type }, files) {
         try {
             const service = await this.Service.findById(id);
-            if (!service) 
+            if (!service)
                 throw new Error("Không tìm thấy dịch vụ.");
 
             if (name && typeof name !== "string")
@@ -299,6 +303,7 @@ export class ServiceService {
             if (description) service.description = description;
             if (unit) service.unit = unit;
             if (price) service.price = price;
+            if (import_price !== undefined && Number(import_price) > 0) service.import_price = Math.round(Number(import_price));
             if (service_type) service.service_type = service_type;
             if (files?.length > 0) service.images = files.map(f => f.path);
 
@@ -514,7 +519,7 @@ export class ServiceService {
                     { storage_quantity: { $exists: false } },
                     { storage_quantity: null },
                 ],
-            }).select("_id name description unit price storage_quantity status");
+            }).select("_id name description unit price import_price storage_quantity status");
 
             await cache.set(cacheKey, services, 60);
             return services;
@@ -572,7 +577,8 @@ export class ServiceService {
                 items = outOfStock.map(s => ({
                     service_id: s._id,
                     import_quantity: default_quantity,
-                    import_price: Math.round(s.price * default_price_percent),
+                    // prefer the stored import_price; fall back to price * factor for legacy records
+                    import_price: s.import_price > 0 ? s.import_price : Math.round(s.price * default_price_percent),
                 }));
             }
 

@@ -15,6 +15,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
     category_id: "",
     unit: "item",
     service_type: "product",
+    import_price: 0,
     price: 0,
     description: "",
     status: "active"
@@ -40,11 +41,15 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
     if (isOpen) {
       fetchCategories();
       if (initialData) {
+        const storedImportPrice = initialData.import_price > 0
+            ? initialData.import_price
+            : Math.round((initialData.price || 0) / 1.2);
         setFormData({
           name: initialData.name || "",
           category_id: initialData.category_id?._id || initialData.category_id || "",
           unit: initialData.unit || "item",
           service_type: initialData.service_type || "product",
+          import_price: storedImportPrice,
           price: initialData.price || 0,
           description: initialData.description || "",
           status: initialData.status || "active"
@@ -71,6 +76,7 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
       category_id: "",
       unit: "item",
       service_type: "product",
+      import_price: 0,
       price: 0,
       description: "",
       status: "active"
@@ -97,7 +103,11 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
           data.append("unit", formData.unit);
           data.append("service_type", formData.service_type);
           const priceValue = Math.round(Number(formData.price));
+          const importPriceValue = Math.round(Number(formData.import_price));
           data.append("price", priceValue);
+          if (formData.service_type === "product" && importPriceValue > 0) {
+            data.append("import_price", importPriceValue);
+          }
           data.append("description", formData.description || "");
           data.append("status", formData.status);
 
@@ -179,34 +189,94 @@ export default function ServiceModal({ isOpen, onClose, onSuccess, initialData }
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Giá bán (VNĐ) <span className="text-red-500">*</span></label>
-                    <input
-                        type="number"
-                        min="0"
-                        required
-                        placeholder="0"
-                        className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition"
-                        value={formData.price}
-                        onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Đơn vị tính</label>
-                    <div className="relative">
-                        <select
-                            className="w-full appearance-none border border-gray-300 rounded-lg p-2.5 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white cursor-pointer transition"
-                            value={formData.unit}
-                            onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                        >
-                            {unitOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-                        </select>
-                        <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+            {formData.service_type === "product" ? (
+                <>
+                    <div className="grid grid-cols-2 gap-5">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Giá nhập (VNĐ) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                required
+                                placeholder="0"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition"
+                                value={formData.import_price}
+                                onChange={(e) => {
+                                    const imp = Number(e.target.value) || 0;
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        import_price: e.target.value,
+                                        price: imp > 0 ? Math.round(imp * 1.2) : prev.price
+                                    }));
+                                }}
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Giá vốn mua vào</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Giá bán (VNĐ) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                required
+                                placeholder="0"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition"
+                                value={formData.price}
+                                onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                            />
+                            <p className="text-xs text-indigo-400 mt-1">
+                                Gợi ý (+20%): {formData.import_price > 0 ? Math.round(Number(formData.import_price) * 1.2).toLocaleString() : "—"} đ
+                            </p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-5">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Đơn vị tính</label>
+                            <div className="relative">
+                                <select
+                                    className="w-full appearance-none border border-gray-300 rounded-lg p-2.5 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white cursor-pointer transition"
+                                    value={formData.unit}
+                                    onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                                >
+                                    {unitOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                                </select>
+                                <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div className="grid grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Giá (VNĐ) <span className="text-red-500">*</span></label>
+                        <input
+                            type="number"
+                            min="0"
+                            required
+                            placeholder="0"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition"
+                            value={formData.price}
+                            onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Đơn vị tính</label>
+                        <div className="relative">
+                            <select
+                                className="w-full appearance-none border border-gray-300 rounded-lg p-2.5 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white cursor-pointer transition"
+                                value={formData.unit}
+                                onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                            >
+                                {unitOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                            </select>
+                            <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loại dịch vụ <span className="text-red-500">*</span></label>
