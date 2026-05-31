@@ -58,8 +58,8 @@ export default function EquipmentCategoryTab() {
       const cats = (catRes && Array.isArray(catRes.categories)) ? catRes.categories : [];
       const eqs = (eqRes && Array.isArray(eqRes.data)) ? eqRes.data : [];
 
-      console.log("Loaded categories:", cats);
-      console.log("Loaded equipments:", eqs);
+      // console.log("Loaded categories:", cats);
+      // console.log("Loaded equipments:", eqs);
 
       const processedCategories = cats.map(cat => {
         const items = eqs.filter(e =>

@@ -80,7 +80,7 @@ export default function ReceiptList() {
     try {
       const params = { keyword, status, payment, from_date: fromDate, to_date: toDate };
       const res = await receiptApi.getAllReceipts(params);
-      console.log("Fetched receipts:", res);
+      // console.log("Fetched receipts:", res);
       setReceipts(res.receipts || []);
     } catch (err) {
       console.error(err);

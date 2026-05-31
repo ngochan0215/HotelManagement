@@ -1,5 +1,6 @@
 ﻿import mongoose from "mongoose";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class EquipmentImportService {
     constructor({ Equipment, EquipmentCategory, EquipmentLog, ImportTicket, ImportDetail, eventBus }) {
@@ -10,6 +11,12 @@ export class EquipmentImportService {
         this.ImportDetail = ImportDetail;
         this.eventBus = eventBus;
     }
+
+    invalidateImportCaches = async (ticketId = null) => {
+        const ops = [cache.delByPattern("eq:import:list:*")];
+        if (ticketId) ops.push(cache.del(`eq:import:ticket:${ticketId}`));
+        await Promise.all(ops);
+    };
 
     validateImportItems = async (items) => {
         if (!Array.isArray(items) || items.length === 0) {
@@ -112,6 +119,7 @@ export class EquipmentImportService {
             }));
 
             await this.ImportDetail.insertMany(importDetails);
+            await this.invalidateImportCaches();
 
             return ticket;
 
@@ -124,6 +132,16 @@ export class EquipmentImportService {
     getAllEquipmentTickets = async (query = {}) => {
         try {
             const { employee_id, min_import_date, max_import_date, status } = query;
+
+            const cacheKey = makeCacheKey("eq:import:list", {
+                employee_id: employee_id || null,
+                min_import_date: min_import_date || null,
+                max_import_date: max_import_date || null,
+                status: status || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             let filter = {};
 
             if (employee_id) {
@@ -194,7 +212,9 @@ export class EquipmentImportService {
                 import_details: importMap[ticket._id.toString()] || [],
             }));
 
-            return { total_tickets: result.length, tickets: result };
+            const response = { total_tickets: result.length, tickets: result };
+            await cache.set(cacheKey, response, 120);
+            return response;
 
         } catch (err) {
             console.log("Error in getting all import equipment tickets: ", err.message);
@@ -204,6 +224,10 @@ export class EquipmentImportService {
 
     getEquipmentTicketById = async (ticketId) => {
         try {
+            const cacheKey = `eq:import:ticket:${ticketId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const ticket = await this.ImportTicket.findById(ticketId).select("-__v -updated_at -created_at");
             if (!ticket)
                 throw new Error("Không tìm thấy phiếu nhập thiết bị.");
@@ -212,7 +236,9 @@ export class EquipmentImportService {
                 .populate("category_id", "name unit price -_id")
                 .select("-__v -created_at -updated_at -ticket_id");
 
-            return { ticket, ticket_details: imports };
+            const result = { ticket, ticket_details: imports };
+            await cache.set(cacheKey, result, 300);
+            return result;
 
         } catch (err) {
             console.log("Error in getting specific import equipment ticket: ", err.message);
@@ -280,6 +306,7 @@ export class EquipmentImportService {
             }));
 
             await this.ImportDetail.insertMany(importDetails);
+            await this.invalidateImportCaches(ticketId);
 
             return { success: true };
 
@@ -318,6 +345,7 @@ export class EquipmentImportService {
             await this.ImportDetail.deleteMany({ ticket_id: ticketId });
 
             await this.ImportTicket.deleteOne({ _id: ticketId });
+            await this.invalidateImportCaches(ticketId);
 
             return { success: true };
         } catch (err) {
@@ -381,7 +409,13 @@ export class EquipmentImportService {
             ticket.confirmed_by = adminId;
             ticket.confirmed_at = now;
             await ticket.save();
-        
+
+            await Promise.all([
+                this.invalidateImportCaches(ticketId),
+                cache.del("eq:import:out_of_stock"),
+                cache.delByPattern("eq:install:suggestions:*"),
+            ]);
+
             return { success: true };
 
         } catch (err) {
@@ -392,11 +426,17 @@ export class EquipmentImportService {
     
     getOutOfStockCategories = async () => {
         try {
+            const cacheKey = "eq:import:out_of_stock";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const outOfStockCategories = await this.EquipmentCategory.find({ storage_quantity: { $lt: 10 } })
                 .select("_id name description unit price storage_quantity");
 
-            return { categories: outOfStockCategories, count: outOfStockCategories.length };
-    
+            const result = { categories: outOfStockCategories, count: outOfStockCategories.length };
+            await cache.set(cacheKey, result, 60);
+            return result;
+
         } catch (err) {
             console.log("Error in getting low-stock equipments: ", err.message);
             throw err;
@@ -491,9 +531,10 @@ export class EquipmentImportService {
             }));
     
             await this.ImportDetail.insertMany(importDetails);
-    
+            await this.invalidateImportCaches();
+
             return { ticket_id: ticketId, items_count: items.length, import_date: importDate };
-    
+
         } catch (err) {
             console.log("Error in auto creating import equipment ticket: ", err.message);
             throw err;

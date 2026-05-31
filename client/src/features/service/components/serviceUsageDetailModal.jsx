@@ -37,7 +37,7 @@ export default function ServiceUsageDetailModal({ usageId, onClose }) {
         const res = await serviceApi.getServiceUsageById(usageId);
         if (res.success) {
           setData(res.data);
-          console.log("Chi tiết phiếu sử dụng dịch vụ:", res.data);
+          // console.log("Chi tiết phiếu sử dụng dịch vụ:", res.data);
         } else {
           setError(res.message || "Không thể tải chi tiết");
         }

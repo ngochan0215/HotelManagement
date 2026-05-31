@@ -58,7 +58,6 @@ export default function BookingList() {
   let employeeId = user?._id;
   if (!employeeId && user?.token) {
     try { employeeId = jwtDecode(user.token).userId; } catch (err) {}
-    console.log("Decoded employeeId from token:", user?.token, "=>", employeeId);
   }
 
   const [bookings, setBookings] = useState([]);
@@ -343,7 +342,6 @@ export default function BookingList() {
               room_id: roomInfo.room_id,
               booking_id: roomInfo.booking_id
             });
-            //console.log("CLEANING TASKS: ", res);
             // Kiểm tra xem room_id đã có trong map chưa và đã có needsAssignment chưa
             const existingTask = tasksMap[roomInfo.room_id];
             const alreadyNeedsAssignment = existingTask && existingTask.needsAssignment === true;
@@ -353,9 +351,7 @@ export default function BookingList() {
               // handled_by có thể là null, undefined, hoặc object (khi populate)
               const hasHandledBy = res.task.handled_by && 
                 (typeof res.task.handled_by === 'object' ? res.task.handled_by._id : res.task.handled_by);
-              //console.log("has handledby: ", hasHandledBy);
               if (!hasHandledBy) {
-                //console.log("IM CALLED");
                 // Có task nhưng chưa gán nhân viên - cần gán
                 // Chỉ set nếu chưa có trong map hoặc chưa có needsAssignment
                 if (!existingTask || !alreadyNeedsAssignment) {
@@ -646,7 +642,7 @@ export default function BookingList() {
         }))
       };
 
-      console.log("Payload booking:", payloadBooking);
+      //console.log("Payload booking:", payloadBooking);
 
       // Đặt liền: tạo booking và ghi hóa đơn ngay
       if (bookingMode === "immediate") {
@@ -659,7 +655,7 @@ export default function BookingList() {
       else {
         // Tạo booking trước
         const bookingRes = await bookingApi.createBooking(payloadBooking);
-        console.log("Booking created:", bookingRes);
+        // console.log("Booking created:", bookingRes);
         const bookingId = bookingRes?.booking_id;
         
         if (!bookingId) {
@@ -680,10 +676,10 @@ export default function BookingList() {
           price: roundedDepositAmount
         }]
       };
-        console.log("Creating payment link with data:", paymentData);
+        //console.log("Creating payment link with data:", paymentData);
 
         const paymentRes = await paymentApi.createPaymentLink(employeeId, paymentData);
-        console.log("Payment link response:", paymentRes);
+        //console.log("Payment link response:", paymentRes);
         
         if (paymentRes?.success && paymentRes?.data?.checkoutUrl) {
           window.open(paymentRes.data.checkoutUrl, '_blank');

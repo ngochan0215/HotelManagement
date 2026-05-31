@@ -1,6 +1,9 @@
 import { EventBus } from "../../../shared/messaging/eventBus.js";
+import { EventConsumer } from "../../../shared/messaging/eventConsumer.js";
 import { ServiceService } from "../services/serviceService.js";
 import { AdditionalService } from "../services/additionalService.js";
+import { ServiceEventHandler } from "../events/serviceHandler.js";
+import { SERVICE_EVENTS } from "../../../shared/events/serviceEvents.js";
 import { sendNotificationsToUsers } from "../../../shared/messaging/notificationPublisher.js";
 
 import Service from "../models/Service.js";
@@ -32,13 +35,21 @@ class Container {
             eventBus: this.eventBus,
             sendNotificationsToUsers,
         });
+
+        this.serviceEventHandler = new ServiceEventHandler(this.serviceService, this.eventBus);
     }
 
     async init() {
         await this.eventBus.connect({
             queueName: "service-service-events",
-            bindEvents: [],
+            bindEvents: [
+                SERVICE_EVENTS.GET_COMPLETED_BY_BOOKING,
+            ],
         });
+
+        const handlers = this.serviceEventHandler.handlers();
+        const consumer = new EventConsumer(this.eventBus, handlers);
+        await consumer.start();
     }
 }
 

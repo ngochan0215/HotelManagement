@@ -202,8 +202,6 @@ export default function AttractionPage() {
             if (maxDistance) params.max_distance = Number(maxDistance) * 1000; // km → m
 
             const res = await attractionApi.getAll(params);
-            console.log("[AttractionPage] API response:", res);
-            console.log("[AttractionPage] API data:", res.attractions);
             setData(res);
         } catch (err) {
             console.error("[AttractionPage] fetch error:", err);

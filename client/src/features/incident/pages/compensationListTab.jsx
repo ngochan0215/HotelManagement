@@ -28,7 +28,7 @@ export default function CompensationListTab() {
         const res = await incidentApi.getAllCompensateTickets();
         const list = Array.isArray(res) ? res : (res.data || []);
 
-        console.log("Fetched compensation tickets:", list);
+        // console.log("Fetched compensation tickets:", list);
         setTickets(list);
 
       } catch (err) {

@@ -73,15 +73,18 @@ export class CustomerService {
                 }
             }
 
+            let userEnrichmentOk = true;
             if (uncachedIds.length > 0) {
                 const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USERS_INFO, { userIds: uncachedIds });
-                if (!reply.success) throw new Error(reply.message);
-
-                await Promise.all(reply.users.map(async u => {
-                    const info = { email: u.email, system_role: u.system_role, avatar: u.avatar, isBanned: u.isBanned };
-                    await cache.set(`user:info:${u._id}`, info, 60);
-                    userInfoMap[u._id.toString()] = info;
-                }));
+                if (reply.success) {
+                    await Promise.all(reply.users.map(async u => {
+                        const info = { email: u.email, system_role: u.system_role, avatar: u.avatar, isBanned: u.isBanned };
+                        await cache.set(`user:info:${u._id}`, info, 60);
+                        userInfoMap[u._id.toString()] = info;
+                    }));
+                } else {
+                    userEnrichmentOk = false;
+                }
             }
 
             const result = customers.map(customer => ({
@@ -90,7 +93,9 @@ export class CustomerService {
             }));
 
             const listResponse = { total: result.length, customers: result };
-            await cache.set(cacheKey, listResponse, 300);
+            if (userEnrichmentOk) {
+                await cache.set(cacheKey, listResponse, 300);
+            }
             return listResponse;
 
         } catch (error) {
@@ -113,18 +118,18 @@ export class CustomerService {
         }
 
         const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
-        if (!reply.success) {
-            throw new Error(reply.message);
-        } else {
+        if (reply.success) {
             customer.user = {
                 email: reply.user.email,
                 system_role: reply.user.system_role,
                 avatar: reply.user.avatar,
                 isBanned: reply.user.isBanned
             };
+            await cache.set(cacheKey, customer, 300);
+        } else {
+            customer.user = null;
         }
 
-        await cache.set(cacheKey, customer, 300);
         return customer;
     };
 
@@ -319,46 +324,51 @@ export class CustomerService {
     };
 
     updateCustomerPoints = async ({ customer_id, points, reason }) => {
-        if (!mongoose.Types.ObjectId.isValid(customer_id)) {
-            throw new Error("customer_id không hợp lệ");
+        try {
+            if (!mongoose.Types.ObjectId.isValid(customer_id)) {
+                throw new Error("customer_id không hợp lệ");
+            }
+
+            if (!Number.isInteger(points) || points === 0) {
+                throw new Error("points phải là số nguyên khác 0");
+            }
+
+            if (!reason || typeof reason !== "string") {
+                throw new Error("reason là bắt buộc");
+            }
+
+            const customer = await this.Customer.findById(customer_id);
+            if (!customer) {
+                throw new Error("Không tìm thấy customer");
+            }
+
+            const before = customer.points;
+            //   if (before <= -points && points < 0) {
+            //     return { before, after: 0, change: points };
+            //   }
+            const after = Math.max(before + points, 0); // không cho âm
+
+            customer.points = after;
+            await customer.save();
+
+            await this.PointsLog.create({
+                customer_id,
+                points_change: points,
+                points_before: before,
+                points_after: after,
+                reason,
+            });
+
+            await Promise.all([
+                cache.del(`customer:one:${customer_id}`),
+                cache.del(`customer:user:${customer.user_id}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
+            return { before, after, change: points };
+        } catch (error) {
+            console.log("Error updating customer points:", error);
+            throw error;
         }
-
-        if (!Number.isInteger(points) || points === 0) {
-            throw new Error("points phải là số nguyên khác 0");
-        }
-
-        if (!reason || typeof reason !== "string") {
-            throw new Error("reason là bắt buộc");
-        }
-
-        const customer = await this.Customer.findById(customer_id);
-        if (!customer) {
-            throw new Error("Không tìm thấy customer");
-        }
-
-        const before = customer.points;
-        //   if (before <= -points && points < 0) {
-        //     return { before, after: 0, change: points };
-        //   }
-        const after = Math.max(before + points, 0); // không cho âm
-
-        customer.points = after;
-        await customer.save();
-
-        await this.PointsLog.create({
-            customer_id,
-            points_change: points,
-            points_before: before,
-            points_after: after,
-            reason,
-        });
-
-        await Promise.all([
-            cache.del(`customer:one:${customer_id}`),
-            cache.del(`customer:user:${customer.user_id}`),
-            cache.delByPattern("customer:list:*"),
-        ]);
-        return { before, after, change: points };
     };
 
     calculateMembershipTier = ({ booking_count, points }) => {
@@ -833,73 +843,83 @@ export class CustomerService {
     };
 
     getMyProfile = async (userId) => {
-        const cacheKey = `customer:profile:${userId}`;
-        const cached = await cache.get(cacheKey);
-        if (cached) return cached;
+        try {
+            const cacheKey = `customer:profile:${userId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
-        const customer = await this.Customer.findOne({ user_id: userId })
-            .select("-__v -created_at -updated_at -createdAt -updatedAt")
-            .lean();
+            const customer = await this.Customer.findOne({ user_id: userId })
+                .select("-__v -created_at -updated_at -createdAt -updatedAt")
+                .lean();
 
-        if (!customer) {
-            const err = new Error("Không tìm thấy hồ sơ khách hàng.");
-            err.status = 404;
-            throw err;
+            if (!customer) {
+                const err = new Error("Không tìm thấy hồ sơ khách hàng.");
+                err.status = 404;
+                throw err;
+            }
+
+            const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+            if (reply.success) {
+                customer.user = {
+                    email: reply.user.email,
+                    avatar: reply.user.avatar,
+                    system_role: reply.user.system_role,
+                };
+            }
+
+            await cache.set(cacheKey, customer, 300);
+            return customer;
+        } catch (error) {
+            console.error("Error fetching my profile:", error);
+            throw error;
         }
-
-        const reply = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
-        if (reply.success) {
-            customer.user = {
-                email: reply.user.email,
-                avatar: reply.user.avatar,
-                system_role: reply.user.system_role,
-            };
-        }
-
-        await cache.set(cacheKey, customer, 300);
-        return customer;
     };
 
     updateMyProfile = async (userId, updateData) => {
-        const { full_name, date_birth, phone_number, nationality,
-            bank_shortName, account_number, BIN
-        } = updateData;
+        try {
+            const { full_name, date_birth, phone_number, nationality,
+                bank_shortName, account_number, BIN
+            } = updateData;
 
-        const customer = await this.Customer.findOne({ user_id: userId });
-        if (!customer) {
-            const err = new Error("Không tìm thấy hồ sơ khách hàng.");
-            err.status = 404;
-            throw err;
-        }
-
-        if (phone_number !== undefined) {
-            if (!PHONE_REGEX.test(phone_number)) {
-                throw new Error("Số điện thoại không hợp lệ.");
+            const customer = await this.Customer.findOne({ user_id: userId });
+            if (!customer) {
+                const err = new Error("Không tìm thấy hồ sơ khách hàng.");
+                err.status = 404;
+                throw err;
             }
-            if (phone_number !== customer.phone_number) {
-                const existPhone = await this.Customer.findOne({ phone_number });
-                if (existPhone) throw new Error("Số điện thoại đã tồn tại.");
+
+            if (phone_number !== undefined) {
+                if (!PHONE_REGEX.test(phone_number)) {
+                    throw new Error("Số điện thoại không hợp lệ.");
+                }
+                if (phone_number !== customer.phone_number) {
+                    const existPhone = await this.Customer.findOne({ phone_number });
+                    if (existPhone) throw new Error("Số điện thoại đã tồn tại.");
+                }
             }
+
+            if (full_name !== undefined) customer.full_name = full_name;
+            if (date_birth !== undefined) customer.date_birth = date_birth;
+            if (phone_number !== undefined) customer.phone_number = phone_number;
+            if (nationality !== undefined) customer.nationality = nationality;
+            if (bank_shortName !== undefined) customer.bank_shortName = bank_shortName;
+            if (account_number !== undefined) customer.account_number = account_number;
+            if (BIN !== undefined) customer.BIN = BIN;
+
+            await customer.save();
+
+            await Promise.all([
+                cache.del(`customer:profile:${userId}`),
+                cache.del(`customer:one:${customer._id}`),
+                cache.del(`customer:user:${userId}`),
+                cache.delByPattern("customer:list:*"),
+            ]);
+
+            return customer;
+        } catch (error) {
+            console.error("Error updating customer profile:", error);
+            throw error;
         }
-
-        if (full_name !== undefined) customer.full_name = full_name;
-        if (date_birth !== undefined) customer.date_birth = date_birth;
-        if (phone_number !== undefined) customer.phone_number = phone_number;
-        if (nationality !== undefined) customer.nationality = nationality;
-        if (bank_shortName !== undefined) customer.bank_shortName = bank_shortName;
-        if (account_number !== undefined) customer.account_number = account_number;
-        if (BIN !== undefined) customer.BIN = BIN;
-
-        await customer.save();
-
-        await Promise.all([
-            cache.del(`customer:profile:${userId}`),
-            cache.del(`customer:one:${customer._id}`),
-            cache.del(`customer:user:${userId}`),
-            cache.delByPattern("customer:list:*"),
-        ]);
-
-        return customer;
     };
 
     // communication
@@ -928,8 +948,6 @@ export class CustomerService {
     };
 
     async createCustomer(userId, customer) {
-        //console.log("USERID IN CUSTOMERSERVICE: ", userId);
-        //console.log("CUSTOMER IN CUSTOMERSERVICE: ", customer);
         try {
             const existed = await this.Customer.findOne({ user_id: userId });
             if (existed)
@@ -957,7 +975,7 @@ export class CustomerService {
             return the_customer;
 
         } catch (error) {
-            console.log("Create customer unsuccessfully with error: " + error.message);
+            console.error("Error creating customer:", error);
             throw error;
         }
         

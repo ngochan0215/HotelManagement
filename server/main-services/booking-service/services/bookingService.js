@@ -242,10 +242,10 @@ export class BookingService {
                     EMPLOYEE_EVENTS.GET_INFO,
                     { employee_ids: employeeIds }
                 );
-                for (const emp of reply.employees) {
+                for (const emp of (reply.employees || [])) {
                     const key = emp._id?.toString();
                     map[key] = {
-                        full_name: emp.full_name, 
+                        full_name: emp.full_name,
                         position: emp.position,
                         phone_number: emp.phone_number
                     };
@@ -261,7 +261,7 @@ export class BookingService {
                     CUSTOMER_EVENTS.GET_INFOS_IDS,
                     { customerIds: customerIds }
                 );
-                for (const cus of reply.customers) {
+                for (const cus of (reply.customers || [])) {
                     const key = cus._id?.toString();
                     map[key] = {
                         full_name: cus.full_name,
@@ -300,7 +300,7 @@ export class BookingService {
                 { room_ids: roomIds }
             );
 
-            for (const room of reply.rooms) {
+            for (const room of (reply.rooms || [])) {
                 roomMap[room._id.toString()] = {
                     _id: room._id,
                     room_number: room.room_number,
@@ -312,7 +312,7 @@ export class BookingService {
                         capacity: room.category_id.capacity,
                         description: room.category_id.description,
                     } : null,
-                }
+                };
             }
         }
 
@@ -952,7 +952,7 @@ export class BookingService {
                             start_time: now,
                             end_time: cleaningEnd,
                             expected_end_time: cleaningEnd,
-                            note: `Cleaning after checkout booking ${booking._id}`,
+                            note: `Cleaning after checkout booking ID: #${shortenId}`,
                             handled_by: null,
                         };
                         const replyInsertLog = await this.eventBus.safeRequest(

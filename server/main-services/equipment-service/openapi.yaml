@@ -455,6 +455,89 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalServerError" }
 
+  /statistics/reports/json:
+    get:
+      tags: [Equipments]
+      summary: Generate equipment report as JSON
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Equipment report data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericObject" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /statistics/reports/excel:
+    get:
+      tags: [Equipments]
+      summary: Export equipment report as Excel
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /statistics/reports/pdf:
+    get:
+      tags: [Equipments]
+      summary: Export equipment report as PDF
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: PDF file download
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /tickets/install/smart-suggestions/{roomId}:
+    get:
+      tags: [Install Tickets]
+      summary: Get smart install suggestions for a room (manager)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Install suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  suggestions:
+                    type: array
+                    items: { $ref: "#/components/schemas/GenericObject" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
   /tickets/install/my:
     get:
       tags: [Install Tickets]

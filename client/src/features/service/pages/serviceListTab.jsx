@@ -54,12 +54,7 @@ export default function ServiceListTab() {
   const isManager = userRole === "manager" || userRole === "admin";
   const isAdmin = userRole === "admin";
   
-  useEffect(() => {
-    // console.log("🔍 Debug ServiceListTab:");
-    // console.log("- user?.role:", user?.role);
-    // console.log("- localStorage role:", localStorage.getItem("role"));
-    // console.log("- isManager:", isManager);
-  }, [user, isManager]);
+  useEffect(() => {}, [user, isManager]);
   
   useEffect(() => {
     fetchData();

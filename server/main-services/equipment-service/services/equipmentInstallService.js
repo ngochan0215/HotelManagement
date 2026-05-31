@@ -2,6 +2,7 @@
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class EquipmentInstallService {
     constructor({ Equipment, EquipmentCategory, EquipmentLog, InstallTicket, 
@@ -15,6 +16,16 @@ export class EquipmentInstallService {
         this.sendNotification = sendNotification;
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
+
+    invalidateInstallCaches = async (ticketId = null, roomId = null) => {
+        const ops = [
+            cache.delByPattern("eq:install:list:*"),
+            cache.delByPattern("eq:install:my:*"),
+        ];
+        if (ticketId) ops.push(cache.del(`eq:install:ticket:${ticketId}`));
+        if (roomId) ops.push(cache.del(`eq:install:suggestions:${roomId}`));
+        await Promise.all(ops);
+    };
 
     // HELPER
 
@@ -187,16 +198,13 @@ export class EquipmentInstallService {
                 : Promise.resolve({ success: true, employees: [] }),
         ]);
 
-        if (!employeeReply.success) throw new Error(employeeReply.message);
-        if (!handlerReply.success) throw new Error(handlerReply.message);
-
         let employeeMap = {};
         let handlerMap = {};
 
-        for (const emp of employeeReply.employees) {
+        for (const emp of (employeeReply.employees || [])) {
             employeeMap[emp._id.toString()] = emp;
         }
-        for (const emp of handlerReply.employees) {
+        for (const emp of (handlerReply.employees || [])) {
             handlerMap[emp._id.toString()] = emp;
         }
 
@@ -227,26 +235,14 @@ export class EquipmentInstallService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
-            if(!reply.success)
-                throw new Error(reply.message);
-
-            for (const room of reply.rooms) {
+            for (const room of (reply.rooms || [])) {
                 roomMap[room._id.toString()] = {
                     _id: room._id,
                     room_number: room.room_number,
                     room_status: room.room_status
-                }
+                };
             }
         }
-
-        // return equipments.map(equipment => {
-        //     const key = equipment.room_id?.toString();
-
-        //     return {
-        //         ...equipment,
-        //         room_id: key && roomMap[key] ? roomMap[key] : null
-        //     };
-        // });
 
         const results = list.map(ticket => ({
             ...ticket,
@@ -322,6 +318,15 @@ export class EquipmentInstallService {
             if (!install_date || !room_id) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: room_id, install_date.");
             }
+
+            const installDate = new Date(install_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            installDate.setHours(0, 0, 0, 0);
+
+            if (installDate < today) {
+                throw new Error("Ngày nhập không hợp lệ! Không thể nhỏ hơn ngày hiện tại.");
+            }
     
             const [employee, targetRoom] = await Promise.all([
                 this.getEmployeeByUserId(employeeUserId),
@@ -358,15 +363,20 @@ export class EquipmentInstallService {
                 await this.getEmployeeById(handled_by);
                 handledByEmployee = await this.getTechnicianAvailable(handled_by);
     
+                const targetDay = new Date(install_date);
+                targetDay.setHours(0, 0, 0, 0);
+                const nextDay = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+
                 const activeTicket = await this.InstallTicket.findOne({
                     handled_by: handled_by,
-                    status: { $in: ["pending", "assigned", "waiting_confirm"]}
+                    status: { $in: ["pending", "assigned", "waiting_confirm"] },
+                    install_date: { $gte: targetDay, $lt: nextDay },
                 });
                 if (activeTicket) {
-                    throw new Error("Nhân viên này đang có phiếu đang xử lý, không thể gán thêm.");
+                    throw new Error("Nhân viên này đã được gán phiếu khác vào cùng ngày, không thể gán thêm.");
                 }
             }
-    
+
             const install = await this.InstallTicket.create({
                 employee_id: employee?._id,
                 handled_by: handled_by || handledByEmployee?._id || null,
@@ -421,12 +431,13 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await this.invalidateInstallCaches(null, room_id);
             return install;
-    
+
         } catch (error) {
             console.log("Error in creating equipment install ticket: ", error.message);
             throw error;
-        } 
+        }
     };
     
     createUninstallTicket = async (employeeUserId, data) => {
@@ -435,6 +446,15 @@ export class EquipmentInstallService {
     
             if (!employeeUserId || !install_date || !from_room_id) {
                 throw new Error("Yêu cầu nhập đầy đủ thông tin: from_room_id, install_date.");
+            }
+
+            const installDate = new Date(install_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            installDate.setHours(0, 0, 0, 0);
+
+            if (installDate < today) {
+                throw new Error("Ngày tháo dỡ không hợp lệ! Không thể nhỏ hơn ngày hiện tại.");
             }
 
             const [employee, sourceRoom] = await Promise.all([
@@ -465,12 +485,17 @@ export class EquipmentInstallService {
                 await this.getEmployeeById(handled_by);
                 handledByEmployee = await this.getTechnicianAvailable(handled_by);
     
+                const targetDay = new Date(install_date);
+                targetDay.setHours(0, 0, 0, 0);
+                const nextDay = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+
                 const activeTicket = await this.InstallTicket.findOne({
                     handled_by: handled_by,
-                    status: { $in: ["pending", "assigned", "waiting_confirm"]}
+                    status: { $in: ["pending", "assigned", "waiting_confirm"] },
+                    install_date: { $gte: targetDay, $lt: nextDay },
                 });
                 if (activeTicket) {
-                    throw new Error("Nhân viên này đang có phiếu đang xử lý, không thể gán thêm.");
+                    throw new Error("Nhân viên này đã được gán phiếu khác vào cùng ngày, không thể gán thêm.");
                 }
             }
 
@@ -526,8 +551,9 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await this.invalidateInstallCaches(null, from_room_id);
             return install;
-    
+
         } catch (error) {
             console.log("Error in creating uninstall equipment ticket: ", error.message);
             throw error;
@@ -537,6 +563,17 @@ export class EquipmentInstallService {
     getAllEquipmentInstalls = async (query = {}) => {
         try {
             const { employee_id, room_id, min_install_date, max_install_date, status } = query;
+
+            const cacheKey = makeCacheKey("eq:install:list", {
+                employee_id: employee_id || null,
+                room_id: room_id || null,
+                min_install_date: min_install_date || null,
+                max_install_date: max_install_date || null,
+                status: status || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             let filter = {};
         
             if (employee_id) {
@@ -565,8 +602,10 @@ export class EquipmentInstallService {
             const results = await this.populateEmployeeAndHandler(installs);
             const finalResult = await this.populateRoom(results);
 
-            return { counts: finalResult.length, installs: finalResult };
-            
+            const response = { counts: finalResult.length, installs: finalResult };
+            await cache.set(cacheKey, response, 60);
+            return response;
+
         } catch (error) {
             console.log("Error in getting all equipment install tickets: ", error.message);
             throw error;
@@ -606,6 +645,10 @@ export class EquipmentInstallService {
     getSmartInstallSuggestions = async (roomId) => {
         try {
             if (!roomId) throw new Error("Vui lòng cung cấp room_id");
+
+            const cacheKey = `eq:install:suggestions:${roomId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const reply = await this.eventBus.safeRequest(
                 ROOM_EVENTS.CHECK_EXISTS,
@@ -698,13 +741,16 @@ export class EquipmentInstallService {
                 return b.needed_quantity - a.needed_quantity;
             });
 
-            return {
+            const result = {
                 room_id: roomId,
                 room_number: room.room_number,
                 room_category: room.category_id?.category_name ?? room.category_id,
                 suggestions,
                 total_suggestions: suggestions.length
             };
+
+            await cache.set(cacheKey, result, 120);
+            return result;
 
         } catch (error) {
             console.error("Error in getSmartInstallSuggestions:", error);
@@ -715,6 +761,16 @@ export class EquipmentInstallService {
     getMyInstallTickets = async (employeeUserId, query = {}) => {
         try {
             const { status, isAssigned, isCreated } = query;
+
+            const cacheKey = makeCacheKey("eq:install:my", {
+                userId: employeeUserId,
+                status: status || null,
+                isAssigned: isAssigned ?? null,
+                isCreated: isCreated ?? null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             let filter = {};
 
             const employee = await this.getEmployeeByUserId(employeeUserId);
@@ -747,8 +803,10 @@ export class EquipmentInstallService {
             const result = await this.populateEmployeeAndHandler(installs);
             const finalResult = await this.populateRoom(result);
 
-            return { count: finalResult.length, installs: finalResult };
-        
+            const response = { count: finalResult.length, installs: finalResult };
+            await cache.set(cacheKey, response, 60);
+            return response;
+
         } catch (error) {
             console.log("Error in getting my equipment install/uninstall tickets: ", error.message);
             throw error;
@@ -757,6 +815,10 @@ export class EquipmentInstallService {
     
     getEquipmentInstallById = async (ticketId) => {
         try {
+            const cacheKey = `eq:install:ticket:${ticketId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const install = await this.InstallTicket.findById(ticketId)
                 .select("-created_at -updated_at -__v").lean();
         
@@ -776,11 +838,10 @@ export class EquipmentInstallService {
                     select: "category_id condition status code"
                 });
 
-            return {
-                ...finalResult,
-                install_details: installDetails
-            };
-        
+            const final = { ...finalResult, install_details: installDetails };
+            await cache.set(cacheKey, final, 120);
+            return final;
+
         } catch (error) {
             console.log("Error in getting equipment un/install ticket: ", error.message);
             throw error;
@@ -850,14 +911,19 @@ export class EquipmentInstallService {
                         || install_ticket.handled_by.toString() !== handled_by;
 
                     if (technicianChanged) {
+                        const targetDay = new Date(install_ticket.install_date);
+                        targetDay.setHours(0, 0, 0, 0);
+                        const nextDay = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+
                         const activeTicket = await this.InstallTicket.findOne({
                             handled_by,
                             status: { $in: ["pending", "assigned", "waiting_confirm"] },
+                            install_date: { $gte: targetDay, $lt: nextDay },
                             _id: { $ne: install_ticket._id },
                         });
 
                         if (activeTicket) {
-                            throw new Error("Nhân viên này đang có phiếu đang xử lý, không thể gán thêm.");
+                            throw new Error("Nhân viên này đã được gán phiếu khác vào cùng ngày, không thể gán thêm.");
                         }
                     }
 
@@ -955,6 +1021,7 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await this.invalidateInstallCaches(ticketId, install_ticket.room_id?.toString());
             return { data: {
                 install_ticket,
                 ...(items?.length && { equipment_count: items.length }),
@@ -1103,8 +1170,9 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
         
+            await this.invalidateInstallCaches(ticketId, installTicket.room_id?.toString());
             return { success: true };
-        
+
         } catch (error) {
             console.log("Error in deleting equipment install/uninstall ticket: ", error.message);
             throw error;
@@ -1296,12 +1364,17 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await Promise.all([
+                this.invalidateInstallCaches(ticketId, ticket.room_id?.toString()),
+                cache.del("eq:import:out_of_stock"),
+                cache.delByPattern("eq:install:suggestions:*"),
+            ]);
             return { install_id: ticket._id, equipment_count: equipmentIds.length };
-        
+
         } catch (error) {
             console.log("Error in confirming install/uninstall equipment ticket: ", error.message);
             throw error;
-        } 
+        }
     };
 
     startInstallTicket = async (ticketId, userId) => {
@@ -1382,6 +1455,7 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await this.invalidateInstallCaches(ticketId, ticket.room_id?.toString());
             return { data: { install_id: ticket._id, started_at: ticket.started_at } };
 
         } catch (error) {
@@ -1467,8 +1541,9 @@ export class EquipmentInstallService {
                 console.error("Error sending notification:", notifError);
             }
 
+            await this.invalidateInstallCaches(ticketId, ticket.room_id?.toString());
             return { data: { install_id: ticket._id, completed_at: ticket.completed_at } };
-        
+
         } catch (error) {
             console.log("Error in employee mark complete install ticket: ", error.message);
             throw error;

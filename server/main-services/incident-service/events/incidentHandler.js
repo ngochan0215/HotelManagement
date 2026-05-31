@@ -12,6 +12,7 @@ export class IncidentEventHandler {
             [INCIDENT_EVENTS.FIND_PENDING_COMPENSATION]: this.findPendingCompensationTicket.bind(this),
             [INCIDENT_EVENTS.GET_COMPENSATION_BY_ID]: this.getCompensationById.bind(this),
             [INCIDENT_EVENTS.GET_ALL_INCIDENTS_INTERNAL]: this.getAllIncidentsInternal.bind(this),
+            [INCIDENT_EVENTS.MARK_COMPENSATION_PAID_BY_BOOKING]: this.markCompensationPaidByBooking.bind(this),
         }
     }
 
@@ -79,6 +80,31 @@ export class IncidentEventHandler {
                 }
             );
 
+        } catch (err) {
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: false, message: err.message })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
+        }
+    }
+
+    async markCompensationPaidByBooking(data, msg) {
+        try {
+            const { bookingId } = data;
+            await this.compensationService.markCompensationPaidByBooking(bookingId);
+
+            this.eventBus.channel.sendToQueue(
+                msg.properties.replyTo,
+                Buffer.from(JSON.stringify({ success: true })),
+                {
+                    correlationId: msg.properties.correlationId,
+                    persistent: false
+                }
+            );
         } catch (err) {
             this.eventBus.channel.sendToQueue(
                 msg.properties.replyTo,

@@ -164,11 +164,8 @@ export class SyncService {
             const count = await Attraction.countDocuments();
             return count === 0;
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("[SYNC] Error checking collection emptiness:", error.message);
+            throw error;
         }
     }
 }

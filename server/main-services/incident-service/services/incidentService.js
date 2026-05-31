@@ -74,7 +74,7 @@ export class IncidentService {
         );
 
         const roleMap = {};
-        for (const user of replyUsers.users) {
+        for (const user of (replyUsers.users || [])) {
             roleMap[user._id.toString()] = user.system_role;
         }
 
@@ -90,13 +90,10 @@ export class IncidentService {
                     EMPLOYEE_EVENTS.GET_INFOS_USERIDS,
                     { employee_user_ids: employeeIds }
                 );
-                if (!reply.success) 
-                    throw new Error(reply.message);
-
-                for (const emp of reply.employees) {
+                for (const emp of (reply.employees || [])) {
                     const key = emp.user_id?.toString();
                     map[key] = {
-                        full_name: emp.full_name, 
+                        full_name: emp.full_name,
                         phone_number: emp.phone_number
                     };
                 }
@@ -111,10 +108,7 @@ export class IncidentService {
                     CUSTOMER_EVENTS.GET_INFOS_USERIDS,
                     { customerUserIds: customerIds }
                 );
-                if (!reply.success)
-                    throw new Error(reply.message);
-
-                for (const cus of reply.customers) {
+                for (const cus of (reply.customers || [])) {
                     const key = cus.user_id?.toString();
                     map[key] = {
                         full_name: cus.full_name,
@@ -124,9 +118,6 @@ export class IncidentService {
                 return map;
             })(),
         ]);
-
-        // console.log("employeeMap keys:", Object.keys(employeeMap));
-        // console.log("customerMap keys:", Object.keys(customerMap));
 
         const getProfile = (userId) => {
             if (!userId) 
@@ -171,15 +162,12 @@ export class IncidentService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
-            if (!reply.success)
-                throw new Error(reply.message);
-
-            for (const room of reply.rooms) {
+            for (const room of (reply.rooms || [])) {
                 roomMap[room._id.toString()] = {
                     _id: room._id,
                     room_number: room.room_number,
                     room_status: room.room_status
-                }
+                };
             }
         }
 

@@ -231,11 +231,31 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, paid, half-paid, refunded, cancelled]
+            enum: [pending, paid, half-paid, cancelled]
+        - in: query
+          name: payment
+          schema:
+            type: string
+            enum: [cash, bank]
         - in: query
           name: booking_id
           schema:
             type: string
+        - in: query
+          name: from_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: keyword
+          schema:
+            type: string
+          description: Filter by customer full name
       responses:
         "200":
           description: Receipt list
@@ -362,7 +382,7 @@ paths:
               properties:
                 payment:
                   type: string
-                  enum: [cash, bank, unknown]
+                  enum: [cash, bank]
               required: [payment]
       responses:
         "200":
@@ -543,10 +563,10 @@ components:
           type: number
         payment:
           type: string
-          enum: [cash, bank, unknown]
+          enum: [cash, bank]
         status:
           type: string
-          enum: [pending, paid, half-paid, refunded, cancelled]
+          enum: [pending, paid, half-paid, cancelled]
         paid_at:
           type: string
           format: date-time
@@ -618,86 +638,28 @@ components:
 
     CreateReceiptRequest:
       type: object
+      description: All fees are computed server-side from booking and service-usage data; only identity and payment method are required from the caller.
       properties:
         booking_id:
           type: string
-        employee_id:
-          type: string
-        base_room_fee:
-          type: number
-        total_fee:
-          type: number
-        service_fee:
-          type: number
-        compensate_fee:
-          type: number
-        deposit_amount:
-          type: number
-        final_amount:
-          type: number
-        amount_due:
-          type: number
         payment:
           type: string
-          enum: [cash, bank, unknown]
-        discount_id:
-          type: string
-        discount_snapshot:
-          $ref: "#/components/schemas/DiscountSnapshot"
-        service_usage_id:
-          type: string
-        compensate_ticket_id:
-          type: string
+          enum: [cash, bank]
         note:
           type: string
       required:
         - booking_id
-        - employee_id
-        - base_room_fee
-        - total_fee
-        - deposit_amount
-        - final_amount
-        - amount_due
         - payment
-      additionalProperties: true
+      additionalProperties: false
 
     UpdateReceiptRequest:
       type: object
       properties:
-        transaction_id:
-          type: string
-          nullable: true
-        discount_id:
-          type: string
-          nullable: true
-        discount_snapshot:
-          $ref: "#/components/schemas/DiscountSnapshot"
-        service_usage_id:
-          type: string
-          nullable: true
-        compensate_ticket_id:
-          type: string
-          nullable: true
-        base_room_fee:
-          type: number
-        total_fee:
-          type: number
-        service_fee:
-          type: number
-        compensate_fee:
-          type: number
-        deposit_amount:
-          type: number
-        final_amount:
-          type: number
-        amount_due:
-          type: number
-        payment:
-          type: string
-          enum: [cash, bank, unknown]
         status:
           type: string
-          enum: [pending, paid, half-paid, refunded, cancelled]
-        note:
+          enum: [pending, paid, half-paid, cancelled]
+        payment:
           type: string
-      additionalProperties: true
+          enum: [cash, bank]
+      required: [status, payment]
+      additionalProperties: false

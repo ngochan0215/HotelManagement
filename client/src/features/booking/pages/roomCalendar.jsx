@@ -173,7 +173,7 @@ export default function RoomCalendar() {
 
     const handleCompleteCleaning = async () => {
         try {
-            console.log("selectedEvent: ", selectedEvent);
+            //console.log("selectedEvent: ", selectedEvent);
             await roomApi.completeCleaning(selectedEvent.room_id);
             setToast({ type: "success", message: "Hoàn thành dọn dẹp!" });
             setSelectedEvent(null);

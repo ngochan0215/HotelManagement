@@ -6,6 +6,7 @@ import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EQUIPMENT_EVENTS } from "../../../shared/events/equipmentEvents.js";
 import { INCIDENT_EVENTS } from "../../../shared/events/incidentEvents.js";
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class CleaningService {
     constructor({ CleaningTask, eventBus, sendNotification, sendNotificationsToUsers }) {
@@ -75,10 +76,26 @@ export class CleaningService {
         return replyRoom.room;
     }
 
+    invalidateTaskCaches = async (roomId = null) => {
+        const ops = [
+            cache.del("cleaning:housekeepers:available"),
+            cache.delByPattern("cleaning:tasks:all:*"),
+            cache.delByPattern("cleaning:tasks:my:*"),
+        ];
+        if (roomId) {
+            ops.push(cache.delByPattern(`cleaning:task:room:${roomId}:*`));
+        }
+        await Promise.all(ops);
+    };
+
     // main logic
 
     getAvailableHousekeepers = async () => {
         try {
+            const cacheKey = "cleaning:housekeepers:available";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const replyHousekeepers = await this.eventBus.safeRequest(
                 EMPLOYEE_EVENTS.GET_AVAILABLE_HOUSEKEEPERS,
                 {}
@@ -110,7 +127,9 @@ export class CleaningService {
                     user_id: hk.user_id
                 }));
 
-            return { count: availableHousekeepers.length, housekeepers: availableHousekeepers };
+            const result = { count: availableHousekeepers.length, housekeepers: availableHousekeepers };
+            await cache.set(cacheKey, result, 30);
+            return result;
 
         } catch (error) {
             console.log("Error in getting available housekeepers: ", error.message);
@@ -165,8 +184,9 @@ export class CleaningService {
 
             task.handled_by = housekeeper._id;
             task.status = "pending";
-            
+
             await task.save();
+            await this.invalidateTaskCaches(task.room_id?.toString());
 
             const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 
@@ -249,7 +269,8 @@ export class CleaningService {
             task.status = "in_progress";
             task.started_at = new Date();
             await task.save();
-    
+            await this.invalidateTaskCaches(task.room_id?.toString());
+
             try {
                 const roomNumber = room?.room_number || "N/A";
                 const roomCategoryName = room?.category_id?.name || "";
@@ -323,6 +344,7 @@ export class CleaningService {
                 task.completion_images = images;
             }
             await task.save();
+            await this.invalidateTaskCaches(task.room_id?.toString());
 
             try {
                 const roomNumber = room?.room_number || "N/A";
@@ -394,7 +416,8 @@ export class CleaningService {
             task.status = "confirmed";
             task.confirmed_at = new Date();
             await task.save();
-    
+            await this.invalidateTaskCaches(task.room_id?.toString());
+
             const now = new Date();
             const roomId = task.room_id;
             const roomLogId = task.room_log_id;
@@ -481,6 +504,13 @@ export class CleaningService {
     getAllTasks = async (query = {}) => {
         try {
             const { type, status } = query;
+
+            const cacheKey = makeCacheKey("cleaning:tasks:all", {
+                type: type || null,
+                status: status || null,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
             const shouldFetch = (taskType) => !type || type === 'all' || type === taskType;
 
             const fetchCleaning = async () => {
@@ -625,6 +655,8 @@ export class CleaningService {
 
             const tasks = [...cleaningTasks, ...installTasks, ...importTasks, ...incidentTasks];
             tasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            await cache.set(cacheKey, tasks, 30);
             return tasks;
 
         } catch (error) {
@@ -639,6 +671,10 @@ export class CleaningService {
             if (!room_id && !booking_id) {
                 throw new Error("Cần cung cấp room_id hoặc booking_id");
             }
+
+            const cacheKey = `cleaning:task:room:${room_id || ""}:${booking_id || ""}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
             
             const filter = {};
             if (room_id) filter.room_id = room_id;
@@ -678,8 +714,10 @@ export class CleaningService {
                 employee = await this.findEmployeeById(task.handled_by);
             }
 
-            return { task, room_log_id, employee };
-            
+            const result = { task, room_log_id, employee };
+            await cache.set(cacheKey, result, 60);
+            return result;
+
         } catch (error) {
             console.error("getCleaningTaskByRoom Error:", error);
             throw error;
@@ -688,6 +726,10 @@ export class CleaningService {
     
     getMyCleaningTasks = async (userId) => {
         try {
+            const cacheKey = `cleaning:tasks:my:${userId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const employee = await this.findEmployeeByUserId(userId);
             if (!employee) {
                 throw new Error("Không tìm thấy thông tin nhân viên");
@@ -718,6 +760,7 @@ export class CleaningService {
                 room: roomMap.get(task.room_id.toString()) || null
             }));
 
+            await cache.set(cacheKey, tasksWithRoomInfo, 60);
             return tasksWithRoomInfo;
 
         } catch (error) {

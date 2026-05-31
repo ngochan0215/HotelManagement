@@ -11,8 +11,10 @@ export class EmployeeEventHandler {
             [EMPLOYEE_EVENTS.REGISTERED]: this.employeeRegistered.bind(this),
             [EMPLOYEE_EVENTS.CHECK_EXISTS]: this.employeeCheckExists.bind(this),
             [EMPLOYEE_EVENTS.CHECK_EXISTS_USERID]: this.employeeCheckExistsByUserId.bind(this),
+
             [EMPLOYEE_EVENTS.GET_INFO]: this.employeeGetInfo.bind(this),
             [EMPLOYEE_EVENTS.GET_INFOS_USERIDS]: this.employeeGetInfosByUserIds.bind(this),
+            
             [EMPLOYEE_EVENTS.CHECK_TECHINICIAN_AVAILABLE]: this.checkTechnicianAvailable.bind(this),
             [EMPLOYEE_EVENTS.GET_RECEPTIONISTS]: this.getAllReceptionists.bind(this),
             [EMPLOYEE_EVENTS.GET_AVAILABLE_HOUSEKEEPERS]: this.getAvailableHousekeepers.bind(this)

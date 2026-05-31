@@ -127,7 +127,7 @@ export default function CompensationDetailModal({ ticketId, onClose }) {
   const incident = ticket.incident_id;
   const compensationDetails = ticket.compensation_details || [];
 
-  console.log("Rendering CompensationDetailModal with ticket:", ticket);
+  // console.log("Rendering CompensationDetailModal with ticket:", ticket);
 
   return (
     <>

@@ -19,7 +19,6 @@ export default function Dashboard() {
   const [cancelReasons, setCancelReasons] = useState([]);
 
   const { user } = useAuth();
-  console.log("Decoded employeeId from token:", user?.token);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,15 +31,15 @@ export default function Dashboard() {
           bookingApi.getWeeklyBookings()
         ]);
 
-        console.log("roomData: ", roomData);
-        console.log("topRooms: ", topRooms);
-        console.log("cancelData: ", cancelData);
-        console.log("revenueData: ", revenueData);
-        console.log("bookingData: ", bookingData);
+        // console.log("roomData: ", roomData);
+        // console.log("topRooms: ", topRooms);
+        // console.log("cancelData: ", cancelData);
+        // console.log("revenueData: ", revenueData);
+        // console.log("bookingData: ", bookingData);
 
         setRoomStatus(roomData);
         setTopRoomTypes(topRooms.result);
-        console.log("top room types: ", topRoomTypes);
+        // console.log("top room types: ", topRoomTypes);
 
         const totalCancel = cancelData.reduce((sum, item) => sum + item.total, 0);
         setCancelReasons(cancelData.map(item => ({

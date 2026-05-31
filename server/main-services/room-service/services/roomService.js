@@ -127,6 +127,7 @@ export class RoomService {
             }
 
             await Promise.all([
+                cache.del(`room:category:${id}`),
                 cache.delByPattern("room:categories:*"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
@@ -162,6 +163,7 @@ export class RoomService {
             await this.DefaultEquipment.deleteMany({ category_id: id });
 
             await Promise.all([
+                cache.del(`room:category:${id}`),
                 cache.delByPattern("room:categories:*"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
@@ -261,11 +263,9 @@ export class RoomService {
                 { categoryIds: equipmentCategoryIds }
             );
 
-            if (!reply.success)
-                throw new Error(reply.message);
-
             const equipmentCategoryMap = {};
-            for (const ec of reply.categories) {
+            const equipmentEnrichmentOk = reply.success;
+            for (const ec of (reply.categories || [])) {
                 equipmentCategoryMap[ec._id.toString()] = {
                     _id: ec._id,
                     name: ec.name,
@@ -308,7 +308,10 @@ export class RoomService {
                 }
             };
 
-            await cache.set(cacheKey, response, 300);
+            // only cache when enrichment was complete so stale null values don't persist
+            if (equipmentEnrichmentOk) {
+                await cache.set(cacheKey, response, 300);
+            }
 
             return response;
 
@@ -320,9 +323,13 @@ export class RoomService {
       
     getRoomCategoryByIdService = async (id) => {
         try {
+            const cacheKey = `room:category:${id}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const category = await this.RoomCategory.findById(id)
                 .select("-__v -created_at -updated_at");
-            if (!category) 
+            if (!category)
                 throw new Error("Không tìm thấy loại phòng");
 
             const defaultEquipments = await this.DefaultEquipment.find({ category_id: id })
@@ -337,21 +344,23 @@ export class RoomService {
             ];
 
             let equipmentCategoryMap = {};
+            let equipmentEnrichmentOk = true;
             if (equipmentCategoryIds.length > 0) {
                 const reply = await this.eventBus.safeRequest(
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
-                if (!reply.success) 
-                    throw new Error(reply.message);
-
-                for (const ec of reply.categories) {
-                    equipmentCategoryMap[ec._id.toString()] = {
-                        _id: ec._id,
-                        name: ec.name,
-                        unit: ec.unit,
-                        price: ec.price
-                    };
+                if (reply.success) {
+                    for (const ec of reply.categories) {
+                        equipmentCategoryMap[ec._id.toString()] = {
+                            _id: ec._id,
+                            name: ec.name,
+                            unit: ec.unit,
+                            price: ec.price
+                        };
+                    }
+                } else {
+                    equipmentEnrichmentOk = false;
                 }
             }
 
@@ -365,10 +374,15 @@ export class RoomService {
                 };
             });
 
-            return {
+            const result = {
                 ...category.toObject(),
                 default_equipments: enrichedEquipments
             };
+
+            if (equipmentEnrichmentOk) {
+                await cache.set(cacheKey, result, 300);
+            }
+            return result;
 
         } catch (err) {
             console.log("Error in getRoomCategoryByIdService:", err);
@@ -399,16 +413,15 @@ export class RoomService {
                     EQUIPMENT_EVENTS.GET_CATEGORIES_INFO,
                     { categoryIds: equipmentCategoryIds }
                 );
-                if (!reply.success)
-                    throw new Error(reply.message);
-
-                for (const ec of reply.categories) {
-                    equipmentCategoryMap[ec._id.toString()] = {
-                        _id: ec._id,
-                        name: ec.name,
-                        unit: ec.unit,
-                        price: ec.price
-                    };
+                if (reply.success) {
+                    for (const ec of reply.categories) {
+                        equipmentCategoryMap[ec._id.toString()] = {
+                            _id: ec._id,
+                            name: ec.name,
+                            unit: ec.unit,
+                            price: ec.price
+                        };
+                    }
                 }
             }
 
@@ -421,7 +434,7 @@ export class RoomService {
                         : null
                 };
             });
-        
+
         return enrichedEquipments;
     };
     
@@ -436,8 +449,15 @@ export class RoomService {
                 throw new Error("Phải điền thời gian nhận và trả phòng.");
             }
 
-            const availCacheKey = makeCacheKey("room:available", query);
-            const cachedAvail = await cache.get(availCacheKey);
+            const cacheKey = makeCacheKey("room:available", {
+                checkin: checkin || null,
+                checkout: checkout || null,
+                adults: adults || null,
+                children: children || null,
+                minPrice: minPrice || null,
+                maxPrice: maxPrice || null,
+            });
+            const cachedAvail = await cache.get(cacheKey);
             if (cachedAvail) return cachedAvail;
 
             const start = new Date(checkin);
@@ -486,7 +506,7 @@ export class RoomService {
             }).select("_id category_id room_number room_status").lean();
 
             if (candidateRooms.length === 0) {
-                await cache.set(availCacheKey, [], 60);
+                await cache.set(cacheKey, [], 60);
                 return [];
             }
 
@@ -540,7 +560,7 @@ export class RoomService {
 
             const categoryIds = Object.keys(roomsByCategory);
             if (categoryIds.length === 0) {
-                await cache.set(availCacheKey, [], 60);
+                await cache.set(cacheKey, [], 60);
                 return [];
             }
 
@@ -569,7 +589,7 @@ export class RoomService {
                 .filter(item => item.available_count > 0)
                 .sort((a, b) => a.price - b.price);
 
-            await cache.set(availCacheKey, result, 60);
+            await cache.set(cacheKey, result, 60);
             return result;
 
         } catch (error) {
@@ -605,6 +625,8 @@ export class RoomService {
             await room.save();
 
             await Promise.all([
+                cache.del("room:stats:status_summary"),
+                cache.del("room:stats:latest_status"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
             ]);
@@ -623,9 +645,8 @@ export class RoomService {
     
     getAllRooms = async (query = {}) => {
         try {
-            const { category_id, room_status, room_number,
-                page = 1, limit = 10, sort_by = "room_number", order = "asc"
-             } = query;
+            const { category_id, room_status, room_number, page = 1, 
+                limit = 10, sort_by = "room_number", order = "asc" } = query;
 
             const cacheKey = makeCacheKey("room:rooms", {
                 category_id: category_id || null,
@@ -908,11 +929,13 @@ export class RoomService {
 
             await Promise.all([
                 cache.del(`room:room:${roomId}`),
+                cache.del("room:stats:status_summary"),
+                cache.del("room:stats:latest_status"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
             ]);
 
-            // Populate roomStatusLog (virtual field tham chiếu RoomLog) để frontend có thể hiển thị
+            // Re-populate the room with category and latest status log for the response
             const nowForPopulate = new Date();
             const updatedRoom = await this.Room.findById(roomId)
                 .populate("category_id", "category_name description max_adults max_children price")
@@ -929,7 +952,6 @@ export class RoomService {
                 })
                 .select("-__v -created_at -updated_at");
             
-            // Nếu roomStatusLog không có (không có log active), lấy log mới nhất từ RoomLog
             if (!updatedRoom.roomStatusLog) {
                 const latestLog = await this.RoomLog.findOne({ room_id: roomId })
                 .sort({ start_time: -1 })
@@ -965,6 +987,8 @@ export class RoomService {
 
             await Promise.all([
                 cache.del(`room:room:${roomId}`),
+                cache.del("room:stats:status_summary"),
+                cache.del("room:stats:latest_status"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
             ]);
@@ -1014,6 +1038,8 @@ export class RoomService {
 
             await Promise.all([
                 cache.del(`room:room:${roomId}`),
+                cache.del("room:stats:status_summary"),
+                cache.del("room:stats:latest_status"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
             ]);
@@ -1064,6 +1090,8 @@ export class RoomService {
 
             await Promise.all([
                 cache.del(`room:room:${roomId}`),
+                cache.del("room:stats:status_summary"),
+                cache.del("room:stats:latest_status"),
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:available:*"),
             ]);

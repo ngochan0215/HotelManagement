@@ -40,6 +40,7 @@ class Container {
             queueName: "payment-service-events",
             bindEvents: [
                 PAYMENT_EVENTS.CREATE_RECEIPT,
+                PAYMENT_EVENTS.GET_RECEIPT_BY_BOOKING,
             ]
         });
 

@@ -3,6 +3,7 @@ import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 import { INCIDENT_EVENTS } from "../../../shared/events/incidentEvents.js";
+import { SERVICE_EVENTS } from "../../../shared/events/serviceEvents.js";
 
 export async function findCustomerById(eventBus, customerId) {
     const replyCustomer = await eventBus.safeRequest(
@@ -62,6 +63,35 @@ export async function findPendingCompensationTickets(eventBus, bookingId) {
         throw new Error(replyTickets.message || "Không tìm thấy phiếu đền bù nào thuộc booking đang chờ xử lý.");
 
     return replyTickets.tickets;
+}
+
+export async function findCompletedServiceUsagesByBooking(eventBus, bookingId) {
+    const reply = await eventBus.safeRequest(
+        SERVICE_EVENTS.GET_COMPLETED_BY_BOOKING,
+        { bookingId }
+    );
+    if (!reply.success)
+        throw new Error(reply.message || "Lỗi khi lấy phiếu sử dụng dịch vụ.");
+    return reply.usages || [];
+}
+
+export async function updateCustomerPoints(eventBus, customerId, points, reason) {
+    const reply = await eventBus.safeRequest(
+        CUSTOMER_EVENTS.UPDATE_POINTS,
+        { customer_id: customerId, points, reason }
+    );
+    if (!reply.success)
+        throw new Error(reply.message || "Lỗi khi cập nhật điểm thưởng khách hàng.");
+    return reply;
+}
+
+export async function markCompensationPaidByBooking(eventBus, bookingId) {
+    const reply = await eventBus.safeRequest(
+        INCIDENT_EVENTS.MARK_COMPENSATION_PAID_BY_BOOKING,
+        { bookingId }
+    );
+    if (!reply.success)
+        throw new Error(reply.message || "Lỗi khi cập nhật trạng thái phiếu đền bù.");
 }
 
 export async function findBookingById(eventBus, bookingId) {

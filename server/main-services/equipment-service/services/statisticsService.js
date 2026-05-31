@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { cache } from "../../../shared/utils/cache.js";
 
 import { safeForEach, parseRange, getWeekRange, getMonthRange, getRange } 
     from "../../../shared/config/excel.js";
@@ -19,6 +20,10 @@ export class EquipmentStatisticService {
     }  
     
     generateEquipmentReport = async (from, to) => {
+        const cacheKey = `eq:report:${from || ""}:${to || ""}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
+
         const { start, end } = parseRange(from, to);
     
         const [categories, equipments, latestLogs] = await Promise.all([
@@ -59,7 +64,7 @@ export class EquipmentStatisticService {
             start_time: { $gte: start, $lte: end }
         }).populate({ path: "equipment_id", populate: { path: "category_id", select: "name" } }).lean();
     
-        return {
+        const result = {
             meta: { from: start, to: end },
             summary,
             by_category: Object.values(byCategory),
@@ -70,6 +75,11 @@ export class EquipmentStatisticService {
                 start_time: l.start_time
             }))
         };
+
+        const now = new Date();
+        const ttl = new Date(end) < now ? 600 : 120;
+        await cache.set(cacheKey, result, ttl);
+        return result;
     };
 
     exportEquipmentReportExcel = async (from, to) => {

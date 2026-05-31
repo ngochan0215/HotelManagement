@@ -1,6 +1,16 @@
 import amqp from "amqplib";
+import { CircuitBreaker } from "./circuitBreaker.js";
 
 const EXCHANGE_NAME = "events";
+
+/**
+ * Derives the service key from an event name.
+ * "equipment.get_categories_info" → "equipment"
+ * "booking.check_exists_id"       → "booking"
+ */
+function serviceKeyOf(event) {
+    return event.split(".")[0] || event;
+}
 
 export class EventBus {
     constructor() {
@@ -9,6 +19,23 @@ export class EventBus {
         this.queueName = null;
         /** Danh sách event (routing keys) bind vào queue của service này. */
         this.bindEvents = null;
+        /**
+         * One CircuitBreaker per downstream service, keyed by service prefix.
+         * Lazily created on first safeRequest to that service.
+         */
+        this._breakers = {};
+    }
+
+    _breakerFor(event) {
+        const key = serviceKeyOf(event);
+        if (!this._breakers[key]) {
+            this._breakers[key] = new CircuitBreaker({
+                failureThreshold: 3,
+                recoveryTimeout: 30000,
+                serviceKey: key,
+            });
+        }
+        return this._breakers[key];
     }
 
     /**
@@ -100,12 +127,22 @@ export class EventBus {
     }
 
     async safeRequest(event, data, fallback = null) {
+        const breaker = this._breakerFor(event);
+        const defaultFallback = fallback ?? { success: false, message: `Service unavailable: ${event}` };
+
+        if (breaker.isOpen()) {
+            console.warn(`[CIRCUIT OPEN] Fast-failing ${event} (${breaker.currentState})`);
+            return defaultFallback;
+        }
+
         try {
             const reply = await this.request(event, data);
+            breaker.onSuccess();
             return reply;
         } catch (err) {
+            breaker.onFailure();
             console.warn(`[CIRCUIT BREAKER] ${event} failed: ${err.message}`);
-            return fallback ?? { success: false, message: `Service unavailable: ${event}` };
+            return defaultFallback;
         }
     }
 

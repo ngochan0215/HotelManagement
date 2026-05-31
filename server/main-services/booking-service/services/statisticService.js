@@ -80,11 +80,12 @@ export class BookingStatisticService {
     
     getWeeklyRevenue = async () => {
         try {
-            const cached = await cache.get("stat:weekly_revenue");
-            if (cached) return cached;
-
             const now = new Date();
             const { start: currentStart, end: currentEnd } = getWeekRange(now);
+
+            const cacheKey = `stat:weekly_revenue:${currentStart.toISOString().split("T")[0]}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
         
             const lastWeekDate = new Date(now);
             lastWeekDate.setDate(now.getDate() - 7);
@@ -156,7 +157,7 @@ export class BookingStatisticService {
                 revenueChangePercent: Number(revenueChangePercent),
                 revenueChart
             };
-            await cache.set("stat:weekly_revenue", weeklyRevenue, 60);
+            await cache.set(cacheKey, weeklyRevenue, 60);
             return weeklyRevenue;
 
         } catch (err) {
@@ -167,12 +168,12 @@ export class BookingStatisticService {
 
     getWeeklyBookings = async () => {
         try {
-            const cached = await cache.get("stat:weekly_bookings");
-            if (cached) return cached;
-
             const now = new Date();
-
             const { start: curStart, end: curEnd } = getWeekRange(now);
+
+            const cacheKey = `stat:weekly_bookings:${curStart.toISOString().split("T")[0]}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
             const lastWeekDate = new Date(now);
             lastWeekDate.setDate(now.getDate() - 7);
             const { start: lastStart, end: lastEnd } = getWeekRange(lastWeekDate);
@@ -239,7 +240,7 @@ export class BookingStatisticService {
                 percentChange: Number(percentChange),
                 chart
             };
-            await cache.set("stat:weekly_bookings", weeklyBookings, 60);
+            await cache.set(cacheKey, weeklyBookings, 60);
             return weeklyBookings;
 
         } catch (err) {
@@ -250,12 +251,12 @@ export class BookingStatisticService {
 
     getMonthlyBookings = async () => {
       try {
-        const cached = await cache.get("stat:monthly_bookings");
-        if (cached) return cached;
-
         const now = new Date();
-    
         const { start: curStart, end: curEnd } = getMonthRange(now);
+
+        const cacheKey = `stat:monthly_bookings:${curStart.toISOString().split("T")[0]}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) return cached;
         const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const { start: lastStart, end: lastEnd } = getMonthRange(lastMonthDate);
     
@@ -312,7 +313,7 @@ export class BookingStatisticService {
           percentChange: Number(percentChange),
           chart
         };
-        await cache.set("stat:monthly_bookings", monthlyBookings, 120);
+        await cache.set(cacheKey, monthlyBookings, 120);
         return monthlyBookings;
 
       } catch (err) {

@@ -53,7 +53,6 @@ export default function ProfilePage() {
       const newName = isEmployee ? profile.full_name : "Quản trị viên";
       const newAvatar = isEmployee ? profile.user_info.avatar : profile.avatar;
 
-      console.log("user: ", user);
       if (user?.full_name !== newName || user?.avatar !== newAvatar) {
             refreshUser({ name: newName, avatar: newAvatar });
       }

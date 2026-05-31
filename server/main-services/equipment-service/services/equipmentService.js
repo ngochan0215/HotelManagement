@@ -1,5 +1,6 @@
 ﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 export class EquipmentService {
@@ -9,6 +10,12 @@ export class EquipmentService {
         this.EquipmentLog = EquipmentLog;
         this.eventBus = eventBus;
     }   
+
+    invalidateEquipmentCaches = async (equipmentId = null) => {
+        const ops = [cache.delByPattern("equipment:list:*")];
+        if (equipmentId) ops.push(cache.del(`equipment:item:${equipmentId}`));
+        await Promise.all(ops);
+    };
 
     // category
 
@@ -132,13 +139,18 @@ export class EquipmentService {
 
     getEquipmentCategoryById = async (categoryId) => {
         try {
+            const cacheKey = `equipment:category:${categoryId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const category = await this.EquipmentCategory.findById(categoryId)
                 .select("-created_at -updated_at -__v");
 
             if (!category) {
                 throw new Error("Không tìm thấy danh mục thiết bị.");
             }
-            
+
+            await cache.set(cacheKey, category, 300);
             return category;
 
         } catch (err) {
@@ -183,14 +195,14 @@ export class EquipmentService {
             }
 
             if (updateData.price) {
-                if (isNaN(price) || Number(price) <= 0) {
+                if (isNaN(updateData.price) || Number(updateData.price) <= 0) {
                     throw new Error("price phải là số lớn hơn 0");
                 }
             }
 
             if (updateData.warehouse) {
                 const validWarehouse = ["housekeeping", "fb", "technical"];
-                if (!validWarehouse.includes(warehouse)) {
+                if (!validWarehouse.includes(updateData.warehouse)) {
                     throw new Error("Kho lưu trữ không hợp lệ.");
                 }
             }
@@ -198,7 +210,11 @@ export class EquipmentService {
             const updated = await this.EquipmentCategory.findByIdAndUpdate(categoryId, updateData, { new: true })
                 .select("-__v -updated_at -created_at");
 
-            await cache.delByPattern("equipment:categories:*");
+            await Promise.all([
+                cache.del(`equipment:category:${categoryId}`),
+                cache.del("equipment:out_of_stock"),
+                cache.delByPattern("equipment:categories:*"),
+            ]);
 
             return updated;
 
@@ -225,7 +241,11 @@ export class EquipmentService {
 
             await this.EquipmentCategory.findByIdAndDelete(categoryId);
 
-            await cache.delByPattern("equipment:categories:*");
+            await Promise.all([
+                cache.del(`equipment:category:${categoryId}`),
+                cache.del("equipment:out_of_stock"),
+                cache.delByPattern("equipment:categories:*"),
+            ]);
 
             return { success: true };
 
@@ -277,7 +297,11 @@ export class EquipmentService {
                 }
             }
 
-            await cache.delByPattern("equipment:categories:*");
+            await Promise.all([
+                cache.del("equipment:out_of_stock"),
+                cache.delByPattern("equipment:category:*"),
+                cache.delByPattern("equipment:categories:*"),
+            ]);
 
             return {
                 total_categories: updatedCount,
@@ -293,11 +317,17 @@ export class EquipmentService {
 
     getOutOfStockCategories = async () => {
         try {
+            const cacheKey = "equipment:out_of_stock";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const outOfStockCategories = await this.EquipmentCategory.find({ storage_quantity: { $lte: 10 } })
                 .select("_id name description unit price storage_quantity");
 
-            return { categories: outOfStockCategories, count: outOfStockCategories.length };
-    
+            const result = { categories: outOfStockCategories, count: outOfStockCategories.length };
+            await cache.set(cacheKey, result, 60);
+            return result;
+
         } catch (err) {
             console.log("Error in getting low-stock equipments: ", err.message);
             throw err;
@@ -322,26 +352,14 @@ export class EquipmentService {
                 ROOM_EVENTS.GET_ROOMS_INFO,
                 { room_ids: roomIds }
             );
-            if(!reply.success)
-                throw new Error(reply.message);
-
-            for (const room of reply.rooms) {
+            for (const room of (reply.rooms || [])) {
                 roomMap[room._id.toString()] = {
                     _id: room._id,
                     room_number: room.room_number,
                     room_status: room.room_status
-                }
+                };
             }
         }
-
-        // return equipments.map(equipment => {
-        //     const key = equipment.room_id?.toString();
-
-        //     return {
-        //         ...equipment,
-        //         room_id: key && roomMap[key] ? roomMap[key] : null
-        //     };
-        // });
 
         const results = list.map(equipment => ({
             ...equipment,
@@ -355,9 +373,23 @@ export class EquipmentService {
 
     getAllEquipments = async (query = {}) => {
         try {
-            const { category_id, status, condition, room_id, 
+            const { category_id, status, condition, room_id,
                 page = 1, limit = 10, sort_by = "created_at", order = "desc"
             } = query;
+
+            const cacheKey = makeCacheKey("equipment:list", {
+                category_id: category_id || null,
+                status: status || null,
+                condition: condition || null,
+                room_id: room_id || null,
+                page: Number(page),
+                limit: Number(limit),
+                sort_by,
+                order,
+            });
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const filter = {};
 
             if (category_id) {
@@ -406,7 +438,7 @@ export class EquipmentService {
             ]);
 
             const results = await this.populateRoom(equipments);
-            return {
+            const response = {
                 data: results,
                 pagination: {
                     total,
@@ -417,6 +449,9 @@ export class EquipmentService {
                     has_prev: currentPage > 1
                 }
             };
+
+            await cache.set(cacheKey, response, 60);
+            return response;
 
         } catch (err) {
             console.log("Error in getting all equipments: ", err.message );
@@ -429,6 +464,10 @@ export class EquipmentService {
             if (!mongoose.Types.ObjectId.isValid(equipmentId))
                 throw new Error("ID thiết bị không hợp lệ!");
 
+            const cacheKey = `equipment:item:${equipmentId}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const equipment = await this.Equipment.findById(equipmentId)
                 .populate("category_id", "name unit price")
                 .select("-__v -created_at -updated_at")
@@ -438,7 +477,7 @@ export class EquipmentService {
                 throw new Error("Không tìm thấy thiết bị.");
 
             const result = await this.populateRoom(equipment);
-
+            await cache.set(cacheKey, result, 120);
             return result;
 
         } catch (err) {
@@ -449,14 +488,19 @@ export class EquipmentService {
 
     updateEquipment = async (equipmentId, userId, updateData) => {
         try {
-            const { status, condition, note } = updateData;
+            const { status, note } = updateData;
+            let { condition } = updateData;
 
             if (!mongoose.Types.ObjectId.isValid(equipmentId))
                 throw new Error("ID không hợp lệ!");
 
-            const employee = await this.Employee.findOne({ user_id: userId });
-            if (!employee)
-                throw new Error("Không xác định được nhân viên.");
+            const employeeReply = await this.eventBus.safeRequest(
+                EMPLOYEE_EVENTS.CHECK_EXISTS_USERID,
+                { employee_user_id: userId }
+            );
+            if (!employeeReply.success)
+                throw new Error(employeeReply.message || "Không xác định được nhân viên.");
+            const employee = employeeReply.employee;
 
             const equipment = await this.Equipment.findById(equipmentId);
             if (!equipment)
@@ -540,7 +584,7 @@ export class EquipmentService {
                 .lean();
 
             const result = await this.populateRoom(updated);
-
+            await this.invalidateEquipmentCaches(equipmentId);
             return result;
 
         } catch (err) {
@@ -563,6 +607,7 @@ export class EquipmentService {
             }
 
             await this.Equipment.findByIdAndDelete(equipmentId);
+            await this.invalidateEquipmentCaches(equipmentId);
 
             return { success: true };
 

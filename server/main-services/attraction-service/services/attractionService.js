@@ -51,11 +51,8 @@ export class AttractionService {
             }
             return result;
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in getAllAttractions:", error);
+            throw error;
         }
     }
 
@@ -81,11 +78,8 @@ export class AttractionService {
             await cache.set(cacheKey, result, 3600);
             return result;
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in getAttractionById:", error);
+            throw error;
         }
     }
 
@@ -116,11 +110,8 @@ export class AttractionService {
                 attractions,
             };
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in getAllAttractionsAdmin:", error);
+            throw error;
         }
     }
 
@@ -153,11 +144,8 @@ export class AttractionService {
 
             return attraction;
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in updateAttraction:", error);
+            throw error;
         }
     }
 
@@ -167,11 +155,8 @@ export class AttractionService {
             await cache.delByPattern("attraction:list:*");
             return result;
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in triggerSync:", error);
+            throw error;
         }
     }
 
@@ -192,11 +177,8 @@ export class AttractionService {
                 last_synced: a.last_synced,
             };
         } catch (error) {
-            const message = error.response?.data?.message || error.message;
-            const status = error.response?.status || error.status;
-            const err = new Error(message);
-            err.status = status;
-            throw err;
+            console.log("Error in formatAttraction:", error);
+            throw error;
         }
     }
 }

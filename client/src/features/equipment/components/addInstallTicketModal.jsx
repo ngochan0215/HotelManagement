@@ -70,7 +70,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
     const fetchTechnicians = async () => {
         try {
             const res = await equipmentApi.getAvailableTechnicians();
-            console.log("AVAILABLE TECHNICIANS: ", res);
+            // console.log("AVAILABLE TECHNICIANS: ", res);
             setTechnicians(res.technicians || []);
         } catch (error) { 
             console.error("Lỗi tải danh sách nhân viên kỹ thuật:", error);
@@ -240,21 +240,19 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
               // Đảm bảo sử dụng equipmentId từ option, không phải item.id (có thể bị sai)
               const equipmentId = option.equipmentId || option.value || item.id;
               
-              console.log(`[Payload] Item ${idx}: item.id=${item.id}, option.value=${option.value}, option.equipmentId=${option.equipmentId}, final equipmentId=${equipmentId}`);
+              //console.log(`[Payload] Item ${idx}: item.id=${item.id}, option.value=${option.value}, option.equipmentId=${option.equipmentId}, final equipmentId=${equipmentId}`);
               
               return { specific_equipment_id: equipmentId, quantity: 1 };
           }
       });
 
-      // Debug log để kiểm tra payload
       if (mode === 'uninstall') {
-          console.log("Uninstall payload items:", payloadItems);
-          console.log("Selected room:", selectedRoomId);
-          console.log("Dropdown options:", dropdownOptions);
+        //   console.log("Uninstall payload items:", payloadItems);
+        //   console.log("Selected room:", selectedRoomId);
+        //   console.log("Dropdown options:", dropdownOptions);
       }
 
       if (mode === 'install') {
-        // Tạo phiếu lắp đặt
         const payload = {
           install_date: installDate,
           items: payloadItems,
@@ -274,7 +272,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
           handled_by: selectedTechnicianId || null,
         };
 
-        console.log("PAYLOAd IN CREATING UNINSTALL TICKET: ", payload);
+        // console.log("PAYLOAd IN CREATING UNINSTALL TICKET: ", payload);
         await equipmentApi.createUninstallTicket(payload);
         setToast({ message: "Tạo phiếu tháo dỡ thành công!", type: "success" });
       }
@@ -456,7 +454,7 @@ export default function AddInstallTicketModal({ onClose, onSuccess }) {
                                     if (mode === 'uninstall' && selectedOption) {
                                         // Lưu equipmentId từ option, không phải value (có thể bị sai)
                                         const equipmentId = selectedOption.equipmentId || selectedOption.value;
-                                        console.log(`[Select Change] Selected value=${selectedValue}, option.equipmentId=${selectedOption.equipmentId}, final equipmentId=${equipmentId}`);
+                                        // console.log(`[Select Change] Selected value=${selectedValue}, option.equipmentId=${selectedOption.equipmentId}, final equipmentId=${equipmentId}`);
                                         updateItem(index, "id", equipmentId);
                                     } else {
                                         updateItem(index, "id", selectedValue);

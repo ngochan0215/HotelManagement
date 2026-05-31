@@ -3,6 +3,8 @@ import PDFDocument from "pdfkit";
 
 import { BOOKING_EVENTS } from "../../../shared/events/bookingEvents.js";
 
+import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
+
 import { safeForEach, parseRange, getWeekRange, getMonthRange, getRange } 
     from "../../../shared/config/excel.js";
 import { ROBOTO_BOLD, ROBOTO_REGULAR } from "../../../shared/config/pdf.js";
@@ -21,6 +23,10 @@ export class RoomStatisticService {
     // return summary count of rooms in each status and total
     getRoomStatusSummary = async () => {
         try {
+            const cacheKey = "room:stats:status_summary";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const result = await this.Room.aggregate([
                 {
                     $group: {
@@ -46,6 +52,7 @@ export class RoomStatisticService {
                 summary.total += item.count;
             });
         
+            await cache.set(cacheKey, summary, 30);
             return summary;
         
         } catch (error) {
@@ -56,6 +63,10 @@ export class RoomStatisticService {
 
     getTopBookedRoomCategories = async (query = {}) => {
         try {
+            const cacheKey = makeCacheKey("room:stats:top_booked", query);
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const reply = await this.eventBus.safeRequest(
                 BOOKING_EVENTS.GET_TOP_BOOKED_ROOM_CATEGORIES,
                 query
@@ -95,6 +106,7 @@ export class RoomStatisticService {
                 }))
                 .sort((a, b) => b.totalBooked - a.totalBooked);
 
+            await cache.set(cacheKey, result, 300);
             return result;
 
         } catch (error) {
@@ -103,111 +115,66 @@ export class RoomStatisticService {
         }
     };
     
-    // getTopBookedRoomCategories = async (query = {}) => {
-    //     try {
-    //         const limit = parseInt(query.limit, 10) || 5;
-        
-    //         const result = await this.BookingDetail.aggregate([
-    //         // join sang Room
-    //         {
-    //             $lookup: {
-    //             from: "rooms",
-    //             localField: "room_id",
-    //             foreignField: "_id",
-    //             as: "room",
-    //             },
-    //         },
-    //         { $unwind: "$room" },
-        
-    //         // group theo category
-    //         {
-    //             $group: {
-    //             _id: "$room.category_id",
-    //             totalBooked: { $sum: 1 },
-    //             },
-    //         },
-        
-    //         // sort giảm dần
-    //         { $sort: { totalBooked: -1 } },
-        
-    //         // limit
-    //         { $limit: limit },
-        
-    //         // join sang RoomCategory
-    //         {
-    //             $lookup: {
-    //             from: "roomcategories",
-    //             localField: "_id",
-    //             foreignField: "_id",
-    //             as: "category",
-    //             },
-    //         },
-    //         { $unwind: "$category" },
-        
-    //         // kết quả trả về cúi cùm
-    //         {
-    //             $project: {
-    //             _id: 0,
-    //             category_id: "$_id",
-    //             name: "$category.category_name",
-    //             price: "$category.price",
-    //             totalBooked: 1,
-    //             },
-    //         },
-    //         ]);
-        
-    //         return { result };
-        
-    //     } catch (error) {
-    //         console.log(error);
-    //         throw error;
-    //     }
-    // };
-    
     getLatestStatusOfAllRooms = async () => {
-        return await this.RoomLog.aggregate([
-            {
-            $sort: {
-                room_id: 1,
-                start_time: -1,
-            },
-            },
-        
-            // gom theo phòng, lấy bản ghi đầu tiên
-            {
-            $group: {
-                _id: "$room_id",
-                latestStatus: { $first: "$$ROOT" },
-            },
-            },
-        
-            // trả về document gốc
-            {
-            $replaceRoot: { newRoot: "$latestStatus" },
-            },
-        
-            // populate phòng
-            {
-            $lookup: {
-                from: "rooms",
-                localField: "room_id",
-                foreignField: "_id",
-                as: "room",
-            },
-            },
-            {
-            $unwind: {
-                path: "$room",
-                preserveNullAndEmptyArrays: true,
-            },
-            },
-        ]);
+        try {
+            const cacheKey = "room:stats:latest_status";
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
+            const result = await this.RoomLog.aggregate([
+                {
+                $sort: {
+                    room_id: 1,
+                    start_time: -1,
+                },
+                },
+            
+                // gom theo phòng, lấy bản ghi đầu tiên
+                {
+                $group: {
+                    _id: "$room_id",
+                    latestStatus: { $first: "$$ROOT" },
+                },
+                },
+            
+                // trả về document gốc
+                {
+                $replaceRoot: { newRoot: "$latestStatus" },
+                },
+            
+                // populate phòng
+                {
+                $lookup: {
+                    from: "rooms",
+                    localField: "room_id",
+                    foreignField: "_id",
+                    as: "room",
+                },
+                },
+                {
+                $unwind: {
+                    path: "$room",
+                    preserveNullAndEmptyArrays: true,
+                },
+                },
+            ]);
+
+            await cache.set(cacheKey, result, 60);
+            return result;
+        } catch (error) {
+            console.log("Error in getLatestStatusOfAllRooms:", error);
+            throw error;
+        }
     };
 
     getCalendarRooms = async (query = {}) => {
         try {
             const { date, floor, category_id } = query;
             if (!date) throw new Error("Thiếu ngày xem lịch");
+
+            const cacheKey = `room:stats:calendar:${date}:${floor || ""}:${category_id || ""}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
 
             const startOfDay = new Date(date);
             startOfDay.setHours(0, 0, 0, 0);
@@ -335,7 +302,9 @@ export class RoomStatisticService {
                 };
             });
 
-            return { rooms, events };
+            const calendarResult = { rooms, events };
+            await cache.set(cacheKey, calendarResult, 60);
+            return calendarResult;
 
         } catch (error) {
             console.error("getCalendarRooms error:", error);
@@ -345,6 +314,10 @@ export class RoomStatisticService {
 
     generateRoomReport = async (from, to) => {
         try {
+            const cacheKey = `room:report:${from || ""}:${to || ""}`;
+            const cached = await cache.get(cacheKey);
+            if (cached) return cached;
+
             const { start, end } = parseRange(from, to);
 
             const rooms = await this.Room.find().populate("category_id", "category_name").lean();
@@ -398,7 +371,7 @@ export class RoomStatisticService {
             const roomPerformance = Object.values(roomStats);
             const occupiedRooms = roomPerformance.filter(r => r.occupied_hours > 0).length;
 
-            return {
+            const reportResult = {
                 meta: { from: start, to: end, generated_at: new Date() },
                 summary: {
                     total_rooms: rooms.length,
@@ -418,6 +391,12 @@ export class RoomStatisticService {
                     top_used_rooms: roomPerformance.sort((a,b) => b.occupied_hours - a.occupied_hours).slice(0, 5).map(r => ({ room: r.room_number, hours: Number(r.occupied_hours.toFixed(1)) }))
                 }
             };
+
+            const now = new Date();
+            const ttl = new Date(end) < now ? 600 : 120;
+            await cache.set(cacheKey, reportResult, ttl);
+            return reportResult;
+
         } catch (error) {
             console.log("Error in generating room report service: ", error.message);
             throw error;

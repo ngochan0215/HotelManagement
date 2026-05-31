@@ -12,7 +12,6 @@ export default function InstallTicketDetailModal({ ticket, onClose }) {
     const fetchDetails = async () => {
       try {
         const res = await equipmentApi.getEquipmentInstallById(ticket._id);
-        console.log("installl detail: ", res);
         if (res.success) {
           setFullTicket(res.install);
           setDetails(res.install.install_details || []);

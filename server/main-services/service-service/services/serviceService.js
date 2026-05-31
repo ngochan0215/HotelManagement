@@ -107,7 +107,12 @@ export class ServiceService {
 
     async getAllServiceCategories({ page = 1, limit = 50, search } = {}) {
         try {
-            const cacheKey = `svc_cat:all:${JSON.stringify([Number(page), Number(limit), search || null])}`;
+            const cacheKey = makeCacheKey("svc_cat:all", { 
+                page: Number(page), 
+                limit: Number(limit), 
+                search: search || null 
+            });
+            // const cacheKey = `svc_cat:all:${JSON.stringify([Number(page), Number(limit), search || null])}`;
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -211,29 +216,21 @@ export class ServiceService {
         }
     }
 
-    async getAllServices({
-        category_id,
-        status,
-        service_type,
-        min_quantity,
-        max_quantity,
-        min_price,
-        max_price,
-        page = 1,
-        limit = 50
-    } = {}) {
+    async getAllServices({ category_id, status, service_type, min_quantity,
+        max_quantity, min_price, max_price, page = 1, limit = 50 } = {}) 
+    {
         try {
-            const cacheKey = `svc:list:${JSON.stringify([
-                category_id || null,
-                status || null,
-                service_type || null,
-                min_quantity || null,
-                max_quantity || null,
-                min_price || null,
-                max_price || null,
-                Number(page),
-                Number(limit)
-            ])}`;
+            const cacheKey = makeCacheKey("svc:list", {
+                category_id: category_id || null,
+                status: status || null,
+                service_type: service_type || null,
+                min_quantity: min_quantity || null,
+                max_quantity: max_quantity || null,
+                min_price: min_price || null,
+                max_price: max_price || null,
+                page: Number(page),
+                limit: Number(limit)
+            });
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -394,6 +391,7 @@ export class ServiceService {
 
             await this.GoodImport.insertMany(detailDocs);
             await cache.delByPattern("svc_ticket:list:*");
+
             return { ticket, total_items: detailDocs.length };
 
         } catch (error) {
@@ -404,19 +402,12 @@ export class ServiceService {
 
     async getAllGoodTickets({ employee_id, min_import_date, max_import_date, status } = {}) {
         try {
-            const cacheKey = `svc_ticket:list:${JSON.stringify([ 
-                employee_id || null, 
-                min_import_date || null, 
-                max_import_date || null, 
-                status || null 
-            ])}`;
-
-            // const cacheKey = makeCacheKey("ticket:list", {
-            //     employee_id: employee_id || null,
-            //     min_import_date: min_import_date || null,
-            //     max_import_date: max_import_date || null,
-            //     status: status || null,
-            // });
+            const cacheKey = makeCacheKey("svc_ticket:list", {
+                employee_id: employee_id || null,
+                min_import_date: min_import_date || null,
+                max_import_date: max_import_date || null,
+                status: status || null,
+            });
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
@@ -780,6 +771,13 @@ export class ServiceService {
     }
 
     //---- SERVICE USAGE ----//
+    async getCompletedByBooking(bookingId) {
+        return await this.ServiceUsage.find({
+            booking_id: bookingId,
+            status: "completed",
+        }).select("_id total_fee").lean();
+    }
+
     async createServiceUsage({ booking_id, customer_id, services }, userId) {
         try {
             if (!booking_id || !customer_id || !Array.isArray(services) || services.length === 0)

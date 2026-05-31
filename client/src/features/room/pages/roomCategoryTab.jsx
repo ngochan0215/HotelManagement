@@ -52,7 +52,7 @@ export default function RoomCategoryTab() {
   const loadCategories = async () => {
     try {
       const data = await roomApi.getAllCategories();
-      console.log("Loaded room categories:", data);
+      // console.log("Loaded room categories:", data);
       setCategories(data);
     } catch (error) {
       console.error("Lỗi tải loại phòng:", error);
@@ -62,7 +62,7 @@ export default function RoomCategoryTab() {
   const loadEquipmentCategories = async () => {
     try {
       const res = await equipmentApi.getAllCategories();
-      console.log("Loaded equipment categories:", res);
+      // console.log("Loaded equipment categories:", res);
       setEquipmentList(res.categories || []);
     } catch (error) {
       console.error("Lỗi tải danh mục thiết bị:", error);
@@ -125,7 +125,7 @@ export default function RoomCategoryTab() {
       loadCategories();
       setToast({ type: "success", message: "Lưu thành công!" });
     } catch (error) {
-      console.log("Lỗi lưu loại phòng:", error);
+      // console.log("Lỗi lưu loại phòng:", error);
       setToast({ type: "error", message: "Lỗi: " + (error.response?.data?.message || error.message) });
     }
   };

@@ -119,7 +119,7 @@ export default function CreateCompensationModal({ incident, onClose, onSuccess }
         const booking = allBookings.find(b => String(b._id) === String(incident.booking_id));
         
         if (booking) {
-          console.log("Found booking for incident:", booking);
+          // console.log("Found booking for incident:", booking);
           setBookingInfo({
             booking_id: booking._id,
             booking_code: booking.code || booking._id.toString().slice(-6),

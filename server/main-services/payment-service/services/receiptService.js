@@ -31,6 +31,12 @@ export class ReceiptService {
     
     enrichReceipts = (receipts) => helpers.enrichReceipts(this.eventBus, receipts);
 
+    markCompensationPaidByBooking = (bookingId) => helpers.markCompensationPaidByBooking(this.eventBus, bookingId);
+
+    updateCustomerPoints = (customerId, points, reason) => helpers.updateCustomerPoints(this.eventBus, customerId, points, reason);
+
+    findCompletedServiceUsagesByBooking = (bookingId) => helpers.findCompletedServiceUsagesByBooking(this.eventBus, bookingId);
+
     // main business logic
 
     createReceiptFromBooking = async (data) => {
@@ -75,23 +81,13 @@ export class ReceiptService {
                 return receipt;
             }
         
-            // find service-usage ticket of this booking
             let serviceFee = 0;
             let serviceUsageId = null;
-            // const serviceUsages = session
-            // ? await ServiceUsage.find({
-            //     booking_id,
-            //     status: "completed",
-            //     }).session(session)
-            // : await ServiceUsage.find({
-            //     booking_id,
-            //     status: "completed",
-            //     });
-        
-            // if (serviceUsages && serviceUsages.length > 0) {
-            //     serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
-            //     serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
-            // }
+            const serviceUsages = await this.findCompletedServiceUsagesByBooking(booking_id);
+            if (serviceUsages.length > 0) {
+                serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
+                serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
+            }
         
             // find all compensation tickets of this booking
             let compensateFee = 0;
@@ -187,19 +183,13 @@ export class ReceiptService {
                 }
             }
         
-            // find all service-usage tickets of this booking
             let serviceFee = 0;
             let serviceUsageId = null;
-        
-            // const serviceUsages = await ServiceUsage.find({
-            // booking_id,
-            // status: "completed",
-            // }).session(session);
-        
-            // if (serviceUsages && serviceUsages.length > 0) {
-            //     serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
-            //     serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
-            // }
+            const serviceUsages = await this.findCompletedServiceUsagesByBooking(booking_id);
+            if (serviceUsages.length > 0) {
+                serviceFee = serviceUsages.reduce((sum, usage) => sum + (usage.total_fee || 0), 0);
+                serviceUsageId = serviceUsages[serviceUsages.length - 1]._id;
+            }
         
             // find all compensation tickets of this booking
             let compensateFee = 0;
@@ -253,7 +243,7 @@ export class ReceiptService {
                 amount_due: amountDue,
         
                 payment,
-                status: depositAmount === 0 ? "half-paid" : "pending",
+                status: depositAmount > 0 ? "half-paid" : "pending",
                 note,
             });
 
@@ -380,44 +370,18 @@ export class ReceiptService {
 
             if (status === "paid" && !receipt.paid_at) {
                 receipt.paid_at = new Date();
-            
-                // if (booking) {
-                //     // cộng điểm khách vì hoàn thành xong booking
-                //     // await updateCustomerPoints({
-                //     //   customer_id: booking.customer_id,
-                //     //   points: Math.floor(receipt.final_amount / 10000),
-                //     //   reason: "Hoàn tất thanh toán hóa đơn"
-                //     // });
-            
-                //     await Customer.findOneAndUpdate(
-                //     { _id: booking.customer_id },
-                //     { $inc: { booking_count: 1 } }
-                //    );
+
+                try {
+                    const rewardPoints = Math.floor(receipt.final_amount / 10000);
+                    await this.updateCustomerPoints(booking.customer_id, rewardPoints, "Hoàn tất thanh toán hóa đơn");
+                } catch (pointsError) {
+                    console.log("Error updating customer points:", pointsError.message);
+                }
             }
-        
-            // update compensation ticket status
+
             if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
                 try {
-                    const compensateTickets = await CompensateTicket.find({
-                        booking_id: receipt.booking_id,
-                        status: "pending"
-                    });
-            
-                    for (const ticket of compensateTickets) {
-                        ticket.status = "paid";
-                        ticket.paid_at = new Date();
-                        await ticket.save();
-            
-                        const incident = await Incident.findById(ticket.incident_id);
-                        if (incident && incident.compensation_status === "pending") {
-                        incident.compensation_status = "done";
-                        if (incident.status !== "closed") {
-                            incident.status = "closed";
-                            incident.closed_at = new Date();
-                        }
-                        await incident.save();
-                        }
-                    }
+                    await this.markCompensationPaidByBooking(receipt.booking_id);
                 } catch (compError) {
                     console.log("Error in updating compensation tickets:", compError.message);
                 }
@@ -450,7 +414,7 @@ export class ReceiptService {
                 const message = `Hóa đơn với ID #${receiptIdShort} đã chuyển sang trạng thái "${statusLabel}"`;
                     
                 if (adminUserIds.length > 0) {
-                    await sendNotificationToUsers({
+                    await this.sendNotificationsToUsers({
                         userIds: adminUserIds,
                         title: "Thay đổi trạng thái hóa đơn",
                         content: message,
@@ -600,43 +564,25 @@ export class ReceiptService {
                 this.findCustomerById(booking.customer_id),
             ]);
             
-            const rewardPoints = Math.floor(receipt.final_amount / 10000);
-            // await updateCustomerPoints({
-            //   customer_id: booking.customer_id,
-            //   points: rewardPoints,
-            //   reason: "Hoàn tất thanh toán hóa đơn"
-            // });
-        
-            // await Customer.findByIdAndUpdate(
-            // booking.customer_id,
-            // { $inc: { booking_count: 1 } },
-            // { session }
-            // );
-        
-            // Tự động cập nhật compensation tickets thành "paid" nếu có trong hóa đơn
-            if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
-                const compensations = await this.findPendingCompensationTickets(receipt.booking_id);  
+            try {
+                const rewardPoints = Math.floor(receipt.final_amount / 10000);
+                await this.updateCustomerPoints(booking.customer_id, rewardPoints, "Hoàn tất thanh toán hóa đơn");
+            } catch (pointsError) {
+                console.log("Error updating customer points:", pointsError.message);
+            }
 
-                // for (const ticket of compensations) {
-                //     ticket.status = "paid";
-                //     ticket.paid_at = new Date();
-                //     await ticket.save();
-            
-                //     const incident = await Incident.findById(ticket.incident_id).session(session);
-                //     if (incident && incident.compensation_status === "pending") {
-                //         incident.compensation_status = "done";
-                //         if (incident.status !== "closed") {
-                //             incident.status = "closed";
-                //             incident.closed_at = new Date();
-                //         }
-                //         await incident.save({ session });
-                //     }
+            if (receipt.compensate_ticket_id || receipt.compensate_fee > 0) {
+                try {
+                    await this.markCompensationPaidByBooking(receipt.booking_id);
+                } catch (compError) {
+                    console.log("Error updating compensation tickets:", compError.message);
+                }
             }
                 
             try {
-                const receiptIdShort = id.toString().slice(-6);
+                const receiptIdShort = receiptId.toString().slice(-6);
                 const message = `Hóa đơn #${receiptIdShort} đã chuyển sang trạng thái "Đã thanh toán"`;
-            
+
                 const adminUserIds = await this.findAdminsByIds();
                 if (adminUserIds.length > 0) {
                     await this.sendNotificationsToUsers({
@@ -645,10 +591,10 @@ export class ReceiptService {
                         content: message,
                         type: "booking",
                         kind: "Order",
-                        refId: id,
+                        refId: receiptId,
                     });
                 }
-            
+
                 if (receiptEmployee && receiptEmployee.user_id) {
                     await this.sendNotification({
                         userId: receiptEmployee.user_id,
@@ -656,10 +602,10 @@ export class ReceiptService {
                         content: message,
                         type: "booking",
                         kind: "Order",
-                        refId: id,
+                        refId: receiptId,
                     });
                 }
-        
+
                 if (bookingEmployee && bookingEmployee.user_id) {
                     if (!receiptEmployee || bookingEmployee.user_id.toString() !== receiptEmployee.user_id.toString()) {
                         await this.sendNotification({
@@ -668,11 +614,11 @@ export class ReceiptService {
                             content: message,
                             type: "booking",
                             kind: "Order",
-                            refId: id,
+                            refId: receiptId,
                         });
                     }
                 }
-            
+
                 if (customer && customer.user_id) {
                     await this.sendNotification({
                         userId: customer.user_id,
@@ -680,7 +626,7 @@ export class ReceiptService {
                         content: message,
                         type: "booking",
                         kind: "Order",
-                        refId: id,
+                        refId: receiptId,
                     });
                 }
             } catch (notifError) {
