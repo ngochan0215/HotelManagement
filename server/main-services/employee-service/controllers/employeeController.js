@@ -25,6 +25,15 @@ export class EmployeeController {
         }
     };
 
+    getBriefEmployees = async (req, res) => {
+        try {
+            const employees = await this.employeeService.getBriefEmployees();
+            return res.status(200).json({ employees });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     getEmployeeById = async (req, res) => {
         try {
             const employee = await this.employeeService.getEmployeeById(req.params.id);

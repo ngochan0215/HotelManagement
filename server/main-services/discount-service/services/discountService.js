@@ -355,7 +355,6 @@ async getAvailableDiscounts(query = {}) {
     };
 
     // called by booking service — returns top 2 discounts ranked by priority then savings
-    
     async getApplicableDiscounts(orderValue = 0) {
         try {
             const now = new Date();

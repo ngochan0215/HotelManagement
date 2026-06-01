@@ -130,9 +130,18 @@ export class RoomController {
     getAllRooms = async (req, res) => {
         try {
             const { data, pagination } = await this.roomService.getAllRooms(req.query);
-            
+
             return res.status(200).json({ success: true, data, pagination });
-    
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
+    getRoomEquipments = async (req, res) => {
+        try {
+            const equipments = await this.roomService.getRoomEquipments(req.params.id);
+            return res.status(200).json({ success: true, data: equipments });
         } catch (err) {
             return res.status(err.status || 400).json({ message: err.message });
         }

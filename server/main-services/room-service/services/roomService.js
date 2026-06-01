@@ -1387,6 +1387,13 @@ export class RoomService {
         }
     };
 
+    getRoomEquipments = async (roomId) => {
+        const equipments = await this.Equipment.find({ room_id: roomId })
+            .populate("category_id", "name price is_critical")
+            .lean();
+        return equipments;
+    };
+
     getDefaultEquipmentsByRoomCategory = async (categoryId) => {
         const defaultEquipments = await this.DefaultEquipment.find({
             category_id: categoryId

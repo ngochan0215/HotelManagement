@@ -35,6 +35,11 @@ export const employeeApi = {
     });
     return res.data;
   },
+
+  getBriefEmployees: async () => {
+    const res = await axios.get(`${BASE_URL}/brief`, getAuthHeader());
+    return res.data;
+  },
   
   createEmployee: async (data) => {
     const res = await axios.post(`${BASE_URL}/`, data, getAuthHeader());

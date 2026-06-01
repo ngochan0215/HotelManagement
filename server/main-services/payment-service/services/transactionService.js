@@ -16,7 +16,6 @@ export class TransactionService {
     }
 
     // main business logic
-    
     createPayment = async (transaction, userId) => {
         try {
             // create orderCode for payos and internal transaction
@@ -70,7 +69,6 @@ export class TransactionService {
         
             try {
                 if (data?.id) newTransaction.payos_payment_id = data.id;
-                
                 newTransaction.raw_response = payOSResponse;
         
                 await newTransaction.save();

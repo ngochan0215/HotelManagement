@@ -9,6 +9,7 @@ const scheduleController = new ScheduleController();
 
 router.get("/my-profile", verifyToken, isEmployee, controller.getMyProfile);
 router.patch("/my-profile", verifyToken, isEmployee, controller.updateMyProfile);
+router.get("/brief", verifyToken, isEmployee, controller.getBriefEmployees);
 router.get("/available-technicians", verifyToken, isManager, controller.getAvailableTechnicians);
 
 router.post("/", verifyToken, isManager, controller.createEmployee);

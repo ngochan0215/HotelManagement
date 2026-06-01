@@ -28,6 +28,7 @@ import MyBookingsPage from '../features/customer-portal/pages/myBookingsPage.jsx
 import CustomerAccountPage from '../features/customer-portal/pages/customerAccountPage.jsx';
 import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } from '../features/auth/utils/roleRedirect.js';
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
+import ProfilePage from '../features/auth/pages/profilePage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   const { user } = useAuth();
@@ -63,14 +64,14 @@ function WorkPageRouter() {
   return <Navigate to="/dashboard" replace />;
 }
 
-function CustomerProfileRoute() {
+function ProfileRoute() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
 
   const { role } = getAuthIdentity(user);
   if (isCustomerRole(role)) return <CustomerAccountPage />;
 
-  return <Navigate to={getRoleRedirectPath(user)} replace />;
+  return <ProfilePage />;
 }
 
 export default function AppRoutes() {
@@ -104,7 +105,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Navigate to={getHomePath()} replace />} />
       <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
 
-      <Route path="/profile" element={<CustomerProfileRoute />} />
+      <Route path="/profile" element={<ProfileRoute />} />
 
       <Route path="/dashboard" element={
         <ProtectedRoute allowed={[]}> <Dashboard /> </ProtectedRoute>

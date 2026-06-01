@@ -8,6 +8,7 @@ const controller = new RoomController();
 router.get("/", controller.getAllRooms);
 router.get("/by-category", controller.getRoomsByCategory);
 
+router.get("/:id/equipments", verifyToken, isEmployee, controller.getRoomEquipments);
 router.get("/:id", controller.getRoomById);
 router.post("/", verifyToken, isAdmin, controller.createRoom);
 router.patch("/:id", verifyToken, isManager, controller.updateRoom);

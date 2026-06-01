@@ -123,6 +123,19 @@ export class EmployeeService {
         }
     };
 
+    async getBriefEmployees () {
+        try {
+            const employees = await this.Employee
+                .find({ status: { $ne: "resign" } })
+                .select("full_name position status user_id")
+                .lean();
+            return employees;
+        } catch (error) {
+            console.log("Error in getBriefEmployees: ", error.message);
+            throw error;
+        }
+    };
+
     async getEmployeeById (employeeId) {
         try {
             const cacheKey = `emp:one:${employeeId}`;

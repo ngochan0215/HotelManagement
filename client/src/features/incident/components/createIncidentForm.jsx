@@ -150,20 +150,28 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
   }, []);
 
   const loadOptions = async () => {
-    try {
-      const [roomRes, bookingRes, empRes, custRes] = await Promise.all([
-        roomApi.getAllRooms(),
-        bookingApi.getAllBookings(),
-        employeeApi.getAllEmployees(),
-        customerApi.getAllCustomers()
-      ]);
+    const [roomRes, bookingRes, empRes, custRes] = await Promise.allSettled([
+      roomApi.getAllRooms(),
+      bookingApi.getAllBookings(),
+      employeeApi.getBriefEmployees(),
+      customerApi.getAllCustomers()
+    ]);
 
-      setRooms(roomRes?.rooms || roomRes?.data || []);
-      setBookings(bookingRes?.bookings || bookingRes?.data || []);
-      setEmployees(empRes?.employees || empRes?.data || []);
-      setCustomers(custRes?.customers || custRes?.data || []);
-    } catch (err) {
-      console.error("Load options failed", err);
+    if (roomRes.status === "fulfilled") {
+      const r = roomRes.value;
+      setRooms(r?.rooms || r?.data || []);
+    }
+    if (bookingRes.status === "fulfilled") {
+      const b = bookingRes.value;
+      setBookings(b?.bookings || b?.data || []);
+    }
+    if (empRes.status === "fulfilled") {
+      const e = empRes.value;
+      setEmployees(e?.employees || e?.data || []);
+    }
+    if (custRes.status === "fulfilled") {
+      const c = custRes.value;
+      setCustomers(c?.customers || c?.data || []);
     }
   };
 
@@ -227,7 +235,7 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
                   booking_id: booking._id,
                   booking_code: booking.code || booking._id.toString().slice(-6),
                   room_id: roomDetail.room_id._id || roomDetail.room_id,
-                  room_number: roomDetail.room_id?.room_number || "N/A",
+                  room_number: roomDetail.room_info?.room_number || "N/A",
                   room_detail_id: roomDetail._id,
                   expected_checkout: roomDetail.expected_checkout || booking.expected_checkout,
                 });
@@ -273,30 +281,61 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
   }, [form.type, form.room_id]);
 
   const getCauserOptions = () => {
-      if (form.caused_by === "employee") {
-        return employees.map((e) => ({
-          id: e.user_id,
-          label: `${e.full_name} - NV (${getPositionLabel(e.position) || "N/A"})`
-        }));
-      }
+    if (form.caused_by === "employee") {
+      return employees.map((e) => ({
+        id: e.user_id,
+        label: `${e.full_name} - NV (${getPositionLabel(e.position) || "N/A"})`
+      }));
+    }
+    if (form.caused_by === "customer") {
+      return customers.map((c) => ({
+        id: c.user_id?._id || c.user_id,
+        label: `${c.full_name} | CCCD: ${c.CCCD || "Trống"} | SĐT: ${c.phone_number || "Trống"}`
+      }));
+    }
+    return [];
+  };
 
-      if (form.caused_by === "customer") {
-        return customers.map((c, index) => ({
-          id: c.user_id?._id || c.user_id,
-
-          label: `${c.full_name} | CCCD: ${c.CCCD || "Trống"} | SĐT: ${c.phone_number || "Trống"}`
-        }));
+  const getEmployeeRelevantBookings = () => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return bookings.filter(b => {
+      if (b.status === "in_progress" || b.status === "confirmed") return true;
+      if (b.status === "completed") {
+        const date = new Date(b.actual_checkout || b.expected_checkout || b.updatedAt || b.updated_at);
+        return !isNaN(date.getTime()) && date >= threeMonthsAgo;
       }
-      return [];
-    };
-  const getRoomOptions = () => rooms.map(r => ({
-    id: r._id,
-    label: `Phòng ${r.room_number} - ${r.type_id?.name || 'Standard'}`
-  }));
+      return false;
+    });
+  };
+
+  const handleEmployeeBookingSelect = (booking) => {
+    const validRooms = (booking.rooms || []).filter(rd => rd.status !== "cancelled" && rd.room_id);
+    const autoRoomId = validRooms.length === 1
+      ? (validRooms[0].room_id?._id || validRooms[0].room_id || "")
+      : "";
+    setForm(prev => ({ ...prev, booking_id: booking._id, room_id: autoRoomId, equipment_ids: [] }));
+  };
+
+  const getRoomOptions = () => {
+    if (form.caused_by === "employee" && form.booking_id) {
+      const booking = bookings.find(b => b._id === form.booking_id);
+      return (booking?.rooms || [])
+        .filter(rd => rd.status !== "cancelled" && rd.room_id)
+        .map(rd => ({
+          id: rd.room_id?._id || rd.room_id,
+          label: `Phòng ${rd.room_info?.room_number || "?"}`
+        }));
+    }
+    return rooms.map(r => ({
+      id: r._id,
+      label: `Phòng ${r.room_number} - ${r.type_id?.name || 'Standard'}`
+    }));
+  };
 
   const getBookingOptions = () => bookings.map(b => ({
     id: b._id,
-    label: `Mã: ${b.code} - Khách: ${b.customer_name}`
+    label: `Mã: ${b._id.toString().slice(-6)} - Khách: ${b.customer_info?.full_name || "N/A"} - Trạng thái: ${b.status}`
   }));
 
   const handleSubmit = async (e) => {
@@ -399,11 +438,81 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
                   placeholder={form.caused_by === 'employee' ? "Chọn nhân viên..." : "Gõ Tên, SĐT hoặc CCCD..."}
                   options={getCauserOptions()}
                   value={form.causer_id}
-                  onChange={(val) => setForm(prev => ({ ...prev, causer_id: val }))}
+                  onChange={(val) => setForm(prev => ({ ...prev, causer_id: val, booking_id: "", room_id: "", equipment_ids: [] }))}
                 />
               )}
             </div>
           </div>
+
+          {/* Hiển thị danh sách booking liên quan khi nguyên nhân là nhân viên */}
+          {form.caused_by === "employee" && form.causer_id && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <FiCalendar size={16} className="text-orange-600" />
+                Chọn booking liên quan đến sự cố
+                <span className="text-xs font-normal text-gray-400">(đang hoạt động hoặc kết thúc trong vòng 3 tháng)</span>
+              </h4>
+              {(() => {
+                const relevantBookings = getEmployeeRelevantBookings();
+                if (relevantBookings.length === 0) {
+                  return <div className="text-sm text-gray-500 italic">Không có booking nào phù hợp.</div>;
+                }
+                return (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {relevantBookings.map(booking => {
+                      const isSelected = form.booking_id === booking._id;
+                      const validRooms = (booking.rooms || []).filter(rd => rd.status !== "cancelled");
+                      return (
+                        <div
+                          key={booking._id}
+                          className={`bg-white border rounded-lg p-3 cursor-pointer transition-all ${
+                            isSelected ? "border-orange-500 ring-2 ring-orange-200" : "border-orange-200 hover:border-orange-400"
+                          }`}
+                          onClick={() => handleEmployeeBookingSelect(booking)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FiMapPin size={13} className="text-orange-500 shrink-0" />
+                              <span className="font-semibold text-sm text-gray-800">
+                                #{booking.code || booking._id.toString().slice(-6)}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                booking.status === "in_progress" ? "bg-green-100 text-green-700" :
+                                booking.status === "confirmed" ? "bg-blue-100 text-blue-700" :
+                                "bg-gray-100 text-gray-600"
+                              }`}>
+                                {booking.status === "in_progress" ? "Đang ở" :
+                                 booking.status === "confirmed" ? "Đã xác nhận" : "Đã hoàn tất"}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 shrink-0">{validRooms.length} phòng</span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Khách: {booking.customer_info?.full_name || "N/A"}
+                            {(booking.expected_checkout || booking.actual_checkout) && (
+                              <span className="ml-3">
+                                Checkout: {new Date(booking.actual_checkout || booking.expected_checkout).toLocaleDateString("vi-VN")}
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && validRooms.length > 1 && (
+                            <div className="mt-2 text-xs text-orange-700 font-medium">
+                              ✓ Đã chọn — chọn phòng cụ thể bên dưới
+                            </div>
+                          )}
+                          {isSelected && validRooms.length === 1 && (
+                            <div className="mt-2 text-xs text-orange-700 font-medium">
+                              ✓ Đã chọn — phòng {validRooms[0].room_info?.room_number || "?"} đã được tự động điền
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Hiển thị danh sách booking/phòng của khách hàng */}
           {form.caused_by === "customer" && form.causer_id && (
@@ -459,21 +568,32 @@ export default function CreateIncidentModal({ onClose, onSuccess }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 border border-gray-200 rounded">
-            <SearchableSelect 
-              label="Vị trí / Phòng" 
-              placeholder="-- Chọn phòng --" 
-              options={getRoomOptions()} 
-              value={form.room_id} 
-              onChange={(val) => setForm(prev => ({ ...prev, room_id: val, booking_id: "", equipment_ids: [] }))} 
-            />
-            <SearchableSelect 
-              label="Booking liên quan" 
-              placeholder="-- Chọn mã booking --" 
-              options={getBookingOptions()} 
-              value={form.booking_id} 
-              onChange={(val) => setForm(prev => ({ ...prev, booking_id: val }))} 
-            />
+          <div className={`grid grid-cols-1 gap-6 bg-gray-50 p-4 border border-gray-200 rounded ${form.caused_by === "employee" ? "" : "md:grid-cols-2"}`}>
+            {form.caused_by === "employee" && !form.booking_id ? (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Vị trí / Phòng</label>
+                <div className="w-full border border-gray-200 rounded px-3 py-2 text-sm text-gray-400 bg-gray-100 italic">
+                  Chọn booking bên trên trước để lọc phòng
+                </div>
+              </div>
+            ) : (
+              <SearchableSelect
+                label="Vị trí / Phòng"
+                placeholder="-- Chọn phòng --"
+                options={getRoomOptions()}
+                value={form.room_id}
+                onChange={(val) => setForm(prev => ({ ...prev, room_id: val, equipment_ids: [] }))}
+              />
+            )}
+            {form.caused_by !== "employee" && (
+              <SearchableSelect
+                label="Booking liên quan"
+                placeholder="-- Chọn mã booking --"
+                options={getBookingOptions()}
+                value={form.booking_id}
+                onChange={(val) => setForm(prev => ({ ...prev, booking_id: val }))}
+              />
+            )}
           </div>
 
           {/* Hiển thị danh sách thiết bị trong phòng khi loại sự cố là thiết bị */}

@@ -1,6 +1,8 @@
 /node_modules/
 node_modules
-.coverage
+server/coverage/
+coverage/
+**/coverage/
 .env
 .vscode
 .idea
