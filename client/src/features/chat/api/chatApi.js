@@ -25,4 +25,9 @@ export const chatApi = {
         );
         return res.data;
     },
+
+    renameGroup: async (conversationId, name) => {
+        const res = await axios.patch(`${BASE_URL}/conversations/${conversationId}`, { name }, authHeader());
+        return res.data;
+    },
 };

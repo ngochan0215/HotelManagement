@@ -311,6 +311,31 @@ export class ChatService {
         }
     }
 
+    async renameGroup(conversationId, userId, name) {
+        try {
+            if (!name?.trim()) throw new Error("Group name cannot be empty.");
+
+            const conversation = await this.Conversation.findById(conversationId);
+            if (!conversation) throw new Error("Conversation not found.");
+            if (conversation.type !== "group") throw new Error("Only group conversations can be renamed.");
+
+            const isParticipant = conversation.participants.some(
+                p => p.user_id.toString() === userId.toString()
+            );
+            if (!isParticipant) throw new Error("Conversation not found or access denied.");
+
+            if (conversation.created_by.toString() !== userId.toString())
+                throw new Error("Only the group creator can rename this conversation.");
+
+            conversation.name = name.trim();
+            await conversation.save();
+            return conversation;
+        } catch (err) {
+            console.log(`Error in renameGroup: ${err.message}`);
+            throw new Error(err.message);
+        }
+    }
+
     async getConversationIds(userId) {
         try {
             const conversations = await this.Conversation.find(

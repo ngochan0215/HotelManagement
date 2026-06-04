@@ -1,4 +1,5 @@
 import { container } from "../containers/container.js";
+import { getSocketInstance } from "../socket/instance.js";
 
 export class ChatController {
     constructor() {
@@ -23,18 +24,15 @@ export class ChatController {
             let conversation;
 
             if (type === "direct") {
-                if (!target_user_id) {
+                if (!target_user_id)
                     return res.status(400).json({ success: false, message: "target_user_id is required." });
-                }
-                if (target_user_id === myId?.toString()) {
+                if (target_user_id === myId?.toString())
                     return res.status(400).json({ success: false, message: "Cannot create a conversation with yourself." });
-                }
                 const result = await this.chatService.getOrCreateDirectConversation(myId, myRole, target_user_id);
                 conversation = result.conversation;
             } else if (type === "group") {
-                if (!participant_ids?.length) {
+                if (!participant_ids?.length)
                     return res.status(400).json({ success: false, message: "participant_ids is required for group conversations." });
-                }
                 conversation = await this.chatService.createGroupConversation(myId, myRole, participant_ids, name);
             } else {
                 return res.status(400).json({ success: false, message: "type must be 'direct' or 'group'." });
@@ -43,6 +41,27 @@ export class ChatController {
             return res.status(201).json({ success: true, conversation });
         } catch (err) {
             return res.status(500).json({ success: false, message: err.message });
+        }
+    };
+
+    renameGroup = async (req, res) => {
+        try {
+            const { name } = req.body;
+            if (!name?.trim())
+                return res.status(400).json({ success: false, message: "name is required." });
+
+            const conversation = await this.chatService.renameGroup(req.params.id, req.user.userId, name);
+
+            const io = getSocketInstance();
+            io?.to(`conv:${req.params.id}`).emit("chat:conversation_renamed", {
+                conversation_id: req.params.id,
+                name: conversation.name,
+            });
+
+            return res.status(200).json({ success: true, conversation });
+        } catch (err) {
+            const status = err.message.includes("creator") || err.message.includes("access denied") ? 403 : 500;
+            return res.status(status).json({ success: false, message: err.message });
         }
     };
 
