@@ -126,6 +126,16 @@ app.use(
   })
 );
 
+app.use(
+  "/chat",
+  createProxyMiddleware({
+    target: "http://chat-service:3014",
+    changeOrigin: true,
+    // Forward WebSocket upgrades so Socket.io works through the gateway
+    ws: true,
+  })
+);
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

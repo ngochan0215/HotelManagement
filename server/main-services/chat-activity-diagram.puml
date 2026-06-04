@@ -1,0 +1,165 @@
+@startuml Chat_Activity_Diagram
+title Activity Diagram: Chat with Person
+
+skinparam backgroundColor #FAFAFA
+skinparam activity {
+  BackgroundColor #EEF2FF
+  BorderColor #6366F1
+  FontColor #1E1B4B
+  ArrowColor #6366F1
+}
+skinparam diamond {
+  BackgroundColor #FFF7ED
+  BorderColor #EA580C
+}
+skinparam note {
+  BackgroundColor #F0FDF4
+  BorderColor #16A34A
+}
+
+start
+
+:Người dùng đã đăng nhập thành công;
+note right: JWT được lưu trong localStorage
+
+:Frontend khởi tạo kết nối Socket.io\n(auth.token = JWT từ localStorage);
+
+:Chat-Service nhận kết nối\n(socketAuth middleware xác thực JWT);
+
+if (Token hợp lệ?) then (Có)
+  :socket.user = { id, role };
+
+  :Lấy thông tin user qua RabbitMQ\n→ safeRequest(GET_USER_INFO)\n→ user-service trả về { email, avatar };
+  note right: email dùng làm display name\nvì User model không có trường name
+
+  :Lưu userSnapshot vào socket\n{ user_id, name=email, avatar, role };
+
+  :Join phòng cá nhân: "user:{userId}";
+
+  :Lấy danh sách conversation IDs từ MongoDB\n→ Join tất cả phòng: "conv:{id}";
+
+  if (Đây là kết nối đầu tiên của user?) then (Có)
+    :Broadcast "chat:user_online" tới\ntất cả người dùng đang online;
+  endif
+
+else (Không)
+  :Trả về lỗi xác thực socket;
+  stop
+endif
+
+:Gọi GET /chat/conversations\n(REST API qua API Gateway)\nHiển thị danh sách cuộc trò chuyện;
+
+fork
+  ' ─────────────────────────────────────
+  ' NHÁNH A: Bắt đầu cuộc trò chuyện mới
+  ' ─────────────────────────────────────
+  :User nhấn nút "+"\nNhập User ID của người muốn nhắn;
+
+  :Gọi POST /chat/conversations\n{ type: "direct", target_user_id };
+
+  :Tính pair_key =\nsort([myId, targetId]).join("_");
+  note right: Đảm bảo không có 2 cuộc trò chuyện\ngiữa cùng một cặp người dùng
+
+  if (Conversation đã tồn tại\n(unique sparse index)?) then (Có)
+    :Lấy conversation hiện có từ MongoDB;
+  else (Không)
+    :Gọi RabbitMQ → safeRequest(GET_USER_INFO)\nxác minh target user tồn tại;
+
+    if (Target user tồn tại?) then (Có)
+      :Tạo Conversation mới trong MongoDB\n{ type, pair_key, participants[\n  { user_id, role } × 2], created_by };
+    else (Không)
+      :Trả về lỗi 500 "Target user not found";
+      stop
+    endif
+  endif
+
+  :Trả về 201 { conversation };
+
+  :Frontend: setActiveConvId(conv._id)\nThêm vào đầu danh sách sidebar;
+
+  :Emit socket "chat:join_conversation"\n{ conversation_id }\n→ socket.join("conv:{id}");
+
+fork again
+  ' ─────────────────────────────────────
+  ' NHÁNH B: Mở cuộc trò chuyện đã có
+  ' ─────────────────────────────────────
+  :User click vào conversation\ntrong sidebar;
+
+  :Gọi GET /chat/conversations/{id}/messages\n?page=1&limit=50;
+
+  :assertParticipant(conversationId, userId)\n→ Kiểm tra quyền truy cập MongoDB;
+
+  if (Là thành viên cuộc trò chuyện?) then (Có)
+    :Truy vấn MongoDB:\nMessage.find({ conversation_id })\n.sort({ created_at: -1 }).skip.limit;
+    :messages.reverse() → oldest-first\n(phù hợp với cách hiển thị chat);
+    :Trả về 200 { messages };
+    :Frontend hiển thị thread\nauto-scroll xuống cuối;
+  else (Không)
+    :Trả về lỗi 403 Access Denied;
+    stop
+  endif
+
+end fork
+
+' ─────────────────────────────────────
+' VÒNG LẶP CHAT
+' ─────────────────────────────────────
+repeat
+
+  fork
+    ' GỬI TIN NHẮN
+    :User nhập nội dung\nnhấn Enter hoặc nút Send;
+
+    :Emit socket "chat:send_message"\n{ conversation_id, content };
+
+    :assertParticipant(convId, senderId)\n→ xác minh quyền gửi;
+
+    :Lưu Message vào MongoDB\n{\n  conversation_id,\n  sender_id, sender_name (snapshot),\n  sender_avatar, sender_role,\n  content, type: "text",\n  read_by: [{ sender, now }]\n};
+
+    :Cập nhật Conversation.last_message\n(denormalized snapshot)\n→ để sidebar hiển thị preview;
+
+    :io.to("conv:{id}").emit(\n  "chat:new_message",\n  { conversation_id, message }\n)\n→ Broadcast tới TẤT CẢ thành viên trong phòng;
+
+  fork again
+    ' NHẬN TIN NHẮN
+    :Socket nhận "chat:new_message"\n{ conversation_id, message };
+
+    if (Là conversation đang\nmở (activeConvIdRef)?) then (Có)
+      :setMessages([...prev, message])\nauto-scroll xuống cuối;
+    else (Không)
+      :Cập nhật preview sidebar\n(last_message.content, sent_at);
+    endif
+
+    note right: isMine = (msg.sender_id === myId)\n→ căn phải nếu là tin của mình\n→ căn trái nếu là tin người khác
+
+  fork again
+    ' TYPING INDICATOR
+    :User đang gõ → Emit "chat:typing"\n{ conversation_id };
+    :Server relay tới các thành viên còn lại\ntrong phòng (socket.to(room).emit);
+    :User dừng gõ → Emit "chat:stop_typing";
+
+  fork again
+    ' ĐỌC TIN NHẮN
+    :Emit "chat:mark_read"\n{ conversation_id };
+    :updateMany trên MongoDB:\nMessage.read_by $ne userId\n→ $push { user_id, read_at };
+    :Broadcast "chat:read_receipt"\ntới các thành viên khác trong phòng;
+
+  end fork
+
+repeat while (Vẫn trong cuộc trò chuyện?) is (Có)
+->Thoát;
+
+' ─────────────────────────────────────
+' NGẮT KẾT NỐI
+' ─────────────────────────────────────
+:Socket disconnect\n(đóng tab hoặc mất kết nối mạng);
+
+:Xóa socket.id khỏi onlineUsers Map;
+
+if (Không còn kết nối nào khác\ncủa user này?) then (Có)
+  :onlineUsers.delete(userId)\nio.emit("chat:user_offline"\n{ user_id });
+endif
+
+stop
+
+@enduml

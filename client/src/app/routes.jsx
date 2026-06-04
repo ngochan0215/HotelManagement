@@ -29,6 +29,7 @@ import CustomerAccountPage from '../features/customer-portal/pages/customerAccou
 import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } from '../features/auth/utils/roleRedirect.js';
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
+import ChatPage from '../features/chat/pages/chatPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   const { user } = useAuth();
@@ -169,6 +170,10 @@ export default function AppRoutes() {
       <Route path="/promotions" element={<ProtectedRoute allowed={['receptionist', 'customer_service']}><DiscountPage /></ProtectedRoute>} />
 
       <Route path="/attractions" element={<AttractionPage />} />
+
+      <Route path="/chat" element={
+        <ProtectedRoute allowed={[]}> <ChatPage /> </ProtectedRoute>
+      } />
 
       <Route path="/payment/success" element={<PaymentResultPage />} />
       <Route path="/payment/cancel" element={<PaymentResultPage />} />

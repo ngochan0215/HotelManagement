@@ -33,7 +33,7 @@ services:
       - /app/node_modules
     command: npm run dev
     depends_on:
-      # container only starts after mongodb is running and rabbitmq passsed health check
+      # container only starts after rabbitmq passsed health check
       rabbitmq:
         condition: service_healthy
 
@@ -128,7 +128,7 @@ services:
     ports:
       - "3007:3007"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${CHAT_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
@@ -196,7 +196,7 @@ services:
     ports:
       - "3011:3011"
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: ${CLEANING_DB_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
     volumes:
       - ./shared:/shared
@@ -237,6 +237,26 @@ services:
       - ./main-services/attraction-service:/app
       - /app/node_modules
     command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  chat-service:
+    build: ./main-services/chat-service
+    container_name: chat-service
+    ports:
+      - "3014:3014"
+    environment:
+      DB_URL: ${CHAT_DB_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    volumes:
+      - ./shared:/shared
+      - ./main-services/chat-service:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   api-gateway:
     # this service acts as the entry point for clients
@@ -260,3 +280,4 @@ services:
       - cleaning-service
       - service-service
       - attraction-service
+      - chat-service
