@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-import { Send, Plus, X, MessageSquare, Pencil, Trash2, Check, Users, MessageCircle, Search } from "lucide-react";
+import { Send, Plus, X, MessageSquare, Pencil, Trash2, Check, Users, MessageCircle, Search, Bot } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import { chatApi } from "../api/chatApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
 
 const CHAT_SOCKET_URL = "http://localhost:3014";
+const BOT_USER_ID = "000000000000000000000001";
 
 function formatTime(dateStr) {
     if (!dateStr) return "";
@@ -65,6 +66,9 @@ export default function ChatPage() {
     // ── group rename state ───────────────────────────────────────────
     const [renamingGroup, setRenamingGroup] = useState(false);
     const [renameInput,   setRenameInput]   = useState("");
+
+    // ── bot typing indicator ─────────────────────────────────────────
+    const [botTyping, setBotTyping] = useState(false);
 
     // ── refs ─────────────────────────────────────────────────────────
     const socketRef       = useRef(null);
@@ -135,6 +139,16 @@ export default function ChatPage() {
             setConversations(p => p.map(c => c._id === conversation_id ? { ...c, name } : c));
         });
 
+        socket.on("chat:typing", ({ conversation_id, user_id }) => {
+            if (user_id === BOT_USER_ID && activeConvIdRef.current === conversation_id)
+                setBotTyping(true);
+        });
+
+        socket.on("chat:stop_typing", ({ conversation_id, user_id }) => {
+            if (user_id === BOT_USER_ID && activeConvIdRef.current === conversation_id)
+                setBotTyping(false);
+        });
+
         socket.on("chat:error", ({ message }) => setError(message));
 
         return () => socket.disconnect();
@@ -152,6 +166,7 @@ export default function ChatPage() {
         if (!activeConvId) return;
         setMessages([]);
         setEditingMsgId(null);
+        setBotTyping(false);
         chatApi.getMessages(activeConvId)
             .then(d => setMessages(d.messages ?? []))
             .catch(e => setError(e.message));
@@ -244,6 +259,19 @@ export default function ChatPage() {
         finally { setGroupLoading(false); }
     };
 
+    // ── start bot conversation ───────────────────────────────────────
+    const startBotChat = async () => {
+        setShowNewMenu(false);
+        setError("");
+        try {
+            const data = await chatApi.createConversation({ type: "bot" });
+            const conv = data.conversation;
+            setConversations(p => [conv, ...p.filter(c => c._id !== conv._id)]);
+            setActiveConvId(conv._id);
+            socketRef.current?.emit("chat:join_conversation", { conversation_id: conv._id });
+        } catch (err) { setError(err.response?.data?.message ?? err.message); }
+    };
+
     // ── rename group ─────────────────────────────────────────────────
     const startRename = () => { setRenameInput(activeConv?.name ?? ""); setRenamingGroup(true); };
     const cancelRename = () => setRenamingGroup(false);
@@ -265,6 +293,7 @@ export default function ChatPage() {
     const isGroupCreator = activeConv?.type === "group" && activeConv?.created_by?.toString() === myId?.toString();
 
     const getConvLabel = (conv) => {
+        if (conv.type === "bot")   return "SE Hotel Assistant";
         if (conv.type === "group") return conv.name ?? "Group";
         const other = conv.participants?.find(p => p.user_id?.toString() !== myId?.toString());
         return other ? `${other.role} · ${other.user_id?.toString().slice(-6)}` : "Direct";
@@ -314,6 +343,12 @@ export default function ChatPage() {
                                         <Users size={15} className="text-indigo-500" /> Group conversation
                                     </button>
                                 )}
+                                <button
+                                    onClick={startBotChat}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                    <Bot size={15} className="text-emerald-500" /> Chat with Bot
+                                </button>
                             </div>
                         )}
                     </div>
@@ -428,6 +463,7 @@ export default function ChatPage() {
                                     <div className="flex justify-between items-center gap-1">
                                         <div className="flex items-center gap-1.5 min-w-0">
                                             {conv.type === "group" && <Users size={12} className="text-gray-400 flex-shrink-0" />}
+                                            {conv.type === "bot"   && <Bot   size={12} className="text-emerald-500 flex-shrink-0" />}
                                             <span className={`text-sm truncate max-w-[110px] ${hasUnread ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
                                                 {getConvLabel(conv)}
                                             </span>
@@ -465,6 +501,7 @@ export default function ChatPage() {
                         {/* Thread header */}
                         <div className="px-5 py-3 border-b border-gray-200 bg-white flex items-center gap-2">
                             {activeConv?.type === "group" && <Users size={16} className="text-gray-400 flex-shrink-0" />}
+                            {activeConv?.type === "bot"   && <Bot   size={16} className="text-emerald-500 flex-shrink-0" />}
                             <div className="flex-1 min-w-0">
                                 {renamingGroup ? (
                                     <div className="flex items-center gap-2">
@@ -493,6 +530,8 @@ export default function ChatPage() {
                                 <p className="text-xs text-gray-400">
                                     {activeConv?.type === "group"
                                         ? `Group · ${activeConv?.participants?.length ?? 0} members`
+                                        : activeConv?.type === "bot"
+                                        ? "Trợ lý ảo khách sạn · Luôn sẵn sàng hỗ trợ"
                                         : "Direct message"}
                                 </p>
                             </div>
@@ -502,6 +541,7 @@ export default function ChatPage() {
                         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-gray-50">
                             {messages.map(msg => {
                                 const isMine    = msg.sender_id?.toString() === myId?.toString();
+                                const isBot     = msg.sender_role === "bot";
                                 const canEdit   = isMine && !msg.is_deleted;
                                 const canDelete = (isMine || isGroupCreator) && !msg.is_deleted;
                                 const isEditing = editingMsgId === msg._id;
@@ -557,9 +597,11 @@ export default function ChatPage() {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className={`px-4 py-2 rounded-2xl text-sm leading-relaxed ${
+                                                <div className={`px-4 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                                                     isMine
                                                         ? "bg-indigo-600 text-white rounded-br-sm"
+                                                        : isBot
+                                                        ? "bg-emerald-50 text-gray-800 border border-emerald-200 rounded-bl-sm shadow-sm"
                                                         : "bg-white text-gray-800 border border-gray-200 rounded-bl-sm shadow-sm"
                                                 }`}>
                                                     {msg.content}
@@ -576,6 +618,19 @@ export default function ChatPage() {
                                     </div>
                                 );
                             })}
+                            {botTyping && (
+                                <div className="flex justify-start">
+                                    <div className="flex items-center gap-2 px-4 py-2 rounded-2xl rounded-bl-sm text-sm bg-emerald-50 border border-emerald-200 text-emerald-600">
+                                        <Bot size={13} className="flex-shrink-0" />
+                                        <span className="italic">SE Hotel Assistant đang trả lời...</span>
+                                        <span className="flex gap-0.5">
+                                            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                             <div ref={bottomRef} />
                         </div>
 

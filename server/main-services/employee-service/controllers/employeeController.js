@@ -168,4 +168,16 @@ export class EmployeeController {
             return res.status(err.status || 400).json({ message: err.message });
         }
     };
+
+    // employee views own attendance summary
+    getMyAttendanceSummary = async (req, res) => {
+        try {
+            const result = await this.employeeService.getMyAttendanceSummary(req.user.userId, req.query);
+
+            return res.status(200).json({ success: true, data: result });
+
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
 }

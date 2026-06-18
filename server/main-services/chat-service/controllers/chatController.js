@@ -34,8 +34,11 @@ export class ChatController {
                 if (!participant_ids?.length)
                     return res.status(400).json({ success: false, message: "participant_ids is required for group conversations." });
                 conversation = await this.chatService.createGroupConversation(myId, myRole, participant_ids, name);
+            } else if (type === "bot") {
+                const result = await this.chatService.getOrCreateBotConversation(myId, myRole);
+                conversation = result.conversation;
             } else {
-                return res.status(400).json({ success: false, message: "type must be 'direct' or 'group'." });
+                return res.status(400).json({ success: false, message: "type must be 'direct', 'group', or 'bot'." });
             }
 
             return res.status(201).json({ success: true, conversation });

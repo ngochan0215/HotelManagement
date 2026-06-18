@@ -1042,6 +1042,74 @@ export class EmployeeService {
         }
     }
 
+    // employee views own attendance summary (worked days, days off, work hours...)
+    async getMyAttendanceSummary(employeeUserId, query = {}) {
+        try {
+            const { start_date, end_date } = query;
+
+            const employee = await this.Employee.findOne({ user_id: employeeUserId });
+            if (!employee) throw new Error("Không tìm thấy nhân viên.");
+
+            const filter = { employee_id: employee._id };
+
+            const startDate = start_date ? new Date(start_date) : null;
+            const endDate   = end_date   ? new Date(end_date)   : null;
+            if (startDate && isNaN(startDate.getTime())) throw new Error("start_date không hợp lệ.");
+            if (endDate && isNaN(endDate.getTime()))     throw new Error("end_date không hợp lệ.");
+            if (startDate && endDate && startDate > endDate) throw new Error("start_date phải trước end_date.");
+
+            if (startDate || endDate) {
+                filter.work_date = {
+                    ...(startDate && { $gte: startDate }),
+                    ...(endDate   && { $lte: endDate }),
+                };
+            }
+
+            const rows = await this.Attendance.aggregate([
+                { $match: filter },
+                {
+                    $group: {
+                        _id: "$status",
+                        count: { $sum: 1 },
+                        total_work_hours: { $sum: "$work_hours" },
+                        total_late_minutes: { $sum: "$late_minutes" },
+                        total_early_leave_minutes: { $sum: "$early_leave_minutes" },
+                    },
+                },
+            ]);
+
+            const by_status = {};
+            let total_records = 0, total_work_hours = 0, total_late_minutes = 0, total_early_leave_minutes = 0;
+            for (const r of rows) {
+                by_status[r._id] = r.count;
+                total_records             += r.count;
+                total_work_hours          += r.total_work_hours || 0;
+                total_late_minutes        += r.total_late_minutes || 0;
+                total_early_leave_minutes += r.total_early_leave_minutes || 0;
+            }
+
+            const count = (s) => by_status[s] || 0;
+            // "worked" = the employee actually showed up (present / late / left early)
+            const total_work_days = count("present") + count("late") + count("early_leave");
+
+            return {
+                full_name: employee.full_name,
+                range: { start_date: startDate, end_date: endDate },
+                total_work_days,
+                days_off:    count("on_leave"),
+                absent_days: count("absent"),
+                total_work_hours: Number(total_work_hours.toFixed(2)),
+                total_late_minutes,
+                total_early_leave_minutes,
+                by_status,
+                total_records,
+            };
+        } catch (error) {
+            console.error("Error in getMyAttendanceSummary:", error.message);
+            throw error;
+        }
+    }
+
     // manager view earnings
     async getEmployeeEarningById(query = {}) {
         try {

@@ -23,7 +23,7 @@ const startServer = async () => {
 
     await connectDB(process.env.DB_URL);
     await container.init();
-    await initSocket(httpServer, container.chatService);
+    await initSocket(httpServer, container.chatService, container.botService);
 
     app.use(chatRoute);
 

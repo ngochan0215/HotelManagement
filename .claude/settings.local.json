@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(Get-ChildItem -Path \"C:\\\\hanheobeou\\\\NodeJSproject\\\\HotelManagement\\\\server\\\\main-services\\\\room-service\" -Recurse -File | Where-Object {$_.FullName -notmatch \"node_modules\"} | Select-Object -ExpandProperty FullName)",
-      "Bash(npx jest *)"
-    ]
-  }
-}

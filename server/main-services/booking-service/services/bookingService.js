@@ -2457,29 +2457,57 @@ export class BookingService {
 
     getTopBookedRoomCategories = async (query = {}) => {
         try {
-            const limit = parseInt(query.limit, 10) || 5;
+            const limit = Math.min(Math.max(parseInt(query.limit, 10) || 5, 1), 10);
 
-            const result = await this.BookingDetail.aggregate([
-                {
-                    $group: {
-                        _id: "$room_id",           // group by room_id instead
-                        totalBooked: { $sum: 1 },
-                    },
-                },
-                { $sort: { totalBooked: -1 } },
-                { $limit: limit },
-                {
-                    $project: {
-                        _id: 0,
-                        room_id: "$_id",           // return room_id, not category_id
-                        totalBooked: 1,
-                    },
-                },
+            // BookingDetail only stores room_id, so first count bookings per room
+            // (excluding cancelled), then resolve rooms → categories via room-service.
+            const perRoom = await this.BookingDetail.aggregate([
+                { $match: { status: { $ne: "cancelled" } } },
+                { $group: { _id: "$room_id", totalBooked: { $sum: 1 } } },
             ]);
-            return { result }; // [{ category_id, totalBooked }]
+
+            if (perRoom.length === 0) return { result: [] };
+
+            const roomIds = perRoom.map(r => r._id);
+            const reply = await this.eventBus.safeRequest(
+                ROOM_EVENTS.GET_ROOMS_INFO, { room_ids: roomIds }
+            );
+            if (!reply?.success) throw new Error(reply?.message || "Không lấy được thông tin phòng.");
+
+            // room_id → { category_id, category_name }
+            const roomToCategory = new Map();
+            for (const room of (reply.rooms || [])) {
+                const cat = room.category_id; // populated { _id, category_name, ... }
+                if (cat?._id) {
+                    roomToCategory.set(room._id.toString(), {
+                        category_id: cat._id.toString(),
+                        category_name: cat.category_name,
+                    });
+                }
+            }
+
+            // Aggregate per-room counts up to the category level
+            const byCategory = new Map();
+            for (const { _id: roomId, totalBooked } of perRoom) {
+                const cat = roomToCategory.get(roomId.toString());
+                if (!cat) continue; // room no longer exists / unresolved
+                const entry = byCategory.get(cat.category_id) ?? {
+                    category_id: cat.category_id,
+                    category_name: cat.category_name,
+                    totalBooked: 0,
+                };
+                entry.totalBooked += totalBooked;
+                byCategory.set(cat.category_id, entry);
+            }
+
+            const result = [...byCategory.values()]
+                .sort((a, b) => b.totalBooked - a.totalBooked)
+                .slice(0, limit);
+
+            return { result }; // [{ category_id, category_name, totalBooked }]
 
         } catch (error) {
-            console.log(error);
+            console.log("Error in getTopBookedRoomCategories:", error);
             throw error;
         }
     };

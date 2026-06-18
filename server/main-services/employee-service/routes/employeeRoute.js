@@ -34,6 +34,7 @@ router.get("/earnings/my", verifyToken, isEmployee, controller.getMyEarnings);
 router.get("/earnings/all", verifyToken, isManager, controller.getAllEmployeesEarnings);
 router.get("/earnings/:employeeId", verifyToken, isManager, controller.getEmployeeEarningById);
 
+router.get("/attendances/my-summary", verifyToken, isEmployee, controller.getMyAttendanceSummary);
 router.post("/attendances/check-in/:scheduleId", verifyToken, isEmployee, controller.checkInShift);
 router.post("/attendances/check-out", verifyToken, isEmployee, controller.checkOutShift);
 

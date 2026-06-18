@@ -64,7 +64,7 @@ export default function MyBookingsPage() {
               </label>
               <label className="grid gap-2 text-sm font-medium text-stone-700">
                 Email đặt phòng
-                <input type="email" value={query.email} onChange={(e) => setQuery((prev) => ({ ...prev, email: e.target.value }))} placeholder="ban@email.com" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+                <input type="email" value={query.email} onChange={(e) => setQuery((prev) => ({ ...prev, email: e.target.value }))} placeholder="ban@email.com" className="w-full rounded-2xl border border-stone-200 px-4 py-3 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
               </label>
               <label className="grid gap-2 text-sm font-medium text-stone-700 md:col-span-2">
                 Số điện thoại (không bắt buộc)

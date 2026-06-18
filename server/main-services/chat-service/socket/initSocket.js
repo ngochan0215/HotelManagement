@@ -1,8 +1,45 @@
 import { Server } from "socket.io";
 import { socketAuth } from "./socketAuth.js";
 import { setSocketInstance } from "./instance.js";
+import { BOT_USER_ID, BOT_NAME } from "../config/botConfig.js";
 
-export async function initSocket(httpServer, chatService) {
+async function handleBotReply(io, conversationId, chatService, botService, userMessage, caller) {
+    io.to(`conv:${conversationId}`).emit("chat:typing", {
+        conversation_id: conversationId,
+        user_id: BOT_USER_ID,
+        user_name: BOT_NAME,
+    });
+
+    try {
+        // Fetch last 21 messages, drop the final one (user's just-sent message) as it becomes the current turn
+        const allMessages = await chatService.getMessages(conversationId, BOT_USER_ID, 1, 21);
+        const history = allMessages.slice(0, -1);
+
+        // caller identity (role + JWT) lets the bot act-as-user for staff tools
+        const replyText = await botService.generateReply(history, userMessage, caller);
+
+        const botSnapshot = { user_id: BOT_USER_ID, name: BOT_NAME, avatar: null, role: "bot" };
+        const { message: botMessage } = await chatService.sendMessage(conversationId, botSnapshot, replyText);
+
+        io.to(`conv:${conversationId}`).emit("chat:stop_typing", {
+            conversation_id: conversationId,
+            user_id: BOT_USER_ID,
+        });
+
+        io.to(`conv:${conversationId}`).emit("chat:new_message", {
+            conversation_id: conversationId,
+            message: botMessage,
+        });
+    } catch (err) {
+        io.to(`conv:${conversationId}`).emit("chat:stop_typing", {
+            conversation_id: conversationId,
+            user_id: BOT_USER_ID,
+        });
+        console.error("[handleBotReply] Error:", err.message);
+    }
+}
+
+export async function initSocket(httpServer, chatService, botService) {
     const io = new Server(httpServer, {
         cors: { origin: "*", methods: ["GET", "POST"], credentials: true },
     });
@@ -17,6 +54,10 @@ export async function initSocket(httpServer, chatService) {
         const { userId, role } = socket.user;
         console.log(`[CHAT] Connected: ${userId} (${socket.id}) as ${role}`);
 
+        // Keep the bare JWT so the bot can act-as-user when calling protected staff endpoints.
+        const rawToken = socket.handshake?.auth?.token || "";
+        socket.authToken = rawToken.startsWith("Bearer ") ? rawToken.slice(7) : rawToken;
+
         if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
         const wasOffline = onlineUsers.get(userId).size === 0;
         onlineUsers.get(userId).add(socket.id);
@@ -27,7 +68,7 @@ export async function initSocket(httpServer, chatService) {
         const userInfo = await chatService.getUserInfo(userId);
         socket.userSnapshot = {
             user_id: userId,
-            name: userInfo?.email ?? userId,   // use email as display name
+            name: userInfo?.email ?? userId,
             avatar: userInfo?.avatar ?? null,
             role,
         };
@@ -41,12 +82,12 @@ export async function initSocket(httpServer, chatService) {
             socket.broadcast.emit("chat:user_online", { user_id: userId });
         }
 
-        // send messages
+        // Send messages
         socket.on("chat:send_message", async ({ conversation_id, content, type = "text" }) => {
             try {
                 if (!conversation_id || !content?.trim()) return;
 
-                const message = await chatService.sendMessage(
+                const { message, conversationType } = await chatService.sendMessage(
                     conversation_id,
                     socket.userSnapshot,
                     content,
@@ -57,12 +98,20 @@ export async function initSocket(httpServer, chatService) {
                     conversation_id,
                     message,
                 });
+
+                // Trigger bot reply asynchronously — fire and forget
+                if (conversationType === "bot") {
+                    const caller = { userId, role, token: socket.authToken };
+                    handleBotReply(io, conversation_id, chatService, botService, content, caller).catch(err =>
+                        console.error("[BotReply] Unhandled error:", err.message)
+                    );
+                }
             } catch (err) {
                 socket.emit("chat:error", { message: err.message });
             }
         });
 
-        // typing indicators
+        // Typing indicators
         socket.on("chat:typing", ({ conversation_id }) => {
             if (!conversation_id) return;
             socket.to(`conv:${conversation_id}`).emit("chat:typing", {
@@ -96,7 +145,6 @@ export async function initSocket(httpServer, chatService) {
         });
 
         // Join a newly created conversation room
-        // Called after POST /conversations so the socket is immediately in the room
         socket.on("chat:join_conversation", ({ conversation_id }) => {
             if (!conversation_id) return;
             socket.join(`conv:${conversation_id}`);

@@ -1,5 +1,6 @@
 import { USER_EVENTS } from "../../../../shared/events/userEvents.js";
 import mongoose from "../../../../shared/config/mongoose.js";
+import { BOT_USER_ID, BOT_NAME } from "../config/botConfig.js";
 
 export class ChatService {
     constructor({ Conversation, Message, eventBus }) {
@@ -57,6 +58,30 @@ export class ChatService {
         } catch (err) {
             console.log(`Error in getOrCreateDirectConversation: ${err.message}`);
             throw new Error(`Failed to create direct conversation: ${err.message}`);
+        }
+    }
+
+    async getOrCreateBotConversation(userId, userRole) {
+        try {
+            const pairKey = `bot_${userId}`;
+            const existing = await this.Conversation.findOne({ pair_key: pairKey });
+            if (existing) return { conversation: existing, isNew: false };
+
+            const conversation = await this.Conversation.create({
+                type: "bot",
+                pair_key: pairKey,
+                name: BOT_NAME,
+                participants: [
+                    { user_id: userId, role: userRole },
+                    { user_id: new mongoose.Types.ObjectId(BOT_USER_ID), role: "bot" },
+                ],
+                created_by: userId,
+            });
+
+            return { conversation, isNew: true };
+        } catch (err) {
+            console.log(`Error in getOrCreateBotConversation: ${err.message}`);
+            throw new Error(`Failed to create bot conversation: ${err.message}`);
         }
     }
 
@@ -172,7 +197,7 @@ export class ChatService {
 
     async sendMessage(conversationId, senderSnapshot, content, type = "text") {
         try {
-            await this.assertParticipant(conversationId, senderSnapshot.user_id);
+            const conversation = await this.assertParticipant(conversationId, senderSnapshot.user_id);
 
             const message = await this.Message.create({
                 conversation_id: conversationId,
@@ -194,7 +219,7 @@ export class ChatService {
                 },
             });
 
-            return message;
+            return { message, conversationType: conversation.type };
         } catch (err) {
             console.log(`Error in sendMessage: ${err.message}`);
             throw new Error(`Failed to send message: ${err.message}`);

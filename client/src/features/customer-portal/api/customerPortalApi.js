@@ -207,12 +207,13 @@ export const customerPortalApi = {
         params: { page: 1, limit: 50 },
         ...getAuthConfig(),
       });
+      console.log("Lookup bookings response:", response);
       const bookings = response.data?.bookings || [];
       const filtered = bookings.filter((item) => {
-        const byCode = bookingCode ? String(item.booking_code || "").toLowerCase() === bookingCode.toLowerCase() : true;
-        const byEmail = email ? String(item.customer_email || "").toLowerCase() === email.toLowerCase() : true;
-        const byPhone = phone ? String(item.customer_phone || "") === phone : true;
-        return byCode && byEmail && byPhone;
+        const byCode = bookingCode ? String(item._id || "").toLowerCase() === bookingCode.toLowerCase() : true;
+        // const byEmail = email ? String(item.customer_email || "").toLowerCase() === email.toLowerCase() : true;
+        // const byPhone = phone ? String(item.customer_phone || "") === phone : true;
+        return byCode;
       });
       return { bookings: filtered, isFallback: false };
     } catch (error) {
