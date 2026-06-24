@@ -3,6 +3,20 @@ import API_BASE_URL from "../../../config/apiConfig.js";
 
 const API_URL = `${API_BASE_URL}/auth`;
 
+function normalizeApiError(error, fallbackMessage) {
+  const serverData = error?.response?.data;
+  const rawMessage =
+    (typeof serverData === "object" && serverData?.message) ||
+    (typeof serverData === "string" && serverData) ||
+    error?.message ||
+    fallbackMessage;
+  const message = String(rawMessage || "").trim();
+  if (!message || message.toLowerCase() === "network error") {
+    return fallbackMessage;
+  }
+  return message;
+}
+
 export const loginUser = async (credentials) => {
   try {
     const response = await axios.post(`${API_URL}/login`, credentials, { timeout: 15000 });
@@ -48,7 +62,7 @@ export const forgotPassword = async (email) => {
     const response = await axios.post(`${API_URL}/forgot-password`, { email });
     return response.data;
   } catch (error) {
-    throw error.response ? error.response.data : error;
+    throw new Error(normalizeApiError(error, "Không thể kết nối đến máy chủ. Vui lòng thử lại."));
   }
 };
 
@@ -57,8 +71,7 @@ export const resetPassword = async (data) => {
     const response = await axios.post(`${API_URL}/reset-password`, data);
     return response.data;
   } catch (error) {
-    console.log("Error in resetPassword:", error);
-    throw error.response ? error.response.data : error;
+    throw new Error(normalizeApiError(error, "Không thể kết nối đến máy chủ. Vui lòng thử lại."));
   }
 };
 

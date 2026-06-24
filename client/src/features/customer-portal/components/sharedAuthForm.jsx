@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Mail, Phone, UserRound } from "lucide-react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
@@ -485,7 +485,9 @@ export default function SharedAuthForm({ embedded = false }) {
                       <input type="checkbox" className="h-4 w-4 rounded border-stone-300 text-stone-950 focus:ring-amber-300" />
                       <span>Ghi nhớ đăng nhập</span>
                     </label>
-                    <span className="font-medium text-stone-800">Quên mật khẩu</span>
+                    <Link to="/forgot-password" className="font-medium text-stone-800 transition hover:text-stone-950">
+                      Quên mật khẩu?
+                    </Link>
                   </div>
                   <button type="submit" disabled={loginLoading} className="mt-2 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60">
                     {loginLoading ? "Đang xử lý..." : "Đăng nhập"}

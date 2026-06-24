@@ -2,6 +2,8 @@ import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/hooks/authContext.jsx';
 import LoginPage from '../features/auth/pages/loginPage.jsx';
+import ForgotPasswordPage from '../features/auth/pages/forgotPasswordPage.jsx';
+import ResetPasswordPage from '../features/auth/pages/resetPasswordPage.jsx';
 import Dashboard from '../features/dashboard/pages/dashboard.jsx';
 import RoomCalendar from '../features/booking/pages/roomCalendar.jsx';
 import RoomPage from '../features/room/pages/roomPage.jsx';
@@ -106,6 +108,8 @@ export default function AppRoutes() {
 
       <Route path="/" element={<Navigate to={getHomePath()} replace />} />
       <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       <Route path="/profile" element={<ProfileRoute />} />
