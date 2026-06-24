@@ -61,3 +61,18 @@ export const resetPassword = async (data) => {
     throw error.response ? error.response.data : error;
   }
 };
+
+export const verifyEmail = async (data) => {
+  try {
+    const response = await axios.post(`${API_URL}/verify-email`, data, { timeout: 15000 });
+    return response.data;
+  } catch (error) {
+    const serverData = error?.response?.data;
+    const message =
+      (typeof serverData === "object" && serverData?.message) ||
+      (typeof serverData === "string" && serverData) ||
+      error?.message ||
+      "Xác thực email thất bại.";
+    throw new Error(message);
+  }
+};

@@ -12,7 +12,7 @@ import { HotelImage, SectionHeader, StatusBadge } from "./sitePrimitives.jsx";
 function getErrorMessage(error) {
   const rawMessage = error?.response?.data?.message || error?.message || error?.msg || (typeof error === "string" ? error : "");
   const message = String(rawMessage || "").toLowerCase();
-  if (message.includes("verify") || message.includes("verified") || message.includes("verification") || message.includes("email")) {
+  if (message.includes("verify") || message.includes("verified") || message.includes("verification") || message.includes("chưa được xác thực") || message.includes("chua duoc xac thuc")) {
     return "Tài khoản chưa được xác thực email. Vui lòng kiểm tra email hoặc liên hệ SE Hotel để được hỗ trợ.";
   }
   return rawMessage || "Đăng nhập thất bại. Vui lòng kiểm tra email và mật khẩu.";
@@ -27,6 +27,42 @@ function getLoginIdentity(response) {
 }
 
 const PASSWORD_RULE_TEXT = "Ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.";
+const VERIFICATION_STORAGE_KEY = "pending-email-verification";
+
+function getVerificationPayload() {
+  try {
+    const raw = sessionStorage.getItem(VERIFICATION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      userId: parsed.userId || parsed.userID || "",
+      email: parsed.email || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildVerifyEmailPath(payload = {}) {
+  const params = new URLSearchParams();
+  if (payload.userId) params.set("userId", payload.userId);
+  if (payload.email) params.set("email", payload.email);
+  const query = params.toString();
+  return `/verify-email${query ? `?${query}` : ""}`;
+}
+
+function isVerificationError(error) {
+  const rawMessage = error?.response?.data?.message || error?.message || error?.msg || (typeof error === "string" ? error : "");
+  const message = String(rawMessage || "").toLowerCase();
+  return (
+    message.includes("verify") ||
+    message.includes("verified") ||
+    message.includes("verification") ||
+    message.includes("chưa được xác thực") ||
+    message.includes("chua duoc xac thuc")
+  );
+}
 
 function Field({ label, icon: Icon, children, required = false, hint = "", error = "", optional = false }) {
   return (
@@ -56,6 +92,7 @@ export default function SharedAuthForm({ embedded = false }) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [registerError, setRegisterError] = useState("");
+  const [verificationHelp, setVerificationHelp] = useState(null);
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     full_name: "",
@@ -173,11 +210,20 @@ export default function SharedAuthForm({ embedded = false }) {
     loginInFlightRef.current = true;
     setLoginLoading(true);
     setMessage("");
+    setVerificationHelp(null);
     try {
       const response = await login(credentials);
       await redirectAfterLogin(response);
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      const pendingVerification = getVerificationPayload();
+      const errorMessage = getErrorMessage(error);
+      setMessage(errorMessage);
+      if (isVerificationError(error)) {
+        setVerificationHelp({
+          email: credentials.email.trim() || pendingVerification?.email || "",
+          userId: pendingVerification?.userId || "",
+        });
+      }
     } finally {
       setLoginLoading(false);
       loginInFlightRef.current = false;
@@ -196,10 +242,15 @@ export default function SharedAuthForm({ embedded = false }) {
     }
     setRegisterLoading(true);
     setMessage("");
+    setVerificationHelp(null);
     try {
-      await customerApi.registerCustomer(registerForm);
-      setMessage("Đăng ký thành công. Vui lòng đăng nhập để tiếp tục.");
-      setTab("login");
+      const response = await customerApi.registerCustomer(registerForm);
+      const verificationPayload = {
+        userId: response?.userID || response?.userId || response?.user?._id || "",
+        email: registerForm.email.trim(),
+      };
+      sessionStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verificationPayload));
+      navigate(buildVerifyEmailPath(verificationPayload), { replace: true });
     } catch (error) {
       if (error?.isTimeout) {
         setRegisterError(error.message);
@@ -262,6 +313,16 @@ export default function SharedAuthForm({ embedded = false }) {
     setGoogleCompletion({ phone_number: "", CCCD: "", date_birth: "", nationality: "Vietnam" });
     setGoogleCompletionErrors({});
     setMessage("");
+  };
+
+  const openVerificationPage = () => {
+    const pendingVerification = getVerificationPayload();
+    navigate(
+      buildVerifyEmailPath({
+        userId: verificationHelp?.userId || pendingVerification?.userId || "",
+        email: verificationHelp?.email || pendingVerification?.email || credentials.email.trim() || registerForm.email.trim() || "",
+      })
+    );
   };
 
   return (
@@ -511,6 +572,24 @@ export default function SharedAuthForm({ embedded = false }) {
                 <p className={`mt-5 rounded-2xl px-4 py-3 text-sm ${message.toLowerCase().includes("thành công") ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-red-200 bg-red-50 text-red-700"}`}>
                   {message}
                 </p>
+              ) : null}
+
+              {tab === "login" && verificationHelp ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                  <p className="font-semibold">Tài khoản này cần xác thực email trước khi đăng nhập.</p>
+                  <p className="mt-1 text-amber-800">
+                    {verificationHelp.email
+                      ? `Mở trang xác thực cho ${verificationHelp.email} để nhập mã OTP.`
+                      : "Mở trang xác thực để nhập mã OTP đã gửi trong email."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openVerificationPage}
+                    className="mt-4 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+                  >
+                    Đi tới xác thực email
+                  </button>
+                </div>
               ) : null}
             </>
           )}

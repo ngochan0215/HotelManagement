@@ -30,6 +30,7 @@ import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } fro
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
 import ChatPage from '../features/chat/pages/chatPage.jsx';
+import VerifyEmailPage from '../features/auth/pages/verifyEmailPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   const { user } = useAuth();
@@ -105,6 +106,7 @@ export default function AppRoutes() {
 
       <Route path="/" element={<Navigate to={getHomePath()} replace />} />
       <Route path="/login" element={user ? <Navigate to={getHomePath()} replace /> : <LoginPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       <Route path="/profile" element={<ProfileRoute />} />
 
