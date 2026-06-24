@@ -58,6 +58,7 @@ export default function LandingPage() {
   const [featuredRooms, setFeaturedRooms] = useState([]);
   const [roomTypes, setRoomTypes] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const [roomLoadError, setRoomLoadError] = useState("");
   const [searchError, setSearchError] = useState("");
   const [search, setSearch] = useState({
     checkin: "",
@@ -69,18 +70,24 @@ export default function LandingPage() {
   const slidingServices = [...services, ...services];
   const slidingAmenities = [...amenities, ...amenities];
 
+  const loadRooms = async () => {
+    setLoadingRooms(true);
+    setRoomLoadError("");
+    try {
+      const { rooms } = await customerPortalApi.getRooms();
+      setRoomTypes(rooms);
+      setFeaturedRooms(rooms.slice(0, 3));
+    } catch (error) {
+      setRoomTypes([]);
+      setFeaturedRooms([]);
+      setRoomLoadError(error.message || "Không thể tải danh sách phòng.");
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setLoadingRooms(true);
-      try {
-        const { rooms } = await customerPortalApi.getRooms();
-        setRoomTypes(rooms);
-        setFeaturedRooms(rooms.slice(0, 3));
-      } finally {
-        setLoadingRooms(false);
-      }
-    };
-    load();
+    loadRooms();
   }, []);
 
   const handleSearch = (e) => {
@@ -232,6 +239,20 @@ export default function LandingPage() {
 
         {loadingRooms ? (
           <LoadingCardGrid count={3} />
+        ) : roomLoadError ? (
+          <div className="rounded-[28px] border border-red-200 bg-red-50 px-6 py-8 text-center shadow-sm">
+            <p className="text-lg font-semibold text-red-800">Không tải được danh sách phòng</p>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-red-700">
+              {roomLoadError}
+            </p>
+            <button
+              type="button"
+              onClick={loadRooms}
+              className="mt-5 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+            >
+              Thử lại
+            </button>
+          </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {featuredRooms.map((room, index) => {

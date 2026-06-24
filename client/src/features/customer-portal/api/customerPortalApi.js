@@ -2,39 +2,6 @@ import axios from "axios";
 import API_BASE_URL from "../../../config/apiConfig.js";
 import { roomApi } from "../../api/roomApi.js";
 
-const FALLBACK_ROOM_CATEGORIES = [
-  {
-    _id: "fallback-deluxe",
-    category_name: "Phòng Deluxe",
-    description: "Không gian nghỉ dưỡng thanh lịch, phù hợp cho chuyến đi ngắn ngày.",
-    max_adults: 2,
-    max_children: 1,
-    price: 1200000,
-    images: [],
-    default_equipments: [],
-  },
-  {
-    _id: "fallback-suite",
-    category_name: "Suite hướng phố",
-    description: "Hạng phòng rộng rãi với khu tiếp khách riêng và tiện nghi cao cấp.",
-    max_adults: 3,
-    max_children: 1,
-    price: 2200000,
-    images: [],
-    default_equipments: [],
-  },
-  {
-    _id: "fallback-family",
-    category_name: "Phòng gia đình",
-    description: "Lựa chọn thoải mái cho gia đình với trẻ em và kỳ nghỉ dài ngày.",
-    max_adults: 4,
-    max_children: 2,
-    price: 2800000,
-    images: [],
-    default_equipments: [],
-  },
-];
-
 const getAuthConfig = () => {
   const token = localStorage.getItem("token");
   return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
@@ -56,6 +23,13 @@ const calculateNights = (checkin, checkout) => {
 const estimateRoomTotal = (room, search) => {
   const nights = calculateNights(search?.checkin, search?.checkout);
   return Number(room?.price || 0) * nights;
+};
+
+const extractRoomList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rooms)) return payload.rooms;
+  return null;
 };
 
 const normalizeRoomCategory = (room, search = {}, categoryMap = {}) => {
@@ -100,10 +74,13 @@ export const customerPortalApi = {
   async getRooms() {
     try {
       const data = await roomApi.getAllCategories();
-      const rooms = Array.isArray(data) ? data : [];
+      const rooms = extractRoomList(data);
+      if (!rooms) {
+        throw new Error("Dữ liệu loại phòng không hợp lệ.");
+      }
       return { rooms, isFallback: false };
     } catch (error) {
-      return { rooms: FALLBACK_ROOM_CATEGORIES, isFallback: true };
+      mapApiError(error, "Không thể tải danh sách loại phòng.");
     }
   },
 
@@ -118,41 +95,35 @@ export const customerPortalApi = {
       if (search.minPrice) params.minPrice = search.minPrice;
       if (search.maxPrice || search.priceLimit) params.maxPrice = search.maxPrice || search.priceLimit;
 
-      const [{ rooms: categories }, response] = await Promise.all([
-        this.getRooms(),
-        axios.get(`${API_BASE_URL}/rooms/categories/available-by`, { params }),
-      ]);
-      const categoryMap = Object.fromEntries(categories.map((item) => [String(item._id), item]));
-      const rooms = Array.isArray(response.data) ? response.data : response.data?.data || response.data?.rooms || [];
-      if (rooms.length) {
-        const normalized = rooms.map((room) => normalizeRoomCategory(room, search, categoryMap));
-        return {
-          rooms: filterRooms(normalized, search),
-          isFallback: false,
-        };
+      const response = await roomApi.getAvailableBy(params);
+      const rooms = extractRoomList(response);
+      if (!rooms) {
+        throw new Error("Dữ liệu phòng khả dụng không hợp lệ.");
       }
-    } catch {
-      // TODO: Remove local filtering fallback after public availability API is stable.
+      const normalized = rooms.map((room) => ({
+        ...room,
+        available_rooms_count: Number(room.available_rooms_count ?? room.available_count ?? room.rooms?.length ?? 0),
+        available_rooms: room.available_rooms || room.rooms || [],
+        estimated_total: Number(room.estimated_total || 0) || estimateRoomTotal(room, search),
+      }));
+      return {
+        rooms: filterRooms(normalized, search),
+        isFallback: false,
+      };
+    } catch (error) {
+      mapApiError(error, "Không thể tải danh sách phòng phù hợp.");
     }
-
-    const { rooms } = await this.getRooms();
-    const filtered = filterRooms(rooms, search).map((room) => ({
-      ...room,
-      estimated_total: estimateRoomTotal(room, search),
-    }));
-    return { rooms: filtered, isFallback: true };
   },
 
   async getRoomById(id) {
     try {
       const room = await roomApi.getCategoryById(id);
+      if (!room) {
+        throw new Error("Không tìm thấy loại phòng.");
+      }
       return { room, isFallback: false };
-    } catch {
-      const { rooms } = await this.getRooms();
-      const room = rooms.find((item) => item._id === id);
-      if (!room) throw new Error("Không tìm thấy loại phòng.");
-      // TODO: Remove fallback room detail from list once dedicated endpoint is guaranteed.
-      return { room, isFallback: true };
+    } catch (error) {
+      mapApiError(error, "Không thể tải thông tin phòng.");
     }
   },
 

@@ -1,140 +1,549 @@
-import { CalendarCheck, Gift, UserRound } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useAuth } from "../../auth/hooks/authContext.jsx";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  CalendarDays,
+  ChevronRight,
+  Mail,
+  MessageCircle,
+} from "lucide-react";
 import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import SharedAuthForm from "../components/sharedAuthForm.jsx";
-import { SectionHeader, StatusBadge } from "../components/sitePrimitives.jsx";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
+
+function formatDate(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatMoney(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "--";
+  return new Intl.NumberFormat("vi-VN").format(amount);
+}
+
+function normalizeStatus(status) {
+  return String(status || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function getStatusMeta(status) {
+  const normalized = normalizeStatus(status);
+  if (["confirmed", "approved", "paid"].includes(normalized)) {
+    return { label: "Đã xác nhận", tone: "success" };
+  }
+  if (["pending", "waiting", "processing"].includes(normalized)) {
+    return { label: "Đang chờ", tone: "warning" };
+  }
+  if (["checked_in", "in_house"].includes(normalized)) {
+    return { label: "Đang lưu trú", tone: "info" };
+  }
+  if (["checked_out", "completed", "done"].includes(normalized)) {
+    return { label: "Hoàn tất", tone: "success" };
+  }
+  if (["cancelled", "canceled", "rejected", "failed"].includes(normalized)) {
+    return { label: "Đã hủy", tone: "info" };
+  }
+  return { label: status || "Chờ xử lý", tone: "info" };
+}
+
+function getBookingTitle(booking) {
+  const roomNumber = booking?.rooms?.[0]?.room_info?.room_number || booking?.room_info?.room_number || booking?.room_number;
+  const roomName =
+    booking?.room_info?.category_name ||
+    booking?.rooms?.[0]?.room_info?.category_name ||
+    booking?.room_name ||
+    booking?.room_type ||
+    booking?.category_name;
+
+  if (roomNumber) return `Phòng ${roomNumber}`;
+  if (roomName) return roomName;
+  return "Đơn đặt phòng";
+}
+
+function getBookingRoomLabel(booking) {
+  const bookingCode = booking?.booking_code || booking?._id || booking?.id || "--";
+  const roomNumber = booking?.rooms?.[0]?.room_info?.room_number || booking?.room_info?.room_number || booking?.room_number;
+  const roomName =
+    booking?.room_info?.category_name ||
+    booking?.rooms?.[0]?.room_info?.category_name ||
+    booking?.room_name ||
+    booking?.room_type ||
+    booking?.category_name;
+
+  if (roomNumber && roomName) return `Mã đơn ${bookingCode} · Phòng ${roomNumber} · ${roomName}`;
+  if (roomNumber) return `Mã đơn ${bookingCode} · Phòng ${roomNumber}`;
+  if (roomName) return `Mã đơn ${bookingCode} · ${roomName}`;
+  return `Mã đơn ${bookingCode}`;
+}
+
+function buildBookingLookupUrl(booking, email) {
+  const params = new URLSearchParams();
+  const lookupCode = booking?._id || booking?.id || booking?.booking_code;
+  if (lookupCode) params.set("bookingCode", lookupCode);
+  if (email) params.set("email", email);
+  return `/hotel/bookings${params.toString() ? `?${params.toString()}` : ""}`;
+}
+
+function getBookingSortValue(booking) {
+  const raw =
+    booking?.createdAt ||
+    booking?.created_at ||
+    booking?.updatedAt ||
+    booking?.updated_at ||
+    booking?.expected_checkin ||
+    booking?.checkin ||
+    booking?.date;
+  const timestamp = new Date(raw || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function buildVerifyEmailUrl(user) {
+  const params = new URLSearchParams();
+  const userId = user?._id || user?.userId || user?.id;
+  const email = user?.email;
+  if (userId) params.set("userId", userId);
+  if (email) params.set("email", email);
+  const query = params.toString();
+  return `/verify-email${query ? `?${query}` : ""}`;
+}
+
+function SearchStartBlock({ onSubmit, searchForm, setSearchForm, searchError, loading }) {
+  return (
+    <form onSubmit={onSubmit} className="rounded-[32px] border border-stone-200 bg-white p-5 shadow-sm md:p-6">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-stone-950">Tìm phòng cho chuyến đi</h2>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Ngày nhận phòng
+          <input
+            required
+            type="date"
+            value={searchForm.checkin}
+            onChange={(e) => setSearchForm((prev) => ({ ...prev, checkin: e.target.value }))}
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Ngày trả phòng
+          <input
+            required
+            type="date"
+            value={searchForm.checkout}
+            onChange={(e) => setSearchForm((prev) => ({ ...prev, checkout: e.target.value }))}
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Người lớn
+          <input
+            required
+            type="number"
+            min="1"
+            value={searchForm.adults}
+            onChange={(e) => setSearchForm((prev) => ({ ...prev, adults: e.target.value }))}
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Trẻ em
+          <input
+            required
+            type="number"
+            min="0"
+            value={searchForm.children}
+            onChange={(e) => setSearchForm((prev) => ({ ...prev, children: e.target.value }))}
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Tìm phòng
+          <ArrowRight size={16} />
+        </button>
+      </div>
+
+      {searchError ? (
+        <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{searchError}</p>
+      ) : null}
+    </form>
+  );
+}
+
+function LoadingCard() {
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
+      <div className="h-4 animate-pulse bg-stone-100" />
+      <div className="p-5 md:p-6">
+        <div className="h-4 w-24 animate-pulse rounded bg-stone-100" />
+        <div className="mt-4 h-7 w-2/3 animate-pulse rounded bg-stone-100" />
+        <div className="mt-3 h-4 w-full animate-pulse rounded bg-stone-100" />
+        <div className="mt-2 h-4 w-4/5 animate-pulse rounded bg-stone-100" />
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="h-20 animate-pulse rounded-2xl bg-stone-100" />
+          <div className="h-20 animate-pulse rounded-2xl bg-stone-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VerifyEmailAlert({ user }) {
+  return (
+    <div className="rounded-[28px] border border-amber-200 bg-amber-50/95 px-5 py-4 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+            <Mail size={18} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-stone-950">Xác thực email</h2>
+            <p className="mt-1 text-sm leading-6 text-stone-700">Xác thực email để bảo vệ tài khoản.</p>
+          </div>
+        </div>
+        <Link
+          to={buildVerifyEmailUrl(user)}
+          className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+        >
+          Xác thực ngay
+          <ArrowRight size={16} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function SupportCard() {
+  return (
+    <div className="rounded-[24px] border border-stone-200 bg-white px-5 py-4 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-stone-950 text-amber-300">
+          <MessageCircle size={18} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-stone-950">Cần hỗ trợ?</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Mở chat với đội hỗ trợ nếu bạn cần hỏi về đặt phòng, thanh toán hoặc thay đổi thông tin.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <Link
+          to="/chat"
+          className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-800"
+        >
+          Mở chat
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function BookingDetailPill({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-white px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{label}</p>
+      <p className="mt-2 break-words text-sm font-semibold text-stone-900">{value}</p>
+    </div>
+  );
+}
+
+function BookingCard({ booking, email }) {
+  const statusMeta = getStatusMeta(booking?.status);
+  const total = formatMoney(booking?.estimated_total || booking?.total_price || booking?.total);
+
+  return (
+    <article className="overflow-hidden rounded-[28px] border border-stone-200 bg-stone-50 shadow-sm">
+      <div className="flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
+              {booking?.booking_code || booking?._id || booking?.id || "Mã đơn"}
+            </p>
+            <StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>
+          </div>
+          <h3 className="mt-3 break-words text-xl font-semibold tracking-tight text-stone-950">{getBookingTitle(booking)}</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-stone-600">{getBookingRoomLabel(booking)}</p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <BookingDetailPill label="Nhận phòng" value={formatDate(booking?.expected_checkin || booking?.checkin)} />
+            <BookingDetailPill label="Trả phòng" value={formatDate(booking?.expected_checkout || booking?.checkout)} />
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-start gap-3 md:items-end">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Tổng tiền</p>
+          <p className="text-2xl font-semibold tracking-tight text-stone-950">{total === "--" ? "--" : `${total} VNĐ`}</p>
+          <Link
+            to={buildBookingLookupUrl(booking, email)}
+            className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+          >
+            Xem chi tiết
+            <ChevronRight size={16} />
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function EmptyBookingState() {
+  return (
+    <div className="rounded-[28px] border border-dashed border-stone-300 bg-white/80 px-5 py-6 shadow-sm">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 text-amber-300">
+            <CalendarDays size={20} />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold tracking-tight text-stone-950">Bạn chưa có đặt phòng nào</h3>
+          <p className="mt-2 text-sm leading-6 text-stone-600">Chọn phòng phù hợp để bắt đầu.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to="/hotel/bookings"
+            className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+          >
+            Tra cứu đặt phòng
+          </Link>
+          <Link
+            to="/hotel/rooms"
+            className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+          >
+            Xem phòng
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CustomerAccountPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reloadIndex, setReloadIndex] = useState(0);
+  const [searchForm, setSearchForm] = useState({
+    checkin: "",
+    checkout: "",
+    adults: 2,
+    children: 0,
+  });
+  const [searchError, setSearchError] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const loadAccountData = async () => {
+      setLoading(true);
+      setError("");
+
+      const [profileResult, bookingsResult] = await Promise.allSettled([
+        customerPortalApi.getMyProfile(),
+        customerPortalApi.getMyBookings({ page: 1, limit: 3 }),
+      ]);
+
+      if (cancelled) return;
+
+      setProfile(profileResult.status === "fulfilled" ? profileResult.value : null);
+
+      if (bookingsResult.status === "fulfilled") {
+        const payload = bookingsResult.value;
+        const nextBookings = Array.isArray(payload)
+          ? payload
+          : payload?.bookings || payload?.data?.bookings || payload?.data || [];
+        setBookings(Array.isArray(nextBookings) ? nextBookings : []);
+      } else {
+        setBookings([]);
+      }
+
+      const messages = [];
+      if (profileResult.status === "rejected") messages.push(profileResult.reason?.message || "Không thể tải hồ sơ khách hàng.");
+      if (bookingsResult.status === "rejected") messages.push(bookingsResult.reason?.message || "Không thể tải danh sách đặt phòng.");
+      setError(messages[0] || "");
+      setLoading(false);
+    };
+
+    loadAccountData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, reloadIndex]);
+
+  const displayEmail = profile?.email || user?.email || "";
+  const displayName = useMemo(() => {
+    const rawName =
+      profile?.full_name ||
+      profile?.name ||
+      user?.full_name ||
+      user?.name ||
+      (displayEmail ? displayEmail.split("@")[0] : "");
+    const trimmed = String(rawName || "").trim();
+    return trimmed || "bạn";
+  }, [displayEmail, profile?.full_name, profile?.name, user?.full_name, user?.name]);
+
+  const emailVerified = Boolean(
+    profile?.email_verified ??
+      profile?.is_email_verified ??
+      profile?.verified ??
+      user?.email_verified ??
+      user?.is_email_verified ??
+      user?.verified,
+  );
+
+  const sortedBookings = useMemo(() => {
+    return [...bookings].sort((a, b) => getBookingSortValue(b) - getBookingSortValue(a));
+  }, [bookings]);
+
+  const recentBookings = sortedBookings.slice(0, 3);
+  const heroPrimaryLink = "/hotel/book";
+
+  const handleSearchRooms = (event) => {
+    event.preventDefault();
+    setSearchError("");
+
+    if (!searchForm.checkin || !searchForm.checkout) {
+      setSearchError("Vui lòng chọn ngày nhận phòng và ngày trả phòng.");
+      return;
+    }
+
+    if (new Date(searchForm.checkout) <= new Date(searchForm.checkin)) {
+      setSearchError("Ngày trả phòng phải sau ngày nhận phòng.");
+      return;
+    }
+
+    if (Number(searchForm.adults) < 1) {
+      setSearchError("Số người lớn phải từ 1 trở lên.");
+      return;
+    }
+
+    if (Number(searchForm.children) < 0) {
+      setSearchError("Số trẻ em không được nhỏ hơn 0.");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("checkin", searchForm.checkin);
+    params.set("checkout", searchForm.checkout);
+    params.set("adults", String(searchForm.adults));
+    params.set("children", String(searchForm.children));
+    navigate(`/hotel/rooms?${params.toString()}`);
+  };
+
+  const handleRetry = () => setReloadIndex((value) => value + 1);
 
   if (!user) {
     return (
       <CustomerShell>
-        <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+        <section className="mx-auto max-w-3xl px-4 py-12 md:px-6">
           <SharedAuthForm embedded />
         </section>
       </CustomerShell>
     );
   }
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const [profileData, bookingData] = await Promise.all([
-          customerPortalApi.getMyProfile(),
-          customerPortalApi.getMyBookings({ page: 1, limit: 4 }),
-        ]);
-        setProfile(profileData);
-        setBookings(bookingData?.bookings || []);
-      } catch (e) {
-        setError(e.message || "Không thể tải hồ sơ khách hàng.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
   return (
     <CustomerShell>
-      <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
-        <div className="mb-8 flex flex-wrap items-center gap-3">
-          <StatusBadge tone="warning">Tài khoản SE Hotel</StatusBadge>
-          <StatusBadge tone="info">{profile?.user?.email || user.email}</StatusBadge>
+      <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+        {error ? (
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="leading-6">Không thể tải đầy đủ dữ liệu tài khoản lúc này. Bạn vẫn có thể tiếp tục sử dụng trang.</p>
+            <button type="button" onClick={handleRetry} className="shrink-0 font-semibold text-amber-900 underline decoration-amber-300 underline-offset-4">
+              Tải lại
+            </button>
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-[32px] border border-stone-900 bg-stone-950 text-white shadow-[0_28px_70px_rgba(28,25,23,0.2)]">
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_22%)]" />
+            <div className="relative flex flex-col gap-5 px-6 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+              <div>
+                <h1 className="break-words text-3xl font-semibold tracking-tight md:text-4xl">
+                  Xin chào, {displayName}
+                </h1>
+                <p className="mt-3 text-sm leading-6 text-stone-300">
+                  Bạn muốn bắt đầu chuyến lưu trú tiếp theo?
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Link to={heroPrimaryLink} className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200">
+                    Đặt phòng mới
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <aside className="min-w-0 rounded-[32px] border border-stone-200 bg-stone-950 p-7 text-white shadow-sm">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-300 text-stone-950">
-              <UserRound size={28} />
-            </div>
-            <h1 className="mt-6 break-words text-3xl font-semibold">Xin chào, {profile?.full_name || user.name || "khách hàng SE Hotel"}</h1>
-            <p className="mt-3 text-sm leading-7 text-stone-300">
-              Quản lý thông tin tài khoản, xem lại lịch sử đặt phòng và theo dõi ưu đãi dành riêng cho bạn.
-            </p>
+        {!emailVerified ? (
+          <div className="mt-5">
+            <VerifyEmailAlert user={user} />
+          </div>
+        ) : null}
 
-            <div className="mt-7 grid gap-3 text-sm">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-stone-400">Email</p>
-                <p className="mt-1 break-words font-semibold">{profile?.user?.email || user.email}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-stone-400">Vai trò</p>
-                <p className="mt-1 font-semibold">Khách hàng</p>
-              </div>
-            </div>
-          </aside>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          <SearchStartBlock
+            onSubmit={handleSearchRooms}
+            searchForm={searchForm}
+            setSearchForm={setSearchForm}
+            searchError={searchError}
+            loading={false}
+          />
 
-          <div className="min-w-0 space-y-6">
-            <section className="rounded-[32px] border border-stone-200 bg-white p-7 shadow-sm">
-              <SectionHeader
-                eyebrow="Lịch sử đặt phòng"
-                title="Các đặt phòng gần đây"
-                description="Những đặt phòng bạn thực hiện trên website SE Hotel sẽ được lưu để tra cứu nhanh."
-              />
-              <div className="mt-6 space-y-4">
-                {error ? (
-                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
-                ) : null}
-                {loading ? (
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-sm leading-7 text-stone-600">
-                    Đang tải lịch sử đặt phòng...
+          <div className="grid gap-4">
+            <div className="min-w-0 rounded-[32px] border border-stone-200 bg-white/92 p-5 shadow-[0_18px_44px_rgba(28,25,23,0.08)] md:p-6">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-stone-950">Đặt phòng của tôi</h2>
+                </div>
+                <Link to="/hotel/bookings" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-800 transition hover:text-stone-950">
+                  Xem tất cả
+                  <ChevronRight size={16} />
+                </Link>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {loading && !recentBookings.length ? (
+                  <>
+                    <LoadingCard />
+                    <LoadingCard />
+                  </>
+                ) : error && !recentBookings.length ? (
+                  <div className="rounded-[24px] border border-dashed border-stone-300 bg-stone-50 px-5 py-6 text-sm text-stone-600">
+                    Không thể tải danh sách đặt phòng vào lúc này. Vui lòng thử lại sau ít phút.
                   </div>
-                ) : null}
-                {bookings.length ? (
-                  bookings.slice(0, 4).map((booking) => (
-                    <article key={booking.id || booking.booking_code} className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-400">Mã đặt phòng</p>
-                          <h2 className="mt-2 break-words text-xl font-semibold text-stone-950">{booking.booking_code || booking.id}</h2>
-                        </div>
-                        <StatusBadge tone="warning">{booking.status || "pending"}</StatusBadge>
-                      </div>
-                      <div className="mt-4 grid gap-3 text-sm text-stone-600 sm:grid-cols-3">
-                        <p><span className="font-semibold text-stone-900">Nhận phòng:</span> {booking.expected_checkin || "--"}</p>
-                        <p><span className="font-semibold text-stone-900">Trả phòng:</span> {booking.expected_checkout || "--"}</p>
-                        <p><span className="font-semibold text-stone-900">Tổng tiền:</span> {Number(booking.estimated_total || 0).toLocaleString()} VNĐ</p>
-                      </div>
-                    </article>
+                ) : recentBookings.length ? (
+                  recentBookings.map((booking) => (
+                    <BookingCard key={booking?._id || booking?.id || booking?.booking_code} booking={booking} email={displayEmail} />
                   ))
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-sm leading-7 text-stone-600">
-                    Bạn chưa có đặt phòng nào trên tài khoản.
-                  </div>
+                  <EmptyBookingState />
                 )}
               </div>
-            </section>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <section className="rounded-[32px] border border-stone-200 bg-white p-7 shadow-sm">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
-                  <Gift size={22} />
-                </div>
-                <h2 className="mt-5 text-2xl font-semibold text-stone-950">Ưu đãi dành riêng</h2>
-                <p className="mt-3 text-sm leading-7 text-stone-600">
-                  SE Hotel sẽ hiển thị các ưu đãi phù hợp khi tài khoản của bạn có lịch sử lưu trú.
-                </p>
-              </section>
-
-              <section className="rounded-[32px] border border-stone-200 bg-white p-7 shadow-sm">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-800">
-                  <CalendarCheck size={22} />
-                </div>
-                <h2 className="mt-5 text-2xl font-semibold text-stone-950">Thông tin tài khoản</h2>
-                <p className="mt-3 text-sm leading-7 text-stone-600">
-                  Dùng cùng một tài khoản để đặt phòng, tra cứu booking và nhận hỗ trợ từ đội ngũ SE Hotel.
-                </p>
-              </section>
             </div>
+            <SupportCard />
           </div>
         </div>
       </section>

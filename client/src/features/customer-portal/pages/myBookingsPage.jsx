@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
@@ -14,11 +15,26 @@ function getStatusTone(status) {
 
 export default function MyBookingsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState({ bookingCode: "", email: "", phone: "" });
   const [bookings, setBookings] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const bookingCode = searchParams.get("bookingCode") || "";
+    const email = searchParams.get("email") || "";
+    const phone = searchParams.get("phone") || "";
+
+    if (bookingCode || email || phone) {
+      setQuery((prev) => ({
+        bookingCode: prev.bookingCode || bookingCode,
+        email: prev.email || email,
+        phone: prev.phone || phone,
+      }));
+    }
+  }, [searchParams]);
 
   const handleLookup = async (e) => {
     e.preventDefault();
