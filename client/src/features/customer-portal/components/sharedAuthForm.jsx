@@ -127,6 +127,13 @@ export default function SharedAuthForm({ embedded = false }) {
     setRegisterForm((prev) => ({ ...prev, email: prev.email || queryEmail }));
   }, [searchParams]);
 
+  useEffect(() => {
+    const queryTab = searchParams.get("tab");
+    if (queryTab === "register" || queryTab === "login") {
+      setTab(queryTab);
+    }
+  }, [searchParams]);
+
   const validateRegisterForm = () => {
     const errors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
