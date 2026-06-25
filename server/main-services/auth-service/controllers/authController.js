@@ -35,6 +35,20 @@ export class AuthController {
         }
     };
 
+    sendVerificationEmail = async (req, res) => {
+        try {
+            const { userId, email } = req.body;
+            if (!userId && !email)
+                return res.status(400).json({ message: "Vui lòng cung cấp userId hoặc email." });
+
+            await this.authService.resendVerificationEmail({ userId, email });
+
+            return res.status(200).json({ message: "Gửi email xác thực thành công." });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     login = async (req, res) => {
         try {
             const result = await this.authService.login(req.body.email, req.body.password);

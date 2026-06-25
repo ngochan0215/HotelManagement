@@ -11,6 +11,8 @@ import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import SharedAuthForm from "../components/sharedAuthForm.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
+import { sendVerificationEmail } from "../../auth/api/authApi.js";
+import { StatusBadge } from "../components/sitePrimitives.jsx";
 
 function formatDate(value) {
   if (!value) return "--";
@@ -204,7 +206,10 @@ function LoadingCard() {
   );
 }
 
-function VerifyEmailAlert({ user }) {
+function VerifyEmailAlert({ user, onSendVerification, loading, error }) {
+  const verified = Boolean(user?.emailVerified ?? user?.email_verified ?? user?.is_email_verified ?? user?.verified);
+  if (verified) return null;
+
   return (
     <div className="rounded-[28px] border border-amber-200 bg-amber-50/95 px-5 py-4 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -212,18 +217,35 @@ function VerifyEmailAlert({ user }) {
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
             <Mail size={18} />
           </div>
+
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-stone-950">Xác thực email</h2>
-            <p className="mt-1 text-sm leading-6 text-stone-700">Xác thực email để bảo vệ tài khoản.</p>
+            <h2 className="text-base font-semibold text-stone-950">
+              Xác thực email
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-stone-700">
+              Xác thực email để bảo vệ tài khoản.
+            </p>
           </div>
         </div>
-        <Link
-          to={buildVerifyEmailUrl(user)}
-          className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
-        >
-          Xác thực ngay
-          <ArrowRight size={16} />
-        </Link>
+
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <button
+            type="button"
+            onClick={onSendVerification}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Đang gửi..." : "Xác thực ngay"}
+            <ArrowRight size={16} />
+          </button>
+
+          {error && (
+            <p className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -348,6 +370,8 @@ export default function CustomerAccountPage() {
     children: 0,
   });
   const [searchError, setSearchError] = useState("");
+  const [sendVerificationLoading, setSendVerificationLoading] = useState(false);
+  const [sendVerificationError, setSendVerificationError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -392,6 +416,8 @@ export default function CustomerAccountPage() {
   }, [user, reloadIndex]);
 
   const displayEmail = profile?.email || user?.email || "";
+  const displayUserId = user?._id || user?.userId || user?.id || "";
+
   const displayName = useMemo(() => {
     const rawName =
       profile?.full_name ||
@@ -451,6 +477,25 @@ export default function CustomerAccountPage() {
     navigate(`/hotel/rooms?${params.toString()}`);
   };
 
+  const handleSendVerification = async () => {
+    if (!displayUserId && !displayEmail) {
+      setSendVerificationError("Không có thông tin người dùng để gửi email xác thực.");
+      return;
+    }
+
+    setSendVerificationError("");
+    setSendVerificationLoading(true);
+
+    try {
+      await sendVerificationEmail({ userId: displayUserId, email: displayEmail });
+      navigate(buildVerifyEmailUrl(user));
+    } catch (err) {
+      setSendVerificationError(err?.message || "Không thể gửi email xác thực.");
+    } finally {
+      setSendVerificationLoading(false);
+    }
+  };
+
   const handleRetry = () => setReloadIndex((value) => value + 1);
 
   if (!user) {
@@ -499,7 +544,12 @@ export default function CustomerAccountPage() {
 
         {!emailVerified ? (
           <div className="mt-5">
-            <VerifyEmailAlert user={user} />
+            <VerifyEmailAlert
+              user={user}
+              onSendVerification={handleSendVerification}
+              loading={sendVerificationLoading}
+              error={sendVerificationError}
+            />
           </div>
         ) : null}
 

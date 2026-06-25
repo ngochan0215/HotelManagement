@@ -50,6 +50,43 @@ export class AuthService {
         }
     }
 
+    async resendVerificationEmail({ userId, email }) {
+        try {
+            if (!userId && !email)
+                throw new Error("Vui lòng cung cấp userId hoặc email.");
+
+            const user = userId
+                ? await this.User.findById(userId)
+                : await this.User.findOne({ email });
+
+            if (!user)
+                throw new Error("Không tìm thấy người dùng.");
+
+            if (user.email !== email) {
+                throw new Error("Email không khớp với tài khoản người dùng.");
+            }
+
+            if (user.emailVerified)
+                return { success: true, message: "Email đã được xác thực." };
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            user.verifyEmailOtp = otp;
+            user.verifyEmailOtpExpires = Date.now() + 5 * 60 * 1000;
+
+            await user.save();
+            await this.mailService.sendVerificationEmail(email, otp);
+
+            return { success: true, message: "OTP xác thực đã được gửi." };
+
+        } catch (error) {
+            const message = error.response?.data?.message || error.message;
+            const status = error.response?.status || error.status;
+            const err = new Error(message);
+            err.status = status;
+            throw err;
+        }
+    }
+
     // for employee and customer signing up
     async register (data) {
         const { email, password, date_birth, full_name, phone_number, nationality,
@@ -194,6 +231,7 @@ export class AuthService {
                     name: fullName,
                     position: payload.position,
                     email: user.email,
+                    emailVerified: user.emailVerified,
                     role: user.system_role,
                     avatar: user.avatar
                 }

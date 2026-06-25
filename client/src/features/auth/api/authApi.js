@@ -89,3 +89,18 @@ export const verifyEmail = async (data) => {
     throw new Error(message);
   }
 };
+
+export const sendVerificationEmail = async (data) => {
+  try {
+    const response = await axios.post(`${API_URL}/send-verification-email`, data, { timeout: 15000 });
+    return response.data;
+  } catch (error) {
+    const serverData = error?.response?.data;
+    const message =
+      (typeof serverData === "object" && serverData?.message) ||
+      (typeof serverData === "string" && serverData) ||
+      error?.message ||
+      "Không thể gửi email xác thực.";
+    throw new Error(message);
+  }
+};

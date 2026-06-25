@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CircleAlert, KeyRound, Mail, ShieldCheck } from "lucide-react";
-import { verifyEmail } from "../api/authApi.js";
+import { verifyEmail, sendVerificationEmail } from "../api/authApi.js";
 
 const VERIFICATION_STORAGE_KEY = "pending-email-verification";
 
@@ -29,6 +29,9 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [verificationInfo, setVerificationInfo] = useState({ userId: "", email: "" });
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendError, setResendError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     const pending = readPendingVerification();
@@ -38,6 +41,39 @@ export default function VerifyEmailPage() {
     setVerificationInfo({ userId, email });
     setMessage(email ? `Mã OTP đã được gửi tới ${email}.` : "Vui lòng nhập mã OTP được gửi đến email của bạn.");
   }, [searchParams]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((value) => Math.max(0, value - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleResend = async () => {
+    if (resendLoading || resendCooldown > 0) return;
+    if (!verificationInfo.userId && !verificationInfo.email) {
+      setResendError("Không có thông tin người dùng để gửi lại email xác thực.");
+      return;
+    }
+
+    setResendLoading(true);
+    setResendError("");
+    setMessage("");
+
+    try {
+      await sendVerificationEmail({ userId: verificationInfo.userId, email: verificationInfo.email });
+      setMessage(`OTP xác thực mới đã được gửi tới ${verificationInfo.email || "email của bạn"}.`);
+      setResendCooldown(60);
+      setSuccess(false);
+    } catch (err) {
+      setResendError(err?.message || "Không thể gửi lại email xác thực.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -155,8 +191,23 @@ export default function VerifyEmailPage() {
               </div>
             ) : null}
 
-            <div className="mt-6 rounded-2xl border border-dashed border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
-              Hiện giao diện chưa có chức năng gửi lại OTP vì backend chưa mở endpoint resend.
+            <div className="mt-6 flex flex-col gap-3 rounded-[28px] border border-dashed border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
+              <p>
+                Nếu không nhận được mã OTP, bạn có thể gửi lại email xác thực.
+              </p>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendLoading || resendCooldown > 0}
+                className="inline-flex items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {resendLoading
+                  ? "Đang gửi lại..."
+                  : resendCooldown > 0
+                  ? `Gửi lại sau ${resendCooldown}s`
+                  : "Gửi lại OTP"}
+              </button>
+              {resendError ? <p className="text-sm text-red-700">{resendError}</p> : null}
             </div>
           </div>
         </div>
