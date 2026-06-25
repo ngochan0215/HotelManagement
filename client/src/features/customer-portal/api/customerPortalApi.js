@@ -172,6 +172,19 @@ export const customerPortalApi = {
     }
   },
 
+  async cancelCustomerBooking(bookingId, reason) {
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/bookings/customer/cancel/${bookingId}`,
+        { reason },
+        getAuthConfig(),
+      );
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể hủy đặt phòng lúc này.");
+    }
+  },
+
   async lookupBookings({ bookingCode, email, phone }) {
     try {
       const response = await axios.get(`${API_BASE_URL}/bookings/my`, {

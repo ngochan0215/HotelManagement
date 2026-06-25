@@ -16,6 +16,18 @@ import { EmptyState } from "../components/sitePrimitives.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import "./myBookingsPage.css";
 
+const CANCELLATION_REASON_OPTIONS = [
+  { value: "change_plan", label: "Thay đổi lịch trình" },
+  { value: "price_issue", label: "Giá không phù hợp" },
+  { value: "find_better_option", label: "Tìm được lựa chọn tốt hơn" },
+  { value: "personal_reason", label: "Lý do cá nhân" },
+  { value: "no_show", label: "Không đến" },
+  { value: "overbooking", label: "Hết phòng" },
+  { value: "force_majeure", label: "Bất khả kháng" },
+  { value: "early_checkout", label: "Trả phòng sớm" },
+  { value: "other", label: "Khác" },
+];
+
 function formatDate(value) {
   if (!value) return "--";
   const date = new Date(value);
@@ -239,6 +251,42 @@ function getPrimaryAction(booking) {
   if (status === "pending") return { label: "Thanh toán cọc", type: "pay" };
   if (status === "cancelled" || status === "expired") return { label: "Đặt phòng mới", type: "rooms" };
   return { label: "Xem chi tiết", type: "detail" };
+}
+
+function getBookingCancelId(booking) {
+  return booking?._id || booking?.id || "";
+}
+
+function canCancelBooking(booking) {
+  const status = normalizeStatus(booking?.status);
+  const allowedStatuses = new Set(["pending", "confirmed", "approved"]);
+  if (!allowedStatuses.has(status)) return false;
+
+  const bookingId = getBookingCancelId(booking);
+  if (!bookingId) return false;
+
+  const checkin = booking?.expected_checkin ? new Date(booking.expected_checkin) : null;
+  if (checkin && !Number.isNaN(checkin.getTime())) {
+    const now = new Date();
+    if (now >= checkin) return false;
+  }
+
+  return true;
+}
+
+function getCancelDisabledReason(booking) {
+  const status = normalizeStatus(booking?.status);
+  if (!getBookingCancelId(booking)) return "Không tìm thấy mã booking để hủy.";
+  if (["cancelled", "canceled", "completed", "checked_in", "checked-out", "checked_out", "failed", "expired"].includes(status)) {
+    return "Đặt phòng này không thể hủy.";
+  }
+
+  const checkin = booking?.expected_checkin ? new Date(booking.expected_checkin) : null;
+  if (checkin && !Number.isNaN(checkin.getTime()) && new Date() >= checkin) {
+    return "Đặt phòng này đã qua thời gian có thể hủy.";
+  }
+
+  return "";
 }
 
 function matchesSearchTerm(booking, term) {
@@ -570,8 +618,10 @@ function BookingDetailPanel({
   onClose,
   onPay,
   onRetry,
+  onRequestCancel,
   allowPay = true,
   showCloseButton = true,
+  showCancelButton = true,
   sectionLabel = "Chi tiết đặt phòng",
 }) {
   const resolvedBooking = detail?.booking || booking;
@@ -586,6 +636,8 @@ function BookingDetailPanel({
   const canPay = allowPay && normalizeStatus(resolvedBooking?.status) === "pending";
   const bookingTitle = getBookingTitle(resolvedBooking, detail);
   const roomSummary = rooms.length ? getRoomSummary(resolvedBooking, detail) : "Chưa có thông tin phòng.";
+  const canCancel = showCancelButton && canCancelBooking(resolvedBooking);
+  const cancelDisabledReason = getCancelDisabledReason(resolvedBooking);
 
   const handleCopy = async () => {
     const code = String(getBookingCode(resolvedBooking));
@@ -757,6 +809,17 @@ function BookingDetailPanel({
             </button>
           ) : null}
 
+          {canCancel ? (
+            <button
+              type="button"
+              onClick={() => onRequestCancel?.(resolvedBooking)}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50"
+              title={cancelDisabledReason || "Hủy đặt phòng"}
+            >
+              Hủy đặt phòng
+            </button>
+          ) : null}
+
           <Link
             to="/hotel/rooms"
             onClick={onClose}
@@ -793,6 +856,64 @@ function MobileDetailSheet({ open, onClose, children }) {
       <div className="absolute inset-x-0 bottom-0 flex justify-center p-0 md:inset-0 md:items-center md:p-6">
         <div className="booking-detail-sheet max-h-[90vh] w-full overflow-hidden rounded-t-[32px] border border-stone-200 bg-white shadow-[0_-18px_50px_rgba(28,25,23,0.14)] md:max-w-4xl md:rounded-[32px] md:shadow-[0_28px_80px_rgba(28,25,23,0.22)]">
           <div className="max-h-[90vh] overflow-y-auto">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CancelBookingConfirmModal({ open, booking, reason, loading, error, onCancel, onConfirm, onReasonChange }) {
+  if (!open || !booking) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-950/45 px-4 py-6 backdrop-blur-[2px]">
+      <div className="w-full max-w-md rounded-[28px] border border-stone-200 bg-white p-5 shadow-[0_28px_80px_rgba(28,25,23,0.22)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">Xác nhận hủy</p>
+        <h3 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">
+          Bạn chắc chắn muốn hủy đặt phòng này?
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          {getBookingTitle(booking)} · Mã {getBookingCode(booking)}
+        </p>
+
+        <label className="mt-4 grid gap-2 text-sm font-medium text-stone-700">
+          Lý do hủy
+          <select
+            value={reason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          >
+            <option value="">Chọn lý do</option>
+            {CANCELLATION_REASON_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {error ? (
+          <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        ) : null}
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="inline-flex flex-1 items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Không
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading || !reason}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+            Xác nhận hủy
+          </button>
         </div>
       </div>
     </div>
@@ -902,6 +1023,10 @@ export default function MyBookingsPage() {
   const [drawerError, setDrawerError] = useState("");
   const [paymentBusyId, setPaymentBusyId] = useState("");
   const [paymentError, setPaymentError] = useState("");
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const [reloadIndex, setReloadIndex] = useState(0);
   const [detailReloadIndex, setDetailReloadIndex] = useState(0);
   const [queryHint, setQueryHint] = useState("");
@@ -1083,6 +1208,57 @@ export default function MyBookingsPage() {
     setPaymentDetail(null);
     setDrawerError("");
     setPaymentError("");
+    setCancelTarget(null);
+    setCancelReason("");
+    setCancelError("");
+  };
+
+  const requestCancelBooking = (booking) => {
+    if (!booking || !canCancelBooking(booking)) return;
+    setCancelTarget(booking);
+    setCancelReason("");
+    setCancelError("");
+  };
+
+  const closeCancelDialog = () => {
+    if (cancelSubmitting) return;
+    setCancelTarget(null);
+    setCancelReason("");
+    setCancelError("");
+  };
+
+  const confirmCancelBooking = async () => {
+    const bookingId = getBookingCancelId(cancelTarget);
+    if (!bookingId) {
+      setCancelError("Không tìm thấy mã booking để hủy.");
+      return;
+    }
+
+    if (!cancelReason) {
+      setCancelError("Vui lòng chọn lý do hủy.");
+      return;
+    }
+
+    setCancelSubmitting(true);
+    setCancelError("");
+    try {
+      await customerPortalApi.cancelCustomerBooking(bookingId, cancelReason);
+      setDrawerError("");
+      setPaymentError("");
+      setSelectedBooking((prev) => (getBookingCancelId(prev) === bookingId ? { ...prev, status: "cancelled" } : prev));
+      setBookingDetail((prev) => (prev && getBookingCancelId(prev.booking || prev) === bookingId
+        ? { ...prev, booking: { ...(prev.booking || {}), status: "cancelled" } }
+        : prev));
+      setBookings((prev) => prev.map((item) => (getBookingCancelId(item) === bookingId ? { ...item, status: "cancelled" } : item)));
+      setCancelTarget(null);
+      setCancelReason("");
+      setReloadIndex((value) => value + 1);
+      setDetailReloadIndex((value) => value + 1);
+    } catch (err) {
+      setCancelError(err.message || "Không thể hủy đặt phòng.");
+    } finally {
+      setCancelSubmitting(false);
+    }
   };
 
   const handlePayDeposit = async (booking) => {
@@ -1201,21 +1377,23 @@ export default function MyBookingsPage() {
             />
 
             {guestLookupResult ? (
-              <BookingDetailPanel
-                booking={guestLookupResult.booking}
-                detail={guestLookupResult}
-                paymentDetail={null}
-                loading={false}
-                error=""
-                paymentBusy={false}
-                paymentError=""
-                onClose={() => {}}
-                onPay={() => {}}
-                onRetry={() => {}}
-                allowPay={false}
-                showCloseButton={false}
-                sectionLabel="Kết quả tra cứu"
-              />
+            <BookingDetailPanel
+              booking={guestLookupResult.booking}
+              detail={guestLookupResult}
+              paymentDetail={null}
+              loading={false}
+              error=""
+              paymentBusy={false}
+              paymentError=""
+              onClose={() => {}}
+              onPay={() => {}}
+              onRetry={() => {}}
+              onRequestCancel={() => {}}
+              allowPay={false}
+              showCloseButton={false}
+              showCancelButton={false}
+              sectionLabel="Kết quả tra cứu"
+            />
             ) : (
               <EmptyState
                 title="Chưa có kết quả tra cứu"
@@ -1342,9 +1520,20 @@ export default function MyBookingsPage() {
             onClose={closeBooking}
             onPay={handlePayDeposit}
             onRetry={() => setDetailReloadIndex((value) => value + 1)}
+            onRequestCancel={requestCancelBooking}
           />
         ) : null}
       </MobileDetailSheet>
+      <CancelBookingConfirmModal
+        open={Boolean(cancelTarget)}
+        booking={cancelTarget}
+        reason={cancelReason}
+        loading={cancelSubmitting}
+        error={cancelError}
+        onCancel={closeCancelDialog}
+        onConfirm={confirmCancelBooking}
+        onReasonChange={setCancelReason}
+      />
     </CustomerShell>
   );
 }

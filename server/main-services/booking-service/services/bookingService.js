@@ -2252,6 +2252,7 @@ export class BookingService {
 
             const now = new Date();
             const shortenId = bookingId.toString().slice(-6);
+            const previousStatus = booking.status;
 
             booking.status = "cancelled";
             await booking.save();
@@ -2313,7 +2314,7 @@ export class BookingService {
                     user_id: userId,
                     cancelled_by: "customer",
                     reason,
-                    booking_status: booking.status,
+                    booking_status: previousStatus,
                 });
             }
 
