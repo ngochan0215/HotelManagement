@@ -5,6 +5,7 @@ import { verifyToken, isManager } from "../../../shared/middleware/authMiddlewar
 const router = express.Router();
 const controller = new ReviewController();
 
+router.get("/public", controller.getPublicReviews);
 router.get("/my", verifyToken, controller.getMyReviews);
 router.get("/statistics", verifyToken, isManager, controller.getReviewStatistics);
 router.get("/", verifyToken, isManager, controller.getAllReviews);

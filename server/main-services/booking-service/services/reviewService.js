@@ -1,5 +1,6 @@
 ﻿import mongoose from "mongoose";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
+import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
 
 const EDIT_LIMIT_HOURS = 48;
@@ -209,7 +210,7 @@ export class ReviewService {
             const reviews = await this.Review.find({
                 customer_id: customerId,
                 is_visible: true
-            }).sort({ created_at: -1 });
+            }).sort({ created_at: -1 }).lean();
 
             const result = { total: reviews.length, data: reviews };
             await cache.set(cacheKey, result, 300);
@@ -221,18 +222,105 @@ export class ReviewService {
         }
     };
 
+    async populateCustomerInfo(reviews = []) {
+        if (!Array.isArray(reviews) || reviews.length === 0) {
+            return reviews;
+        }
+
+        const customerIds = [...new Set(reviews
+            .map((review) => review.customer_id?.toString())
+            .filter(Boolean)
+        )];
+
+        if (customerIds.length === 0) {
+            return reviews;
+        }
+
+        const reply = await this.eventBus.safeRequest(
+            CUSTOMER_EVENTS.GET_INFOS_IDS,
+            { customerIds }
+        );
+
+        const customerMap = {};
+        if (reply?.success && Array.isArray(reply.customers)) {
+            for (const customer of reply.customers) {
+                const key = customer._id?.toString();
+                if (!key) continue;
+                customerMap[key] = {
+                    full_name: customer.full_name,
+                    CCCD: customer.CCCD,
+                    phone_number: customer.phone_number,
+                    email: customer.email,
+                    address: customer.address,
+                    avatar_url: customer.avatar_url,
+                    ...customer,
+                };
+            }
+        }
+
+        return reviews.map((review) => ({
+            ...review,
+            customer_info: customerMap[review.customer_id?.toString()] || null,
+        }));
+    }
+
+    async populateCustomerInfoForReview(review) {
+        if (!review) return review;
+
+        const [result] = await this.populateCustomerInfo([review]);
+        return result || review;
+    }
+
+    async getVisibleReviews (query = {}) {
+        try {
+            const { page = 1, limit = 3, search } = query;
+            const filter = { is_visible: true };
+
+            if (search) {
+                const regex = { $regex: search, $options: "i" };
+                filter.$or = [
+                    { general_comment: regex },
+                    { "category_reviews.comment": regex },
+                ];
+            }
+
+            const skip = (Number(page) - 1) * Number(limit);
+            const reviews = await this.Review.find(filter)
+                .sort({ created_at: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .lean();
+
+            const total = await this.Review.countDocuments(filter);
+            const reviewsWithCustomerInfo = await this.populateCustomerInfo(reviews);
+
+            return {
+                reviews: reviewsWithCustomerInfo,
+                pagination: {
+                    page: Number(page),
+                    limit: Number(limit),
+                    total,
+                    totalPages: Math.ceil(total / Number(limit)),
+                },
+            };
+        } catch (error) {
+            console.log("Error in getting visible reviews: ", error);
+            throw error;
+        }
+    };
+
     async getReviewByBooking (bookingId, customerId) {
         try {
             const review = await this.Review.findOne({ 
                 booking_id: bookingId, 
                 customer_id: customerId,
                 is_visible: true
-            }).select("-__v -created_at -updated_at");
+            }).select("-__v -created_at -updated_at").lean();
 
             if (!review) return { can_review: true, review: null };
 
-            console.log("Found review for booking:", review);
-            return { can_review: false, review };
+            const reviewWithCustomerInfo = await this.populateCustomerInfoForReview(review);
+            return { can_review: false, review: reviewWithCustomerInfo };
 
         } catch (error) {
             console.log("Error in getting reviews by order: ", error);
@@ -503,11 +591,12 @@ export class ReviewService {
             const cached = await cache.get(cacheKey);
             if (cached) return cached;
 
-            const review = await this.Review.findById(reviewId);
+            const review = await this.Review.findById(reviewId).lean();
             if (!review) throw new Error("Không tìm thấy đánh giá.");
 
-            await cache.set(cacheKey, review, 300);
-            return review;
+            const reviewWithCustomerInfo = await this.populateCustomerInfoForReview(review);
+            await cache.set(cacheKey, reviewWithCustomerInfo, 300);
+            return reviewWithCustomerInfo;
 
         } catch (error) {
             console.log("Error in getting review by ID:", error);

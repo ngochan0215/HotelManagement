@@ -5,12 +5,13 @@ const BASE_URL = `${API_BASE_URL}/services`;
 
 const getAuthHeader = (isMultipart = false) => {
   const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": isMultipart ? "multipart/form-data" : "application/json",
-    },
+  const headers = {
+    "Content-Type": isMultipart ? "multipart/form-data" : "application/json",
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return { headers };
 };
 
 export const serviceApi = {

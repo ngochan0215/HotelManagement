@@ -4,6 +4,8 @@ import { ArrowRight, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import CustomerShell from "../components/customerShell.jsx";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
+import { serviceApi } from "../../api/serviceApi.js";
+import { reviewApi } from "../../api/reviewApi.js";
 import {
   AmenityPill,
   HotelImage,
@@ -13,7 +15,7 @@ import {
   StatusBadge,
 } from "../components/sitePrimitives.jsx";
 
-const services = [
+const fallbackServices = [
   {
     title: "Đưa đón sân bay",
     desc: "Đặt thêm để chuyến đi thuận tiện hơn.",
@@ -40,11 +42,23 @@ const amenities = [
   { title: "Không gian thư giãn", image: HOTEL_IMAGE_SETS.amenities[2] },
 ];
 
-const testimonials = [
-  { name: "Ngọc Anh", role: "Khách du lịch", content: "Không gian yên tĩnh, đặt phòng nhanh và đội ngũ hỗ trợ rất chu đáo." },
-  { name: "Minh Quân", role: "Khách công tác", content: "Vị trí thuận tiện, phòng sạch đẹp và thông tin giá rất dễ theo dõi." },
-  { name: "Thảo Vy", role: "Khách nghỉ dưỡng", content: "Dịch vụ chỉn chu, tiện nghi đầy đủ và trải nghiệm lưu trú đáng nhớ." },
+const fallbackTestimonials = [
+  { name: "Ngọc Anh", role: "Khách du lịch", content: "Không gian yên tĩnh, đặt phòng nhanh và đội ngũ hỗ trợ rất chu đáo.", rating: 5 },
+  { name: "Minh Quân", role: "Khách công tác", content: "Vị trí thuận tiện, phòng sạch đẹp và thông tin giá rất dễ theo dõi.", rating: 5 },
+  { name: "Thảo Vy", role: "Khách nghỉ dưỡng", content: "Dịch vụ chỉn chu, tiện nghi đầy đủ và trải nghiệm lưu trú đáng nhớ.", rating: 5 },
 ];
+
+const getServiceIcon = (type) => {
+  switch (type) {
+    case "experience":
+      return Star;
+    case "rental":
+      return MapPin;
+    case "product":
+    default:
+      return Sparkles;
+  }
+};
 
 function deriveAmenities(room) {
   return (room.default_equipments || [])
@@ -67,7 +81,13 @@ export default function LandingPage() {
     children: 0,
     roomType: "",
   });
-  const slidingServices = [...services, ...services];
+  const [landingServices, setLandingServices] = useState(fallbackServices);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState("");
+  const [landingTestimonials, setLandingTestimonials] = useState(fallbackTestimonials);
+  const [testimonialsLoading, setTestimonialsLoading] = useState(true);
+  const [testimonialsError, setTestimonialsError] = useState("");
+  const slidingServices = [...landingServices, ...landingServices];
   const slidingAmenities = [...amenities, ...amenities];
 
   const loadRooms = async () => {
@@ -86,8 +106,61 @@ export default function LandingPage() {
     }
   };
 
+  const loadServices = async () => {
+    setServicesLoading(true);
+    setServicesError("");
+    try {
+      const response = await serviceApi.getAllServices({ status: "active", service_type: "experience,rental" });
+      const fetchedServices = response?.services || response?.data || [];
+
+      if (Array.isArray(fetchedServices) && fetchedServices.length > 0) {
+        setLandingServices(
+          fetchedServices.map((service, index) => ({
+            title: service.name || `Dịch vụ ${index + 1}`,
+            desc: service.description || "Dịch vụ tiện ích giúp kỳ nghỉ thêm trọn vẹn.",
+            image: service.images?.[0] || HOTEL_IMAGE_SETS.services[index % HOTEL_IMAGE_SETS.services.length],
+            icon: getServiceIcon(service.service_type),
+          })),
+        );
+      } else {
+        setLandingServices(fallbackServices);
+      }
+    } catch (error) {
+      setLandingServices(fallbackServices);
+      setServicesError(error.message || "Không thể tải dịch vụ.");
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  const loadTestimonials = async () => {
+    setTestimonialsLoading(true);
+    setTestimonialsError("");
+    try {
+      const response = await reviewApi.getPublicReviews({ limit: 3 });
+      const reviews = response?.reviews || response?.data || [];
+
+      if (Array.isArray(reviews) && reviews.length > 0) {
+        setLandingTestimonials(
+          reviews.map((review, index) => ({
+            name: review.customer_info?.full_name || `Khách hàng ${index + 1}`,
+            role: "Khách hàng",
+            content: review.general_comment || "Trải nghiệm dịch vụ rất tốt.",
+            rating: review.general_rating || 5,
+          })),
+        );
+      }
+    } catch (error) {
+      setTestimonialsError(error.message || "Không thể tải đánh giá khách hàng.");
+    } finally {
+      setTestimonialsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadRooms();
+    loadServices();
+    loadTestimonials();
   }, []);
 
   const handleSearch = (e) => {
@@ -354,10 +427,10 @@ export default function LandingPage() {
               <p className="mt-3 text-sm leading-7 text-stone-300 md:text-base">SE Hotel giữ trải nghiệm đặt phòng rõ ràng, thân thiện và nhất quán từ lúc chọn phòng đến khi nhận phòng.</p>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {testimonials.map((item) => (
-                <article key={item.name} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+              {landingTestimonials.map((item) => (
+                <article key={`${item.name}-${item.content}`} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
                   <div className="flex text-amber-300">
-                    {Array.from({ length: 5 }).map((_, idx) => <Star key={idx} size={14} fill="currentColor" />)}
+                    {Array.from({ length: item.rating || 5 }).map((_, idx) => <Star key={idx} size={14} fill="currentColor" />)}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-stone-200">{item.content}</p>
                   <p className="mt-3 text-sm font-semibold">{item.name}</p>

@@ -95,6 +95,14 @@ app.use(
 );
 
 app.use(
+  "/reviews",
+  createProxyMiddleware({
+    target: "http://booking-service:3009",
+    changeOrigin: true
+  })
+);
+
+app.use(
   "/payments",
   createProxyMiddleware({
     target: "http://payment-service:3010",

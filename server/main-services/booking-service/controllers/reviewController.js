@@ -89,6 +89,20 @@ export class ReviewController {
         }
     };
 
+    getPublicReviews = async (req, res) => {
+        try {
+            const { reviews, pagination } = await this.reviewService.getVisibleReviews(req.query);
+
+            return res.status(200).json({
+                success: true,
+                reviews,
+                pagination,
+            });
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     getReviewStatistics = async (req, res) => {
         try {
             const { total, visible, hidden, averageRating, ratingDistribution, 
