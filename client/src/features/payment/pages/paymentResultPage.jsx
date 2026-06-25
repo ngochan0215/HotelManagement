@@ -147,25 +147,28 @@ export default function PaymentResultPage() {
     const bookingId = booking?._id || receipt?.booking_id || transaction?.booking_id || "";
     const bookingCode = transaction?.booking_code || orderCode || "";
     const bookingStatus = String(booking?.status || "").toLowerCase();
+    const isCancelState = Boolean(result?.isCancel);
     const canRetryPayment = !result?.success && (bookingStatus === "pending" || !bookingStatus) && Boolean(bookingId);
     const retryAmount = Number(receipt?.deposit_amount || transaction?.amount || 0);
     const statusLabel = result?.success
       ? "Đã thanh toán cọc"
-      : bookingStatus === "cancelled" || bookingStatus === "expired"
-        ? "Đặt phòng đã hết hạn"
+      : isCancelState
+        ? "Đã hủy thanh toán"
         : "Đang chờ thanh toán";
     const header = result?.success
       ? {
           title: "Thanh toán cọc thành công",
           description: "Tiền cọc đã được xác nhận. Đơn đặt phòng của bạn đã được giữ chỗ.",
         }
-      : {
-          title: "Thanh toán đã hủy",
-          description:
-            bookingStatus === "cancelled" || bookingStatus === "expired"
-              ? "Đơn đặt phòng đã hết hạn. Bạn có thể đặt phòng lại."
-              : "Đặt phòng của bạn vẫn đang chờ thanh toán cọc.",
-        };
+      : isCancelState
+        ? {
+            title: "Bạn đã hủy thanh toán cọc",
+            description: "Đơn đặt phòng chưa được xác nhận. Bạn có thể thanh toán lại nếu vẫn muốn giữ chỗ.",
+          }
+        : {
+            title: "Thanh toán chưa hoàn tất",
+            description: "Giao dịch chưa được ghi nhận. Vui lòng thử lại hoặc quay lại đơn đặt phòng.",
+          };
 
     const handleRetryPayment = async () => {
       const paymentUserId = user?._id || user?.userId || user?.id;
@@ -291,15 +294,14 @@ export default function PaymentResultPage() {
                 </div>
               </div>
 
-              {result?.data?.receipt ? (
-                <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 text-sm leading-7 text-stone-600">
-                  Hóa đơn đã được tạo và sẽ tự đồng bộ với trạng thái đặt phòng sau khi thanh toán.
-                </div>
-              ) : null}
-
               <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
-                <p className="font-medium text-stone-800">Đặt phòng</p>
-                <p className="mt-1">{bookingStatus === "cancelled" || bookingStatus === "expired" ? "Đơn đặt phòng đã hết hạn." : "Đơn đặt phòng đang chờ thanh toán cọc."}</p>
+                {result?.success ? (
+                  <p>Bạn có thể xem chi tiết đơn trong mục Đặt phòng của tôi.</p>
+                ) : isCancelState ? (
+                  <p>Đơn đặt phòng chưa được xác nhận. Bạn có thể thanh toán lại nếu vẫn muốn giữ chỗ.</p>
+                ) : (
+                  <p>Giao dịch chưa được ghi nhận. Vui lòng thử lại hoặc quay lại đơn đặt phòng.</p>
+                )}
               </div>
 
               {retryError ? (
@@ -315,6 +317,23 @@ export default function PaymentResultPage() {
                       className="inline-flex items-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800"
                     >
                       Xem đặt phòng của tôi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate("/hotel/rooms")}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-4 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+                    >
+                      Xem phòng
+                    </button>
+                  </>
+                ) : isCancelState ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(bookingId ? `/hotel/bookings?bookingCode=${encodeURIComponent(bookingId)}` : "/hotel/bookings")}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-stone-800"
+                    >
+                      Quay lại đơn đặt phòng
                     </button>
                     <button
                       type="button"
@@ -342,13 +361,15 @@ export default function PaymentResultPage() {
                     Đặt phòng lại
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => navigate(bookingId ? `/hotel/bookings?bookingCode=${encodeURIComponent(bookingId)}` : "/hotel/bookings")}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-4 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
-                >
-                  Xem đặt phòng của tôi
-                </button>
+                {result?.success ? null : !isCancelState ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(bookingId ? `/hotel/bookings?bookingCode=${encodeURIComponent(bookingId)}` : "/hotel/bookings")}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-4 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+                  >
+                    Xem đặt phòng của tôi
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
