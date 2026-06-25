@@ -104,3 +104,41 @@ export const sendVerificationEmail = async (data) => {
     throw new Error(message);
   }
 };
+
+export const registerEmployee = async (data) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/register`,
+      {
+        ...data,
+        system_role: "employee",
+      },
+      { timeout: 15000 }
+    );
+    return response.data;
+  } catch (error) {
+    const errorName = String(error?.name || "");
+    const errorCode = String(error?.code || "");
+    const errorMessage = String(error?.message || "");
+    const isCanceledOrTimeout =
+      errorCode === "ERR_CANCELED" ||
+      errorCode === "ECONNABORTED" ||
+      errorName === "CanceledError" ||
+      errorName === "AbortError" ||
+      errorMessage.toLowerCase().includes("timeout");
+
+    if (isCanceledOrTimeout) {
+      const timeoutError = new Error("Tạo nhân viên mất quá nhiều thời gian. Vui lòng thử lại.");
+      timeoutError.isTimeout = true;
+      throw timeoutError;
+    }
+
+    const serverData = error?.response?.data;
+    const message =
+      (typeof serverData === "object" && serverData?.message) ||
+      (typeof serverData === "string" && serverData) ||
+      error?.message ||
+      "Tạo nhân viên thất bại.";
+    throw new Error(message);
+  }
+};
