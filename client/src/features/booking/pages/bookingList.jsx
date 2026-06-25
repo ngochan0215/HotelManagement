@@ -930,20 +930,7 @@ export default function BookingList() {
     }
   };
 
-  const actionCheckIn = (did, bid, rNum, expectedCheckin) => {
-      const now = new Date();
-      const checkinTime = new Date(expectedCheckin);
-      const twoHoursBefore = new Date(checkinTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-in
-      
-      // Kiểm tra nếu chưa đến 2h trước giờ check-in
-      if (now < twoHoursBefore) {
-          const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60));
-          const hours = Math.floor(remainingTime / 60);
-          const minutes = remainingTime % 60;
-          setToast({ type: "error", message: `Chưa đến thời gian check-in! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-in.` });
-          return;
-      }
-      
+  const actionCheckIn = (did, bid, rNum) => {
       setConfirmState({
           open: true, 
           title: `Check-in Phòng ${rNum}`, 
@@ -974,20 +961,7 @@ export default function BookingList() {
     return role === "manager";
   }, [user]);
 
-  const actionCheckOut = (did, bid, rNum, expectedCheckout) => {
-    const now = new Date();
-    const checkoutTime = new Date(expectedCheckout);
-    const twoHoursBefore = new Date(checkoutTime.getTime() - 2 * 60 * 60 * 1000); // 2 giờ trước check-out
-    
-    // Kiểm tra nếu chưa đến 2h trước giờ check-out
-    if (now < twoHoursBefore) {
-        const remainingTime = Math.ceil((twoHoursBefore.getTime() - now.getTime()) / (1000 * 60));
-        const hours = Math.floor(remainingTime / 60);
-        const minutes = remainingTime % 60;
-        setToast({ type: "error", message: `Chưa đến thời gian check-out! Còn ${hours} giờ ${minutes} phút nữa mới có thể check-out.` });
-        return;
-    }
-
+  const actionCheckOut = (did, bid, rNum) => {
     setConfirmState({
       open: true, title: `Check-out Phòng ${rNum}`, message: `Xác nhận khách trả phòng ${rNum} ?`, confirmText: "Trả phòng", type: "warning",
       onConfirm: async () => {
@@ -1232,7 +1206,7 @@ export default function BookingList() {
                                         return (
                                             <button 
                                                 key={i} 
-                                                onClick={()=>actionCheckIn(r._id, b._id, r.room_info?.room_number, b.expected_checkin)}
+                                                onClick={()=>actionCheckIn(r._id, b._id, r.room_info?.room_number)}
                                                 className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded hover:bg-emerald-100 transition"
                                             >
                                                 <FiLogIn/> Check-in
@@ -1241,7 +1215,7 @@ export default function BookingList() {
                                     }
                                     if(r.status === 'checked_in')
                                         return (
-                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_info?.room_number, b.expected_checkout)}
+                                            <button key={i} onClick={()=>actionCheckOut(r._id,b._id,r.room_info?.room_number)}
                                                 className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded hover:bg-orange-100 transition">
                                                 <FiLogOut/> Check-out
                                             </button>
