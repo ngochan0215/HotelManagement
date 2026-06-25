@@ -116,7 +116,15 @@ function buildVerifyEmailUrl(user) {
   return `/verify-email${query ? `?${query}` : ""}`;
 }
 
-function SearchStartBlock({ onSubmit, searchForm, setSearchForm, searchError, loading }) {
+function getTodayInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function SearchStartBlock({ onSubmit, searchForm, setSearchForm, searchError, loading, todayInputValue }) {
   return (
     <form onSubmit={onSubmit} className="rounded-[32px] border border-stone-200 bg-white p-5 shadow-sm md:p-6">
       <div className="flex items-end justify-between gap-4">
@@ -131,6 +139,7 @@ function SearchStartBlock({ onSubmit, searchForm, setSearchForm, searchError, lo
           <input
             required
             type="date"
+            min={todayInputValue}
             value={searchForm.checkin}
             onChange={(e) => setSearchForm((prev) => ({ ...prev, checkin: e.target.value }))}
             className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
@@ -372,7 +381,7 @@ export default function CustomerAccountPage() {
   const [searchError, setSearchError] = useState("");
   const [sendVerificationLoading, setSendVerificationLoading] = useState(false);
   const [sendVerificationError, setSendVerificationError] = useState("");
-
+    const todayInputValue = getTodayInputValue();
   useEffect(() => {
     if (!user) return;
 
@@ -451,6 +460,10 @@ export default function CustomerAccountPage() {
 
     if (!searchForm.checkin || !searchForm.checkout) {
       setSearchError("Vui lòng chọn ngày nhận phòng và ngày trả phòng.");
+      return;
+    }
+    if (searchForm.checkin < todayInputValue) {
+      setSearchError("Ngày nhận phòng không được nằm trong quá khứ.");
       return;
     }
 
@@ -560,6 +573,7 @@ export default function CustomerAccountPage() {
             setSearchForm={setSearchForm}
             searchError={searchError}
             loading={false}
+            todayInputValue={todayInputValue}
           />
 
           <div className="grid gap-4">

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CheckCircle2, ChevronRight, Mail, Phone, UserRound } from "lucide-react";
 import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
+import { paymentApi } from "../../api/paymentApi.js";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
 import { AmenityPill, EmptyState, HotelImage, SectionHeader, StatusBadge } from "../components/sitePrimitives.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
@@ -23,11 +24,54 @@ function calculateAddOnTotal(selectedAddOns, nights) {
   return selectedAddOns.reduce((sum, item) => sum + Number(item.price || 0), 0) * nights;
 }
 
+function formatDate(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function addDays(dateValue, days) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function toDateInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayInputValue() {
+  return toDateInputValue(new Date());
+}
+
+function normalizeRouteId(value) {
+  if (!value || value === "undefined" || value === "null") return "";
+  return value;
+}
+
 export default function BookingPage() {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const roomId = searchParams.get("roomId");
-  const [rooms, setRooms] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryId = normalizeRouteId(searchParams.get("categoryId") || searchParams.get("roomId"));
+  const [catalogRooms, setCatalogRooms] = useState([]);
+  const [availabilityRooms, setAvailabilityRooms] = useState([]);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const [isFindingSuggestions, setIsFindingSuggestions] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [suggestionError, setSuggestionError] = useState("");
+  const [suggestedDates, setSuggestedDates] = useState([]);
+  const [suggestedCategories, setSuggestedCategories] = useState([]);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [addOns, setAddOns] = useState([]);
   const [addOnsMessage, setAddOnsMessage] = useState("");
   const [guestVerifyEmail, setGuestVerifyEmail] = useState("");
@@ -35,8 +79,14 @@ export default function BookingPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const availabilityRequestRef = useRef(0);
+  const suggestionRequestRef = useRef(0);
+  const paymentRedirectAttemptRef = useRef(false);
+  const paymentRedirectKeyRef = useRef("");
   const [form, setForm] = useState({
-    room_id: roomId || "",
+    room_id: categoryId || "",
     checkin: searchParams.get("checkin") || "",
     checkout: searchParams.get("checkout") || "",
     adults: Number(searchParams.get("adults") || 2),
@@ -48,26 +98,227 @@ export default function BookingPage() {
     selected_add_ons: [],
   });
 
+  const selectedCatalogRoom = useMemo(
+    () => catalogRooms.find((room) => room._id === form.room_id) || null,
+    [catalogRooms, form.room_id],
+  );
+  const selectedAvailabilityRoom = useMemo(
+    () => availabilityRooms.find((room) => room._id === form.room_id) || null,
+    [availabilityRooms, form.room_id],
+  );
+  const selectedRoom = selectedCatalogRoom || selectedAvailabilityRoom;
+  const nights = customerPortalApi.calculateNights(form.checkin, form.checkout);
+  const roomTotal = Number(selectedRoom?.price || 0) * nights;
+  const selectedAddOns = addOns.filter((item) => form.selected_add_ons.includes(item.id));
+  const selectedBookingRoomId =
+    selectedAvailabilityRoom?.available_rooms?.[0]?.room_id ||
+    selectedAvailabilityRoom?.available_rooms?.[0]?._id ||
+    null;
+  const selectedRealRoomId = selectedBookingRoomId;
+  const todayInputValue = getTodayInputValue();
+  const isCheckinInPast = Boolean(form.checkin && form.checkin < todayInputValue);
+  const hasValidStayDates = Boolean(form.checkin && form.checkout && new Date(form.checkout) > new Date(form.checkin));
+  const canContinueStep0 =
+    Boolean(form.room_id) &&
+    hasValidStayDates &&
+    !isCheckinInPast &&
+    !isCheckingAvailability &&
+    !isFindingSuggestions &&
+    !availabilityError &&
+    Boolean(selectedRealRoomId);
+  const canContinueStep1 =
+    Boolean(form.customer_name.trim()) &&
+    Boolean(form.customer_email.trim()) &&
+    Boolean(form.customer_phone.trim());
+  const addOnTotal = calculateAddOnTotal(selectedAddOns, nights);
+  const estimatedTotal = roomTotal + addOnTotal;
+  const depositAmount = calculateDeposit(estimatedTotal);
+  const remainingAmount = Math.max(estimatedTotal - depositAmount, 0);
+
   useEffect(() => {
     const load = async () => {
-      const hasSearchCriteria = form.checkin && form.checkout;
       const [{ rooms: roomList }, { services, reason }] = await Promise.all([
-        hasSearchCriteria
-          ? customerPortalApi.searchRooms({
-            checkin: form.checkin,
-            checkout: form.checkout,
-            adults: form.adults,
-            children: form.children,
-          })
-          : customerPortalApi.getRooms(),
+        customerPortalApi.getRooms(),
         customerPortalApi.getBookingAddOns(),
       ]);
-      setRooms(roomList);
+      setCatalogRooms(roomList);
       setAddOns(services || []);
       setAddOnsMessage(reason || "");
     };
     load().catch(() => setError("Không thể tải thông tin đặt phòng. Vui lòng thử lại."));
-  }, [form.adults, form.checkin, form.checkout, form.children]);
+  }, []);
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      const requestId = availabilityRequestRef.current + 1;
+      availabilityRequestRef.current = requestId;
+      const hasSearchCriteria = form.checkin && form.checkout;
+      if (!hasSearchCriteria) {
+        setIsCheckingAvailability(false);
+        setAvailabilityError("");
+        setAvailabilityRooms([]);
+        setSuggestedDates([]);
+        setSuggestedCategories([]);
+        setSuggestionError("");
+        return;
+      }
+
+      if (form.checkin < todayInputValue) {
+        setIsCheckingAvailability(false);
+        setAvailabilityError("Ngày nhận phòng không được ở trong quá khứ.");
+        setAvailabilityRooms([]);
+        setSuggestedDates([]);
+        setSuggestedCategories([]);
+        setSuggestionError("");
+        return;
+      }
+
+      if (new Date(form.checkout) <= new Date(form.checkin)) {
+        setIsCheckingAvailability(false);
+        setAvailabilityError("");
+        setAvailabilityRooms([]);
+        setSuggestedDates([]);
+        setSuggestedCategories([]);
+        setSuggestionError("");
+        return;
+      }
+
+      try {
+        setAvailabilityError("");
+        setIsCheckingAvailability(true);
+        setAvailabilityRooms([]);
+        setSuggestedDates([]);
+        setSuggestedCategories([]);
+        setSuggestionError("");
+        const { rooms: roomList } = await customerPortalApi.searchRooms({
+          checkin: form.checkin,
+          checkout: form.checkout,
+          adults: form.adults,
+          children: form.children,
+        });
+        if (availabilityRequestRef.current !== requestId) return;
+        setAvailabilityRooms(roomList);
+      } catch {
+        if (availabilityRequestRef.current !== requestId) return;
+        setAvailabilityError("Không thể kiểm tra phòng trống lúc này.");
+        setAvailabilityRooms([]);
+        setSuggestedDates([]);
+        setSuggestedCategories([]);
+        setSuggestionError("");
+      } finally {
+        if (availabilityRequestRef.current === requestId) {
+          setIsCheckingAvailability(false);
+        }
+      }
+    };
+
+    loadAvailability();
+  }, [availabilityRefreshKey, form.adults, form.checkin, form.checkout, form.children, todayInputValue]);
+
+  useEffect(() => {
+    const hasValidSearch = form.room_id && hasValidStayDates;
+    if (!hasValidSearch || isCheckingAvailability || availabilityError) {
+      setIsFindingSuggestions(false);
+      setSuggestedDates([]);
+      setSuggestedCategories([]);
+      if (!availabilityError) {
+        setSuggestionError("");
+      }
+      return;
+    }
+
+    if (selectedBookingRoomId) {
+      setIsFindingSuggestions(false);
+      setSuggestedDates([]);
+      setSuggestedCategories([]);
+      setSuggestionError("");
+      return;
+    }
+
+    const requestId = suggestionRequestRef.current + 1;
+    suggestionRequestRef.current = requestId;
+    let cancelled = false;
+
+    const run = async () => {
+      setIsFindingSuggestions(true);
+      setSuggestionError("");
+
+      const alternativeCategories = availabilityRooms
+        .filter((room) => room._id && room._id !== form.room_id)
+        .slice(0, 3);
+
+      if (!cancelled && suggestionRequestRef.current === requestId) {
+        setSuggestedCategories(alternativeCategories);
+      }
+
+      const nextDates = [];
+      const nightsCount = customerPortalApi.calculateNights(form.checkin, form.checkout);
+
+      for (let offset = 1; offset <= 7 && nextDates.length < 3; offset += 1) {
+        const nextCheckinDate = addDays(form.checkin, offset);
+        if (!nextCheckinDate) continue;
+        const nextCheckoutDate = addDays(nextCheckinDate, nightsCount);
+        if (!nextCheckoutDate) continue;
+
+        try {
+          const { rooms } = await customerPortalApi.searchRooms({
+            checkin: toDateInputValue(nextCheckinDate),
+            checkout: toDateInputValue(nextCheckoutDate),
+            adults: form.adults,
+            children: form.children,
+            roomType: form.room_id,
+          });
+
+          if (cancelled || suggestionRequestRef.current !== requestId) {
+            return;
+          }
+
+          if (rooms.length > 0) {
+            nextDates.push({
+              checkin: toDateInputValue(nextCheckinDate),
+              checkout: toDateInputValue(nextCheckoutDate),
+              label: `${formatDate(nextCheckinDate)} - ${formatDate(nextCheckoutDate)}`,
+            });
+          }
+        } catch (error) {
+          if (cancelled || suggestionRequestRef.current !== requestId) {
+            return;
+          }
+          setSuggestionError("Không thể tìm gợi ý lúc này.");
+          break;
+        }
+      }
+
+      if (cancelled || suggestionRequestRef.current !== requestId) {
+        return;
+      }
+
+      setSuggestedDates(nextDates);
+      if (!nextDates.length && !alternativeCategories.length) {
+        setSuggestionError("Chưa tìm thấy ngày phù hợp gần đây.");
+      } else {
+        setSuggestionError("");
+      }
+      setIsFindingSuggestions(false);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    availabilityError,
+    availabilityRooms,
+    form.adults,
+    form.checkin,
+    form.checkout,
+    form.children,
+    form.room_id,
+    hasValidStayDates,
+    isCheckingAvailability,
+    selectedBookingRoomId,
+  ]);
 
   useEffect(() => {
     if (!user) return;
@@ -82,16 +333,6 @@ export default function BookingPage() {
     if (!user) return;
     setGuestVerifyEmail(user.email || "");
   }, [user]);
-
-  const selectedRoom = useMemo(() => rooms.find((room) => room._id === form.room_id), [rooms, form.room_id]);
-  const nights = customerPortalApi.calculateNights(form.checkin, form.checkout);
-  const roomTotal = Number(selectedRoom?.price || 0) * nights;
-  const selectedAddOns = addOns.filter((item) => form.selected_add_ons.includes(item.id));
-  const selectedBookingRoomId = selectedRoom?.available_rooms?.[0]?.room_id || selectedRoom?.available_rooms?.[0]?._id || null;
-  const addOnTotal = calculateAddOnTotal(selectedAddOns, nights);
-  const estimatedTotal = roomTotal + addOnTotal;
-  const depositAmount = calculateDeposit(estimatedTotal);
-  const remainingAmount = Math.max(estimatedTotal - depositAmount, 0);
 
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -112,6 +353,10 @@ export default function BookingPage() {
         setError("Vui lòng chọn phòng và ngày lưu trú.");
         return false;
       }
+      if (form.checkin < todayInputValue) {
+        setError("Ngày nhận phòng không được ở trong quá khứ.");
+        return false;
+      }
       if (new Date(form.checkout) <= new Date(form.checkin)) {
         setError("Ngày trả phòng phải sau ngày nhận phòng.");
         return false;
@@ -130,6 +375,7 @@ export default function BookingPage() {
 
   const goNext = async () => {
     setError("");
+    setPaymentError("");
     if (!validateCurrentStep()) return;
 
     if (step === 3) {
@@ -144,8 +390,8 @@ export default function BookingPage() {
           return;
         }
 
-        if (!selectedBookingRoomId) {
-          setError("Phòng đã chọn hiện chưa có phòng trống cụ thể. Vui lòng quay lại danh sách phòng.");
+        if (!selectedRealRoomId) {
+          setError("Hạng phòng này không còn phòng trống trong thời gian đã chọn. Vui lòng đổi ngày hoặc chọn hạng phòng khác.");
           return;
         }
 
@@ -154,9 +400,15 @@ export default function BookingPage() {
           expected_checkout: form.checkout,
           adults: Number(form.adults),
           children: Number(form.children),
-          rooms: [{ room_id: selectedBookingRoomId }],
+          rooms: [{ room_id: selectedRealRoomId }],
         });
-        setResult(response);
+        paymentRedirectAttemptRef.current = false;
+        setResult({
+          bookingId: response.bookingId,
+          deposit: response.deposit,
+          booking: response.booking || null,
+          paymentStatus: "pending",
+        });
         setStep(4);
       } catch (e) {
         setError(e.message || "Đặt phòng thất bại. Vui lòng thử lại.");
@@ -174,13 +426,130 @@ export default function BookingPage() {
     setStep((prev) => Math.max(prev - 1, 0));
   };
 
-  if (!rooms.length && !selectedRoom && !result) {
+  const retryAvailability = () => {
+    setAvailabilityRefreshKey((value) => value + 1);
+  };
+
+  const startDepositPayment = async () => {
+    if (!result?.bookingId) return;
+
+    setPaymentError("");
+    setPaymentLoading(true);
+    try {
+      const paymentUserId = user?._id || user?.userId || user?.id;
+      if (!paymentUserId) {
+        throw new Error("Không tìm thấy tài khoản để tạo thanh toán.");
+      }
+
+      const amount = Math.round(Number(result.deposit || 0));
+      if (!amount || Number.isNaN(amount)) {
+        throw new Error("Số tiền cọc không hợp lệ.");
+      }
+
+      const paymentRes = await paymentApi.createPaymentLink(paymentUserId, {
+        booking_id: result.bookingId,
+        amount,
+        description: `Tiền cọc đặt phòng #${String(result.bookingId).slice(-6)}`,
+        items: [
+          {
+            name: "Tiền cọc đặt phòng",
+            quantity: 1,
+            price: amount,
+          },
+        ],
+      });
+
+      const checkoutUrl = paymentRes?.data?.checkoutUrl;
+      if (!checkoutUrl) {
+        throw new Error("Không thể tạo link thanh toán. Vui lòng thử lại.");
+      }
+
+      sessionStorage.removeItem(paymentRedirectKeyRef.current);
+      window.location.assign(checkoutUrl);
+    } catch (e) {
+      setPaymentError(e.message || "Không thể tạo thanh toán tiền cọc. Vui lòng thử lại.");
+      paymentRedirectAttemptRef.current = false;
+      if (paymentRedirectKeyRef.current) {
+        sessionStorage.removeItem(paymentRedirectKeyRef.current);
+      }
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step !== 4 || !result?.bookingId || paymentLoading || paymentError || paymentRedirectAttemptRef.current) {
+      return;
+    }
+
+    const redirectKey = `booking-payment-redirect:${result.bookingId}`;
+    paymentRedirectKeyRef.current = redirectKey;
+    if (sessionStorage.getItem(redirectKey) === "started") {
+      return;
+    }
+    sessionStorage.setItem(redirectKey, "started");
+
+    paymentRedirectAttemptRef.current = true;
+    void startDepositPayment();
+  }, [paymentError, paymentLoading, result?.bookingId, step]);
+
+  const updateBookingQuery = (patch) => {
+    const params = new URLSearchParams();
+    const nextValues = {
+      categoryId: patch.room_id ?? form.room_id,
+      checkin: patch.checkin ?? form.checkin,
+      checkout: patch.checkout ?? form.checkout,
+      adults: patch.adults ?? form.adults,
+      children: patch.children ?? form.children,
+    };
+
+    Object.entries(nextValues).forEach(([key, value]) => {
+      if (value !== "" && value !== null && value !== undefined) {
+        params.set(key, String(value));
+      }
+    });
+
+    setSearchParams(params, { replace: true });
+  };
+
+  const applySuggestedDates = (suggestion) => {
+    setError("");
+    setAvailabilityError("");
+    setSuggestionError("");
+    setForm((prev) => ({
+      ...prev,
+      checkin: suggestion.checkin,
+      checkout: suggestion.checkout,
+    }));
+    updateBookingQuery({
+      checkin: suggestion.checkin,
+      checkout: suggestion.checkout,
+    });
+  };
+
+  const applySuggestedCategory = (room) => {
+    const nextRoomId = room?._id || room?.categoryId || room?.category_id || "";
+    if (!nextRoomId) return;
+
+    setError("");
+    setAvailabilityError("");
+    setSuggestionError("");
+    setForm((prev) => ({
+      ...prev,
+      room_id: nextRoomId,
+    }));
+    updateBookingQuery({
+      room_id: nextRoomId,
+    });
+  };
+
+  if (!catalogRooms.length && !selectedRoom && !result) {
     return (
-      <CustomerShell>
+          <CustomerShell>
         <section className="mx-auto max-w-7xl px-4 py-16 md:px-6">
           <EmptyState
             title="Đang chuẩn bị đặt phòng"
-            description="SE Hotel đang tải thông tin phòng và dịch vụ để bạn tiếp tục."
+            description="Đang tải thông tin phòng và dịch vụ."
           />
         </section>
       </CustomerShell>
@@ -190,11 +559,6 @@ export default function BookingPage() {
   return (
     <CustomerShell>
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
-        <div className="mb-8 flex flex-wrap items-center gap-3">
-          <StatusBadge tone="warning">Đặt phòng SE Hotel</StatusBadge>
-          {selectedRoom ? <StatusBadge tone="info">{selectedRoom.category_name}</StatusBadge> : null}
-        </div>
-
         <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {STEP_ITEMS.map((item, index) => (
             <div
@@ -212,52 +576,70 @@ export default function BookingPage() {
           ))}
         </div>
 
-        {step === 4 && result ? (
+        {step === 4 && result?.bookingId ? (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="overflow-hidden rounded-[32px] border border-stone-200 bg-stone-950 text-white shadow-sm">
-              <HotelImage src={HOTEL_IMAGE_SETS.hero[0]} alt="Không gian đón khách sang trọng của SE Hotel" ratio="wide" fallbackLabel="SE Hotel" className="rounded-none" />
+              <HotelImage src={HOTEL_IMAGE_SETS.hero[0]} alt="Không gian đón khách sang trọng của SE Hotel" ratio="wide" fallbackLabel="SE Hotel" className="rounded-none" overlay={false} />
               <div className="p-7">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
                   <CheckCircle2 size={32} />
                 </div>
-                <h1 className="mt-6 break-words text-3xl font-semibold md:text-4xl">Xác nhận đặt phòng</h1>
+                <h1 className="mt-6 break-words text-3xl font-semibold md:text-4xl">Thanh toán cọc</h1>
                 <p className="mt-4 text-sm leading-7 text-stone-300">
-                  Mã đặt phòng: <span className="font-semibold text-white">{result.bookingId}</span>
-                </p>
-                <p className="mt-2 text-sm leading-7 text-stone-300">
-                  Số tiền cọc: <span className="font-semibold text-white">{depositAmount.toLocaleString()} VNĐ</span>
+                  Đặt phòng đã được tạo và đang chờ thanh toán cọc. Hoàn tất thanh toán để xác nhận giữ phòng.
                 </p>
               </div>
             </div>
 
             <div className="min-w-0 rounded-[32px] border border-stone-200 bg-white p-7 shadow-sm">
-              <SectionHeader eyebrow="Đã hoàn tất" title="Đặt phòng đã được ghi nhận" description="Bạn có thể tra cứu lại bằng mã đặt phòng và email ngay trên trang này." />
+              <SectionHeader eyebrow="Bước 4" title="Xác nhận và thanh toán" description={null} />
+              <div className="mt-6 flex flex-wrap gap-2">
+                <StatusBadge tone="warning">Đang chờ thanh toán</StatusBadge>
+                <StatusBadge tone="info">PayOS</StatusBadge>
+              </div>
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl bg-stone-50 p-5">
-                  <p className="text-sm text-stone-500">Loại phòng</p>
-                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{selectedRoom?.category_name}</p>
+                  <p className="text-sm text-stone-500">Mã đặt phòng</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{result.bookingId}</p>
                 </div>
                 <div className="rounded-2xl bg-stone-50 p-5">
-                  <p className="text-sm text-stone-500">Lịch lưu trú</p>
-                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{form.checkin} - {form.checkout}</p>
+                  <p className="text-sm text-stone-500">Tổng tiền</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{estimatedTotal.toLocaleString()} VNĐ</p>
                 </div>
                 <div className="rounded-2xl bg-stone-50 p-5">
-                  <p className="text-sm text-stone-500">Số khách</p>
-                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{form.adults} người lớn, {form.children} trẻ em</p>
-                </div>
-                <div className="rounded-2xl bg-stone-50 p-5">
-                  <p className="text-sm text-stone-500">Tổng tiền tạm tính</p>
-                  <p className="mt-2 text-lg font-semibold text-stone-900">{estimatedTotal.toLocaleString()} VNĐ</p>
+                  <p className="text-sm text-stone-500">Số tiền cọc</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-stone-900">{Number(result.deposit || 0).toLocaleString()} VNĐ</p>
                 </div>
                 <div className="rounded-2xl bg-amber-50 p-5">
                   <p className="text-sm text-amber-800">Số tiền còn lại</p>
                   <p className="mt-2 text-lg font-semibold text-amber-900">{remainingAmount.toLocaleString()} VNĐ</p>
                 </div>
               </div>
-              <Link to="/hotel/bookings" className="mt-8 inline-flex max-w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800">
-                Tra cứu đặt phòng
-                <ChevronRight size={16} />
-              </Link>
+              <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
+                <p className="font-medium text-stone-800">Lịch lưu trú</p>
+                <p className="mt-1">{form.checkin} - {form.checkout}</p>
+                <p className="mt-1">{selectedRoom?.category_name || "Chưa xác định"}</p>
+              </div>
+              <p className="mt-5 rounded-2xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
+                Sau khi thanh toán, hệ thống sẽ tự xác nhận giữ phòng.
+              </p>
+              {paymentError ? (
+                <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{paymentError}</p>
+              ) : null}
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={startDepositPayment}
+                  disabled={paymentLoading}
+                  className="inline-flex max-w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {paymentLoading ? "Đang chuyển đến PayOS..." : "Mở lại PayOS"}
+                  <ChevronRight size={16} />
+                </button>
+                <Link to="/hotel/bookings" className="inline-flex max-w-full items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-4 text-center text-sm font-semibold leading-5 text-stone-800 transition hover:border-stone-300 hover:bg-stone-50">
+                  Đặt phòng của tôi
+                </Link>
+              </div>
             </div>
           </div>
         ) : (
@@ -266,8 +648,8 @@ export default function BookingPage() {
               <div className="rounded-[32px] border border-stone-200 bg-white p-6 shadow-sm">
                 <SectionHeader
                   eyebrow="Thông tin đã chọn"
-                  title="Phòng, ngày ở và chi phí"
-                  description="Kiểm tra lại thông tin lưu trú và chi phí trước khi xác nhận."
+                  title="Chi phí tạm tính"
+                  description={null}
                 />
                 <div className="mt-6">
                   <HotelImage
@@ -275,11 +657,118 @@ export default function BookingPage() {
                     alt={selectedRoom ? `Hình ảnh phòng ${selectedRoom.category_name}` : "Hình minh họa hạng phòng"}
                     ratio="wide"
                     fallbackLabel={selectedRoom ? `Hạng phòng ${selectedRoom.category_name}` : "Chọn loại phòng"}
+                    overlay={false}
                   />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {isCheckingAvailability && hasValidStayDates ? (
+                    <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-700">
+                      Đang kiểm tra phòng trống...
+                    </div>
+                  ) : null}
+                  {availabilityError ? (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+                      <p>{availabilityError}</p>
+                      <button
+                        type="button"
+                        onClick={retryAvailability}
+                        className="mt-3 inline-flex items-center justify-center rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+                      >
+                        Thử lại
+                      </button>
+                    </div>
+                  ) : form.room_id && hasValidStayDates && !isCheckingAvailability && !selectedRealRoomId ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-4 text-amber-900">
+                      <p className="text-sm font-semibold">Hạng phòng này đã hết trong ngày bạn chọn</p>
+                      <p className="mt-1 text-sm leading-6 text-amber-800">
+                        Bạn có thể đổi sang ngày gần nhất còn phòng hoặc chọn hạng phòng khác.
+                      </p>
+
+                      {isFindingSuggestions ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-white/70 px-3 py-3 text-sm text-amber-800">
+                          Đang tìm ngày còn phòng gần nhất...
+                        </div>
+                      ) : null}
+
+                      {suggestionError ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-white/70 px-3 py-3 text-sm leading-6 text-amber-900">
+                          {suggestionError}
+                        </div>
+                      ) : null}
+
+                      {suggestedDates.length ? (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Ngày gần nhất còn phòng</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {suggestedDates.map((item) => (
+                              <button
+                                key={`${item.checkin}-${item.checkout}`}
+                                type="button"
+                                onClick={() => applySuggestedDates(item)}
+                                className="inline-flex items-center justify-center rounded-full border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {suggestedCategories.length ? (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Hạng phòng khác còn trống</p>
+                          <div className="mt-2 grid gap-3 md:grid-cols-2">
+                            {suggestedCategories.map((room) => (
+                              <div key={room._id} className="rounded-2xl border border-amber-200 bg-white/85 p-4 text-stone-900">
+                                <p className="break-words text-sm font-semibold text-stone-950">{room.category_name}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {room.price ? (
+                                    <span className="inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">
+                                      {Number(room.price).toLocaleString()} VNĐ/đêm
+                                    </span>
+                                  ) : null}
+                                  {(room.max_adults || room.max_children) ? (
+                                    <span className="inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">
+                                      {room.max_adults ? `${room.max_adults} người lớn` : ""}{room.max_adults && room.max_children ? " · " : ""}{room.max_children ? `${room.max_children} trẻ em` : ""}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => applySuggestedCategory(room)}
+                                  className="mt-3 inline-flex items-center justify-center rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+                                >
+                                  Chọn hạng này
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {!isFindingSuggestions && !suggestedDates.length && !suggestedCategories.length ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById("booking-checkin")?.focus()}
+                            className="inline-flex items-center justify-center rounded-xl border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+                          >
+                            Đổi ngày
+                          </button>
+                          <Link
+                            to="/hotel/rooms"
+                            className="inline-flex items-center justify-center rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+                          >
+                            Xem tất cả hạng phòng
+                          </Link>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="mt-5 space-y-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Loại phòng</p>
+                    <p className="text-sm font-medium text-stone-500">Loại phòng</p>
                     <p className="mt-2 break-words text-2xl font-semibold leading-tight text-stone-950">{selectedRoom?.category_name || "Chưa chọn"}</p>
                   </div>
                   <div className="flex min-w-0 flex-wrap gap-2">
@@ -314,15 +803,20 @@ export default function BookingPage() {
             </aside>
 
             <div className="min-w-0 rounded-[32px] border border-stone-200 bg-white p-5 shadow-[0_18px_48px_rgba(28,25,23,0.08)] md:p-7">
+              {!categoryId ? (
+                <div className="mb-6 rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+                  Vui lòng chọn hạng phòng trước khi đặt.
+                </div>
+              ) : null}
               {step === 0 ? (
                 <>
-                  <SectionHeader eyebrow="Bước 1" title="Xem lại phòng đã chọn" description="Xác nhận lại phòng, ngày ở và số khách trước khi tiếp tục." />
+                  <SectionHeader eyebrow="Bước 1" title="Thông tin đặt phòng" description={null} />
                   <div className="mt-7 grid gap-5 md:grid-cols-2">
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Loại phòng
                       <select value={form.room_id} onChange={(e) => handleChange("room_id", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required>
                         <option value="">Chọn loại phòng</option>
-                        {rooms.map((room) => (
+                        {catalogRooms.map((room) => (
                           <option key={room._id} value={room._id}>
                             {room.category_name}
                           </option>
@@ -331,11 +825,11 @@ export default function BookingPage() {
                     </label>
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Ngày nhận phòng
-                      <input type="date" value={form.checkin} onChange={(e) => handleChange("checkin", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+                      <input id="booking-checkin" type="date" min={todayInputValue} value={form.checkin} onChange={(e) => handleChange("checkin", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
                     </label>
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Ngày trả phòng
-                      <input type="date" value={form.checkout} onChange={(e) => handleChange("checkout", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+                      <input id="booking-checkout" type="date" value={form.checkout} onChange={(e) => handleChange("checkout", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
                     </label>
                     <div className="grid min-w-0 grid-cols-2 gap-4">
                       <label className="grid gap-2 text-sm font-medium text-stone-700">
@@ -353,7 +847,7 @@ export default function BookingPage() {
 
               {step === 1 ? (
                 <>
-                  <SectionHeader eyebrow="Bước 2" title="Thông tin khách lưu trú" description="Nhập thông tin liên hệ để xác nhận đơn đặt phòng." />
+                  <SectionHeader eyebrow="Bước 2" title="Thông tin khách" description={null} />
                   <div className="mt-7 grid gap-5 md:grid-cols-2">
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Họ và tên
@@ -386,10 +880,10 @@ export default function BookingPage() {
 
               {step === 2 ? (
                 <>
-                  <SectionHeader eyebrow="Bước 3" title="Chọn dịch vụ thêm" description="Bạn có thể chọn thêm tiện ích để kỳ nghỉ thoải mái hơn." />
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
-                    {addOns.map((addOn, index) => {
-                      const selected = form.selected_add_ons.includes(addOn.id);
+                  <SectionHeader eyebrow="Bước 3" title="Dịch vụ thêm" description={null} />
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  {addOns.map((addOn, index) => {
+                    const selected = form.selected_add_ons.includes(addOn.id);
                       return (
                         <button
                           key={addOn.id}
@@ -405,6 +899,7 @@ export default function BookingPage() {
                             ratio="wide"
                             fallbackLabel={addOn.name}
                             className="rounded-none"
+                            overlay={false}
                           />
                           <div className="space-y-3 p-5">
                             <div className="flex items-start justify-between gap-3">
@@ -420,7 +915,7 @@ export default function BookingPage() {
                   </div>
                   {!addOns.length ? (
                     <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-700">
-                      {addOnsMessage || "Hiện chưa có dịch vụ kèm theo khả dụng cho tài khoản này."}
+                      {addOnsMessage || "Chưa có dịch vụ thêm."}
                     </div>
                   ) : null}
                 </>
@@ -428,7 +923,7 @@ export default function BookingPage() {
 
               {step === 3 ? (
                 <>
-                  <SectionHeader eyebrow="Bước 4" title="Thanh toán cọc" description="Xác nhận tổng tiền tạm tính và số tiền cần cọc trước khi chốt đơn." />
+                  <SectionHeader eyebrow="Bước 4" title="Thanh toán" description={null} />
                   <div className="mt-6 grid gap-4 md:grid-cols-3">
                     <div className="min-w-0 rounded-2xl bg-stone-50 p-5">
                       <p className="text-sm text-stone-500">Tổng tiền tạm tính</p>
@@ -444,14 +939,12 @@ export default function BookingPage() {
                     </div>
                   </div>
                   <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 text-sm leading-7 text-stone-600">
-                    Khoản cọc giúp SE Hotel giữ phòng theo lịch lưu trú đã chọn. Nhân viên khách sạn sẽ hỗ trợ xác nhận chi tiết sau khi đặt phòng.
+                    Khoản cọc giữ phòng theo lịch đã chọn.
                   </div>
                   {!user ? (
                     <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                      <p className="text-sm font-semibold text-amber-900">Xác thực email trước khi đặt phòng</p>
-                      <p className="mt-2 text-sm leading-6 text-amber-800">
-                        Để tránh thất lạc giao dịch, vui lòng xác thực bằng tài khoản trước khi xác nhận đặt phòng.
-                      </p>
+                      <p className="text-sm font-semibold text-amber-900">Xác thực email</p>
+                      <p className="mt-2 text-sm leading-6 text-amber-800">Nhập email để tiếp tục.</p>
                       <label className="mt-4 grid gap-2 text-sm font-medium text-stone-700">
                         Email xác thực
                         <input
@@ -467,7 +960,7 @@ export default function BookingPage() {
                         to={`/login?email=${encodeURIComponent(guestVerifyEmail || "")}`}
                         className="mt-4 inline-flex items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
                       >
-                        Tiếp tục xác thực tài khoản
+                        Xác thực ngay
                       </Link>
                     </div>
                   ) : null}
@@ -488,7 +981,7 @@ export default function BookingPage() {
                 <button
                   type="button"
                   onClick={goNext}
-                  disabled={submitting}
+                  disabled={submitting || (step === 0 ? !canContinueStep0 : step === 1 ? !canContinueStep1 : false)}
                   className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {step === 3 ? "Xác nhận đặt phòng" : "Tiếp tục"}

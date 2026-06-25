@@ -18,8 +18,9 @@ function toNumber(value, fallback = 0) {
 }
 
 function buildBookingUrl(roomId, criteria) {
+  if (!roomId) return "";
   const params = new URLSearchParams();
-  params.set("roomId", roomId);
+  params.set("categoryId", roomId);
   ["checkin", "checkout", "adults", "children"].forEach((key) => {
     const value = criteria[key];
     if (value) params.set(key, value);
@@ -38,6 +39,14 @@ function readFiltersFromParams(params) {
   };
 }
 
+function getTodayInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function RoomsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
@@ -53,6 +62,7 @@ export default function RoomsPage() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
   const [searchValidationError, setSearchValidationError] = useState("");
+  const todayInputValue = getTodayInputValue();
 
   const activeRooms = hasSubmittedSearch ? availabilityRooms : catalogRooms;
   const activeLoading = hasSubmittedSearch ? availabilityLoading : catalogLoading;
@@ -158,6 +168,10 @@ export default function RoomsPage() {
       setSearchValidationError("Vui lòng chọn ngày nhận và trả phòng.");
       return;
     }
+    if (filters.checkin < todayInputValue) {
+      setSearchValidationError("Ngày nhận phòng không được nằm trong quá khứ.");
+      return;
+    }
     if (new Date(filters.checkout) <= new Date(filters.checkin)) {
       setSearchValidationError("Ngày trả phòng phải sau ngày nhận phòng.");
       return;
@@ -206,6 +220,7 @@ export default function RoomsPage() {
                 <input
                   required
                   type="date"
+                  min={todayInputValue}
                   value={filters.checkin}
                   onChange={(e) => handleFilterChange("checkin", e.target.value)}
                   className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
@@ -386,9 +401,10 @@ export default function RoomsPage() {
                         >
                           Xem chi tiết
                         </Link>
-                        <Link
-                          to={buildBookingUrl(room._id, hasSubmittedSearch ? submittedCriteria : filters)}
-                          className="inline-flex min-w-0 items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800"
+                      <Link
+                          to={buildBookingUrl(room._id, hasSubmittedSearch ? submittedCriteria : filters) || "/hotel/rooms"}
+                          aria-disabled={!room._id}
+                          className="inline-flex min-w-0 items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Chọn phòng
                         </Link>

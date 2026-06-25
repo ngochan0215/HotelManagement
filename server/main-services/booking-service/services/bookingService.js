@@ -20,6 +20,26 @@ export class BookingService {
         this.sendNotification = sendNotification;
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
+
+    startOfDay = (value) => {
+        const date = value instanceof Date ? new Date(value) : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
+
+    isPastDate = (value) => {
+        const target = this.startOfDay(value);
+        if (!target) return false;
+        const today = this.startOfDay(new Date());
+        return target < today;
+    };
+
+    isAfterToday = (value) => {
+        const target = this.startOfDay(value);
+        if (!target) return false;
+        const today = this.startOfDay(new Date());
+        return target > today;
+    };
     
     // 1 đêm = 14:00 ngày N đến 12:00 ngày N+1 (chu kỳ chuẩn khách sạn)
     // Số đêm = số ngày lịch giữa ngày check-in và ngày check-out (bỏ giờ)
@@ -406,11 +426,11 @@ export class BookingService {
                 throw new Error("Ngày check-out dự kiến phải sau ngày check-in dự kiến.");
             }
 
-            if ( new Date(expected_checkout) < new Date() ) {
+            if ( this.isPastDate(expected_checkout) ) {
                 throw new Error("Ngày check-out dự kiến không được trong quá khứ.");
             }
 
-            if ( new Date(expected_checkin) < new Date() ) {
+            if ( this.isPastDate(expected_checkin) ) {
                 throw new Error("Ngày check-in dự kiến không được trong quá khứ.");
             }
 
@@ -479,7 +499,7 @@ export class BookingService {
             }
 
             const handled_by = employee._id;
-            const isScheduled = new Date(expected_checkin) > new Date();
+            const isScheduled = this.isAfterToday(expected_checkin);
             const isImmediate = deposit === 0;
             let initialStatus = isImmediate ? "in_progress" : "pending";
 
@@ -1845,10 +1865,17 @@ export class BookingService {
 
             const checkin = new Date(expected_checkin);
             const checkout = new Date(expected_checkout);
-            const now = new Date();
 
-            if (checkin <= now) throw new Error("Ngày check-in phải là ngày trong tương lai.");
-            if (checkout <= checkin) throw new Error("Ngày check-out phải sau ngày check-in.");
+            const today = this.startOfDay(new Date());
+            const checkinDay = this.startOfDay(checkin);
+            const checkoutDay = this.startOfDay(checkout);
+
+            if (!checkinDay || !checkoutDay) {
+                throw new Error("Ngày nhận phòng hoặc ngày trả phòng không hợp lệ.");
+            }
+
+            if (checkinDay < today) throw new Error("Ngày nhận phòng không được nằm trong quá khứ.");
+            if (checkoutDay <= checkinDay) throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
 
             const customer = await this.findCustomerByUserId(userId);
 
@@ -1969,7 +1996,7 @@ export class BookingService {
                 expected_checkin: checkin,
                 expected_checkout: checkout,
                 status: "pending",
-                isScheduled: true,
+                isScheduled: this.isAfterToday(expected_checkin),
                 ...(discountSnapshot && { discount_snapshot: discountSnapshot }),
                 ...(voucherSnapshot && { voucher_snapshot: voucherSnapshot }),
             });

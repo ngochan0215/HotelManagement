@@ -67,6 +67,14 @@ function deriveAmenities(room) {
     .slice(0, 3);
 }
 
+function getTodayInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [featuredRooms, setFeaturedRooms] = useState([]);
@@ -89,6 +97,7 @@ export default function LandingPage() {
   const [testimonialsError, setTestimonialsError] = useState("");
   const slidingServices = [...landingServices, ...landingServices];
   const slidingAmenities = [...amenities, ...amenities];
+  const todayInputValue = getTodayInputValue();
 
   const loadRooms = async () => {
     setLoadingRooms(true);
@@ -168,6 +177,10 @@ export default function LandingPage() {
     setSearchError("");
     if (!search.checkin || !search.checkout || search.adults === "" || search.children === "") {
       setSearchError("Vui lòng nhập ngày nhận phòng, ngày trả phòng, số người lớn và số trẻ em.");
+      return;
+    }
+    if (search.checkin < todayInputValue) {
+      setSearchError("Ngày nhận phòng không được nằm trong quá khứ.");
       return;
     }
     if (new Date(search.checkout) <= new Date(search.checkin)) {
@@ -255,7 +268,7 @@ export default function LandingPage() {
               <form onSubmit={handleSearch} className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <label className="grid gap-2 text-sm font-medium text-stone-700">
                   Ngày nhận phòng
-                  <input required type="date" value={search.checkin} onChange={(e) => setSearch((p) => ({ ...p, checkin: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
+                  <input required type="date" min={todayInputValue} value={search.checkin} onChange={(e) => setSearch((p) => ({ ...p, checkin: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-stone-700">
                   Ngày trả phòng
@@ -361,7 +374,15 @@ export default function LandingPage() {
                         <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Giá từ</p>
                         <p className="break-words text-2xl font-semibold text-stone-950">{Number(room.price || 0).toLocaleString()} VNĐ</p>
                       </div>
-                      <button onClick={() => navigate(`/hotel/book?roomId=${room._id}`)} className="inline-flex min-w-0 items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800">
+                      <button
+                        type="button"
+                        disabled={!room._id}
+                        onClick={() => {
+                          if (!room._id) return;
+                          navigate(`/hotel/book?categoryId=${room._id}`);
+                        }}
+                        className="inline-flex min-w-0 items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
                         Đặt phòng
                       </button>
                     </div>
