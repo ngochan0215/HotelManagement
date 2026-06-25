@@ -1746,6 +1746,119 @@ export class BookingService {
         return reply.customer;
     };
 
+    normalizeLookupString = (value) => String(value || "").trim().toLowerCase();
+
+    normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "");
+
+    getPhoneVariants = (value) => {
+        const digits = this.normalizePhoneDigits(value);
+        const variants = new Set();
+        if (!digits) return variants;
+        variants.add(digits);
+        if (digits.startsWith("84")) variants.add(`0${digits.slice(2)}`);
+        if (digits.startsWith("0")) variants.add(`84${digits.slice(1)}`);
+        return variants;
+    };
+
+    matchesLookupContact = (contact, customer) => {
+        const normalizedContact = this.normalizeLookupString(contact);
+        if (!normalizedContact) return false;
+
+        const customerEmail = this.normalizeLookupString(customer?.email || customer?.user?.email);
+        if (customerEmail && normalizedContact === customerEmail) return true;
+
+        const contactPhoneVariants = this.getPhoneVariants(contact);
+        if (contactPhoneVariants.size === 0) return false;
+
+        const customerPhoneVariants = this.getPhoneVariants(customer?.phone_number || customer?.phone || customer?.user?.phone_number || customer?.user?.phone);
+        if (customerPhoneVariants.size === 0) return false;
+
+        for (const candidate of contactPhoneVariants) {
+            if (customerPhoneVariants.has(candidate)) return true;
+        }
+
+        return false;
+    };
+
+    lookupPublicBooking = async (data = {}) => {
+        try {
+            const bookingCode = String(data.bookingCode || data.booking_code || data.code || "").trim();
+            const contact = String(data.contact || data.email || data.phone || "").trim();
+
+            if (!bookingCode) {
+                const err = new Error("Vui lòng nhập mã đặt phòng.");
+                err.status = 400;
+                throw err;
+            }
+
+            if (!contact) {
+                const err = new Error("Vui lòng nhập email hoặc số điện thoại dùng khi đặt phòng.");
+                err.status = 400;
+                throw err;
+            }
+
+            if (!mongoose.Types.ObjectId.isValid(bookingCode)) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const booking = await this.Booking.findById(bookingCode).select("-__v").lean();
+            if (!booking) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const customer = await this.findCustomerById(booking.customer_id);
+            let customerEmail = customer?.email || customer?.user?.email || "";
+            if (!customerEmail && customer?.user_id) {
+                const replyUser = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+                if (replyUser?.success && replyUser.user?.email) {
+                    customerEmail = replyUser.user.email;
+                }
+            }
+
+            const customerForLookup = {
+                ...customer,
+                email: customerEmail,
+            };
+
+            if (!this.matchesLookupContact(contact, customerForLookup)) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const bookingDetails = await this.BookingDetail.find({ booking_id: booking._id })
+                .select("-__v")
+                .lean();
+            const populatedDetails = await this.populateRoom(bookingDetails);
+            const rooms = populatedDetails.map(item => ({
+                detail_id: item._id,
+                room_id: item.room_info?._id,
+                room_number: item.room_info?.room_number,
+                room_status: item.room_info?.room_status,
+                category: item.room_info?.category ?? null,
+                expected_checkin: item.expected_checkin,
+                expected_checkout: item.expected_checkout,
+                actual_checkin: item.actual_checkin,
+                actual_checkout: item.actual_checkout,
+                base_fee: item.base_fee,
+                extra_fee: item.extra_fee,
+                status: item.status,
+                note: item.note,
+                cancellation_reason: item.cancellation_reason,
+            }));
+
+            return { booking, rooms };
+
+        } catch (error) {
+            console.log("Error in lookupPublicBooking:", error.message);
+            throw error;
+        }
+    };
+
     // customer management 
     
     getMyBookings = async (userId, query = {}) => {

@@ -13,7 +13,6 @@ import CustomerShell from "../components/customerShell.jsx";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import { paymentApi } from "../../api/paymentApi.js";
 import { EmptyState } from "../components/sitePrimitives.jsx";
-import SharedAuthForm from "../components/sharedAuthForm.jsx";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import "./myBookingsPage.css";
 
@@ -366,6 +365,64 @@ function EmptySelectedDetail() {
   );
 }
 
+function GuestLookupForm({ form, setForm, onSubmit, loading, error, initialBookingCode }) {
+  return (
+    <form onSubmit={onSubmit} className="w-full rounded-[32px] border border-stone-200 bg-white p-5 shadow-[0_18px_46px_rgba(28,25,23,0.08)] md:p-6">
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">Tra cứu đặt phòng</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Tra cứu đặt phòng</h1>
+        <p className="max-w-2xl text-sm leading-6 text-stone-600">
+          Nhập mã đặt phòng và email hoặc số điện thoại dùng khi đặt phòng để kiểm tra trạng thái đơn.
+        </p>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Mã đặt phòng
+          <input
+            value={form.bookingCode}
+            onChange={(event) => setForm((prev) => ({ ...prev, bookingCode: event.target.value }))}
+            placeholder={initialBookingCode || "Nhập mã đặt phòng"}
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-medium text-stone-700">
+          Email hoặc số điện thoại
+          <input
+            value={form.contact}
+            onChange={(event) => setForm((prev) => ({ ...prev, contact: event.target.value }))}
+            placeholder="ban@email.com hoặc 09xxxxxxxx"
+            className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+          Tra cứu
+        </button>
+
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+        >
+          Đăng nhập để xem tất cả đặt phòng của bạn
+        </Link>
+      </div>
+
+      {error ? (
+        <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      ) : null}
+    </form>
+  );
+}
+
 function BookingCard({ booking, selected, onSelect, onPay, paymentBusy }) {
   const statusMeta = getBookingStatusMeta(booking);
   const action = getPrimaryAction(booking);
@@ -513,6 +570,9 @@ function BookingDetailPanel({
   onClose,
   onPay,
   onRetry,
+  allowPay = true,
+  showCloseButton = true,
+  sectionLabel = "Chi tiết đặt phòng",
 }) {
   const resolvedBooking = detail?.booking || booking;
   const rooms = getBookingRoomEntries(booking, detail);
@@ -523,7 +583,7 @@ function BookingDetailPanel({
   const nights = getNightCount(resolvedBooking?.expected_checkin, resolvedBooking?.expected_checkout);
   const adults = Number(resolvedBooking?.adults || 0);
   const children = Number(resolvedBooking?.children || 0);
-  const canPay = normalizeStatus(resolvedBooking?.status) === "pending";
+  const canPay = allowPay && normalizeStatus(resolvedBooking?.status) === "pending";
   const bookingTitle = getBookingTitle(resolvedBooking, detail);
   const roomSummary = rooms.length ? getRoomSummary(resolvedBooking, detail) : "Chưa có thông tin phòng.";
 
@@ -557,7 +617,7 @@ function BookingDetailPanel({
               : "border-stone-100 bg-[linear-gradient(180deg,#fff5e4_0%,#ffffff_100%)]"
       }`}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Chi tiết đặt phòng</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">{sectionLabel}</p>
           <h3 className="mt-2 break-words text-2xl font-semibold tracking-tight text-stone-950">
             {bookingTitle}
           </h3>
@@ -569,14 +629,16 @@ function BookingDetailPanel({
             <BookingStatusBadge tone={paymentMeta.tone}>{paymentMeta.label}</BookingStatusBadge>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
-          aria-label="Đóng"
-        >
-          <X size={18} />
-        </button>
+        {showCloseButton ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+            aria-label="Đóng"
+          >
+            <X size={18} />
+          </button>
+        ) : null}
       </div>
 
       <div className="space-y-5 px-5 py-5">
@@ -843,12 +905,27 @@ export default function MyBookingsPage() {
   const [reloadIndex, setReloadIndex] = useState(0);
   const [detailReloadIndex, setDetailReloadIndex] = useState(0);
   const [queryHint, setQueryHint] = useState("");
+  const [guestLookupForm, setGuestLookupForm] = useState({
+    bookingCode: initialBookingCode,
+    contact: searchParams.get("contact") || "",
+  });
+  const [guestLookupLoading, setGuestLookupLoading] = useState(false);
+  const [guestLookupError, setGuestLookupError] = useState("");
+  const [guestLookupResult, setGuestLookupResult] = useState(null);
   const queryAppliedRef = useRef(false);
 
   useEffect(() => {
     setSearchTerm(initialBookingCode);
     setQueryHint(initialBookingCode ? "Đang tìm đơn theo mã đã nhập sẵn trong URL." : "");
   }, [initialBookingCode]);
+
+  useEffect(() => {
+    if (user) return;
+    setGuestLookupForm((prev) => ({
+      bookingCode: searchParams.get("bookingCode") || prev.bookingCode,
+      contact: searchParams.get("contact") || prev.contact,
+    }));
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (!user) {
@@ -957,6 +1034,38 @@ export default function MyBookingsPage() {
     setStatusFilter("all");
     setSearchParams({});
     setQueryHint("");
+  };
+
+  const handleGuestLookup = async (event) => {
+    event.preventDefault();
+
+    const bookingCode = guestLookupForm.bookingCode.trim();
+    const contact = guestLookupForm.contact.trim();
+
+    if (!bookingCode) {
+      setGuestLookupError("Vui lòng nhập mã đặt phòng.");
+      setGuestLookupResult(null);
+      return;
+    }
+
+    if (!contact) {
+      setGuestLookupError("Vui lòng nhập email hoặc số điện thoại dùng khi đặt phòng.");
+      setGuestLookupResult(null);
+      return;
+    }
+
+    setGuestLookupLoading(true);
+    setGuestLookupError("");
+    setGuestLookupResult(null);
+
+    try {
+      const result = await customerPortalApi.lookupPublicBooking({ bookingCode, contact });
+      setGuestLookupResult(result);
+    } catch (err) {
+      setGuestLookupError(err.message || "Không thể tra cứu đặt phòng.");
+    } finally {
+      setGuestLookupLoading(false);
+    }
   };
 
   const openBooking = (booking) => {
@@ -1080,8 +1189,40 @@ export default function MyBookingsPage() {
   if (!user) {
     return (
       <CustomerShell>
-        <section className="mx-auto max-w-3xl px-4 py-12 md:px-6">
-          <SharedAuthForm embedded />
+        <section className="mx-auto max-w-5xl px-4 py-6 md:px-6">
+          <div className="grid gap-6">
+            <GuestLookupForm
+              form={guestLookupForm}
+              setForm={setGuestLookupForm}
+              onSubmit={handleGuestLookup}
+              loading={guestLookupLoading}
+              error={guestLookupError}
+              initialBookingCode={initialBookingCode}
+            />
+
+            {guestLookupResult ? (
+              <BookingDetailPanel
+                booking={guestLookupResult.booking}
+                detail={guestLookupResult}
+                paymentDetail={null}
+                loading={false}
+                error=""
+                paymentBusy={false}
+                paymentError=""
+                onClose={() => {}}
+                onPay={() => {}}
+                onRetry={() => {}}
+                allowPay={false}
+                showCloseButton={false}
+                sectionLabel="Kết quả tra cứu"
+              />
+            ) : (
+              <EmptyState
+                title="Chưa có kết quả tra cứu"
+                description="Nhập mã đặt phòng và email hoặc số điện thoại để kiểm tra trạng thái đơn."
+              />
+            )}
+          </div>
         </section>
       </CustomerShell>
     );

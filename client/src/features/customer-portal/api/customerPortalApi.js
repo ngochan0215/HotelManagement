@@ -195,6 +195,18 @@ export const customerPortalApi = {
     }
   },
 
+  async lookupPublicBooking({ bookingCode, contact }) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/bookings/lookup`, {
+        bookingCode,
+        contact,
+      });
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể tra cứu đặt phòng lúc này.");
+    }
+  },
+
   async getMyBookings(params = {}) {
     try {
       const response = await axios.get(`${API_BASE_URL}/bookings/my`, {

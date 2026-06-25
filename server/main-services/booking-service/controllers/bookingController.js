@@ -177,6 +177,15 @@ export class BookingController {
         }
     };
 
+    lookupPublicBooking = async (req, res) => {
+        try {
+            const result = await this.bookingService.lookupPublicBooking(req.body);
+            return res.status(200).json(result);
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     cancelBooking = async (req, res) => {
         try {
             const { id } = req.params;
@@ -193,4 +202,3 @@ export class BookingController {
         }
     };
 }
-
