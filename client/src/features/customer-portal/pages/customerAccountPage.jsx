@@ -70,7 +70,7 @@ function getBookingTitle(booking) {
 }
 
 function getBookingRoomLabel(booking) {
-  const bookingCode = booking?.booking_code || booking?._id || booking?.id || "--";
+  const bookingCode = booking?.booking_code || booking?.bookingCode || booking?.code || "--";
   const roomNumber = booking?.rooms?.[0]?.room_info?.room_number || booking?.room_info?.room_number || booking?.room_number;
   const roomName =
     booking?.room_info?.category_name ||
@@ -87,9 +87,11 @@ function getBookingRoomLabel(booking) {
 
 function buildBookingLookupUrl(booking, email) {
   const params = new URLSearchParams();
-  const lookupCode = booking?._id || booking?.id || booking?.booking_code;
-  if (lookupCode) params.set("bookingCode", lookupCode);
-  if (email) params.set("email", email);
+  const lookupCode = booking?.booking_code || booking?.bookingCode || booking?.code;
+  if (lookupCode) {
+    params.set("bookingCode", lookupCode);
+    if (email) params.set("email", email);
+  }
   return `/hotel/bookings${params.toString() ? `?${params.toString()}` : ""}`;
 }
 

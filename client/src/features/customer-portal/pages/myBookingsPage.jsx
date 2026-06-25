@@ -88,14 +88,45 @@ function getRoomTitle(room) {
   return "Phòng lưu trú";
 }
 
-function getBookingTitle(booking) {
-  const rooms = getRoomEntries(booking);
+function getBookingRoomEntries(booking, detail) {
+  const detailRooms = Array.isArray(detail?.rooms) ? detail.rooms : [];
+  if (detailRooms.length) return detailRooms;
+  return getRoomEntries(booking);
+}
+
+function getBookingTitle(booking, detail) {
+  const rooms = getBookingRoomEntries(booking, detail);
   if (rooms.length) return getRoomTitle(rooms[0]);
+
+  const directRoom = {
+    room_info: {
+      room_number: booking?.room_info?.room_number || booking?.room_number,
+      category: {
+        name:
+          booking?.room_info?.category?.name ||
+          booking?.room_info?.category_name ||
+          booking?.category?.name ||
+          booking?.category_name ||
+          booking?.room_name ||
+          booking?.room_type ||
+          "",
+      },
+    },
+    room_number: booking?.room_number,
+    category: booking?.category,
+    category_name: booking?.category_name,
+    room_name: booking?.room_name,
+    room_type: booking?.room_type,
+  };
+
+  const directLabel = getRoomTitle(directRoom);
+  if (directLabel && directLabel !== "Phòng lưu trú") return directLabel;
+
   return "Đơn đặt phòng";
 }
 
-function getRoomSummary(booking) {
-  const rooms = getRoomEntries(booking);
+function getRoomSummary(booking, detail) {
+  const rooms = getBookingRoomEntries(booking, detail);
   if (!rooms.length) return "Chưa có thông tin phòng.";
   const primary = getRoomTitle(rooms[0]);
   if (rooms.length === 1) return primary;
@@ -169,6 +200,32 @@ function getPaymentOverviewText(booking, paymentDetail) {
   if (status === "completed") return "Thanh toán đã hoàn tất";
   if (status === "failed") return "Thanh toán thất bại";
   return "Thanh toán cọc chưa hoàn tất";
+}
+
+function getPaymentTransactionIdentifier(booking) {
+  const candidates = [
+    booking?.transaction?.booking_code,
+    booking?.payment?.booking_code,
+    booking?.payment_transaction?.booking_code,
+    booking?.payment_transaction?.orderCode,
+    booking?.receipt?.booking_code,
+    booking?.orderCode,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const normalized = String(candidate).trim();
+    if (!normalized) continue;
+    if (/^\d+$/.test(normalized)) return normalized;
+  }
+
+  return "";
+}
+
+function shouldFetchPaymentTransaction(booking) {
+  const status = normalizeStatus(booking?.status);
+  if (status === "cancelled" || status === "canceled" || status === "expired") return false;
+  return Boolean(getPaymentTransactionIdentifier(booking));
 }
 
 function getAmountSummary(booking) {
@@ -340,7 +397,7 @@ function BookingCard({ booking, selected, onSelect, onPay, paymentBusy }) {
           <div className="booking-ticket__header">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="booking-ticket__title break-words text-lg font-semibold tracking-tight">
+                  <h3 className="booking-ticket__title break-words text-lg font-semibold tracking-tight">
                   {getBookingTitle(booking)}
                 </h3>
                 <BookingStatusBadge tone={statusMeta.tone}>{statusMeta.label}</BookingStatusBadge>
@@ -458,7 +515,7 @@ function BookingDetailPanel({
   onRetry,
 }) {
   const resolvedBooking = detail?.booking || booking;
-  const rooms = Array.isArray(detail?.rooms) && detail.rooms.length ? detail.rooms : booking?.rooms || [];
+  const rooms = getBookingRoomEntries(booking, detail);
   const statusMeta = getBookingStatusMeta(resolvedBooking);
   const paymentMeta = getPaymentStatusMeta(paymentDetail, resolvedBooking);
   const paymentOverviewText = getPaymentOverviewText(resolvedBooking, paymentDetail);
@@ -467,6 +524,8 @@ function BookingDetailPanel({
   const adults = Number(resolvedBooking?.adults || 0);
   const children = Number(resolvedBooking?.children || 0);
   const canPay = normalizeStatus(resolvedBooking?.status) === "pending";
+  const bookingTitle = getBookingTitle(resolvedBooking, detail);
+  const roomSummary = rooms.length ? getRoomSummary(resolvedBooking, detail) : "Chưa có thông tin phòng.";
 
   const handleCopy = async () => {
     const code = String(getBookingCode(resolvedBooking));
@@ -500,8 +559,11 @@ function BookingDetailPanel({
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Chi tiết đặt phòng</p>
           <h3 className="mt-2 break-words text-2xl font-semibold tracking-tight text-stone-950">
-            {getBookingTitle(resolvedBooking)}
+            {bookingTitle}
           </h3>
+          <p className="mt-1 text-sm font-medium text-stone-600">
+            Mã booking {getBookingCode(resolvedBooking)}
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <BookingStatusBadge tone={statusMeta.tone}>{statusMeta.label}</BookingStatusBadge>
             <BookingStatusBadge tone={paymentMeta.tone}>{paymentMeta.label}</BookingStatusBadge>
@@ -557,6 +619,7 @@ function BookingDetailPanel({
                 <DetailRow label="Số đêm" value={nights > 0 ? `${nights} đêm` : "--"} />
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <DetailRow label="Phòng / hạng phòng" value={roomSummary} />
                 <DetailRow label="Mã booking" value={getBookingCode(resolvedBooking)} emphasize />
                 <DetailRow label="Khách" value={`${adults} người lớn · ${children} trẻ em`} />
               </div>
@@ -964,27 +1027,37 @@ export default function MyBookingsPage() {
 
     let cancelled = false;
     const bookingId = selectedBooking?._id || selectedBooking?.id;
+    const paymentTransactionIdentifier = getPaymentTransactionIdentifier(selectedBooking);
 
     const loadDetail = async () => {
       setDrawerLoading(true);
       setDrawerError("");
       try {
-        const [detailPayload, paymentPayload] = await Promise.allSettled([
-          customerPortalApi.getMyBookingDetail(bookingId),
-          paymentApi.getPaymentTransactionDetail(bookingId),
-        ]);
-
-        if (cancelled) return;
-
-        if (detailPayload.status === "fulfilled") {
-          setBookingDetail(detailPayload.value || null);
-        } else {
+        try {
+          const detailPayload = await customerPortalApi.getMyBookingDetail(bookingId);
+          if (cancelled) return;
+          setBookingDetail(detailPayload || { booking: selectedBooking, rooms: selectedBooking?.rooms || [] });
+        } catch (detailErr) {
+          if (cancelled) return;
           setBookingDetail({ booking: selectedBooking, rooms: selectedBooking?.rooms || [] });
-          setDrawerError(detailPayload.reason?.message || "Không thể tải chi tiết đặt phòng.");
+          setDrawerError(detailErr?.message || "Không thể tải chi tiết đặt phòng.");
         }
 
-        if (paymentPayload.status === "fulfilled") {
-          setPaymentDetail(paymentPayload.value || null);
+        if (shouldFetchPaymentTransaction(selectedBooking) && paymentTransactionIdentifier) {
+          try {
+            const paymentPayload = await paymentApi.getPaymentTransactionDetail(paymentTransactionIdentifier);
+            if (!cancelled) {
+              setPaymentDetail(paymentPayload || null);
+            }
+          } catch (paymentErr) {
+            if (!cancelled) {
+              const statusCode = paymentErr?.response?.status;
+              if (statusCode !== 400 && statusCode !== 404) {
+                setDrawerError(paymentErr?.message || "Không thể tải chi tiết thanh toán.");
+              }
+              setPaymentDetail(null);
+            }
+          }
         } else {
           setPaymentDetail(null);
         }
