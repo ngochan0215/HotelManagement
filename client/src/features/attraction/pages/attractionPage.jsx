@@ -1,352 +1,428 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Landmark, MapPin, Sparkles, Star, Trees, UtensilsCrossed } from "lucide-react";
 import { attractionApi } from "../../api/attractionApi.js";
+import { getAttractionFallbackImage, getAttractionVisual } from "../attractionVisuals.js";
 
 const CATEGORIES = [
-    { value: "", label: "Tất cả" },
-    { value: "cultural", label: "Văn hóa" },
-    { value: "natural", label: "Thiên nhiên" },
-    { value: "food", label: "Ẩm thực" },
-    { value: "entertainment", label: "Giải trí" },
-    { value: "sport", label: "Thể thao" },
-    { value: "other", label: "Khác" },
+  { value: "", label: "Tất cả" },
+  { value: "food", label: "Ăn uống" },
+  { value: "cultural", label: "Tham quan" },
+  { value: "entertainment", label: "Giải trí" },
+  { value: "natural", label: "Thiên nhiên" },
 ];
 
-function Stars({ rating }) {
-    return (
-        <span style={{ color: "#f59e0b", fontSize: 14 }}>
-            {"★".repeat(rating)}{"☆".repeat(3 - rating)}
-        </span>
-    );
+const CATEGORY_META = {
+  food: { label: "Ăn uống", icon: UtensilsCrossed },
+  cultural: { label: "Tham quan", icon: Landmark },
+  entertainment: { label: "Giải trí", icon: Sparkles },
+  natural: { label: "Thiên nhiên", icon: Trees },
+  sport: { label: "Vận động", icon: MapPin },
+  other: { label: "Khác", icon: MapPin },
+};
+
+const ratingStars = (rating = 0) => {
+  const value = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  return Array.from({ length: 5 }, (_, index) => (index < value ? "★" : "☆")).join("");
+};
+
+function getDistanceLabel(distanceKm) {
+  const distance = Number(distanceKm || 0);
+  if (!distance) return "Gần khách sạn";
+  if (distance <= 2) return "5–10 phút";
+  if (distance <= 5) return "10–15 phút";
+  return "Trong ngày";
 }
 
-function AttractionDetailModal({ attraction, onClose }) {
-    if (!attraction) return null;
-
-    const lat = attraction.coordinates?.lat;
-    const lng = attraction.coordinates?.lng;
-    const mapEmbedUrl = lat && lng
-        ? `https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`
-        : null;
-    const mapsUrl = lat && lng
-        ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name)}`;
-
-    return (
-        <div
-            onClick={onClose}
-            style={{
-                position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-            }}
-        >
-            <div
-                onClick={e => e.stopPropagation()}
-                style={{
-                    background: "#fff", borderRadius: 12, width: 620, maxHeight: "90vh",
-                    overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-                }}
-            >
-                {/* Header image */}
-                {attraction.image_url ? (
-                    <img
-                        src={attraction.image_url}
-                        alt={attraction.name}
-                        style={{ width: "100%", height: 200, objectFit: "cover", borderRadius: "12px 12px 0 0", display: "block" }}
-                        onError={e => { e.target.style.display = "none"; }}
-                    />
-                ) : null}
-
-                <div style={{ padding: "20px 24px 24px" }}>
-                    {/* Title row */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111" }}>{attraction.name}</h2>
-                            <div style={{ marginTop: 6, display: "flex", gap: 10, alignItems: "center" }}>
-                                <Stars rating={attraction.rating} />
-                                <span style={{ fontSize: 12, background: "#e0e7ff", color: "#4338ca", borderRadius: 4, padding: "2px 8px" }}>
-                                    {CATEGORIES.find(c => c.value === attraction.category)?.label || attraction.category}
-                                </span>
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>📍 {attraction.distance_km} km</span>
-                            </div>
-                        </div>
-                        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280", marginLeft: 12 }}>✕</button>
-                    </div>
-
-                    {/* Description */}
-                    <div style={{ marginTop: 14, fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
-                        {attraction.description || <span style={{ color: "#9ca3af" }}>Chưa có mô tả.</span>}
-                    </div>
-
-                    {/* Google Maps embed */}
-                    {mapEmbedUrl && (
-                        <div style={{ marginTop: 18 }}>
-                            <iframe
-                                title={attraction.name}
-                                src={mapEmbedUrl}
-                                width="100%"
-                                height="240"
-                                style={{ border: "none", borderRadius: 8 }}
-                                loading="lazy"
-                                referrerPolicy="no-referrer-when-downgrade"
-                            />
-                        </div>
-                    )}
-
-                    {/* Action links */}
-                    <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-                        <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                background: "#4f46e5", color: "#fff", borderRadius: 7,
-                                padding: "8px 16px", fontSize: 13, textDecoration: "none", fontWeight: 500,
-                            }}
-                        >
-                            🗺️ Mở Google Maps
-                        </a>
-                        {attraction.wikipedia_url && (
-                            <a
-                                href={attraction.wikipedia_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                    display: "inline-flex", alignItems: "center", gap: 6,
-                                    background: "#f3f4f6", color: "#374151", borderRadius: 7,
-                                    padding: "8px 16px", fontSize: 13, textDecoration: "none", fontWeight: 500,
-                                    border: "1px solid #e5e7eb",
-                                }}
-                            >
-                                📖 Wikipedia
-                            </a>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+function getMapsUrl(attraction) {
+  const lat = attraction.coordinates?.lat;
+  const lng = attraction.coordinates?.lng;
+  if (lat && lng) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name)}`;
 }
 
 function AttractionCard({ attraction, onClick }) {
-    return (
-        <div
-            onClick={() => onClick(attraction)}
-            style={{
-                border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden",
-                background: "#fff", cursor: "pointer", transition: "box-shadow 0.2s",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-            }}
-            onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.13)"}
-            onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.07)"}
-        >
-            {attraction.image_url ? (
-                <img
-                    src={attraction.image_url}
-                    alt={attraction.name}
-                    style={{ width: "100%", height: 140, objectFit: "cover" }}
-                    onError={e => { e.target.style.display = "none"; }}
-                />
-            ) : (
-                <div style={{
-                    height: 80, background: "#f3f4f6",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#9ca3af", fontSize: 12,
-                }}>
-                    Không có ảnh
-                </div>
-            )}
+  const visual = getAttractionVisual(attraction);
+  const fallbackImage = getAttractionFallbackImage(visual.category);
+  const [imageSrc, setImageSrc] = useState(visual.image || fallbackImage);
+  const config = CATEGORY_META[visual.category] || CATEGORY_META.other;
+  const CategoryIcon = config.icon;
 
-            <div style={{ padding: "12px 14px" }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#111", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {attraction.name}
-                </div>
+  useEffect(() => {
+    setImageSrc(visual.image || fallbackImage);
+  }, [fallbackImage, visual.image]);
 
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <Stars rating={attraction.rating} />
-                    <span style={{ fontSize: 11, background: "#e0e7ff", color: "#4338ca", borderRadius: 4, padding: "1px 6px" }}>
-                        {CATEGORIES.find(c => c.value === attraction.category)?.label || attraction.category}
-                    </span>
-                </div>
+  return (
+    <article
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`group flex min-w-0 flex-col overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-[0_16px_40px_rgba(28,25,23,0.08)] transition ${
+        onClick ? "cursor-pointer hover:-translate-y-1 hover:shadow-[0_22px_50px_rgba(28,25,23,0.12)]" : ""
+      }`}
+    >
+      <div className="relative overflow-hidden bg-stone-100">
+        <img
+          src={imageSrc}
+          alt={attraction.name}
+          className="h-52 w-full object-cover transition duration-500 ease-out group-hover:scale-[1.04]"
+          onError={() => {
+            if (imageSrc !== fallbackImage) {
+              setImageSrc(fallbackImage);
+            }
+          }}
+        />
 
-                <div style={{ fontSize: 12, color: "#374151", height: 48, overflow: "hidden", lineHeight: 1.5 }}>
-                    {attraction.description || <span style={{ color: "#9ca3af" }}>Chưa có mô tả.</span>}
-                </div>
-
-                <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-                    📍 {attraction.distance_km} km &nbsp;·&nbsp;
-                    {attraction.coordinates?.lat?.toFixed(4)}, {attraction.coordinates?.lng?.toFixed(4)}
-                </div>
-            </div>
+        <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-stone-800 shadow-sm backdrop-blur">
+          <CategoryIcon size={13} />
+          <span>{config.label}</span>
         </div>
-    );
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
+        <div className="min-w-0">
+          <h3
+            className="break-words text-lg font-semibold leading-tight text-stone-950"
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {attraction.name}
+          </h3>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+              <Star size={12} fill="currentColor" />
+              {ratingStars(attraction.rating)}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+              <MapPin size={12} />
+              {Number(attraction.distance_km || 0) ? `${Number(attraction.distance_km).toFixed(1)} km` : "Gần khách sạn"}
+            </span>
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+              {getDistanceLabel(attraction.distance_km)}
+            </span>
+          </div>
+        </div>
+
+        <p
+          className="text-sm leading-6 text-stone-600"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {attraction.description || "Gợi ý gần SE Hotel để khách dễ ghé ăn uống, tham quan hoặc thư giãn."}
+        </p>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+          <span className="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Khám phá quanh khách sạn</span>
+          <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold text-stone-700">
+            Xem chi tiết
+            <ArrowRight size={14} />
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function AttractionDetail({ attraction, onClose }) {
+  if (!attraction) return null;
+  const visual = getAttractionVisual(attraction);
+  const fallbackImage = getAttractionFallbackImage(visual.category);
+  const [imageSrc, setImageSrc] = useState(visual.image || fallbackImage);
+
+  useEffect(() => {
+    setImageSrc(visual.image || fallbackImage);
+  }, [fallbackImage, visual.image]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.28)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-700">
+              {CATEGORY_META[attraction.category]?.label || "Khám phá"}
+            </p>
+            <h3 className="mt-2 break-words text-2xl font-semibold text-stone-950">{attraction.name}</h3>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-stone-600">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+                <MapPin size={12} />
+                {Number(attraction.distance_km || 0) ? `${Number(attraction.distance_km).toFixed(1)} km` : "Gần khách sạn"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                <Star size={12} fill="currentColor" />
+                {ratingStars(attraction.rating)}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-50"
+          >
+            Đóng
+          </button>
+        </div>
+
+        <div className="grid gap-6 px-6 py-6 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="min-w-0 overflow-hidden rounded-[24px] border border-stone-200 bg-stone-100">
+            <img
+              src={imageSrc}
+              alt={attraction.name}
+              className="h-full w-full object-cover"
+              style={{ minHeight: 280 }}
+              onError={() => {
+                if (imageSrc !== fallbackImage) {
+                  setImageSrc(fallbackImage);
+                }
+              }}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm leading-7 text-stone-600">
+              {attraction.description || "Gợi ý gần SE Hotel để khách dễ lên kế hoạch ghé thăm, ăn uống hoặc thư giãn."}
+            </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[20px] border border-stone-200 bg-stone-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Loại địa điểm</p>
+                <p className="mt-2 text-sm font-medium text-stone-800">{visual.categoryLabel || "Khác"}</p>
+              </div>
+              <div className="rounded-[20px] border border-stone-200 bg-stone-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">Khoảng cách</p>
+                <p className="mt-2 text-sm font-medium text-stone-800">
+                  {Number(attraction.distance_km || 0) ? `${Number(attraction.distance_km).toFixed(1)} km` : "Gần khách sạn"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <a
+                href={getMapsUrl(attraction)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800"
+              >
+                Mở Google Maps
+                <ArrowRight size={16} />
+              </a>
+              {attraction.wikipedia_url ? (
+                <a
+                  href={attraction.wikipedia_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
+                >
+                  Wikipedia
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AttractionPage() {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [selected, setSelected] = useState(null);
+  const [data, setData] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [category, setCategory] = useState("");
+  const [maxDistance, setMaxDistance] = useState("");
+  const [page, setPage] = useState(1);
+  const LIMIT = 12;
 
-    const [category, setCategory] = useState("");
-    const [maxDistance, setMaxDistance] = useState("");
-    const [page, setPage] = useState(1);
-    const LIMIT = 12;
-
+  useEffect(() => {
     const fetchAttractions = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = { page, limit: LIMIT };
-            if (category) params.category = category;
-            if (maxDistance) params.max_distance = Number(maxDistance) * 1000; // km → m
+      setLoading(true);
+      setError("");
+      try {
+        const params = { page, limit: LIMIT };
+        if (category) params.category = category;
+        if (maxDistance) params.max_distance = Number(maxDistance) * 1000;
 
-            const res = await attractionApi.getAll(params);
-            setData(res);
-        } catch (err) {
-            console.error("[AttractionPage] fetch error:", err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+        const res = await attractionApi.getAll(params);
+        const list = res?.attractions || res?.data?.attractions || [];
+        setData(res);
+        setItems((prev) => (page === 1 ? list : [...prev, ...list]));
+      } catch (err) {
+        setError(err?.message || "Không thể tải địa điểm.");
+        if (page === 1) setItems([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    useEffect(() => {
-        fetchAttractions();
-    }, [category, maxDistance, page]);
+    fetchAttractions();
+  }, [category, maxDistance, page]);
 
-    const totalPages = data ? Math.ceil(data.total / LIMIT) : 0;
+  const hasMore = useMemo(() => {
+    if (!data) return false;
+    return items.length < Number(data.total || 0);
+  }, [data, items.length]);
 
-    return (
-        <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "sans-serif" }}>
-            {/* Simple header */}
-            <div style={{ background: "#4f46e5", color: "#fff", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Địa điểm du lịch gần đây</h1>
-                    <p style={{ margin: "4px 0 0", fontSize: 13, opacity: 0.8 }}>Khám phá các địa điểm nổi bật xung quanh khách sạn</p>
-                </div>
-                {data && (
-                    <span style={{ fontSize: 13, opacity: 0.8 }}>{data.total} địa điểm</span>
-                )}
-            </div>
+  const applyCategory = (value) => {
+    setCategory(value);
+    setPage(1);
+  };
 
-            <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
-                {/* Filters */}
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, marginBottom: 24 }}>
-                    {/* Category tabs */}
-                    <div style={{ marginBottom: 12 }}>
-                        <span style={{ fontSize: 12, color: "#6b7280", marginRight: 8 }}>Loại hình:</span>
-                        <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
-                            {CATEGORIES.map(c => (
-                                <button
-                                    key={c.value}
-                                    onClick={() => { setCategory(c.value); setPage(1); }}
-                                    style={{
-                                        border: "1px solid",
-                                        borderColor: category === c.value ? "#4f46e5" : "#d1d5db",
-                                        background: category === c.value ? "#4f46e5" : "#fff",
-                                        color: category === c.value ? "#fff" : "#374151",
-                                        borderRadius: 20, padding: "4px 14px", fontSize: 12, cursor: "pointer",
-                                    }}
-                                >
-                                    {c.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+  const applyDistance = (value) => {
+    setMaxDistance(value);
+    setPage(1);
+  };
 
-                    {/* Distance presets */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 12, color: "#6b7280" }}>Khoảng cách:</span>
-                        {[
-                            { label: "Tất cả", value: "" },
-                            { label: "Dưới 2 km", value: "2" },
-                            { label: "Dưới 5 km", value: "5" },
-                            { label: "Dưới 10 km", value: "10" },
-                        ].map(d => (
-                            <button
-                                key={d.value}
-                                onClick={() => { setMaxDistance(d.value); setPage(1); }}
-                                style={{
-                                    border: "1px solid",
-                                    borderColor: maxDistance === d.value ? "#059669" : "#d1d5db",
-                                    background: maxDistance === d.value ? "#059669" : "#fff",
-                                    color: maxDistance === d.value ? "#fff" : "#374151",
-                                    borderRadius: 20, padding: "4px 14px", fontSize: 12, cursor: "pointer",
-                                }}
-                            >
-                                {d.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+  const resetAll = () => {
+    setCategory("");
+    setMaxDistance("");
+    setPage(1);
+  };
 
-                {/* Content */}
-                {loading && (
-                    <div style={{ textAlign: "center", padding: 60, color: "#6b7280" }}>Đang tải...</div>
-                )}
-                {error && (
-                    <div style={{ textAlign: "center", padding: 40, color: "#ef4444" }}>
-                        Lỗi: {error}
-                    </div>
-                )}
-                {!loading && !error && data?.attractions?.length === 0 && (
-                    <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
-                        Không tìm thấy địa điểm nào.
-                    </div>
-                )}
-                {!loading && !error && data?.attractions?.length > 0 && (
-                    <>
-                        <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-                            gap: 16,
-                        }}>
-                            {data.attractions.map(a => (
-                                <AttractionCard key={a._id} attraction={a} onClick={setSelected} />
-                            ))}
-                        </div>
+  return (
+    <div className="min-h-screen bg-[linear-gradient(180deg,#faf8f4_0%,#f5f2eb_100%)] text-stone-900">
+      <div className="border-b border-stone-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-5 md:px-6">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-700">Khám phá quanh khách sạn</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">Địa điểm gần SE Hotel</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-stone-600 md:text-base">
+              Gợi ý những nơi dễ ghé để ăn uống, tham quan hoặc thư giãn trong thời gian lưu trú.
+            </p>
+          </div>
 
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div style={{ marginTop: 32, display: "flex", gap: 8, justifyContent: "center" }}>
-                                <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #d1d5db", background: "#fff", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.4 : 1 }}
-                                >
-                                    ← Trước
-                                </button>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-                                    <button
-                                        key={n}
-                                        onClick={() => setPage(n)}
-                                        style={{
-                                            padding: "6px 12px", borderRadius: 6,
-                                            border: "1px solid",
-                                            borderColor: page === n ? "#4f46e5" : "#d1d5db",
-                                            background: page === n ? "#4f46e5" : "#fff",
-                                            color: page === n ? "#fff" : "#374151",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        {n}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                    style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #d1d5db", background: "#fff", cursor: page === totalPages ? "not-allowed" : "pointer", opacity: page === totalPages ? 0.4 : 1 }}
-                                >
-                                    Tiếp →
-                                </button>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            <AttractionDetailModal attraction={selected} onClose={() => setSelected(null)} />
+          <button
+            type="button"
+            onClick={resetAll}
+            className="inline-flex shrink-0 items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+          >
+            Đặt lại bộ lọc
+          </button>
         </div>
-    );
+      </div>
+
+      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        <div className="mb-6 flex flex-wrap gap-2">
+          {CATEGORIES.map((chip) => (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => applyCategory(chip.value)}
+              className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition ${
+                category === chip.value
+                  ? "border-stone-950 bg-stone-950 text-white shadow-sm"
+                  : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+
+          {[
+            { label: "Dưới 2 km", value: "2" },
+            { label: "Dưới 5 km", value: "5" },
+            { label: "Dưới 10 km", value: "10" },
+          ].map((chip) => (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => applyDistance(chip.value)}
+              className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition ${
+                maxDistance === chip.value
+                  ? "border-emerald-700 bg-emerald-700 text-white shadow-sm"
+                  : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
+        {error ? (
+          <div className="rounded-[28px] border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
+            <p className="text-lg font-semibold text-stone-900">Chưa thể tải địa điểm</p>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">{error}</p>
+          </div>
+        ) : null}
+
+        <section className="space-y-4">
+          {items.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((item) => (
+                <AttractionCard key={item._id || item.xid || item.name} attraction={item} onClick={() => setSelected(item)} />
+              ))}
+            </div>
+          ) : loading ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
+                  <div className="h-52 animate-pulse bg-stone-100" />
+                  <div className="space-y-3 p-5">
+                    <div className="h-4 w-24 animate-pulse rounded bg-stone-100" />
+                    <div className="h-6 w-4/5 animate-pulse rounded bg-stone-100" />
+                    <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
+                    <div className="h-4 w-2/3 animate-pulse rounded bg-stone-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-[28px] border border-dashed border-stone-300 bg-white/80 px-6 py-12 text-center shadow-sm">
+              <p className="text-lg font-semibold text-stone-900">Không tìm thấy địa điểm nào</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">
+                Hãy thử bỏ bớt bộ lọc để xem thêm gợi ý quanh SE Hotel.
+              </p>
+            </div>
+          )}
+        </section>
+
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={page === 1 || loading}
+            className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Trước
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((prev) => prev + 1)}
+            disabled={!hasMore || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Xem thêm
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </main>
+
+      <AttractionDetail attraction={selected} onClose={() => setSelected(null)} />
+    </div>
+  );
 }

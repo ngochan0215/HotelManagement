@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
+import { ArrowRight, Landmark, MapPin, ShieldCheck, Sparkles, Star, Trees, UtensilsCrossed } from "lucide-react";
+import { attractionApi } from "../../api/attractionApi.js";
+import { getAttractionImage, getAttractionVisual } from "../../attraction/attractionVisuals.js";
 import { customerPortalApi } from "../api/customerPortalApi.js";
 import CustomerShell from "../components/customerShell.jsx";
 import { HOTEL_IMAGE_SETS } from "../components/imageCatalog.js";
@@ -60,6 +62,31 @@ const getServiceIcon = (type) => {
   }
 };
 
+const nearbyCategoryChips = [
+  { value: "", label: "Tất cả" },
+  { value: "food", label: "Ăn uống" },
+  { value: "cultural", label: "Tham quan" },
+  { value: "entertainment", label: "Giải trí" },
+  { value: "natural", label: "Thiên nhiên" },
+];
+
+const nearbyCategoryMeta = {
+  food: { Icon: UtensilsCrossed, label: "Ăn uống" },
+  cultural: { Icon: Landmark, label: "Tham quan" },
+  entertainment: { Icon: Sparkles, label: "Giải trí" },
+  natural: { Icon: Trees, label: "Thiên nhiên" },
+  sport: { Icon: MapPin, label: "Vận động" },
+  other: { Icon: MapPin, label: "Khác" },
+};
+
+const getNearbyDistanceLabel = (distanceKm) => {
+  const distance = Number(distanceKm || 0);
+  if (!distance) return "Gần khách sạn";
+  if (distance <= 2) return "5-10 phút di chuyển";
+  if (distance <= 5) return "10-15 phút di chuyển";
+  return "Tiện ghé trong ngày";
+};
+
 function deriveAmenities(room) {
   return (room.default_equipments || [])
     .map((item) => item.equipment_category?.name)
@@ -95,9 +122,22 @@ export default function LandingPage() {
   const [landingTestimonials, setLandingTestimonials] = useState(fallbackTestimonials);
   const [testimonialsLoading, setTestimonialsLoading] = useState(true);
   const [testimonialsError, setTestimonialsError] = useState("");
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [nearbyTotal, setNearbyTotal] = useState(0);
+  const [nearbyLoading, setNearbyLoading] = useState(true);
+  const [nearbyError, setNearbyError] = useState("");
+  const [nearbyCategory, setNearbyCategory] = useState("");
   const slidingServices = [...landingServices, ...landingServices];
   const slidingAmenities = [...amenities, ...amenities];
   const todayInputValue = getTodayInputValue();
+  const visibleNearbyPlaces = useMemo(() => {
+    const items = Array.isArray(nearbyPlaces) ? [...nearbyPlaces] : [];
+    return items
+      .sort((a, b) => {
+        return Number(a?.distance_km || 0) - Number(b?.distance_km || 0);
+      })
+      .slice(0, 6);
+  }, [nearbyPlaces]);
 
   const loadRooms = async () => {
     setLoadingRooms(true);
@@ -172,6 +212,36 @@ export default function LandingPage() {
     loadTestimonials();
   }, []);
 
+  useEffect(() => {
+    const loadNearbyPlaces = async () => {
+      setNearbyLoading(true);
+      setNearbyError("");
+      try {
+        const params = {
+          page: 1,
+          limit: 12,
+          max_distance: 8000,
+        };
+        if (nearbyCategory) {
+          params.category = nearbyCategory;
+        }
+
+        const response = await attractionApi.getAll(params);
+        const attractions = response?.attractions || response?.data?.attractions || [];
+        setNearbyTotal(Number(response?.total || response?.data?.total || attractions.length || 0));
+        setNearbyPlaces(Array.isArray(attractions) ? attractions : []);
+      } catch (error) {
+        setNearbyPlaces([]);
+        setNearbyTotal(0);
+        setNearbyError(error.message || "Không thể tải địa điểm gần khách sạn.");
+      } finally {
+        setNearbyLoading(false);
+      }
+    };
+
+    loadNearbyPlaces();
+  }, [nearbyCategory]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     setSearchError("");
@@ -232,6 +302,22 @@ export default function LandingPage() {
         .hover-zoom-wrap:hover .hover-zoom-img {
           transform: scale(1.05);
         }
+        .nearby-place-card__imageWrap {
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          overflow: hidden;
+          border-radius: 22px 22px 0 0;
+          background: linear-gradient(135deg, #f5efe7, #e7d3b7);
+        }
+        .nearby-place-card__image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .nearby-place-card__imageWrap--fallback {
+          min-height: 160px;
+        }
       `}</style>
       <section className="overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_30%),linear-gradient(135deg,#1c1917_0%,#292524_46%,#92400e_100%)]">
         <div className="mx-auto max-w-7xl px-4 pb-12 pt-8 md:px-6 md:pb-16 md:pt-12">
@@ -254,57 +340,42 @@ export default function LandingPage() {
                   <span className="truncate">Đặt phòng nhanh và rõ giá</span>
                 </span>
               </div>
+
+              <div className="mt-8 rounded-[28px] border border-white/15 bg-white/8 p-4 backdrop-blur">
+                <p className="text-sm leading-6 text-stone-200">
+                  Khám phá phòng, dịch vụ và những trải nghiệm gần khách sạn trước khi đặt phòng.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/hotel/rooms")}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-stone-100"
+                  >
+                    Xem phòng
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/hotel/rooms")}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+                  >
+                    Đặt phòng ngay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/hotel/bookings")}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-transparent px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Đặt phòng của tôi
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid min-w-0 max-w-full gap-4 overflow-hidden rounded-[34px] border border-white/15 bg-white/10 p-4 shadow-2xl backdrop-blur md:grid-cols-2">
-              <HotelImage src={HOTEL_IMAGE_SETS.hero[0]} alt="Sảnh đón khách sang trọng tại SE Hotel" ratio="wide" fallbackLabel="Sảnh đón khách SE Hotel" className="min-w-0 rounded-[26px] md:col-span-2" />
-              <HotelImage src={HOTEL_IMAGE_SETS.hero[1]} alt="Phòng nghỉ cao cấp với ánh sáng ấm áp" ratio="square" fallbackLabel="Phòng nghỉ cao cấp" className="min-w-0 rounded-[26px]" />
-              <HotelImage src={HOTEL_IMAGE_SETS.hero[2]} alt="Khu vực thư giãn và tiếp khách của khách sạn" ratio="square" fallbackLabel="Khu vực thư giãn" className="min-w-0 rounded-[26px]" />
-            </div>
-          </div>
-
-          <div className="mt-10 min-w-0 overflow-hidden rounded-[32px] border border-white/70 bg-white/95 p-5 shadow-[0_25px_60px_rgba(28,25,23,0.18)] backdrop-blur md:mt-12 md:p-6">
-            <div className="grid min-w-0 gap-6 lg:grid-cols-1 lg:items-end">
-              <form onSubmit={handleSearch} className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <label className="grid gap-2 text-sm font-medium text-stone-700">
-                  Ngày nhận phòng
-                  <input required type="date" min={todayInputValue} value={search.checkin} onChange={(e) => setSearch((p) => ({ ...p, checkin: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-stone-700">
-                  Ngày trả phòng
-                  <input required type="date" value={search.checkout} onChange={(e) => setSearch((p) => ({ ...p, checkout: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-stone-700">
-                  Người lớn
-                  <input required type="number" min="1" value={search.adults} onChange={(e) => setSearch((p) => ({ ...p, adults: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-stone-700">
-                  Trẻ em
-                  <input required type="number" min="0" value={search.children} onChange={(e) => setSearch((p) => ({ ...p, children: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-stone-700">
-                  Loại phòng
-                  <select value={search.roomType} onChange={(e) => setSearch((p) => ({ ...p, roomType: e.target.value }))} className="h-12 w-full rounded-2xl border border-stone-200 bg-white px-4 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100">
-                    <option value="">Tất cả hạng phòng</option>
-                    {roomTypes.map((room) => (
-                      <option key={room._id} value={room._id}>
-                        {room.category_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {searchError ? (
-                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 md:col-span-2 xl:col-span-5">
-                    {searchError}
-                  </p>
-                ) : null}
-                <div className="md:col-span-2 xl:col-span-5">
-                  <button type="submit" className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-3.5 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800 focus:outline-none focus:ring-4 focus:ring-stone-200">
-                    Tìm phòng phù hợp
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              </form>
+              <HotelImage src={HOTEL_IMAGE_SETS.hero[0]} alt="Sảnh đón khách sang trọng tại SE Hotel" ratio="wide" fallbackLabel="Sảnh đón khách SE Hotel" className="min-w-0 rounded-[26px] md:col-span-2" overlay={false} />
+              <HotelImage src={HOTEL_IMAGE_SETS.hero[1]} alt="Phòng nghỉ cao cấp với ánh sáng ấm áp" ratio="square" fallbackLabel="Phòng nghỉ cao cấp" className="min-w-0 rounded-[26px]" overlay={false} />
+              <HotelImage src={HOTEL_IMAGE_SETS.hero[2]} alt="Khu vực thư giãn và tiếp khách của khách sạn" ratio="square" fallbackLabel="Khu vực thư giãn" className="min-w-0 rounded-[26px]" overlay={false} />
             </div>
           </div>
         </div>
@@ -312,6 +383,159 @@ export default function LandingPage() {
 
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
         <MetricStrip />
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
+        <div className="overflow-hidden rounded-[32px] border border-stone-200 bg-white shadow-[0_18px_50px_rgba(28,25,23,0.08)]">
+          <div className="border-b border-stone-200 bg-[linear-gradient(135deg,#fffaf0_0%,#ffffff_55%,#f8f5ef_100%)] px-6 py-6 md:px-8">
+            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-700">Khám phá gần khách sạn</p>
+                <h2 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950 md:text-4xl">
+                  Đi đâu gần SE Hotel?
+                </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-600 md:text-base">
+                  Gợi ý những nơi dễ ghé để ăn uống, tham quan hoặc dạo chơi trong thời gian lưu trú.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/attractions")}
+                className="inline-flex max-w-full items-center justify-center gap-2 self-start rounded-full border border-stone-300 bg-white px-5 py-3 text-center text-sm font-semibold leading-5 text-stone-800 transition hover:border-stone-400 hover:bg-stone-50"
+              >
+                Xem tất cả địa điểm
+                <ArrowRight size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {nearbyCategoryChips.map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => setNearbyCategory(chip.value)}
+                  className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition ${
+                    nearbyCategory === chip.value
+                      ? "border-stone-950 bg-stone-950 text-white shadow-sm"
+                      : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 md:p-8">
+            {nearbyLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
+                    <div className="h-44 animate-pulse bg-stone-100" />
+                    <div className="space-y-3 p-5">
+                      <div className="h-4 w-24 animate-pulse rounded bg-stone-100" />
+                      <div className="h-6 w-4/5 animate-pulse rounded bg-stone-100" />
+                      <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
+                      <div className="h-4 w-2/3 animate-pulse rounded bg-stone-100" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : nearbyError ? (
+              <div className="rounded-[28px] border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
+                <p className="text-lg font-semibold text-stone-900">Chưa thể tải địa điểm gần khách sạn</p>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">{nearbyError}</p>
+              </div>
+            ) : visibleNearbyPlaces.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleNearbyPlaces.map((place) => {
+                  const visual = getAttractionVisual(place);
+                  const config = nearbyCategoryMeta[visual.category] || nearbyCategoryMeta.other;
+                  const PlaceIcon = config.Icon;
+                  const distanceText = Number(place.distance_km || 0) ? `${Number(place.distance_km).toFixed(1)} km` : "Gần khách sạn";
+                  const imageSrc = getAttractionImage(place);
+
+                  return (
+                    <article
+                      key={place._id || place.xid || place.name}
+                      className="group flex min-w-0 flex-col overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-[0_16px_40px_rgba(28,25,23,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_50px_rgba(28,25,23,0.12)]"
+                    >
+                      <div className="nearby-place-card__imageWrap relative overflow-hidden">
+                        <img
+                          src={imageSrc}
+                          alt={place.name}
+                          className="nearby-place-card__image block aspect-[16/9] w-full object-cover transition duration-500 ease-out group-hover:scale-[1.04]"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            e.currentTarget.parentElement?.classList.add("nearby-place-card__imageWrap--fallback");
+                          }}
+                        />
+                        <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-stone-800 shadow-sm backdrop-blur">
+                          <PlaceIcon size={13} />
+                          <span>{config.label}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
+                        <div className="min-w-0">
+                          <h3
+                            className="break-words text-lg font-semibold leading-tight text-stone-950"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {place.name}
+                          </h3>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium text-stone-500">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">
+                              <MapPin size={11} />
+                              {distanceText}
+                            </span>
+                            <span className="rounded-full bg-stone-100 px-2.5 py-1">{getNearbyDistanceLabel(place.distance_km)}</span>
+                          </div>
+                        </div>
+
+                        <p
+                          className="text-sm leading-6 text-stone-600"
+                          style={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {place.description || "Gợi ý gần SE Hotel để khách dễ ghé ăn uống, tham quan hoặc thư giãn."}
+                        </p>
+
+                        <div className="mt-auto flex items-center justify-end gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => navigate("/attractions")}
+                            className="inline-flex shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-white"
+                          >
+                            Khám phá
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-[28px] border border-dashed border-stone-300 bg-white/80 px-6 py-10 text-center shadow-sm">
+                <p className="text-lg font-semibold text-stone-900">Chưa có địa điểm gần khách sạn</p>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">
+                  Hệ thống hiện chưa có dữ liệu địa điểm đủ để hiển thị ở khu vực này.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
@@ -352,6 +576,7 @@ export default function LandingPage() {
                       ratio="wide"
                       fallbackLabel={`Phòng ${room.category_name}`}
                       className="hover-zoom-img shrink-0 rounded-none"
+                      overlay={false}
                     />
                   </div>
                   <div className="flex flex-1 flex-col space-y-4 p-6">
@@ -406,7 +631,7 @@ export default function LandingPage() {
               return (
                 <article key={`${service.title}-${index}`} className="hover-lift fade-up-in fade-delay-1 w-[calc(50%-1rem)] min-w-[280px] flex-1 overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm md:min-w-[320px]">
                   <div className="hover-zoom-wrap overflow-hidden">
-                    <HotelImage src={service.image} alt={service.title} ratio="wide" fallbackLabel={service.title} className="hover-zoom-img rounded-none" />
+                    <HotelImage src={service.image} alt={service.title} ratio="wide" fallbackLabel={service.title} className="hover-zoom-img rounded-none" overlay={false} />
                   </div>
                   <div className="p-6">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
@@ -432,7 +657,7 @@ export default function LandingPage() {
                 {slidingAmenities.map((item, index) => (
                   <div key={`${item.title}-${index}`} className="hover-lift fade-up-in fade-delay-2 w-1/6 min-w-[180px] space-y-3">
                     <div className="hover-zoom-wrap overflow-hidden rounded-2xl">
-                      <HotelImage src={item.image} alt={item.title} ratio="square" fallbackLabel={item.title} className="hover-zoom-img" />
+                      <HotelImage src={item.image} alt={item.title} ratio="square" fallbackLabel={item.title} className="hover-zoom-img" overlay={false} />
                     </div>
                     <p className="text-sm font-medium text-stone-800">{item.title}</p>
                   </div>
