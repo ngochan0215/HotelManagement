@@ -52,7 +52,6 @@ const sidebarConfig = [
       { name: "Quản lý đặt phòng", path: "/booking-management", icon: FiCalendar, allowed: ["receptionist"] },
       { name: "Khách hàng", path: "/customers", icon: FiUser, allowed: [ "customer_service"] },
       { name: "Nhân viên", path: "/employees", icon: FiUsers, allowed: [] }, // Rỗng nghĩa là chỉ Manager
-      { name: "Tài khoản quản trị nội bộ", path: "/user-accounts", icon: FiUser, allowed: [], adminOnly: true },
       //{ name: "Quản lý công việc", path: "/all-tasks", icon: FiBriefcase, allowed: [] }, // Chỉ Manager
       { name: "Thiết bị", path: "/equipment", icon: FiSettings, allowed: [] },
       { name: "Dịch vụ & Sản phẩm", path: "/service", icon: FiBox, allowed: ["receptionist"] },
