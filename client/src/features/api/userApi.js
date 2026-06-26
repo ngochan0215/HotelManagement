@@ -9,6 +9,7 @@ const getAuthHeader = () => {
 
 const USERS_BASE = `${API_BASE_URL}/users`;
 const EMPLOYEES_BASE = `${API_BASE_URL}/employees`;
+const AUTH_BASE = `${API_BASE_URL}/auth`;
 
 export const userApi = {
   getProfile: async () => {
@@ -19,6 +20,28 @@ export const userApi = {
 
     const profile = res.data;
     return profile;
+  },
+
+  getAllUsers: async (params = {}) => {
+    const res = await axios.get(USERS_BASE, {
+      ...getAuthHeader(),
+      params,
+    });
+    return res.data;
+  },
+
+  getUserProfile: async (userId) => {
+    const res = await axios.get(`${USERS_BASE}/profile/${userId}`, getAuthHeader());
+    return res.data;
+  },
+
+  adminResetPassword: async ({ userId, newPassword }) => {
+    const res = await axios.patch(
+      `${AUTH_BASE}/admin-reset-pass`,
+      { userId, newPassword },
+      getAuthHeader()
+    );
+    return res.data;
   },
 
   updateProfile: async (data) => {

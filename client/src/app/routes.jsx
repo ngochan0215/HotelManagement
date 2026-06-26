@@ -33,6 +33,7 @@ import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
 import ChatPage from '../features/chat/pages/chatPage.jsx';
 import VerifyEmailPage from '../features/auth/pages/verifyEmailPage.jsx';
+import UserManagementPage from '../features/user/pages/userManagementPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   const { user } = useAuth();
@@ -50,6 +51,20 @@ const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
     if (!allowedLower.includes(position)) {
       return <Navigate to={getRoleRedirectPath({ role, position })} replace />;
     }
+  }
+
+  return children;
+};
+
+const AdminOnlyRoute = ({ children }) => {
+  const { user } = useAuth();
+  useLocation();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const { role } = getAuthIdentity(user);
+  if ((role || "").toLowerCase() !== "admin") {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -119,6 +134,9 @@ export default function AppRoutes() {
       } />
       <Route path="/employees" element={
         <ProtectedRoute allowed={[]}> <EmployeePage /> </ProtectedRoute>
+      } />
+      <Route path="/user-accounts" element={
+        <AdminOnlyRoute> <UserManagementPage /> </AdminOnlyRoute>
       } />
       <Route path="/earnings" element={
         <ProtectedRoute allowed={[]} excludeManager={true}> <EarningsPage /> </ProtectedRoute>

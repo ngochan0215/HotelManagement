@@ -79,6 +79,12 @@ export const employeeApi = {
         return res.data;
     },
 
+    toggleBanUser: async (employeeId, isBanned) => {
+        const url = `${BASE_URL}/toggle-ban/${employeeId}`;
+        const res = await axios.patch(url, { isBanned }, getAuthHeader());
+        return res.data;
+    },
+
     cashOut: async () => {
         const res = await axios.put(`${BASE_URL}/cashOut`, {}, getAuthHeader());
         return res.data;
