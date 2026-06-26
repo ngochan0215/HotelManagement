@@ -9,7 +9,7 @@ const AUTH_FLASH_KEY = "auth_flash_message";
 const navItems = [
   { label: "Trang chủ", to: "/hotel", type: "route" },
   { label: "Phòng", to: "/hotel/rooms", type: "route" },
-  { label: "Tra cứu đặt phòng", to: "/hotel/bookings", type: "route" },
+  { label: "Tra cứu đặt phòng", to: "/hotel/bookings/lookup", type: "route" },
 ];
 
 const navClass = ({ isActive }) =>

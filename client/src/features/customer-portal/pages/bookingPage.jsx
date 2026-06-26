@@ -84,14 +84,19 @@ export default function BookingPage() {
   }, [user]);
 
   const selectedRoom = useMemo(() => rooms.find((room) => room._id === form.room_id), [rooms, form.room_id]);
-  const nights = customerPortalApi.calculateNights(form.checkin, form.checkout);
-  const roomTotal = Number(selectedRoom?.price || 0) * nights;
+  const hasValidDateRange = Boolean(
+    form.checkin &&
+    form.checkout &&
+    new Date(form.checkout) > new Date(form.checkin)
+  );
+  const nights = hasValidDateRange ? customerPortalApi.calculateNights(form.checkin, form.checkout) : 0;
+  const roomTotal = hasValidDateRange ? Number(selectedRoom?.price || 0) * nights : 0;
   const selectedAddOns = addOns.filter((item) => form.selected_add_ons.includes(item.id));
   const selectedBookingRoomId = selectedRoom?.available_rooms?.[0]?.room_id || selectedRoom?.available_rooms?.[0]?._id || null;
-  const addOnTotal = calculateAddOnTotal(selectedAddOns, nights);
+  const addOnTotal = hasValidDateRange ? calculateAddOnTotal(selectedAddOns, nights) : 0;
   const estimatedTotal = roomTotal + addOnTotal;
-  const depositAmount = calculateDeposit(estimatedTotal);
-  const remainingAmount = Math.max(estimatedTotal - depositAmount, 0);
+  const depositAmount = hasValidDateRange ? calculateDeposit(estimatedTotal) : 0;
+  const remainingAmount = hasValidDateRange ? Math.max(estimatedTotal - depositAmount, 0) : 0;
 
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));

@@ -100,12 +100,7 @@ export const customerPortalApi = {
       if (!rooms) {
         throw new Error("Dữ liệu phòng khả dụng không hợp lệ.");
       }
-      const normalized = rooms.map((room) => ({
-        ...room,
-        available_rooms_count: Number(room.available_rooms_count ?? room.available_count ?? room.rooms?.length ?? 0),
-        available_rooms: room.available_rooms || room.rooms || [],
-        estimated_total: Number(room.estimated_total || 0) || estimateRoomTotal(room, search),
-      }));
+      const normalized = rooms.map((room) => normalizeRoomCategory(room, search));
       return {
         rooms: filterRooms(normalized, search),
         isFallback: false,
@@ -204,6 +199,15 @@ export const customerPortalApi = {
       return response.data;
     } catch (error) {
       mapApiError(error, "Không thể tải danh sách đặt phòng.");
+    }
+  },
+
+  async getMyBookingDetail(bookingId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/bookings/my/${bookingId}`, getAuthConfig());
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể tải chi tiết đặt phòng.");
     }
   },
 

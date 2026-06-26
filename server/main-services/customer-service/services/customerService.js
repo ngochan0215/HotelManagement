@@ -864,6 +864,7 @@ export class CustomerService {
                     email: reply.user.email,
                     avatar: reply.user.avatar,
                     system_role: reply.user.system_role,
+                    emailVerified: reply.user.emailVerified,
                 };
             }
 

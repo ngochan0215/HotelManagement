@@ -3,8 +3,10 @@ import { CUSTOMER_EVENTS } from "../../../shared/events/customerEvents.js";
 import { EMPLOYEE_EVENTS } from "../../../shared/events/employeeEvents.js";
 import { USER_EVENTS } from "../../../shared/events/userEvents.js";
 import { ROOM_EVENTS } from "../../../shared/events/roomEvents.js";
-import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
+import { SERVICE_EVENTS } from "../../../shared/events/serviceEvents.js";
 import { PAYMENT_EVENTS } from "../../../shared/events/paymentEvents.js";
+import { INCIDENT_EVENTS } from "../../../shared/events/incidentEvents.js";
+import { DISCOUNT_EVENTS } from "../../../shared/events/discountEvents.js";
 import { CLEANING_EVENTS } from "../../../shared/events/cleaningEvents.js";
 import { CANCELLATION_REASON_LABELS } from "../constants/cancellationReason.js";
 import { cache, makeCacheKey } from "../../../shared/utils/cache.js";
@@ -307,7 +309,7 @@ export class BookingService {
                     room_status: room.room_status,
                     category: room.category_id ? {
                         id: room.category_id._id,
-                        name: room.category_id.name,
+                        name: room.category_id.category_name,
                         price: room.category_id.price,
                         capacity: room.category_id.capacity,
                         description: room.category_id.description,
@@ -1824,7 +1826,22 @@ export class BookingService {
                 cancellation_reason: item.cancellation_reason,
             }));
 
-            return { booking, rooms };
+            const [serviceReply, paymentReply, incidentReply] = await Promise.all([
+                this.eventBus.safeRequest(SERVICE_EVENTS.GET_COMPLETED_BY_BOOKING, { bookingId }),
+                this.eventBus.safeRequest(PAYMENT_EVENTS.GET_RECEIPT_BY_BOOKING, { booking_id: bookingId }),
+                this.eventBus.safeRequest(INCIDENT_EVENTS.GET_ALL_INCIDENTS_INTERNAL, { booking_id: bookingId }),
+            ]);
+
+            const serviceUsages = serviceReply.success ? serviceReply.usages || [] : [];
+            const receipts = [];
+            if (paymentReply.success) {
+                if (paymentReply.receipt) receipts.push(paymentReply.receipt);
+                if (paymentReply.receiptByBooking) receipts.push(paymentReply.receiptByBooking);
+                if (Array.isArray(paymentReply.receipts)) receipts.push(...paymentReply.receipts);
+            }
+            const incidents = incidentReply.success ? incidentReply.incidents || [] : [];
+
+            return { booking, rooms, serviceUsages, receipts, incidents };
 
         } catch (error) {
             console.log("Error in getMyBookingDetail:", error.message);

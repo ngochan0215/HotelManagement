@@ -27,6 +27,7 @@ import RoomsPage from '../features/customer-portal/pages/roomsPage.jsx';
 import RoomDetailPage from '../features/customer-portal/pages/roomDetailPage.jsx';
 import BookingPage from '../features/customer-portal/pages/bookingPage.jsx';
 import MyBookingsPage from '../features/customer-portal/pages/myBookingsPage.jsx';
+import LookupBookingsModal from '../features/customer-portal/pages/lookupBookingsModal.jsx';
 import CustomerAccountPage from '../features/customer-portal/pages/customerAccountPage.jsx';
 import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } from '../features/auth/utils/roleRedirect.js';
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
@@ -104,6 +105,7 @@ export default function AppRoutes() {
       <Route path="/hotel/rooms/:roomId" element={<RoomDetailPage />} />
       <Route path="/hotel/book" element={<BookingPage />} />
       <Route path="/hotel/bookings" element={<MyBookingsPage />} />
+      <Route path="/hotel/bookings/lookup" element={<LookupBookingsModal />} />
       <Route path="/hotel/account" element={<CustomerAccountPage />} />
 
       <Route path="/" element={<Navigate to={getHomePath()} replace />} />
