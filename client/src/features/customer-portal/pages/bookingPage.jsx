@@ -80,12 +80,12 @@ function filterSlotsByStay(slots, checkin, checkout) {
   });
 }
 
-function createEmptyServiceSelection(checkin, checkout) {
+function createEmptyServiceSelection(checkin, checkout, checkinTime = "14:00") {
   return {
     quantity: 1,
     asset_id: "",
     slot_id: "",
-    use_from: toDateTimeLocalValue(getCheckinDateTime(checkin)),
+    use_from: toDateTimeLocalValue(getCheckinDateTime(checkin, checkinTime)),
     finish_at: toDateTimeLocalValue(getCheckoutDateTime(checkout)),
     availableAssets: [],
     availableSlots: [],
@@ -205,10 +205,17 @@ function addDays(dateValue, days) {
   return next;
 }
 
-function getCheckinDateTime(dateString) {
+/**
+ * Build checkin ISO string using date + explicit time string "HH:mm".
+ * Defaults to 14:00 if timeString is missing/invalid.
+ */
+function getCheckinDateTime(dateString, timeString = "14:00") {
   const date = parseDateOnly(dateString);
   if (!date) return "";
-  date.setHours(14, 0, 0, 0);
+  const parts = (timeString || "14:00").split(":");
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  date.setHours(Number.isNaN(hours) ? 14 : hours, Number.isNaN(minutes) ? 0 : minutes, 0, 0);
   return date.toISOString();
 }
 
@@ -221,6 +228,36 @@ function getCheckoutDateTime(dateString) {
 
 function getTodayInputValue() {
   return toDateInputValue(new Date());
+}
+
+/**
+ * Resolve the effective checkin time string given a date and a user-selected time.
+ *
+ * Rules:
+ * - Đặt trước (date > today): always "14:00"
+ * - Đặt liền (date === today):
+ *   - selected time < 14:00 → ép thành "14:00"
+ *   - selected time >= 14:00 → giữ nguyên
+ */
+function resolveCheckinTime(dateString, timeString) {
+  const todayStr = toDateInputValue(new Date());
+  if (!dateString || dateString > todayStr) {
+    // đặt trước — luôn 14:00
+    return "14:00";
+  }
+  // đặt liền (hôm nay)
+  const parts = (timeString || "14:00").split(":");
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  const totalMinutes = (Number.isNaN(hours) ? 0 : hours) * 60 + (Number.isNaN(minutes) ? 0 : minutes);
+  return totalMinutes < 14 * 60 ? "14:00" : (timeString || "14:00");
+}
+
+/**
+ * Returns true if the selected date is today (same-day / đặt liền).
+ */
+function isBookingToday(dateString) {
+  return Boolean(dateString) && dateString === toDateInputValue(new Date());
 }
 
 function normalizeRouteId(value) {
@@ -261,6 +298,7 @@ export default function BookingPage() {
     room_id: categoryId || "",
     checkin: searchParams.get("checkin") || "",
     checkout: searchParams.get("checkout") || "",
+    checkin_time: "14:00",
     adults: Number(searchParams.get("adults") || 2),
     children: Number(searchParams.get("children") || 0),
     customer_name: "",
@@ -318,6 +356,16 @@ export default function BookingPage() {
   const depositAmount = calculateDeposit(estimatedTotal);
   const remainingAmount = Math.max(estimatedTotal - depositAmount, 0);
 
+  // Derived display values
+  const checkinIsToday = isBookingToday(form.checkin);
+  const effectiveCheckinTime = form.checkin_time || "14:00";
+  const checkinTimeLabel = (() => {
+    if (!form.checkin) return null;
+    if (!checkinIsToday) return `Đặt trước — nhận phòng lúc 14:00 ngày ${formatDate(form.checkin)}`;
+    if (effectiveCheckinTime >= "14:00") return `Đặt liền — nhận phòng lúc ${effectiveCheckinTime} hôm nay`;
+    return "Giờ trước 14:00 sẽ được tự động điều chỉnh thành 14:00";
+  })();
+
   useEffect(() => {
     const load = async () => {
       const [{ rooms: roomList }, { services, reason }] = await Promise.all([
@@ -374,7 +422,7 @@ export default function BookingPage() {
         setSuggestedCategories([]);
         setSuggestionError("");
         const { rooms: roomList } = await customerPortalApi.searchRooms({
-          checkin: getCheckinDateTime(form.checkin),
+          checkin: getCheckinDateTime(form.checkin, form.checkin_time),
           checkout: getCheckoutDateTime(form.checkout),
           adults: form.adults,
           children: form.children,
@@ -396,7 +444,7 @@ export default function BookingPage() {
     };
 
     loadAvailability();
-  }, [availabilityRefreshKey, form.adults, form.checkin, form.checkout, form.children, todayInputValue]);
+  }, [availabilityRefreshKey, form.adults, form.checkin, form.checkin_time, form.checkout, form.children, todayInputValue]);
 
   useEffect(() => {
     const hasValidSearch = form.room_id && hasValidStayDates;
@@ -444,8 +492,9 @@ export default function BookingPage() {
         if (!nextCheckoutDate) continue;
 
         try {
+          // Suggested dates are always future dates → always use 14:00
           const { rooms } = await customerPortalApi.searchRooms({
-            checkin: getCheckinDateTime(toDateInputValue(nextCheckinDate)),
+            checkin: getCheckinDateTime(toDateInputValue(nextCheckinDate), "14:00"),
             checkout: getCheckoutDateTime(toDateInputValue(nextCheckoutDate)),
             adults: form.adults,
             children: form.children,
@@ -522,7 +571,7 @@ export default function BookingPage() {
       Object.entries(nextSelections).forEach(([serviceId, selection]) => {
         const service = addOns.find((item) => item.id === serviceId);
         if (!service || service.service_type !== "rental") return;
-        const nextUseFrom = toDateTimeLocalValue(getCheckinDateTime(form.checkin));
+        const nextUseFrom = toDateTimeLocalValue(getCheckinDateTime(form.checkin, form.checkin_time));
         const nextFinishAt = toDateTimeLocalValue(getCheckoutDateTime(form.checkout));
         if (selection.use_from === nextUseFrom && selection.finish_at === nextFinishAt) return;
         nextSelections[serviceId] = {
@@ -535,7 +584,7 @@ export default function BookingPage() {
 
       return changed ? { ...prev, selected_services: nextSelections } : prev;
     });
-  }, [addOns, form.checkin, form.checkout]);
+  }, [addOns, form.checkin, form.checkin_time, form.checkout]);
 
   useEffect(() => {
     if (!form.checkin || !form.checkout) return;
@@ -597,10 +646,15 @@ export default function BookingPage() {
       const nextForm = { ...prev, [key]: value };
 
       if (key === "checkin") {
-        const nextCheckout = nextForm.checkout;
-        if (!nextCheckout || new Date(nextCheckout) <= new Date(value)) {
-          nextForm.checkout = getNextDayInputValue(value);
-        }
+        // checkout always = checkin + 1 ngày
+        nextForm.checkout = getNextDayInputValue(value);
+        // resolve giờ checkin: đặt trước → 14:00, đặt liền → giữ nếu ≥ 14:00
+        nextForm.checkin_time = resolveCheckinTime(value, prev.checkin_time);
+      }
+
+      if (key === "checkin_time") {
+        // re-apply constraint whenever user touches the time field
+        nextForm.checkin_time = resolveCheckinTime(prev.checkin, value);
       }
 
       return nextForm;
@@ -638,7 +692,7 @@ export default function BookingPage() {
     const initialDraft = existing
       ? { ...existing, loadingExtra: needsExtra && !hasCachedExtra }
       : {
-          ...createEmptyServiceSelection(form.checkin, form.checkout),
+          ...createEmptyServiceSelection(form.checkin, form.checkout, form.checkin_time),
           loadingExtra: needsExtra,
         };
 
@@ -757,7 +811,7 @@ export default function BookingPage() {
 
         const pendingServices = buildPendingServicePayload(addOns, form.selected_services);
         const response = await customerPortalApi.createBooking({
-          expected_checkin: getCheckinDateTime(form.checkin),
+          expected_checkin: getCheckinDateTime(form.checkin, form.checkin_time),
           expected_checkout: getCheckoutDateTime(form.checkout),
           adults: Number(form.adults),
           children: Number(form.children),
@@ -882,6 +936,8 @@ export default function BookingPage() {
       ...prev,
       checkin: suggestion.checkin,
       checkout: suggestion.checkout,
+      // Suggested dates are always future → always 14:00
+      checkin_time: "14:00",
     }));
     updateBookingQuery({
       checkin: suggestion.checkin,
@@ -907,7 +963,7 @@ export default function BookingPage() {
 
   if (!catalogRooms.length && !selectedRoom && !result) {
     return (
-          <CustomerShell>
+      <CustomerShell>
         <section className="mx-auto max-w-7xl px-4 py-16 md:px-6">
           <EmptyState
             title="Đang chuẩn bị đặt phòng"
@@ -979,7 +1035,7 @@ export default function BookingPage() {
               </div>
               <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
                 <p className="font-medium text-stone-800">Lịch lưu trú</p>
-                <p className="mt-1">{formatDateTime(getCheckinDateTime(form.checkin))} - {formatDateTime(getCheckoutDateTime(form.checkout))}</p>
+                <p className="mt-1">{formatDateTime(getCheckinDateTime(form.checkin, form.checkin_time))} - {formatDateTime(getCheckoutDateTime(form.checkout))}</p>
                 <p className="mt-1">{selectedRoom?.category_name || "Chưa xác định"}</p>
               </div>
               <p className="mt-5 rounded-2xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
@@ -1202,17 +1258,64 @@ export default function BookingPage() {
                         ))}
                       </select>
                     </label>
+
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Ngày nhận phòng
-                      <input id="booking-checkin" type="date" min={todayInputValue} value={form.checkin} onChange={(e) => handleChange("checkin", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+                      <input
+                        id="booking-checkin"
+                        type="date"
+                        min={todayInputValue}
+                        value={form.checkin}
+                        onChange={(e) => handleChange("checkin", e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                        required
+                      />
                     </label>
+
+                    {/* Giờ nhận phòng — chỉ cho phép chọn khi đặt liền (hôm nay) */}
+                    <label className="grid gap-2 text-sm font-medium text-stone-700">
+                      Giờ nhận phòng
+                      <input
+                        id="booking-checkin-time"
+                        type="time"
+                        value={form.checkin_time}
+                        onChange={(e) => handleChange("checkin_time", e.target.value)}
+                        disabled={!checkinIsToday}
+                        className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400"
+                      />
+                      {checkinTimeLabel ? (
+                        <span
+                          className={`text-xs ${
+                            checkinIsToday && effectiveCheckinTime >= "14:00"
+                              ? "text-emerald-600"
+                              : "text-stone-500"
+                          }`}
+                        >
+                          {checkinTimeLabel}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-stone-400">Chọn ngày nhận phòng trước</span>
+                      )}
+                    </label>
+
                     <label className="grid gap-2 text-sm font-medium text-stone-700">
                       Ngày trả phòng
-                      <input id="booking-checkout" type="date" value={form.checkout} onChange={(e) => handleChange("checkout", e.target.value)} className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100" required />
+                      <input
+                        id="booking-checkout"
+                        type="date"
+                        value={form.checkout}
+                        onChange={(e) => handleChange("checkout", e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-stone-200 px-4 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                        required
+                      />
+                      <span className="text-xs text-stone-500">Giờ trả phòng cố định lúc 12:00</span>
                     </label>
+
                     <p className="text-sm text-stone-500 md:col-span-2">
-                      Giờ nhận phòng được cố định lúc 14:00 và giờ trả phòng được cố định lúc 12:00 ngày kế tiếp.
+                      Đặt liền (hôm nay): giờ nhận phòng theo lựa chọn của bạn, tối thiểu 14:00.
+                      Đặt trước: giờ nhận phòng cố định lúc 14:00.
                     </p>
+
                     <div className="grid min-w-0 grid-cols-2 gap-4">
                       <label className="grid gap-2 text-sm font-medium text-stone-700">
                         Người lớn
@@ -1381,7 +1484,14 @@ export default function BookingPage() {
                     </div>
                   </div>
                   <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5 text-sm leading-7 text-stone-600">
-                    Khoản cọc giữ phòng theo lịch đã chọn.
+                    <p className="font-medium text-stone-800">Lịch nhận — trả phòng</p>
+                    <p className="mt-1">
+                      Nhận phòng: {formatDateTime(getCheckinDateTime(form.checkin, form.checkin_time))}
+                    </p>
+                    <p className="mt-1">
+                      Trả phòng: {formatDateTime(getCheckoutDateTime(form.checkout))}
+                    </p>
+                    <p className="mt-3 text-stone-500">Khoản cọc giữ phòng theo lịch đã chọn.</p>
                   </div>
                   {!user ? (
                     <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">

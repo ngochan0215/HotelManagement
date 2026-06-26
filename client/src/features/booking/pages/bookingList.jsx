@@ -207,22 +207,28 @@ export default function BookingList() {
 
   // Tự động set thời gian check-in khi chọn "đặt liền"
   useEffect(() => {
-    if (isModalOpen && bookingMode === 'immediate') {
-      const now = new Date();
+    if (isModalOpen && bookingMode === "immediate") {
+      // Lấy thời gian check-in hiện tại của form, nếu chưa có thì dùng thời gian hiện tại
+      const checkin = formData.expected_checkin
+        ? new Date(formData.expected_checkin)
+        : new Date();
 
-      let checkinTime = null;
-      const standardCheckin = setMinutes(setHours(now, 14), 0);
-      if (now < standardCheckin) {
+      let checkinTime = checkin;
+
+      // 14:00 của chính ngày được chọn
+      const standardCheckin = setMinutes(setHours(checkin, 14), 0);
+
+      // Nếu trước 14:00 thì ép thành 14:00
+      if (checkin < standardCheckin) {
         checkinTime = standardCheckin;
-      } else {
-        checkinTime = addDays(standardCheckin, 1);
       }
+
       const formattedTime = format(checkinTime, "yyyy-MM-dd'T'HH:mm");
 
       if (formData.expected_checkin !== formattedTime) {
         setFormData(prev => ({
           ...prev,
-          expected_checkin: formattedTime
+          expected_checkin: formattedTime,
         }));
       }
     }
@@ -568,21 +574,35 @@ export default function BookingList() {
 
   const handleOpenModal = () => {
     const now = new Date();
-    // Nếu là đặt liền, set check-in = hiện tại + 10 phút
+
     let checkin;
+
     if (bookingMode === "immediate") {
-      const standardCheckin = setMinutes(setHours(now, 14), 0);
-      if (now < standardCheckin) {
+      checkin = new Date(now);
+
+      // 14:00 của cùng ngày
+      const standardCheckin = setMinutes(setHours(checkin, 14), 0);
+
+      // Nếu trước 14:00 thì ép thành 14:00
+      if (checkin < standardCheckin) {
         checkin = standardCheckin;
-      } else {
-        checkin = addDays(standardCheckin, 1);
       }
     } else {
       // Đặt trước
       checkin = setMinutes(setHours(now, 14), 0);
     }
-    const checkout = setMinutes(setHours(addDays(now, 1), 12), 0);
-    setFormData({ customer_id: "", adults: 1, children: 0, expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"), expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"), deposit: 0 });
+
+    const checkout = setMinutes(setHours(addDays(checkin, 1), 12), 0);
+
+    setFormData({
+      customer_id: "",
+      adults: 1,
+      children: 0,
+      expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"),
+      expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"),
+      deposit: 0,
+    });
+
     setSelectedRooms([]); 
     setTempRoomId(""); 
     setIsWalkIn(false); 
@@ -1378,7 +1398,12 @@ export default function BookingList() {
                             setIsWalkIn(true);
                             // Tự động set thời gian check-in = hiện tại + 10 phút
                             const now = new Date();
-                            const checkinTime = addMinutes(now, 10);
+                            const standardCheckin = setMinutes(setHours(now, 14), 0);
+
+                            const checkinTime =
+                              now < standardCheckin
+                                ? standardCheckin
+                                : now;
                             setFormData(prev => ({
                               ...prev,
                               expected_checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm")
@@ -1390,9 +1415,12 @@ export default function BookingList() {
                         <button type="button" onClick={() => {
                             setBookingMode('advance');
                             setIsWalkIn(false);
-                            // Đặt giờ check-in chuẩn 2:00 SA khi chuyển sang đặt trước
+                            // Đặt giờ check-in chuẩn 2:00 CH khi chuyển sang đặt trước
                             const now = new Date();
-                            const checkinTime = setMinutes(setHours(now, 14), 0);
+                            let checkinTime = setMinutes(setHours(now, 14), 0);
+                            if (now >= checkinTime) {
+                              checkinTime = addDays(checkinTime, 1);
+                            }
                             setFormData(prev => ({
                               ...prev,
                               expected_checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm")

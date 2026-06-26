@@ -461,7 +461,11 @@ export class BookingService {
     createBooking = async (employeeUserId, data) => {
         try {
             const { customer_id, adults, children, deposit, 
-            total_fee, rooms, expected_checkin, expected_checkout, discount_id } = data;
+            total_fee, rooms, expected_checkout, discount_id } = data;
+
+            const isScheduled = this.isAfterToday(expected_checkin);
+            const isImmediate = deposit === 0;
+            let initialStatus = isImmediate ? "in_progress" : "pending";
 
             // validation
             if (!customer_id || adults === undefined || children === undefined || deposit === undefined || total_fee === undefined ) {
@@ -475,9 +479,20 @@ export class BookingService {
                 this.findCustomerById(customer_id),
                 this.findEmployeeByUserId(employeeUserId),
             ]);
+            const handled_by = employee._id;
 
             if (!Array.isArray(rooms) || rooms.length === 0) {
                 throw new Error("Phải đặt ít nhất một phòng!");
+            }
+
+            let { expected_checkin } = data;
+            const now = new Date();
+            if (isImmediate && now.getHours() < 14) {
+                const today2PM = new Date(now);
+                today2PM.setHours(14, 0, 0, 0);
+                expected_checkin = today2PM;
+            } else {
+                expected_checkin = new Date(expected_checkin);
             }
 
             if ( !expected_checkin || !expected_checkout) {
@@ -559,11 +574,6 @@ export class BookingService {
                     discount_amount: discountAmount
                 };
             }
-
-            const handled_by = employee._id;
-            const isScheduled = this.isAfterToday(expected_checkin);
-            const isImmediate = deposit === 0;
-            let initialStatus = isImmediate ? "in_progress" : "pending";
 
             const booking = await this.Booking.create({
                 customer_id,
@@ -2053,7 +2063,8 @@ export class BookingService {
 
     createCustomerBooking = async (userId, data) => {
         try {
-            const { expected_checkin, expected_checkout, adults, children, rooms, voucher_code, services } = data;
+            const { expected_checkout, adults, children, rooms, voucher_code, services } = data;
+            let { expected_checkin } = data;
 
             if (!expected_checkin || !expected_checkout || adults === undefined || children === undefined) {
                 throw new Error("Phải điền đầy đủ thông tin bắt buộc.");
@@ -2062,9 +2073,17 @@ export class BookingService {
                 throw new Error("Phải chọn ít nhất một phòng.");
             }
 
+            const now = new Date();
+            if (now.getHours() < 14) {
+                const today2PM = new Date(now);
+                today2PM.setHours(14, 0, 0, 0);
+                expected_checkin = today2PM;
+            } else {
+                expected_checkin = new Date(expected_checkin);
+            }
+
             const checkin = new Date(expected_checkin);
             const checkout = new Date(expected_checkout);
-
             const today = this.startOfDay(new Date());
             const checkinDay = this.startOfDay(checkin);
             const checkoutDay = this.startOfDay(checkout);
