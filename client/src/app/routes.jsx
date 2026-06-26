@@ -11,6 +11,7 @@ import BookingList from '../features/booking/pages/bookingList.jsx';
 import CustomerPage from '../features/customer/pages/customerPage.jsx';
 import EmployeePage from '../features/employee/pages/employeePage.jsx';
 import EarningsPage from '../features/employee/pages/earningsPage.jsx';
+import SchedulePage from '../features/employee/pages/schedulePage.jsx';
 import EquipmentPage from '../features/equipment/pages/equipmentPage.jsx';
 import TechnicianWorkPage from '../features/equipment/pages/technicianWorkPage.jsx';
 import HousekeeperWorkPage from '../features/booking/pages/housekeeperWorkPage.jsx';
@@ -138,6 +139,9 @@ export default function AppRoutes() {
       } />
       <Route path="/earnings" element={
         <ProtectedRoute allowed={[]} excludeManager={true}> <EarningsPage /> </ProtectedRoute>
+      } />
+      <Route path="/schedules" element={
+        <ProtectedRoute allowed={['receptionist', 'technician', 'customer_service', 'housekeeper', 'accountant', 'it']}> <SchedulePage /> </ProtectedRoute>
       } />
 
       {/* LỄ TÂN */}

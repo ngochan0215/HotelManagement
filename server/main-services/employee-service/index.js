@@ -27,8 +27,8 @@ const startServer = async () => {
     // initialize dependencies (RabbitMQ, event subscriptions)
     await container.init();
 
-    app.use(employeeRoute);
     app.use("/schedules", scheduleRoute);
+    app.use(employeeRoute);
 
     const PORT = process.env.PORT || 3003;
 
