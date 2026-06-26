@@ -1,6 +1,7 @@
 import axios from "axios";
+import API_BASE_URL from "../../config/apiConfig.js";
 
-const BASE = "http://localhost:3000/attractions";
+const BASE = `${API_BASE_URL}/attractions`;
 
 export const attractionApi = {
     getAll: (params = {}) =>
