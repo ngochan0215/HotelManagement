@@ -63,7 +63,7 @@ function normalizeStatus(status) {
 }
 
 function normalizeStatusLabel(status) {
-  return "Chờ xử lý";
+  return "—";
 }
 
 function getNightCount(checkin, checkout) {
@@ -105,6 +105,134 @@ function getBookingRoomEntries(booking, detail) {
   return getRoomEntries(booking);
 }
 
+function getCustomerInfo(booking) {
+  const info = booking?.customer_info || booking?.customer || booking?.customer_detail || booking?.customerDetails || {};
+  return {
+    fullName:
+      info?.full_name ||
+      booking?.customer_full_name ||
+      booking?.customer_name ||
+      booking?.customer?.full_name ||
+      "",
+    phone:
+      info?.phone_number ||
+      info?.phone ||
+      booking?.customer_phone_number ||
+      booking?.customer_phone ||
+      booking?.phone_number ||
+      booking?.phone ||
+      "",
+    email:
+      info?.email ||
+      booking?.customer_email ||
+      booking?.email ||
+      "",
+    cccd:
+      info?.CCCD ||
+      info?.cccd ||
+      booking?.CCCD ||
+      booking?.cccd ||
+      booking?.identity_number ||
+      "",
+  };
+}
+
+const CANCELLATION_REASON_LABEL_MAP = CANCELLATION_REASON_OPTIONS.reduce((acc, item) => {
+  acc[item.value] = item.label;
+  return acc;
+}, {});
+
+function getCancellationReasonLabel(reason) {
+  const normalized = String(reason || "").trim();
+  if (!normalized) return "";
+  return CANCELLATION_REASON_LABEL_MAP[normalized] || normalized;
+}
+
+function getCancellationActorLabel(value) {
+  const normalized = normalizeStatus(value);
+  if (normalized === "customer") return "Khách hàng";
+  if (normalized === "employee") return "Khách sạn / Nhân viên";
+  if (normalized === "system") return "Hệ thống";
+  return "";
+}
+
+function getCancellationInfo(booking, detail) {
+  const resolvedBooking = detail?.booking || booking || {};
+  const detailRooms = Array.isArray(detail?.rooms) ? detail.rooms : [];
+  const bookingRooms = Array.isArray(resolvedBooking?.rooms) ? resolvedBooking.rooms : [];
+  const rooms = detailRooms.length ? detailRooms : bookingRooms;
+
+  const reasonCodes = [...new Set(
+    rooms
+      .map((room) => room?.cancellation_reason)
+      .filter(Boolean)
+      .map((reason) => String(reason).trim())
+      .filter(Boolean),
+  )];
+
+  const cancelledAt =
+    resolvedBooking?.cancelled_at ||
+    detail?.cancelled_at ||
+    rooms.find((room) => room?.cancelled_at)?.cancelled_at ||
+    "";
+
+  const actorRaw =
+    resolvedBooking?.cancelled_by ||
+    detail?.cancelled_by ||
+    rooms.find((room) => room?.cancelled_by)?.cancelled_by ||
+    "";
+
+  const actorName =
+    resolvedBooking?.cancelled_by_user?.full_name ||
+    resolvedBooking?.cancelled_by_user?.name ||
+    detail?.cancelled_by_user?.full_name ||
+    detail?.cancelled_by_user?.name ||
+    "";
+
+  const note =
+    resolvedBooking?.cancelled_note ||
+    detail?.cancelled_note ||
+    resolvedBooking?.note ||
+    detail?.note ||
+    "";
+
+  return {
+    hasBackendData: Boolean(actorRaw || actorName || reasonCodes.length || cancelledAt || note),
+    actorLabel: getCancellationActorLabel(actorRaw),
+    actorName,
+    reasons: reasonCodes.map(getCancellationReasonLabel).filter(Boolean),
+    cancelledAt,
+    note,
+  };
+}
+
+function getPaymentSnapshot(booking, paymentDetail) {
+  const source = paymentDetail?.data || paymentDetail || {};
+  const transaction = source?.transaction || source;
+  const receipt = source?.receipt || null;
+  const rawStatus = normalizeStatus(transaction?.status || receipt?.status || booking?.payment_status || booking?.receipt_status);
+  const total = Number(receipt?.final_amount || booking?.total_fee || booking?.estimated_total || booking?.total || 0);
+  const deposit = Number(receipt?.deposit_amount ?? booking?.deposit ?? 0);
+
+  let paid = 0;
+  if (rawStatus === "paid" || rawStatus === "success" || rawStatus === "completed") {
+    paid = total > 0 ? total : Number(transaction?.amount || 0);
+  } else if (rawStatus === "half_paid" || rawStatus === "half-paid") {
+    paid = deposit + Number(transaction?.amount || 0);
+  } else if (rawStatus === "refunded") {
+    paid = 0;
+  }
+
+  const amountDueFromReceipt = receipt?.amount_due;
+  const remaining = Number.isFinite(Number(amountDueFromReceipt))
+    ? Math.max(Number(amountDueFromReceipt), 0)
+    : rawStatus === "pending" || rawStatus === "unpaid"
+      ? Math.max(total - deposit, 0)
+      : Math.max(total - paid, 0);
+
+  return { total, deposit, paid: Math.max(paid, 0), remaining };
+}
+
 function getBookingTitle(booking, detail) {
   const rooms = getBookingRoomEntries(booking, detail);
   if (rooms.length) return getRoomTitle(rooms[0]);
@@ -138,7 +266,7 @@ function getBookingTitle(booking, detail) {
 
 function getRoomSummary(booking, detail) {
   const rooms = getBookingRoomEntries(booking, detail);
-  if (!rooms.length) return "Chưa có thông tin phòng.";
+  if (!rooms.length) return "—";
   const primary = getRoomTitle(rooms[0]);
   if (rooms.length === 1) return primary;
   return `${primary} · +${rooms.length - 1} phòng khác`;
@@ -151,28 +279,23 @@ function getRoomStatusLabel(status) {
   if (normalized === "checked_out") return "Đã trả phòng";
   if (normalized === "completed") return "Hoàn tất";
   if (normalized === "cancelled" || normalized === "canceled") return "Đã hủy";
-  if (normalized === "pending") return "Chờ xử lý";
+  if (normalized === "pending") return "Chưa cọc";
   return normalizeStatusLabel(normalized);
 }
 
 function getBookingStatusMeta(booking) {
   const status = normalizeStatus(booking?.status);
-  const checkin = booking?.expected_checkin ? new Date(booking.expected_checkin) : null;
-  const checkout = booking?.expected_checkout ? new Date(booking.expected_checkout) : null;
-  const now = new Date();
+  const paymentStatus = normalizeStatus(booking?.payment_status || booking?.receipt_status);
+  const depositSettled = ["paid", "success", "completed", "half_paid", "half-paid"].includes(paymentStatus);
 
-  if (status === "pending") return { label: "Chờ thanh toán cọc", tone: "warning", group: "pending" };
-  if (status === "confirmed") {
-    if (checkin && checkin > now) return { label: "Đã xác nhận", tone: "info", group: "upcoming" };
-    if (checkout && checkout >= now) return { label: "Đã xác nhận", tone: "success", group: "active" };
-    return { label: "Đã xác nhận", tone: "success", group: "upcoming" };
-  }
-  if (["in_progress", "checked_in"].includes(status)) return { label: "Đang lưu trú", tone: "warning", group: "active" };
-  if (["checked_out"].includes(status)) return { label: "Đã trả phòng", tone: "success", group: "completed" };
-  if (["completed"].includes(status)) return { label: "Hoàn tất", tone: "success", group: "completed" };
-  if (["cancelled", "canceled", "expired"].includes(status)) return { label: "Đã hủy", tone: "info", group: "cancelled" };
+  if (status === "cancelled" || status === "canceled" || status === "expired") return { label: "Đã huỷ", tone: "info", group: "cancelled" };
+  if (status === "completed" || (status === "checked_out" && depositSettled)) return { label: "Đã hoàn tất", tone: "success", group: "completed" };
+  if (["checked_in", "in_progress"].includes(status)) return { label: "Đã check-in", tone: "success", group: "active" };
+  if (status === "confirmed" || depositSettled) return { label: "Đã cọc", tone: "success", group: depositSettled ? "upcoming" : "pending" };
+  if (status === "pending" || paymentStatus === "pending" || paymentStatus === "unpaid") return { label: "Chưa cọc", tone: "warning", group: "pending" };
+  if (status === "checked_out") return { label: "Đã check-out", tone: "info", group: "completed" };
   if (status === "failed") return { label: "Thanh toán thất bại", tone: "info", group: "cancelled" };
-  return { label: normalizeStatusLabel(status), tone: "info", group: "all" };
+  return { label: "—", tone: "info", group: "all" };
 }
 
 function getPaymentStatusMeta(paymentDetail, booking) {
@@ -180,16 +303,21 @@ function getPaymentStatusMeta(paymentDetail, booking) {
   const transaction = source?.transaction || source;
   const receipt = source?.receipt || null;
   const rawStatus = normalizeStatus(transaction?.status || receipt?.status || booking?.payment_status || booking?.receipt_status);
+  const bookingStatus = normalizeStatus(booking?.status);
+
+  if (bookingStatus === "cancelled" || bookingStatus === "canceled" || bookingStatus === "expired") {
+    return { label: "Đã huỷ", tone: "info" };
+  }
 
   if (rawStatus === "paid" || rawStatus === "success" || rawStatus === "completed") {
-    return { label: "Đã thanh toán", tone: "success" };
+    return { label: "Đã thanh toán đủ", tone: "success" };
   }
-  if (rawStatus === "half_paid" || rawStatus === "half-paid") return { label: "Đã thanh toán cọc", tone: "warning" };
-  if (rawStatus === "pending" || rawStatus === "unpaid") return { label: "Chờ thanh toán", tone: "warning" };
+  if (rawStatus === "half_paid" || rawStatus === "half-paid") return { label: "Đã cọc", tone: "success" };
+  if (rawStatus === "pending" || rawStatus === "unpaid") return { label: "Chưa cọc", tone: "warning" };
   if (rawStatus === "failed") return { label: "Thanh toán thất bại", tone: "info" };
-  if (rawStatus === "cancelled" || rawStatus === "canceled") return { label: "Đã hủy", tone: "info" };
+  if (rawStatus === "cancelled" || rawStatus === "canceled") return { label: "Đã huỷ", tone: "info" };
   if (rawStatus === "refunded") return { label: "Đã hoàn tiền", tone: "info" };
-  return { label: normalizeStatusLabel(rawStatus), tone: "info" };
+  return { label: "—", tone: "info" };
 }
 
 function getPaymentOverviewText(booking, paymentDetail) {
@@ -197,20 +325,20 @@ function getPaymentOverviewText(booking, paymentDetail) {
   const paymentStatus = normalizeStatus(paymentDetail?.data?.transaction?.status || paymentDetail?.data?.receipt?.status || booking?.payment_status || booking?.receipt_status);
   const wasPaid = ["paid", "success", "completed", "half_paid", "half-paid"].includes(paymentStatus);
 
-  if (status === "pending") return "Đang chờ thanh toán cọc";
+  if (status === "pending") return "Chờ thanh toán cọc để giữ chỗ.";
   if (status === "cancelled" || status === "canceled" || status === "expired") {
-    if (wasPaid) return "Đơn đã hủy";
-    return "Đơn đã hủy. Thanh toán cọc chưa được ghi nhận.";
+    if (wasPaid) return "Đơn đã huỷ, các khoản thanh toán chỉ dùng để đối chiếu.";
+    return "Đơn đã huỷ. Chưa ghi nhận thanh toán cọc.";
   }
   if (status === "confirmed") {
-    if (wasPaid) return "Đã xác nhận thanh toán cọc";
-    return "Đã xác nhận đặt phòng";
+    if (wasPaid) return "Đã ghi nhận cọc. Đơn đặt phòng đã được giữ chỗ.";
+    return "Đơn đã được xác nhận. Vui lòng hoàn tất thanh toán cọc.";
   }
-  if (status === "in_progress" || status === "checked_in") return "Thanh toán cọc đã ghi nhận";
-  if (status === "checked_out") return "Đã trả phòng";
-  if (status === "completed") return "Thanh toán đã hoàn tất";
-  if (status === "failed") return "Thanh toán thất bại";
-  return "Thanh toán cọc chưa hoàn tất";
+  if (status === "in_progress" || status === "checked_in") return "Đã ghi nhận cọc. Khách đang lưu trú.";
+  if (status === "checked_out") return "Đã hoàn tất lưu trú.";
+  if (status === "completed") return "Đơn đã hoàn tất.";
+  if (status === "failed") return "Thanh toán thất bại.";
+  return "—";
 }
 
 function getPaymentTransactionIdentifier(booking) {
@@ -244,13 +372,6 @@ function getAmountSummary(booking) {
   const deposit = Number(booking?.deposit || 0);
   const remaining = Math.max(total - deposit, 0);
   return { total, deposit, remaining };
-}
-
-function getPrimaryAction(booking) {
-  const status = normalizeStatus(booking?.status);
-  if (status === "pending") return { label: "Thanh toán cọc", type: "pay" };
-  if (status === "cancelled" || status === "expired") return { label: "Đặt phòng mới", type: "rooms" };
-  return { label: "Xem chi tiết", type: "detail" };
 }
 
 function getBookingCancelId(booking) {
@@ -359,15 +480,6 @@ function BookingStatusBadge({ tone = "info", children }) {
   );
 }
 
-function BookingMetricCard({ label, value, accent = false, dim = false }) {
-  return (
-    <div className={`booking-ticket__metric ${accent ? "booking-ticket__metric--accent" : ""} ${dim ? "opacity-80" : ""}`}>
-      <p className="booking-ticket__metric-label">{label}</p>
-      <p className="booking-ticket__metric-value">{value}</p>
-    </div>
-  );
-}
-
 function BookingWorkspaceShell({ children }) {
   return (
     <div className="booking-workspace-shell rounded-[30px] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.72)_0%,rgba(255,250,242,0.92)_100%)] p-3 shadow-[0_20px_50px_rgba(28,25,23,0.08)] md:p-4">
@@ -473,7 +585,6 @@ function GuestLookupForm({ form, setForm, onSubmit, loading, error, initialBooki
 
 function BookingCard({ booking, selected, onSelect, onPay, paymentBusy }) {
   const statusMeta = getBookingStatusMeta(booking);
-  const action = getPrimaryAction(booking);
   const { total, deposit, remaining } = getAmountSummary(booking);
   const nights = getNightCount(booking?.expected_checkin, booking?.expected_checkout);
   const roomSummary = getRoomSummary(booking);
@@ -598,11 +709,20 @@ function BookingCard({ booking, selected, onSelect, onPay, paymentBusy }) {
   );
 }
 
-function DetailRow({ label, value, emphasize = false }) {
+function DetailRow({ label, value, compact = false, className = "" }) {
+  if (compact) {
+    return (
+      <div className={`flex items-start justify-between gap-4 rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2.5 ${className}`}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400">{label}</p>
+        <p className="max-w-[60%] text-right text-sm font-semibold leading-6 text-stone-950 break-words">{value}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="booking-detail-row">
+    <div className={`booking-detail-row ${className}`}>
       <p className="booking-detail-row__label">{label}</p>
-      <p className={`booking-detail-row__value break-words ${emphasize ? "text-base" : ""}`}>{value}</p>
+      <p className="booking-detail-row__value break-words">{value}</p>
     </div>
   );
 }
@@ -630,17 +750,30 @@ function BookingDetailPanel({
   const paymentMeta = getPaymentStatusMeta(paymentDetail, resolvedBooking);
   const paymentOverviewText = getPaymentOverviewText(resolvedBooking, paymentDetail);
   const { total, deposit, remaining } = getAmountSummary(resolvedBooking);
+  const { total: paymentTotal, deposit: paymentDeposit, paid: paymentPaid, remaining: paymentRemaining } = getPaymentSnapshot(
+    resolvedBooking,
+    paymentDetail,
+  );
   const nights = getNightCount(resolvedBooking?.expected_checkin, resolvedBooking?.expected_checkout);
   const adults = Number(resolvedBooking?.adults || 0);
   const children = Number(resolvedBooking?.children || 0);
   const canPay = allowPay && normalizeStatus(resolvedBooking?.status) === "pending";
   const bookingTitle = getBookingTitle(resolvedBooking, detail);
-  const roomSummary = rooms.length ? getRoomSummary(resolvedBooking, detail) : "Chưa có thông tin phòng.";
+  const roomSummary = rooms.length ? getRoomSummary(resolvedBooking, detail) : "—";
   const canCancel = showCancelButton && canCancelBooking(resolvedBooking);
   const cancelDisabledReason = getCancelDisabledReason(resolvedBooking);
+  const bookingCode = getBookingCode(resolvedBooking);
+  const guestValue = adults > 0 || children > 0
+    ? `${adults} người lớn${children ? ` · ${children} trẻ em` : ""}`
+    : "--";
+  const customerInfo = getCustomerInfo(resolvedBooking);
+  const cancellationInfo = getCancellationInfo(resolvedBooking, detail);
+  const primaryCancellationReason = cancellationInfo.reasons[0] || rooms.find((room) => room?.cancellation_reason)?.cancellation_reason || "";
+  const showCancellationSection = Boolean(cancellationInfo.actorLabel || cancellationInfo.actorName || cancellationInfo.cancelledAt);
+  const showCancellationReasonLine = statusMeta.group === "cancelled" && Boolean(primaryCancellationReason);
 
   const handleCopy = async () => {
-    const code = String(getBookingCode(resolvedBooking));
+    const code = String(bookingCode);
     if (!code || code === "--") return;
     try {
       await navigator.clipboard.writeText(code);
@@ -673,13 +806,26 @@ function BookingDetailPanel({
           <h3 className="mt-2 break-words text-2xl font-semibold tracking-tight text-stone-950">
             {bookingTitle}
           </h3>
-          <p className="mt-1 text-sm font-medium text-stone-600">
-            Mã booking {getBookingCode(resolvedBooking)}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-medium text-stone-600">
+            <span>Mã booking {bookingCode}</span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
+            >
+              <Copy size={14} />
+              Copy mã
+            </button>
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <BookingStatusBadge tone={statusMeta.tone}>{statusMeta.label}</BookingStatusBadge>
             <BookingStatusBadge tone={paymentMeta.tone}>{paymentMeta.label}</BookingStatusBadge>
           </div>
+          {showCancellationReasonLine ? (
+            <p className="mt-2 text-sm font-medium text-stone-700">
+              Lý do huỷ: {getCancellationReasonLabel(primaryCancellationReason)}
+            </p>
+          ) : null}
         </div>
         {showCloseButton ? (
           <button
@@ -721,57 +867,76 @@ function BookingDetailPanel({
               </div>
             ) : null}
 
-            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-4 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
+            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
+              <BookingSectionTitle subtitle="Khách hàng" title="Thông tin khách hàng" />
+              <div className="mt-3 space-y-2">
+                <DetailRow compact label="Họ tên" value={customerInfo.fullName || "—"} />
+                <DetailRow compact label="Số điện thoại" value={customerInfo.phone || "—"} />
+                <DetailRow compact label="Email" value={customerInfo.email || "—"} />
+                <DetailRow compact label="CCCD/CMND" value={customerInfo.cccd || "—"} />
+              </div>
+            </section>
+
+            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
               <BookingSectionTitle
-                subtitle="Lưu trú"
+                subtitle="Tóm tắt"
                 title="Thông tin lưu trú"
                 right={<BookingStatusBadge tone={statusMeta.tone}>{statusMeta.label}</BookingStatusBadge>}
               />
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <DetailRow label="Nhận phòng" value={formatDate(resolvedBooking?.expected_checkin)} />
-                <DetailRow label="Trả phòng" value={formatDate(resolvedBooking?.expected_checkout)} />
-                <DetailRow label="Số đêm" value={nights > 0 ? `${nights} đêm` : "--"} />
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <DetailRow label="Phòng / hạng phòng" value={roomSummary} />
-                <DetailRow label="Mã booking" value={getBookingCode(resolvedBooking)} emphasize />
-                <DetailRow label="Khách" value={`${adults} người lớn · ${children} trẻ em`} />
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <DetailRow compact label="Nhận phòng" value={formatDate(resolvedBooking?.expected_checkin)} />
+                <DetailRow compact label="Trả phòng" value={formatDate(resolvedBooking?.expected_checkout)} />
+                <DetailRow compact label="Số đêm" value={nights > 0 ? `${nights} đêm` : "--"} />
+                <DetailRow compact label="Khách" value={guestValue} />
+                <DetailRow compact label="Phòng / hạng phòng" value={roomSummary} className="sm:col-span-2" />
               </div>
             </section>
 
-            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-4 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
-              <BookingSectionTitle
-                subtitle="Thanh toán"
-                title="Tổng quan thanh toán"
-                right={<BookingStatusBadge tone={paymentMeta.tone}>{paymentMeta.label}</BookingStatusBadge>}
-              />
-              <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800">
+            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
+              <BookingSectionTitle subtitle="Thanh toán" title="Thanh toán" right={<BookingStatusBadge tone={paymentMeta.tone}>{paymentMeta.label}</BookingStatusBadge>} />
+              <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-800">
                 {paymentOverviewText}
               </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <BookingMetricCard label="Tổng tiền" value={total > 0 ? `${formatMoney(total)} VNĐ` : "--"} dim={statusMeta.group === "cancelled" || statusMeta.group === "completed"} />
-                <BookingMetricCard label="Tiền cọc" value={deposit > 0 ? `${formatMoney(deposit)} VNĐ` : "Miễn cọc"} accent={canPay} dim={statusMeta.group === "cancelled" || statusMeta.group === "completed"} />
-                <BookingMetricCard label="Còn lại" value={remaining > 0 ? `${formatMoney(remaining)} VNĐ` : "Đã đủ"} dim={statusMeta.group === "cancelled" || statusMeta.group === "completed"} />
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <DetailRow compact label="Tổng tiền" value={paymentTotal > 0 ? `${formatMoney(paymentTotal)} VNĐ` : "--"} />
+                <DetailRow compact label="Tiền cọc" value={paymentDeposit > 0 ? `${formatMoney(paymentDeposit)} VNĐ` : "Chưa cọc"} />
+                <DetailRow compact label="Đã thanh toán" value={paymentPaid > 0 ? `${formatMoney(paymentPaid)} VNĐ` : "0 VNĐ"} />
+                <DetailRow compact label="Còn lại" value={paymentRemaining > 0 ? `${formatMoney(paymentRemaining)} VNĐ` : "Đã đủ"} />
               </div>
               {canPay ? (
-                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                  <p className="font-semibold text-stone-950">Đơn đang chờ thanh toán cọc.</p>
-                  <p className="mt-1 text-stone-700">Vui lòng hoàn tất thanh toán để giữ đặt phòng.</p>
-                </div>
-              ) : null}
-              {statusMeta.group === "cancelled" ? (
-                <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-700">
-                  Đơn này không còn hiệu lực.
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+                  Đơn đang chờ thanh toán cọc để giữ chỗ.
                 </div>
               ) : null}
             </section>
 
-            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-4 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
-              <BookingSectionTitle subtitle="Phòng" title="Phòng trong booking" />
-              <div className="mt-3 space-y-3">
+            {showCancellationSection ? (
+              <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
+                <BookingSectionTitle subtitle="Huỷ đơn" title="Thông tin huỷ đơn" />
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {cancellationInfo.actorLabel || cancellationInfo.actorName ? (
+                    <DetailRow
+                      compact
+                      label="Người huỷ"
+                      value={cancellationInfo.actorName ? `${cancellationInfo.actorLabel || "—"} · ${cancellationInfo.actorName}` : (cancellationInfo.actorLabel || "—")}
+                    />
+                  ) : null}
+                  {cancellationInfo.reasons.length ? (
+                    <DetailRow compact label="Lý do huỷ" value={cancellationInfo.reasons.join(" · ")} />
+                  ) : null}
+                  {cancellationInfo.cancelledAt ? (
+                    <DetailRow compact label="Thời điểm huỷ" value={formatDateTime(cancellationInfo.cancelledAt)} />
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="booking-detail-card__section rounded-[24px] border border-stone-200 bg-white p-3 shadow-[0_10px_24px_rgba(28,25,23,0.06)]">
+              <BookingSectionTitle subtitle="Phòng" title="Danh sách phòng" />
+              <div className="mt-3 space-y-2">
                 {rooms.length ? (
                   rooms.map((room, index) => (
-                    <div key={room?.detail_id || room?._id || index} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                    <div key={room?.detail_id || room?._id || index} className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2.5">
                       <p className="text-sm font-semibold text-stone-950">{getRoomTitle(room)}</p>
                       <p className="mt-1 text-sm text-stone-600">
                         {formatDate(room?.expected_checkin)} → {formatDate(room?.expected_checkout)}
@@ -781,6 +946,11 @@ function BookingDetailPanel({
                           {getRoomStatusLabel(room?.status)}
                         </BookingStatusBadge>
                         {room?.note ? <span className="text-sm text-stone-500">{room.note}</span> : null}
+                        {room?.cancellation_reason && statusMeta.group !== "cancelled" ? (
+                          <span className="text-sm text-stone-600">
+                            Lý do huỷ: {getCancellationReasonLabel(room.cancellation_reason)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -827,15 +997,6 @@ function BookingDetailPanel({
           >
             Xem phòng
           </Link>
-
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
-          >
-            <Copy size={16} />
-            Copy mã
-          </button>
         </div>
       </div>
     </div>

@@ -31,6 +31,13 @@ const sidebarConfig = [
   },
   {
     type: "main",
+    title: "Lịch làm việc",
+    icon: FiCalendar,
+    path: "/schedules",
+    allowed: ["receptionist", "technician", "customer_service", "housekeeper", "accountant", "it"],
+  },
+  {
+    type: "main",
     title: "Công việc của tôi",
     icon: FiBriefcase,
     path: "/my-work",

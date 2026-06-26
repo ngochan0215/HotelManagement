@@ -7,6 +7,7 @@ const getAuthHeader = () => {
 };
 
 const BASE_URL = `${API_BASE_URL}/employees`;
+const SCHEDULES_BASE_URL = `${BASE_URL}/schedules`;
 
 function flattenEarningsFromMyEarnings(apiData) {
   const byDate = apiData?.by_date || {};
@@ -38,6 +39,34 @@ export const employeeApi = {
 
   getBriefEmployees: async () => {
     const res = await axios.get(`${BASE_URL}/brief`, getAuthHeader());
+    return res.data;
+  },
+
+  getAllShifts: async (params = {}) => {
+    const res = await axios.get(`${BASE_URL}/shifts`, {
+      ...getAuthHeader(),
+      params,
+    });
+    return res.data;
+  },
+
+  getShiftById: async (id) => {
+    const res = await axios.get(`${BASE_URL}/shifts/${id}`, getAuthHeader());
+    return res.data;
+  },
+
+  createShift: async (data) => {
+    const res = await axios.post(`${BASE_URL}/shifts`, data, getAuthHeader());
+    return res.data;
+  },
+
+  updateShift: async (id, data) => {
+    const res = await axios.patch(`${BASE_URL}/shifts/${id}`, data, getAuthHeader());
+    return res.data;
+  },
+
+  deleteShift: async (id) => {
+    const res = await axios.delete(`${BASE_URL}/shifts/${id}`, getAuthHeader());
     return res.data;
   },
   
@@ -79,10 +108,98 @@ export const employeeApi = {
         return res.data;
     },
 
-    toggleBanUser: async (employeeId, isBanned) => {
+  toggleBanUser: async (employeeId, isBanned) => {
         const url = `${BASE_URL}/toggle-ban/${employeeId}`;
         const res = await axios.patch(url, { isBanned }, getAuthHeader());
         return res.data;
+    },
+
+    getAllSchedules: async (params = {}) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    getScheduleById: async (id) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}/${id}`, getAuthHeader());
+      return res.data;
+    },
+
+    getScheduleContractById: async (id, params = {}) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}/contracts/${id}`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    updateScheduleContractStatus: async (id, data) => {
+      const res = await axios.patch(`${SCHEDULES_BASE_URL}/contracts/${id}`, data, getAuthHeader());
+      return res.data;
+    },
+
+    getPendingScheduleRequests: async (params = {}) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}/pending-requests`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    getMySchedule: async (params = {}) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}/my`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    getAvailableShifts: async (params = {}) => {
+      const res = await axios.get(`${SCHEDULES_BASE_URL}/available-shifts`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    registerSchedule: async (data) => {
+      const res = await axios.post(`${SCHEDULES_BASE_URL}`, data, getAuthHeader());
+      return res.data;
+    },
+
+    updateSchedule: async (id, data) => {
+      const res = await axios.patch(`${SCHEDULES_BASE_URL}/${id}`, data, getAuthHeader());
+      return res.data;
+    },
+
+    deleteSchedule: async (id) => {
+      const res = await axios.delete(`${SCHEDULES_BASE_URL}/${id}`, getAuthHeader());
+      return res.data;
+    },
+
+    cancelScheduleContract: async (id, data = {}) => {
+      const res = await axios.post(`${SCHEDULES_BASE_URL}/cancel-contract/${id}`, data, getAuthHeader());
+      return res.data;
+    },
+
+    getMyAttendanceSummary: async (params = {}) => {
+      const res = await axios.get(`${BASE_URL}/attendances/my-summary`, {
+        ...getAuthHeader(),
+        params,
+      });
+      return res.data;
+    },
+
+    checkInShift: async (scheduleId) => {
+      const res = await axios.post(`${BASE_URL}/attendances/check-in/${scheduleId}`, {}, getAuthHeader());
+      return res.data;
+    },
+
+    checkOutShift: async () => {
+      const res = await axios.post(`${BASE_URL}/attendances/check-out`, {}, getAuthHeader());
+      return res.data;
     },
 
     cashOut: async () => {
