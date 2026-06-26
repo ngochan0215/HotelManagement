@@ -466,7 +466,6 @@ export default function SchedulePage() {
     if (!shift?._id) return;
     setRegisteringShiftId(String(shift._id));
     try {
-      console.log("work date: ", workDate);
       const parsedDate = parse(workDate, "dd/MM/yyyy", new Date());
       await employeeApi.registerSchedule({
         shifts: [

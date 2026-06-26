@@ -402,16 +402,18 @@ export class CleaningService {
                 throw new Error("Công việc chưa được hoàn thành bởi nhân viên");
             }
 
-            const [room, employee] = await Promise.all([
-                this.findRoomById(task.room_id),
-                this.findEmployeeByUserId(userId),
-            ]);
+            // const [room, employee] = await Promise.all([
+            //     this.findRoomById(task.room_id),
+            //     this.findEmployeeByUserId(userId),
+            // ]);
+
+            const room = await this.findRoomById(task.room_id);
             if (!room) {
                 throw new Error("Không tìm thấy phòng");
             }
-            if (!employee) {
-                throw new Error("Không tìm thấy thông tin nhân viên");
-            }
+            // if (!employee) {
+            //     throw new Error("Không tìm thấy thông tin nhân viên");
+            // }
 
             task.status = "confirmed";
             task.confirmed_at = new Date();

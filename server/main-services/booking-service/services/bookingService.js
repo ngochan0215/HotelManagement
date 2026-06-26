@@ -2063,6 +2063,8 @@ export class BookingService {
 
     createCustomerBooking = async (userId, data) => {
         try {
+            console.log("CREATE CUSTOMER BOOKING: ", data);
+
             const { expected_checkout, adults, children, rooms, voucher_code, services } = data;
             let { expected_checkin } = data;
 
@@ -2343,7 +2345,9 @@ export class BookingService {
                 return Promise.all(notifPromises);
             }).catch(err => console.error("[createCustomerBooking] Notification error:", err.message));
 
+            console.log("FUCK IM DEAD: " + booking + " - " + deposit);
             return { booking, deposit };
+
 
         } catch (error) {
             console.log("Error in createCustomerBooking:", error.message);

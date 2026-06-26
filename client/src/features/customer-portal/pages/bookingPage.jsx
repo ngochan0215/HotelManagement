@@ -878,7 +878,9 @@ export default function BookingPage() {
       }
 
       console.log("result: ", result);
-
+      localStorage.setItem("last booking result", JSON.stringify(result));
+      console.log(localStorage.getItem("last booking result"));
+      
       const paymentRes = await paymentApi.createPaymentLink(paymentUserId, {
         booking_id: result.bookingId,
         amount,
