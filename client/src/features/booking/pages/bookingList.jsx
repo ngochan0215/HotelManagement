@@ -206,33 +206,85 @@ export default function BookingList() {
   }, [formData.expected_checkin, formData.expected_checkout, formData.adults, formData.children, isModalOpen]);
 
   // Tự động set thời gian check-in khi chọn "đặt liền"
-  useEffect(() => {
-    if (isModalOpen && bookingMode === "immediate") {
-      // Lấy thời gian check-in hiện tại của form, nếu chưa có thì dùng thời gian hiện tại
-      const checkin = formData.expected_checkin
-        ? new Date(formData.expected_checkin)
-        : new Date();
+  // useEffect(() => {
+  //   if (isModalOpen && bookingMode === "immediate") {
+  //     // Lấy thời gian check-in hiện tại của form, nếu chưa có thì dùng thời gian hiện tại
+  //     const checkin = formData.expected_checkin
+  //       ? new Date(formData.expected_checkin)
+  //       : new Date();
 
-      let checkinTime = checkin;
+  //     let checkinTime = checkin;
 
-      // 14:00 của chính ngày được chọn
-      const standardCheckin = setMinutes(setHours(checkin, 14), 0);
+  //     // 14:00 của chính ngày được chọn
+  //     const standardCheckin = setMinutes(setHours(checkin, 14), 0);
 
-      // Nếu trước 14:00 thì ép thành 14:00
-      if (checkin < standardCheckin) {
-        checkinTime = standardCheckin;
+  //     // Nếu trước 14:00 thì ép thành 14:00
+  //     if (checkin < standardCheckin) {
+  //       checkinTime = standardCheckin;
+  //     }
+
+  //     const formattedTime = format(checkinTime, "yyyy-MM-dd'T'HH:mm");
+
+  //     if (formData.expected_checkin !== formattedTime) {
+  //       setFormData(prev => ({
+  //         ...prev,
+  //         expected_checkin: formattedTime,
+  //       }));
+  //     }
+  //   }
+  // }, [isModalOpen, bookingMode]);
+
+  // Hàm tính toán ngày checkin/checkout chuẩn theo mode
+  const calculateStandardDates = (mode, inputCheckinDate = new Date()) => {
+    let checkinTime;
+    let checkoutTime;
+
+    if (mode === "immediate") {
+      // Đặt liền: Lấy ngày giờ input, so sánh với 14:00 của ngày đó
+      checkinTime = new Date(inputCheckinDate);
+      const standard14h = setMinutes(setHours(new Date(checkinTime), 14), 0);
+      
+      // Nếu < 14h thì ép thành 14h, nếu >= 14h thì giữ nguyên
+      if (checkinTime < standard14h) {
+        checkinTime = standard14h;
       }
-
-      const formattedTime = format(checkinTime, "yyyy-MM-dd'T'HH:mm");
-
-      if (formData.expected_checkin !== formattedTime) {
-        setFormData(prev => ({
-          ...prev,
-          expected_checkin: formattedTime,
-        }));
-      }
+    } else {
+      // Đặt trước: Mặc định là 14:00 ngày mai
+      const tomorrow = addDays(new Date(), 1);
+      checkinTime = setMinutes(setHours(tomorrow, 14), 0);
     }
-  }, [isModalOpen, bookingMode]);
+
+    // Checkout tự động là 1 ngày sau (thường là 12:00 trưa)
+    checkoutTime = setMinutes(setHours(addDays(checkinTime, 1), 12), 0);
+
+    return {
+      checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm"),
+      checkout: format(checkoutTime, "yyyy-MM-dd'T'HH:mm")
+    };
+  };
+
+  // Hàm xử lý khi user tự tay chọn ngày checkin mới trên UI
+  const handleCheckinChange = (e) => {
+    const selectedDate = new Date(e.target.value);
+    const { checkin, checkout } = calculateStandardDates(bookingMode, selectedDate);
+    
+    // Nếu là đặt trước, user chọn ngày khác thì vẫn giữ ngày user chọn, chỉ set cứng giờ 14h và checkout ngày hôm sau
+    if (bookingMode === "advance") {
+      const advanceCheckin = setMinutes(setHours(selectedDate, 14), 0);
+      const advanceCheckout = setMinutes(setHours(addDays(advanceCheckin, 1), 12), 0);
+      setFormData(prev => ({
+        ...prev,
+        expected_checkin: format(advanceCheckin, "yyyy-MM-dd'T'HH:mm"),
+        expected_checkout: format(advanceCheckout, "yyyy-MM-dd'T'HH:mm")
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        expected_checkin: checkin,
+        expected_checkout: checkout
+      }));
+    }
+  };
 
   useEffect(() => {
     if (!formData.expected_checkin || !formData.expected_checkout) {
@@ -572,40 +624,72 @@ export default function BookingList() {
     }
   };
 
+  // const handleOpenModal = () => {
+  //   const now = new Date();
+
+  //   let checkin;
+
+  //   if (bookingMode === "immediate") {
+  //     checkin = new Date(now);
+
+  //     // 14:00 của cùng ngày
+  //     const standardCheckin = setMinutes(setHours(checkin, 14), 0);
+
+  //     // Nếu trước 14:00 thì ép thành 14:00
+  //     if (checkin < standardCheckin) {
+  //       checkin = standardCheckin;
+  //     }
+  //   } else {
+  //     // Đặt trước
+  //     checkin = setMinutes(setHours(now, 14), 0);
+  //   }
+
+  //   const checkout = setMinutes(setHours(addDays(checkin, 1), 12), 0);
+
+  //   setFormData({
+  //     customer_id: "",
+  //     adults: 1,
+  //     children: 0,
+  //     expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"),
+  //     expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"),
+  //     deposit: 0,
+  //   });
+
+  //   setSelectedRooms([]); 
+  //   setTempRoomId(""); 
+  //   setIsWalkIn(false); 
+  //   setCalcValues({ total_price: 0, deposit_required: 0 });
+  //   setSelectedDiscount(null); 
+  //   setAvailableDiscounts([]);
+  //   setNewCustomer({ email: "", full_name: "", phone_number: "", date_birth: "", nationality: "Vietnam", CCCD: "" });
+  //   setCustomerMode("existing"); 
+  //   setCustSearchQuery(""); 
+  //   setSelectedCustDisplay(null); 
+  //   setShowCustDropdown(false);
+  //   setShowQrScanner(false); 
+  //   setQrScanning(false); 
+  //   setQrError(null);
+  //   setBookingMode("immediate"); // Reset về đặt liền
+  //   setSavingCustomer(false);
+  //   setIsModalOpen(true);
+  // };
   const handleOpenModal = () => {
-    const now = new Date();
-
-    let checkin;
-
-    if (bookingMode === "immediate") {
-      checkin = new Date(now);
-
-      // 14:00 của cùng ngày
-      const standardCheckin = setMinutes(setHours(checkin, 14), 0);
-
-      // Nếu trước 14:00 thì ép thành 14:00
-      if (checkin < standardCheckin) {
-        checkin = standardCheckin;
-      }
-    } else {
-      // Đặt trước
-      checkin = setMinutes(setHours(now, 14), 0);
-    }
-
-    const checkout = setMinutes(setHours(addDays(checkin, 1), 12), 0);
+    // Khởi tạo là đặt liền
+    setBookingMode("immediate");
+    const { checkin, checkout } = calculateStandardDates("immediate", addMinutes(new Date(), 10));
 
     setFormData({
       customer_id: "",
       adults: 1,
       children: 0,
-      expected_checkin: format(checkin, "yyyy-MM-dd'T'HH:mm"),
-      expected_checkout: format(checkout, "yyyy-MM-dd'T'HH:mm"),
+      expected_checkin: checkin,
+      expected_checkout: checkout,
       deposit: 0,
     });
 
     setSelectedRooms([]); 
     setTempRoomId(""); 
-    setIsWalkIn(false); 
+    setIsWalkIn(true); // Default đặt liền
     setCalcValues({ total_price: 0, deposit_required: 0 });
     setSelectedDiscount(null); 
     setAvailableDiscounts([]);
@@ -617,7 +701,6 @@ export default function BookingList() {
     setShowQrScanner(false); 
     setQrScanning(false); 
     setQrError(null);
-    setBookingMode("immediate"); // Reset về đặt liền
     setSavingCustomer(false);
     setIsModalOpen(true);
   };
@@ -1396,17 +1479,11 @@ export default function BookingList() {
                         <button type="button" onClick={() => { 
                             setBookingMode('immediate'); 
                             setIsWalkIn(true);
-                            // Tự động set thời gian check-in = hiện tại + 10 phút
-                            const now = new Date();
-                            const standardCheckin = setMinutes(setHours(now, 14), 0);
-
-                            const checkinTime =
-                              now < standardCheckin
-                                ? standardCheckin
-                                : now;
+                            const { checkin, checkout } = calculateStandardDates("immediate", addMinutes(new Date(), 10));
                             setFormData(prev => ({
                               ...prev,
-                              expected_checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm")
+                              expected_checkin: checkin,
+                              expected_checkout: checkout
                             }));
                           }}
                             className={`flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition ${bookingMode==='immediate' ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}>
@@ -1415,15 +1492,11 @@ export default function BookingList() {
                         <button type="button" onClick={() => {
                             setBookingMode('advance');
                             setIsWalkIn(false);
-                            // Đặt giờ check-in chuẩn 2:00 CH khi chuyển sang đặt trước
-                            const now = new Date();
-                            let checkinTime = setMinutes(setHours(now, 14), 0);
-                            if (now >= checkinTime) {
-                              checkinTime = addDays(checkinTime, 1);
-                            }
+                            const { checkin, checkout } = calculateStandardDates("advance");
                             setFormData(prev => ({
                               ...prev,
-                              expected_checkin: format(checkinTime, "yyyy-MM-dd'T'HH:mm")
+                              expected_checkin: checkin,
+                              expected_checkout: checkout
                             }));
                           }}
                             className={`flex-1 py-2.5 rounded-lg text-sm font-bold border-2 transition ${bookingMode==='advance' ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}>
@@ -1565,11 +1638,12 @@ export default function BookingList() {
                         <FiCalendar/> Thời gian & Số lượng
                     </label>
                     <div className="grid grid-cols-2 gap-4 mb-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Check-in</label>
-                            <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 bg-white text-sm focus:ring-2 focus:ring-indigo-500"
-                                value={formData.expected_checkin} onChange={e => setFormData({...formData, expected_checkin: e.target.value})} />
-                        </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Check-in</label>
+                          <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 bg-white text-sm focus:ring-2 focus:ring-indigo-500"
+                              value={formData.expected_checkin} 
+                              onChange={handleCheckinChange} /> {/* Đổi chỗ này */}
+                      </div>
                         <div>
                             <label className="block text-xs font-semibold text-gray-600 mb-1">Check-out</label>
                             <input type="datetime-local" required className="w-full border border-gray-300 rounded-lg p-2.5 bg-white text-sm focus:ring-2 focus:ring-indigo-500"

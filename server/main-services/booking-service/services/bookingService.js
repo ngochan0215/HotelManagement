@@ -463,6 +463,7 @@ export class BookingService {
             const { customer_id, adults, children, deposit, 
             total_fee, rooms, expected_checkout, discount_id } = data;
 
+            let { expected_checkin } = data;
             const isScheduled = this.isAfterToday(expected_checkin);
             const isImmediate = deposit === 0;
             let initialStatus = isImmediate ? "in_progress" : "pending";
@@ -485,7 +486,6 @@ export class BookingService {
                 throw new Error("Phải đặt ít nhất một phòng!");
             }
 
-            let { expected_checkin } = data;
             const now = new Date();
             if (isImmediate && now.getHours() < 14) {
                 const today2PM = new Date(now);

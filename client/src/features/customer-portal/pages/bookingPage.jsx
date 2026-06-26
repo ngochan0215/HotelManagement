@@ -230,15 +230,18 @@ function getTodayInputValue() {
   return toDateInputValue(new Date());
 }
 
-/**
- * Resolve the effective checkin time string given a date and a user-selected time.
- *
- * Rules:
- * - Đặt trước (date > today): always "14:00"
- * - Đặt liền (date === today):
- *   - selected time < 14:00 → ép thành "14:00"
- *   - selected time >= 14:00 → giữ nguyên
- */
+// Thêm hàm này: Lấy giờ hiện tại + 10 phút (nếu < 14:00 thì ép thành 14:00)
+function getDefaultImmediateTime() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 10);
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+  
+  if (totalMinutes < 14 * 60) return "14:00";
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 function resolveCheckinTime(dateString, timeString) {
   const todayStr = toDateInputValue(new Date());
   if (!dateString || dateString > todayStr) {
@@ -269,6 +272,12 @@ export default function BookingPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryId = normalizeRouteId(searchParams.get("categoryId") || searchParams.get("roomId"));
+  
+  const initCheckin = searchParams.get("checkin") || "";
+  // Nếu url không có ngày checkin hoặc là ngày hôm nay -> xem như chế độ Đặt liền
+  const isInitialTodayOrEmpty = !initCheckin || initCheckin === getTodayInputValue();
+  const initCheckinTime = isInitialTodayOrEmpty ? getDefaultImmediateTime() : "14:00";
+  
   const [catalogRooms, setCatalogRooms] = useState([]);
   const [availabilityRooms, setAvailabilityRooms] = useState([]);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
@@ -296,9 +305,9 @@ export default function BookingPage() {
   const paymentRedirectKeyRef = useRef("");
   const [form, setForm] = useState({
     room_id: categoryId || "",
-    checkin: searchParams.get("checkin") || "",
+    checkin: initCheckin || "",
     checkout: searchParams.get("checkout") || "",
-    checkin_time: "14:00",
+    checkin_time: initCheckinTime,
     adults: Number(searchParams.get("adults") || 2),
     children: Number(searchParams.get("children") || 0),
     customer_name: "",
@@ -648,8 +657,13 @@ export default function BookingPage() {
       if (key === "checkin") {
         // checkout always = checkin + 1 ngày
         nextForm.checkout = getNextDayInputValue(value);
-        // resolve giờ checkin: đặt trước → 14:00, đặt liền → giữ nếu ≥ 14:00
-        nextForm.checkin_time = resolveCheckinTime(value, prev.checkin_time);
+
+        if (value === getTodayInputValue()) {
+          nextForm.checkin_time = getDefaultImmediateTime();
+        } else {
+          // Còn nếu chọn ngày mai trở đi -> về lại quy tắc đặt trước (14:00)
+          nextForm.checkin_time = resolveCheckinTime(value, prev.checkin_time);
+        }
       }
 
       if (key === "checkin_time") {
