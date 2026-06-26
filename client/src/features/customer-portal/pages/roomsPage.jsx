@@ -215,15 +215,18 @@ export default function RoomsPage() {
           <SectionHeader eyebrow={pageEyebrow} title={pageTitle} description={pageDescription} />
 
           <form onSubmit={handleSearch} className="min-w-0 overflow-hidden rounded-[32px] border border-stone-300 bg-white p-4 shadow-[0_18px_48px_rgba(28,25,23,0.10)] ring-1 ring-stone-100 md:p-5">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-stone-950">Tìm phòng</p>
                 <p className="mt-1 text-sm text-stone-500">Bộ lọc nhanh cho lịch lưu trú của bạn.</p>
               </div>
+              <div className="rounded-full bg-stone-50 px-3 py-1 text-xs font-medium text-stone-500">
+                Nhận phòng 14:00 · Trả phòng 12:00
+              </div>
             </div>
 
-            <div className="grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-12">
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-3">
                 <span className="text-[13px] font-medium text-stone-600">Nhận phòng</span>
                 <input
                   required
@@ -231,62 +234,51 @@ export default function RoomsPage() {
                   min={todayInputValue}
                   value={filters.checkin}
                   onChange={(e) => handleFilterChange("checkin", e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
                 />
-                <p className="mt-3 text-sm text-stone-500">
-                  Giờ nhận phòng: <span className="font-semibold">14:00</span>
-                </p>
               </label>
 
-              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700">
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-3">
                 <span className="text-[13px] font-medium text-stone-600">Trả phòng</span>
                 <input
                   required
                   type="date"
                   value={filters.checkout}
                   onChange={(e) => handleFilterChange("checkout", e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
                 />
-                <p className="mt-3 text-sm text-stone-500">
-                  Giờ trả phòng: <span className="font-semibold">12:00 (trưa)</span>
-                </p>
               </label>
 
-              <div className="grid min-w-0 gap-2">
-                <span className="text-[13px] font-medium text-stone-600">Khách</span>
-                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-stone-200 bg-white p-1.5">
-                  <label className="grid gap-1 rounded-xl px-2 py-1.5">
-                    <span className="text-[11px] uppercase tracking-[0.14em] text-stone-400">Người lớn</span>
-                    <input
-                      required
-                      type="number"
-                      min="1"
-                      value={filters.adults}
-                      onChange={(e) => handleFilterChange("adults", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
-                    />
-                  </label>
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-3">
+                <span className="text-[13px] font-medium text-stone-600">Người lớn</span>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={filters.adults}
+                  onChange={(e) => handleFilterChange("adults", e.target.value)}
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                />
+              </label>
 
-                  <label className="grid gap-1 rounded-xl px-2 py-1.5">
-                    <span className="text-[11px] uppercase tracking-[0.14em] text-stone-400">Trẻ em</span>
-                    <input
-                      required
-                      type="number"
-                      min="0"
-                      value={filters.children}
-                      onChange={(e) => handleFilterChange("children", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
-                    />
-                  </label>
-                </div>
-              </div>
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-3">
+                <span className="text-[13px] font-medium text-stone-600">Trẻ em</span>
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  value={filters.children}
+                  onChange={(e) => handleFilterChange("children", e.target.value)}
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                />
+              </label>
 
-              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700">
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-5">
                 <span className="text-[13px] font-medium text-stone-600">Loại phòng</span>
                 <select
                   value={filters.roomType}
                   onChange={(e) => handleFilterChange("roomType", e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
                 >
                   <option value="">Tất cả hạng phòng</option>
                   {roomTypes.map((room) => (
@@ -297,21 +289,21 @@ export default function RoomsPage() {
                 </select>
               </label>
 
-              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700">
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-stone-700 xl:col-span-4">
                 <span className="text-[13px] font-medium text-stone-600">Ngân sách</span>
                 <input
                   type="number"
                   value={filters.priceLimit}
                   onChange={(e) => handleFilterChange("priceLimit", e.target.value)}
-                  placeholder="Ví dụ: 3.000.000"
-                  className="h-11 w-full rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+                  placeholder="VD: 1.000.000"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
                 />
               </label>
 
-              <div className="grid min-w-0 gap-2 sm:col-span-2 xl:col-span-1">
+              <div className="flex min-w-0 items-end xl:col-span-3">
                 <button
                   type="submit"
-                  className="inline-flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-4 text-center text-sm font-semibold text-white shadow-[0_12px_30px_rgba(28,25,23,0.22)] transition hover:bg-stone-800 hover:shadow-[0_16px_36px_rgba(28,25,23,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-4 text-center text-sm font-semibold text-white shadow-[0_12px_30px_rgba(28,25,23,0.22)] transition hover:bg-stone-800 hover:shadow-[0_16px_36px_rgba(28,25,23,0.28)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Tìm phòng
                   <ArrowRight size={16} />
