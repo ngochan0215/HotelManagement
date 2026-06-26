@@ -1374,12 +1374,15 @@ export class RoomService {
 
     updateRoomInternal = async (filter, updateData, options = {}) => {
         try {
+            console.log("IM CALLED BITCH!!!!!");
+            console.log("UPDATE ROOM INTERNAL: " + filter + " - " + "updateData: " + updateData);
             const result = await this.Room.updateMany(filter, { $set: updateData }, options);
             await Promise.all([
                 cache.delByPattern("room:rooms:*"),
                 cache.delByPattern("room:room:*"),
                 cache.delByPattern("room:available:*"),
             ]);
+            console.log("IM DONE WITH THIS SHIT");
             return result;
         } catch (err) {
             console.log("Error in updateRoomInternal:", err);

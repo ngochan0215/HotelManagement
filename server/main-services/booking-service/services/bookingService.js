@@ -1194,6 +1194,15 @@ export class BookingService {
                 throw new Error("Không tìm thấy phòng trong booking.");
             }
 
+            const ONE_HOUR = 60 * 60 * 1000;
+            const expectedCheckin = new Date(detail.expected_checkin);
+            const earliestCheckin = new Date(expectedCheckin.getTime() - ONE_HOUR);
+            if (now < earliestCheckin) {
+                throw new Error(
+                    `Khách chỉ có thể check-in từ ${earliestCheckin.toLocaleString("vi-VN")} trở đi.`
+                );
+            }
+
             if (!["reserved", "confirmed"].includes(detail.status)) {
                 throw new Error(`Phòng đang ở trạng thái '${detail.status}', không thể check-in.`);
             }
@@ -1208,25 +1217,25 @@ export class BookingService {
             const room = replyRoom.room;
 
             // find conflict room logs, close old logs and insert new one
-            const conflictLog = await this.eventBus.safeRequest(
-                ROOM_EVENTS.FIND_ROOM_LOGS,
-                {
-                    filter: {
-                        room_id: detail.room_id,
-                        start_time: { $lt: detail.expected_checkout },
-                        end_time: { $gt: now },
-                        status: { $in: ["occupied", "maintenance", "cleaning"] },
-                        $or: [
-                            { end_time: null },
-                            { end_time: { $gt: detail.expected_checkin } }
-                        ]
-                    },
-                    opts: { limit: 1 }
-                }
-            );
-            if (conflictLog) {
-                throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này (đang có khách ở hoặc đang bảo trì, dọn dẹp).");
-            }
+            // const conflictLog = await this.eventBus.safeRequest(
+            //     ROOM_EVENTS.FIND_ROOM_LOGS,
+            //     {
+            //         filter: {
+            //             room_id: detail.room_id,
+            //             start_time: { $lt: detail.expected_checkout },
+            //             end_time: { $gt: now },
+            //             status: { $in: ["occupied", "maintenance", "cleaning"] },
+            //             $or: [
+            //                 { end_time: null },
+            //                 { end_time: { $gt: detail.expected_checkin } }
+            //             ]
+            //         },
+            //         opts: { limit: 1 }
+            //     }
+            // );
+            // if (conflictLog) {
+            //     throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này (đang có khách ở hoặc đang bảo trì, dọn dẹp).");
+            // }
 
             const replyUpdateLog = await this.eventBus.safeRequest(
                 ROOM_EVENTS.UPDATE_ROOM_LOG, 

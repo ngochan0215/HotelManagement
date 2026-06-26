@@ -57,7 +57,7 @@ export default function RoomCalendar() {
             const dateStr = format(currentDate, 'yyyy-MM-dd');
             const response = await roomApi.getRoomsCalendar(dateStr);
 
-            //console.log("FULL API RESPONSE:", response);
+            console.log("FULL API RESPONSE:", response);
             const data = response.rooms ? response : (response.data || {});
 
             const roomList = data.rooms || [];
