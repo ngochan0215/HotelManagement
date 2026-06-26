@@ -10,6 +10,7 @@ import Topbar from "../../../components/topbar.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
 import { employeeApi } from "../../api/employeeApi.js";
+import { registerEmployee } from "../../auth/api/authApi.js";
 import { RankBadge, StatusPill } from "../../../components/ui/label.jsx";
 
 const POSITION_MAP = {
@@ -136,7 +137,10 @@ export default function EmployeePage() {
         await employeeApi.updateEmployee(editingEmployee._id, payload);
         showToast("Cập nhật thông tin thành công!", "success");
       } else {
-        await employeeApi.createEmployee(formData);
+        await registerEmployee({
+          ...formData,
+          nationality: "Vietnam",
+        });
         showToast("Thêm nhân viên mới thành công!", "success");
       }
       setIsModalOpen(false);

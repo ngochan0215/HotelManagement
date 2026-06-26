@@ -233,6 +233,7 @@ export class AuthService {
                     email: user.email,
                     emailVerified: user.emailVerified,
                     role: user.system_role,
+                    phone_number: payload.phone_number,
                     avatar: user.avatar
                 }
             };
@@ -249,6 +250,7 @@ export class AuthService {
         try {
             let fullName = "Người dùng";
             let position = "";
+            let phone_number = "";
             let employeeId = null;
             let customerId = null;
 
@@ -261,6 +263,7 @@ export class AuthService {
                 if (reply.found) {
                     fullName = reply.customer.full_name;
                     customerId = reply.customer._id;
+                    phone_number = reply.customer.phone_number;
                 }
             } else {
                 const reply = await this.eventBus.safeRequest(
@@ -283,6 +286,7 @@ export class AuthService {
             if (position) payload.position = position;
             if (employeeId) payload.employeeId = employeeId;
             if (customerId) payload.customerId = customerId;
+            if (phone_number) payload.phone_number = phone_number;
 
             return { payload, fullName };
         } catch (error) {

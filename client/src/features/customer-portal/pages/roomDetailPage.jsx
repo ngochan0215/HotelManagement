@@ -16,8 +16,9 @@ function isNotFoundError(message) {
 }
 
 function buildBookingUrl(roomId, search) {
+  if (!roomId) return "";
   const params = new URLSearchParams(search);
-  params.set("roomId", roomId);
+  params.set("categoryId", roomId);
   return `/hotel/book?${params.toString()}`;
 }
 
@@ -584,7 +585,7 @@ export default function RoomDetailPage() {
             </div>
 
             <Link
-              to={bookingHref}
+              to={bookingHref || "/hotel/rooms"}
               className="mt-6 inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-4 text-center text-sm font-semibold leading-5 text-white transition hover:bg-stone-800"
             >
               Đặt phòng ngay

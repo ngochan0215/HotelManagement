@@ -22,6 +22,26 @@ export class BookingService {
         this.sendNotification = sendNotification;
         this.sendNotificationsToUsers = sendNotificationsToUsers;
     }
+
+    startOfDay = (value) => {
+        const date = value instanceof Date ? new Date(value) : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
+
+    isPastDate = (value) => {
+        const target = this.startOfDay(value);
+        if (!target) return false;
+        const today = this.startOfDay(new Date());
+        return target < today;
+    };
+
+    isAfterToday = (value) => {
+        const target = this.startOfDay(value);
+        if (!target) return false;
+        const today = this.startOfDay(new Date());
+        return target > today;
+    };
     
     // 1 đêm = 14:00 ngày N đến 12:00 ngày N+1 (chu kỳ chuẩn khách sạn)
     // Số đêm = số ngày lịch giữa ngày check-in và ngày check-out (bỏ giờ)
@@ -114,6 +134,7 @@ export class BookingService {
                     updateData: { 
                         start_time: booking.expected_checkin,
                         end_time: booking.expected_checkout, 
+                        status: "booked"
                     }
                 }
             );
@@ -176,6 +197,10 @@ export class BookingService {
                 { $set: { status: "confirmed" } },
             );
 
+            if (booking.pending_service_orders?.length) {
+                await this.fulfillPendingServiceOrders(booking);
+            }
+
             console.log(`FUCK YOU: Booking ${booking_id} đã được xác nhận thành công.`);
             await Promise.all([
                 cache.del(`booking:one:${booking_id}`),
@@ -222,6 +247,61 @@ export class BookingService {
             console.log("Error in confirming booking internal: ", error.message);
             throw error;
         }
+    };
+
+    fulfillPendingServiceOrders = async (booking) => {
+        const pendingOrders = (booking.pending_service_orders || []).filter((order) => order.status === "pending");
+        if (!pendingOrders.length) return booking;
+
+        try {
+            const reply = await this.eventBus.safeRequest(SERVICE_EVENTS.FULFILL_PENDING_SERVICES, {
+                booking_id: booking._id.toString(),
+                customer_id: booking.customer_id.toString(),
+                orders: pendingOrders,
+                employee_id: booking.handled_by || null,
+            });
+
+            const now = new Date();
+
+            if (reply.success) {
+                booking.pending_service_orders = booking.pending_service_orders.map((order) => {
+                    if (order.status !== "pending") return order;
+                    return {
+                        ...(order.toObject?.() || order),
+                        status: "fulfilled",
+                        service_usage_id: reply.service_usage_id || null,
+                        fulfilled_at: now,
+                        failure_reason: null,
+                    };
+                });
+            } else {
+                booking.pending_service_orders = booking.pending_service_orders.map((order) => {
+                    if (order.status !== "pending") return order;
+                    return {
+                        ...(order.toObject?.() || order),
+                        status: "failed",
+                        failure_reason: reply.message || "Không thể tạo phiếu sử dụng dịch vụ sau khi thanh toán cọc.",
+                    };
+                });
+            }
+
+            booking.markModified("pending_service_orders");
+            await booking.save();
+        } catch (error) {
+            console.error("[fulfillPendingServiceOrders] Error:", error.message);
+            booking.pending_service_orders = booking.pending_service_orders.map((order) => {
+                if (order.status !== "pending") return order;
+                return {
+                    ...order.toObject?.() || order,
+                    status: "failed",
+                    failure_reason: error.message || "Không thể tạo phiếu sử dụng dịch vụ sau khi thanh toán cọc.",
+                };
+            });
+            booking.markModified("pending_service_orders");
+            await booking.save();
+        }
+
+        return booking;
     };
 
     populateCustomerAndEmployee= async (bookings) => {
@@ -408,11 +488,11 @@ export class BookingService {
                 throw new Error("Ngày check-out dự kiến phải sau ngày check-in dự kiến.");
             }
 
-            if ( new Date(expected_checkout) < new Date() ) {
+            if ( this.isPastDate(expected_checkout) ) {
                 throw new Error("Ngày check-out dự kiến không được trong quá khứ.");
             }
 
-            if ( new Date(expected_checkin) < new Date() ) {
+            if ( this.isPastDate(expected_checkin) ) {
                 throw new Error("Ngày check-in dự kiến không được trong quá khứ.");
             }
 
@@ -481,7 +561,7 @@ export class BookingService {
             }
 
             const handled_by = employee._id;
-            const isScheduled = new Date(expected_checkin) > new Date();
+            const isScheduled = this.isAfterToday(expected_checkin);
             const isImmediate = deposit === 0;
             let initialStatus = isImmediate ? "in_progress" : "pending";
 
@@ -1145,7 +1225,7 @@ export class BookingService {
                 }
             );
             if (conflictLog) {
-                throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này.");
+                throw new Error("Phòng đang không trong trạng thái có thể checkin trong khoảng thời gian này (đang có khách ở hoặc đang bảo trì, dọn dẹp).");
             }
 
             const replyUpdateLog = await this.eventBus.safeRequest(
@@ -1728,6 +1808,119 @@ export class BookingService {
         return reply.customer;
     };
 
+    normalizeLookupString = (value) => String(value || "").trim().toLowerCase();
+
+    normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "");
+
+    getPhoneVariants = (value) => {
+        const digits = this.normalizePhoneDigits(value);
+        const variants = new Set();
+        if (!digits) return variants;
+        variants.add(digits);
+        if (digits.startsWith("84")) variants.add(`0${digits.slice(2)}`);
+        if (digits.startsWith("0")) variants.add(`84${digits.slice(1)}`);
+        return variants;
+    };
+
+    matchesLookupContact = (contact, customer) => {
+        const normalizedContact = this.normalizeLookupString(contact);
+        if (!normalizedContact) return false;
+
+        const customerEmail = this.normalizeLookupString(customer?.email || customer?.user?.email);
+        if (customerEmail && normalizedContact === customerEmail) return true;
+
+        const contactPhoneVariants = this.getPhoneVariants(contact);
+        if (contactPhoneVariants.size === 0) return false;
+
+        const customerPhoneVariants = this.getPhoneVariants(customer?.phone_number || customer?.phone || customer?.user?.phone_number || customer?.user?.phone);
+        if (customerPhoneVariants.size === 0) return false;
+
+        for (const candidate of contactPhoneVariants) {
+            if (customerPhoneVariants.has(candidate)) return true;
+        }
+
+        return false;
+    };
+
+    lookupPublicBooking = async (data = {}) => {
+        try {
+            const bookingCode = String(data.bookingCode || data.booking_code || data.code || "").trim();
+            const contact = String(data.contact || data.email || data.phone || "").trim();
+
+            if (!bookingCode) {
+                const err = new Error("Vui lòng nhập mã đặt phòng.");
+                err.status = 400;
+                throw err;
+            }
+
+            if (!contact) {
+                const err = new Error("Vui lòng nhập email hoặc số điện thoại dùng khi đặt phòng.");
+                err.status = 400;
+                throw err;
+            }
+
+            if (!mongoose.Types.ObjectId.isValid(bookingCode)) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const booking = await this.Booking.findById(bookingCode).select("-__v").lean();
+            if (!booking) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const customer = await this.findCustomerById(booking.customer_id);
+            let customerEmail = customer?.email || customer?.user?.email || "";
+            if (!customerEmail && customer?.user_id) {
+                const replyUser = await this.eventBus.safeRequest(USER_EVENTS.GET_USER_INFO, { userId: customer.user_id });
+                if (replyUser?.success && replyUser.user?.email) {
+                    customerEmail = replyUser.user.email;
+                }
+            }
+
+            const customerForLookup = {
+                ...customer,
+                email: customerEmail,
+            };
+
+            if (!this.matchesLookupContact(contact, customerForLookup)) {
+                const err = new Error("Không tìm thấy đặt phòng phù hợp.");
+                err.status = 404;
+                throw err;
+            }
+
+            const bookingDetails = await this.BookingDetail.find({ booking_id: booking._id })
+                .select("-__v")
+                .lean();
+            const populatedDetails = await this.populateRoom(bookingDetails);
+            const rooms = populatedDetails.map(item => ({
+                detail_id: item._id,
+                room_id: item.room_info?._id,
+                room_number: item.room_info?.room_number,
+                room_status: item.room_info?.room_status,
+                category: item.room_info?.category ?? null,
+                expected_checkin: item.expected_checkin,
+                expected_checkout: item.expected_checkout,
+                actual_checkin: item.actual_checkin,
+                actual_checkout: item.actual_checkout,
+                base_fee: item.base_fee,
+                extra_fee: item.extra_fee,
+                status: item.status,
+                note: item.note,
+                cancellation_reason: item.cancellation_reason,
+            }));
+
+            return { booking, rooms };
+
+        } catch (error) {
+            console.log("Error in lookupPublicBooking:", error.message);
+            throw error;
+        }
+    };
+
     // customer management 
     
     getMyBookings = async (userId, query = {}) => {
@@ -1851,7 +2044,7 @@ export class BookingService {
 
     createCustomerBooking = async (userId, data) => {
         try {
-            const { expected_checkin, expected_checkout, adults, children, rooms, voucher_code } = data;
+            const { expected_checkin, expected_checkout, adults, children, rooms, voucher_code, services } = data;
 
             if (!expected_checkin || !expected_checkout || adults === undefined || children === undefined) {
                 throw new Error("Phải điền đầy đủ thông tin bắt buộc.");
@@ -1862,10 +2055,17 @@ export class BookingService {
 
             const checkin = new Date(expected_checkin);
             const checkout = new Date(expected_checkout);
-            const now = new Date();
 
-            if (checkin <= now) throw new Error("Ngày check-in phải là ngày trong tương lai.");
-            if (checkout <= checkin) throw new Error("Ngày check-out phải sau ngày check-in.");
+            const today = this.startOfDay(new Date());
+            const checkinDay = this.startOfDay(checkin);
+            const checkoutDay = this.startOfDay(checkout);
+
+            if (!checkinDay || !checkoutDay) {
+                throw new Error("Ngày nhận phòng hoặc ngày trả phòng không hợp lệ.");
+            }
+
+            if (checkinDay < today) throw new Error("Ngày nhận phòng không được nằm trong quá khứ.");
+            if (checkoutDay <= checkinDay) throw new Error("Ngày trả phòng phải sau ngày nhận phòng.");
 
             const customer = await this.findCustomerByUserId(userId);
 
@@ -1972,7 +2172,23 @@ export class BookingService {
             }
 
             const originalFee = baseRoomFee;
-            const totalFee = Math.max(baseRoomFee - discountAmount - voucherAmount, 0);
+            let servicePreorderFee = 0;
+            let pendingServiceOrders = [];
+
+            if (Array.isArray(services) && services.length > 0) {
+                const replyServices = await this.eventBus.safeRequest(
+                    SERVICE_EVENTS.VALIDATE_PENDING_SERVICES,
+                    { services },
+                );
+                if (!replyServices.success) {
+                    throw new Error(replyServices.message || "Dịch vụ đặt trước không hợp lệ.");
+                }
+                servicePreorderFee = Number(replyServices.totalServiceFee || 0);
+                pendingServiceOrders = replyServices.orders || [];
+            }
+
+            const roomFeeAfterDiscount = Math.max(baseRoomFee - discountAmount - voucherAmount, 0);
+            const totalFee = roomFeeAfterDiscount + servicePreorderFee;
             const deposit = Math.ceil(totalFee * 0.3);
 
             const booking = await this.Booking.create({
@@ -1983,10 +2199,12 @@ export class BookingService {
                 deposit,
                 original_fee: originalFee,
                 total_fee: totalFee,
+                service_preorder_fee: servicePreorderFee,
+                pending_service_orders: pendingServiceOrders,
                 expected_checkin: checkin,
                 expected_checkout: checkout,
                 status: "pending",
-                isScheduled: true,
+                isScheduled: this.isAfterToday(expected_checkin),
                 ...(discountSnapshot && { discount_snapshot: discountSnapshot }),
                 ...(voucherSnapshot && { voucher_snapshot: voucherSnapshot }),
             });
@@ -2041,9 +2259,12 @@ export class BookingService {
                 deposit_amount: deposit,
                 final_amount: totalFee,
                 amount_due: amountDue,
+                service_fee: servicePreorderFee,
                 payment: "bank",
                 status: "pending",
-                note: "Hóa đơn tạo tự động khi khách tự đặt phòng, chờ thanh toán cọc.",
+                note: pendingServiceOrders.length
+                    ? "Hóa đơn tạo tự động khi khách tự đặt phòng kèm dịch vụ đặt trước, chờ thanh toán cọc."
+                    : "Hóa đơn tạo tự động khi khách tự đặt phòng, chờ thanh toán cọc.",
             });
             if (!replyReceipt.success) throw new Error(replyReceipt.message);
 
@@ -2129,6 +2350,7 @@ export class BookingService {
 
             const now = new Date();
             const shortenId = bookingId.toString().slice(-6);
+            const previousStatus = booking.status;
 
             booking.status = "cancelled";
             await booking.save();
@@ -2190,7 +2412,7 @@ export class BookingService {
                     user_id: userId,
                     cancelled_by: "customer",
                     reason,
-                    booking_status: booking.status,
+                    booking_status: previousStatus,
                 });
             }
 

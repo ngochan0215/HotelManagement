@@ -65,7 +65,7 @@ const freeRoomsForBooking = async (booking, details, reasonNote) => {
       updateData: {
         room_status: "available",
         start_time: now,
-        end_time: now,
+        end_time: null,
       },
     }
   );

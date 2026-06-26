@@ -43,7 +43,7 @@ export class ReceiptService {
         const {
             booking_id, employee_id, discount_id, discount_snapshot,
             base_room_fee, total_fee, deposit_amount, final_amount,
-            amount_due, payment, status, note
+            amount_due, payment, status, note, service_fee,
         } = data;
 
         const existing = await this.Receipt.findOne({ booking_id });
@@ -59,6 +59,7 @@ export class ReceiptService {
             deposit_amount,
             final_amount,
             amount_due,
+            service_fee: service_fee || 0,
             payment,
             status: status || "pending",
             note: note || "",

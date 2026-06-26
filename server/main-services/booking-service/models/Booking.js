@@ -71,7 +71,33 @@ const bookingSchema = new mongoose.Schema(
 
         isScheduled: { type: Boolean, default: false },
 
-        isLateCheckin: { type: Boolean, default: false }
+        isLateCheckin: { type: Boolean, default: false },
+
+        service_preorder_fee: { type: Number, default: 0, min: 0 },
+
+        pending_service_orders: [
+            {
+                service_id: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    required: true,
+                },
+                quantity: { type: Number, required: true, min: 1 },
+                asset_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+                slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+                use_from: { type: Date, default: null },
+                finish_at: { type: Date, default: null },
+                unit_price: { type: Number, required: true, min: 0 },
+                line_total: { type: Number, required: true, min: 0 },
+                status: {
+                    type: String,
+                    enum: ["pending", "fulfilled", "failed"],
+                    default: "pending",
+                },
+                service_usage_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+                failure_reason: { type: String, default: null },
+                fulfilled_at: { type: Date, default: null },
+            },
+        ],
         
     },
     {

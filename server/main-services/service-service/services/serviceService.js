@@ -778,6 +778,143 @@ export class ServiceService {
         }).select("_id total_fee").lean();
     }
 
+    async validatePendingServices(services) {
+        if (!Array.isArray(services) || services.length === 0) {
+            return { orders: [], totalServiceFee: 0 };
+        }
+
+        const serviceIds = services.map((item) => item.service_id);
+        const dbServices = await this.Service.find({ _id: { $in: serviceIds }, status: "active" }).lean();
+        if (dbServices.length !== services.length) {
+            throw new Error("Một hoặc nhiều dịch vụ không tồn tại hoặc không hoạt động.");
+        }
+
+        const serviceMap = {};
+        dbServices.forEach((service) => {
+            serviceMap[service._id.toString()] = service;
+        });
+
+        const orders = [];
+        let totalServiceFee = 0;
+
+        for (let i = 0; i < services.length; i += 1) {
+            const item = services[i];
+            if (!item.service_id || !mongoose.Types.ObjectId.isValid(item.service_id)) {
+                throw new Error(`service_id không hợp lệ tại phần tử thứ ${i + 1}.`);
+            }
+
+            const quantity = Number(item.quantity);
+            if (!Number.isInteger(quantity) || quantity < 1) {
+                throw new Error(`quantity phải >= 1 tại phần tử thứ ${i + 1}.`);
+            }
+
+            const svc = serviceMap[item.service_id.toString()];
+            if (!svc) {
+                throw new Error(`Dịch vụ tại phần tử thứ ${i + 1} không tồn tại.`);
+            }
+
+            if (svc.service_type === "rental") {
+                if (!item.asset_id || !mongoose.Types.ObjectId.isValid(item.asset_id)) {
+                    throw new Error(`Yêu cầu asset_id hợp lệ cho dịch vụ thuê "${svc.name}".`);
+                }
+                if (!item.use_from || !item.finish_at) {
+                    throw new Error(`Yêu cầu use_from và finish_at cho dịch vụ thuê "${svc.name}".`);
+                }
+                const from = new Date(item.use_from);
+                const to = new Date(item.finish_at);
+                if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
+                    throw new Error(`Khoảng thời gian thuê không hợp lệ cho "${svc.name}".`);
+                }
+
+                const asset = await this.ServiceAsset.findOne({
+                    _id: item.asset_id,
+                    service_id: svc._id,
+                    status: "in-stock",
+                }).lean();
+                if (!asset) {
+                    throw new Error(`Tài sản đã chọn cho "${svc.name}" hiện không khả dụng.`);
+                }
+            } else if (svc.service_type === "experience") {
+                if (!item.slot_id || !mongoose.Types.ObjectId.isValid(item.slot_id)) {
+                    throw new Error(`Yêu cầu slot_id hợp lệ cho dịch vụ "${svc.name}".`);
+                }
+
+                const slot = await this.ServiceSlot.findOne({
+                    _id: item.slot_id,
+                    service_id: svc._id,
+                }).lean();
+                if (!slot) {
+                    throw new Error(`Không tìm thấy slot cho dịch vụ "${svc.name}".`);
+                }
+                if (slot.status === "closed") {
+                    throw new Error(`Slot "${slot.label}" đã đóng.`);
+                }
+                if (slot.status === "full" || slot.booked_count + quantity > slot.max_capacity) {
+                    throw new Error(`Slot "${slot.label}" không đủ chỗ.`);
+                }
+            }
+
+            const lineTotal = quantity * svc.price;
+            totalServiceFee += lineTotal;
+            orders.push({
+                service_id: svc._id,
+                quantity,
+                asset_id: item.asset_id || null,
+                slot_id: item.slot_id || null,
+                use_from: item.use_from ? new Date(item.use_from) : null,
+                finish_at: item.finish_at ? new Date(item.finish_at) : null,
+                unit_price: svc.price,
+                line_total: lineTotal,
+                status: "pending",
+            });
+        }
+
+        return { orders, totalServiceFee };
+    }
+
+    async fulfillPendingServices({ booking_id, customer_id, orders }, employeeId = null) {
+        const pendingOrders = (orders || []).filter((order) => order.status === "pending");
+        if (!pendingOrders.length) {
+            return { fulfilledOrders: [], failedOrders: [] };
+        }
+
+        const services = pendingOrders.map((order) => {
+            const payload = {
+                service_id: order.service_id,
+                quantity: Number(order.quantity),
+            };
+            if (order.asset_id) {
+                payload.asset_id = order.asset_id;
+                payload.use_from = order.use_from;
+                payload.finish_at = order.finish_at;
+            } else if (order.slot_id) {
+                payload.slot_id = order.slot_id;
+            } else if (order.use_from) {
+                payload.use_from = order.use_from;
+            }
+            return payload;
+        });
+
+        const result = await this.createServiceUsage(
+            { booking_id, customer_id, services },
+            employeeId || null,
+        );
+
+        const fulfilledOrders = pendingOrders.map((order) => ({
+            ...order,
+            status: "fulfilled",
+            service_usage_id: result.service_usage._id,
+            fulfilled_at: new Date(),
+            failure_reason: null,
+        }));
+
+        return {
+            service_usage_id: result.service_usage._id,
+            fulfilledOrders,
+            failedOrders: [],
+        };
+    }
+
     async createServiceUsage({ booking_id, customer_id, services }, userId) {
         try {
             if (!booking_id || !customer_id || !Array.isArray(services) || services.length === 0)
@@ -815,7 +952,7 @@ export class ServiceService {
             }
 
             const serviceUsage = await this.ServiceUsage.create({
-                booking_id, customer_id, employee_id: userId, total_fee: 0
+                booking_id, customer_id, employee_id: userId || null, total_fee: 0
             });
 
             let totalUsageFee = 0;

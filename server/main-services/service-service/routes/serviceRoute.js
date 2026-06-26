@@ -8,6 +8,8 @@ const controller = new ServiceController();
 
 router.get("/categories", controller.getAllServiceCategories);
 router.get("/", controller.getAllServices);
+router.get("/public/assets", controller.getAllAssetsServices);
+router.get("/public/slots", controller.getAllSlotsServices);
 router.get("/import-tickets/out-of-stock", verifyToken, isEmployee, controller.getOutOfStockServices);
 router.get("/import-tickets", verifyToken, isEmployee, controller.getAllGoodTickets);
 router.get("/usage-tickets/all", verifyToken, isEmployee, controller.getAllServiceUsage);

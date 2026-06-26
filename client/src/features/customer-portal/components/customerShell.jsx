@@ -6,12 +6,6 @@ import Toast from "../../../components/toast.jsx";
 
 const AUTH_FLASH_KEY = "auth_flash_message";
 
-const navItems = [
-  { label: "Trang chủ", to: "/hotel", type: "route" },
-  { label: "Phòng", to: "/hotel/rooms", type: "route" },
-  { label: "Tra cứu đặt phòng", to: "/hotel/bookings/lookup", type: "route" },
-];
-
 const navClass = ({ isActive }) =>
   `rounded-full px-4 py-2 text-sm font-medium transition ${
     isActive ? "bg-stone-950 text-white shadow-sm" : "text-stone-700 hover:bg-white hover:text-stone-950"
@@ -43,6 +37,15 @@ export default function CustomerShell({ children }) {
   const displayName = user?.full_name || user?.name || user?.email || "Khách hàng";
   const displayEmail = user?.email || "";
   const avatarLabel = displayName.trim().charAt(0).toUpperCase() || "K";
+  const navItems = [
+    { label: "Trang chủ", to: "/hotel", type: "route" },
+    { label: "Phòng", to: "/hotel/rooms", type: "route" },
+    {
+      label: user ? "Đặt phòng của tôi" : "Tra cứu đặt phòng",
+      to: "/hotel/bookings/lookup",
+      type: "route",
+    },
+  ];
 
   useEffect(() => {
     const flash = sessionStorage.getItem(AUTH_FLASH_KEY);

@@ -9,6 +9,7 @@ const controller = new BookingController();
 router.post("/customer", verifyToken, isCustomer, controller.createCustomerBooking);
 router.patch("/customer/cancel/:id", verifyToken, isCustomer, controller.cancelCustomerBooking);
 router.patch("/customer/:bookingId/details/:detailId/cancel", verifyToken, isCustomer, controller.cancelCustomerBookingDetail);
+router.post("/lookup", controller.lookupPublicBooking);
 router.get("/my", verifyToken, isCustomer, controller.getMyBookings);
 router.get("/my/:id", verifyToken, isCustomer, controller.getMyBookingDetail);
 

@@ -14,10 +14,10 @@ const serviceUsageSchema = new mongoose.Schema(
       required: true,
     },
 
-    // employee
+    // employee (null when auto-created from customer pre-order after deposit)
     employee_id: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      default: null,
     },
 
     total_fee: {

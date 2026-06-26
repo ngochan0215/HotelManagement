@@ -127,6 +127,7 @@ export class BookingController {
 
     createCustomerBooking = async (req, res) => {
         try {
+            console.log("create customer booking", req.user.userId, req.body);
             const { booking, deposit } = await this.bookingService.createCustomerBooking(req.user.userId, req.body);
             return res.status(201).json({
                 message: "Đặt phòng thành công.",
@@ -177,6 +178,15 @@ export class BookingController {
         }
     };
 
+    lookupPublicBooking = async (req, res) => {
+        try {
+            const result = await this.bookingService.lookupPublicBooking(req.body);
+            return res.status(200).json(result);
+        } catch (err) {
+            return res.status(err.status || 400).json({ message: err.message });
+        }
+    };
+
     cancelBooking = async (req, res) => {
         try {
             const { id } = req.params;
@@ -193,4 +203,3 @@ export class BookingController {
         }
     };
 }
-

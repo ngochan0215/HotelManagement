@@ -12,6 +12,25 @@ const mapApiError = (error, fallbackMessage) => {
   throw new Error(message || fallbackMessage);
 };
 
+const resolveServiceImage = (images, fallbackIndex = 0) => {
+  const raw = Array.isArray(images) ? images[0] : "";
+  if (!raw) return "";
+  if (String(raw).startsWith("http")) return raw;
+  return `${API_BASE_URL}/${String(raw).replace(/^\/+/, "")}`;
+};
+
+const normalizeBookingAddOn = (item) => ({
+  id: item._id,
+  name: item.name,
+  price: Number(item.price || 0),
+  description: item.description || "",
+  unit: item.unit || "item",
+  service_type: item.service_type || "experience",
+  images: Array.isArray(item.images) ? item.images : [],
+  image: resolveServiceImage(item.images),
+  category_id: item.category_id?._id || item.category_id || null,
+});
+
 const calculateNights = (checkin, checkout) => {
   if (!checkin || !checkout) return 1;
   const start = new Date(checkin);
@@ -39,6 +58,7 @@ const normalizeRoomCategory = (room, search = {}, categoryMap = {}) => {
   const normalized = {
     ...category,
     ...room,
+    categoryId,
     _id: categoryId,
     category_name: room.category_name || room.name || category.category_name || "Hạng phòng SE Hotel",
     description: room.description || category.description || "Không gian lưu trú tiện nghi tại SE Hotel.",
@@ -49,6 +69,7 @@ const normalizeRoomCategory = (room, search = {}, categoryMap = {}) => {
     default_equipments: room.default_equipments || category.default_equipments || [],
     available_rooms_count: Number(room.available_rooms_count ?? room.availableRooms ?? room.rooms?.length ?? 0),
     available_rooms: room.available_rooms || room.rooms || [],
+    roomId: room.room_id || room.roomId || room.id || null,
   };
 
   return {
@@ -78,7 +99,10 @@ export const customerPortalApi = {
       if (!rooms) {
         throw new Error("Dữ liệu loại phòng không hợp lệ.");
       }
-      return { rooms, isFallback: false };
+      return {
+        rooms: rooms.map((room) => normalizeRoomCategory(room)),
+        isFallback: false,
+      };
     } catch (error) {
       mapApiError(error, "Không thể tải danh sách loại phòng.");
     }
@@ -116,7 +140,7 @@ export const customerPortalApi = {
       if (!room) {
         throw new Error("Không tìm thấy loại phòng.");
       }
-      return { room, isFallback: false };
+      return { room: normalizeRoomCategory(room), isFallback: false };
     } catch (error) {
       mapApiError(error, "Không thể tải thông tin phòng.");
     }
@@ -133,12 +157,9 @@ export const customerPortalApi = {
         response.data?.data?.services ||
         response.data?.data ||
         [];
-      const services = rawServices.map((item) => ({
-        id: item._id,
-        name: item.name,
-        price: Number(item.price || 0),
-        description: item.description || "",
-      })).filter((item) => item.id && item.name);
+      const services = rawServices
+        .map((item) => normalizeBookingAddOn(item))
+        .filter((item) => item.id && item.name);
       return { services, isFallback: false };
     } catch (error) {
       if (error?.response?.status === 401 || error?.response?.status === 403) {
@@ -167,6 +188,19 @@ export const customerPortalApi = {
     }
   },
 
+  async cancelCustomerBooking(bookingId, reason) {
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/bookings/customer/cancel/${bookingId}`,
+        { reason },
+        getAuthConfig(),
+      );
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể hủy đặt phòng lúc này.");
+    }
+  },
+
   async lookupBookings({ bookingCode, email, phone }) {
     try {
       const response = await axios.get(`${API_BASE_URL}/bookings/my`, {
@@ -187,6 +221,18 @@ export const customerPortalApi = {
         throw new Error("Bạn cần đăng nhập tài khoản khách hàng để xem lịch sử đặt phòng.");
       }
       mapApiError(error, "Không thể tra cứu lịch sử đặt phòng lúc này.");
+    }
+  },
+
+  async lookupPublicBooking({ bookingCode, contact }) {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/bookings/lookup`, {
+        bookingCode,
+        contact,
+      });
+      return response.data;
+    } catch (error) {
+      mapApiError(error, "Không thể tra cứu đặt phòng lúc này.");
     }
   },
 
@@ -235,6 +281,28 @@ export const customerPortalApi = {
         params: { orderValue },
       });
       return response.data?.discounts || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getServiceAssets(serviceId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/services/public/assets`, {
+        params: { service_id: serviceId, status: "in-stock" },
+      });
+      return response.data?.assets || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getServiceSlots(serviceId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/services/public/slots`, {
+        params: { service_id: serviceId, status: "open" },
+      });
+      return response.data?.slots || [];
     } catch {
       return [];
     }

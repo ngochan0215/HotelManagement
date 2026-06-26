@@ -44,6 +44,8 @@ class Container {
             queueName: "service-service-events",
             bindEvents: [
                 SERVICE_EVENTS.GET_COMPLETED_BY_BOOKING,
+                SERVICE_EVENTS.VALIDATE_PENDING_SERVICES,
+                SERVICE_EVENTS.FULFILL_PENDING_SERVICES,
             ],
         });
 

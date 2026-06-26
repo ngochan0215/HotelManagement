@@ -87,6 +87,17 @@ app.use(
 );
 
 app.use(
+  "/bookings/lookup",
+  createProxyMiddleware({
+    target: "http://booking-service:3009",
+    changeOrigin: true,
+    pathRewrite: {
+      "^/bookings/lookup": "/lookup",
+    },
+  })
+);
+
+app.use(
   "/bookings",
   createProxyMiddleware({
     target: "http://booking-service:3009",

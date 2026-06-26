@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Mail, Phone, UserRound } from "lucide-react";
 import { GoogleLogin } from "@react-oauth/google";
@@ -189,7 +189,7 @@ export default function SharedAuthForm({ embedded = false }) {
     return Object.keys(errors).length === 0;
   };
 
-  const redirectAfterLogin = async (response) => {
+  const redirectAfterLogin = useCallback(async (response) => {
     const { role, position } = getLoginIdentity(response);
     if (role) localStorage.setItem("role", role);
     if (position) localStorage.setItem("position", position);
@@ -209,11 +209,15 @@ export default function SharedAuthForm({ embedded = false }) {
     } catch {
       navigate("/dashboard");
     }
-  };
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     if (loginLoading || loginInFlightRef.current) return;
+    if (!credentials.email.trim() || !credentials.password.trim()) {
+      setMessage("Vui lòng nhập email và mật khẩu.");
+      return;
+    }
     loginInFlightRef.current = true;
     setLoginLoading(true);
     setMessage("");
@@ -271,7 +275,7 @@ export default function SharedAuthForm({ embedded = false }) {
   };
 
   // Step 1: Google button clicked → verify token, check if user exists
-  const handleGoogleLogin = async (credential) => {
+  const handleGoogleLogin = useCallback(async (credential) => {
     if (googleLoading || googleInFlightRef.current) return;
     googleInFlightRef.current = true;
     setGoogleLoading(true);
@@ -290,7 +294,7 @@ export default function SharedAuthForm({ embedded = false }) {
       setGoogleLoading(false);
       googleInFlightRef.current = false;
     }
-  };
+  }, [googleLoading, loginGoogle, redirectAfterLogin]);
 
   // Step 2: new Google user submits their missing profile fields
   const handleGoogleComplete = async (e) => {
@@ -313,6 +317,22 @@ export default function SharedAuthForm({ embedded = false }) {
       googleInFlightRef.current = false;
     }
   };
+
+  const handleGoogleSuccess = useCallback(
+    (res) => {
+      const credential = res?.credential;
+      if (!credential) {
+        setMessage("Không nhận được thông tin đăng nhập Google.");
+        return;
+      }
+      void handleGoogleLogin(credential);
+    },
+    [handleGoogleLogin],
+  );
+
+  const handleGoogleFailure = useCallback(() => {
+    setMessage("Đăng nhập với Google thất bại. Vui lòng thử lại.");
+  }, []);
 
   const cancelGoogleCompletion = () => {
     setGoogleNewUserData(null);
@@ -502,8 +522,8 @@ export default function SharedAuthForm({ embedded = false }) {
 
                   <div className={`flex justify-center transition ${googleLoading ? "pointer-events-none opacity-60" : ""}`}>
                     <GoogleLogin
-                      onSuccess={(res) => handleGoogleLogin(res.credential)}
-                      onError={() => setMessage("Đăng nhập với Google thất bại. Vui lòng thử lại.")}
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleFailure}
                       text="signin_with"
                       shape="rectangular"
                       theme="outline"

@@ -68,10 +68,13 @@ export const AuthProvider = ({ children }) => {
       const fullUser = { ...userFromToken, ...data.theUser };
       setUser(fullUser);
 
+      console.log("fullUser: ", fullUser);
+
       localStorage.setItem("token", data.token);
       localStorage.setItem("user_info", JSON.stringify(data.theUser));
       localStorage.setItem("role", (fullUser.role || data.theUser?.role || data.theUser?.system_role || "").toLowerCase());
       localStorage.setItem("position", data.theUser.position || "");
+      localStorage.setItem("position", data.theUser.phone_number || "");
     }
     return data;
   };
@@ -88,6 +91,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("user_info", JSON.stringify(data.theUser));
       localStorage.setItem("role", (fullUser.role || data.theUser?.role || data.theUser?.system_role || "").toLowerCase());
       localStorage.setItem("position", data.theUser.position || "");
+      localStorage.setItem("position", data.theUser.phone_number || "");
     }
     return data;
   };
