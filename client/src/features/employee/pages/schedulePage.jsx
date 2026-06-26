@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { format, parseISO, subDays } from "date-fns";
+import { parse, format, parseISO, subDays } from "date-fns";
 import {
   FiCalendar,
   FiCheckCircle,
@@ -466,8 +466,15 @@ export default function SchedulePage() {
     if (!shift?._id) return;
     setRegisteringShiftId(String(shift._id));
     try {
+      console.log("work date: ", workDate);
+      const parsedDate = parse(workDate, "dd/MM/yyyy", new Date());
       await employeeApi.registerSchedule({
-        shifts: [{ shift_id: shift._id, work_date: workDate }],
+        shifts: [
+          {
+            shift_id: shift._id,
+            work_date: format(parsedDate, "yyyy-MM-dd"),
+          },
+        ],
         repeat: false,
       });
       showToast("Đã đăng ký ca làm.", "success");

@@ -2,7 +2,7 @@ import mongoose from "../../../shared/config/mongoose.js";
 
 const scheduleSchema = new mongoose.Schema(
     {
-        contract_id: { type: mongoose.Schema.Types.ObjectId, ref: "ScheduleContract", required: true },
+        contract_id: { type: mongoose.Schema.Types.ObjectId, ref: "ScheduleContract", default: null },
         
         employee_id: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
 

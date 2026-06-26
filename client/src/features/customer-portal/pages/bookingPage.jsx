@@ -832,6 +832,7 @@ export default function BookingPage() {
           rooms: [{ room_id: selectedRealRoomId }],
           ...(pendingServices.length ? { services: pendingServices } : {}),
         });
+        console.log("Booking response: ", response);
         paymentRedirectAttemptRef.current = false;
         setResult({
           bookingId: response.bookingId,
@@ -875,6 +876,8 @@ export default function BookingPage() {
       if (!amount || Number.isNaN(amount)) {
         throw new Error("Số tiền cọc không hợp lệ.");
       }
+
+      console.log("result: ", result);
 
       const paymentRes = await paymentApi.createPaymentLink(paymentUserId, {
         booking_id: result.bookingId,
