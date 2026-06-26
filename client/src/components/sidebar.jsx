@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUser, FiUsers, FiSettings,
-  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign, FiBriefcase
+  FiCalendar, FiFileText, FiBox, FiTag, FiAlertTriangle, FiLogOut, FiCamera, FiDollarSign, FiBriefcase, FiMessageSquare
 } from "react-icons/fi";
 import { FaBed } from "react-icons/fa";
 import { useAuth } from "../features/auth/hooks/authContext.jsx";
+import { chatApi } from "../features/chat/api/chatApi.js";
 
 const ACTIVE_BG = "bg-indigo-600";
 const ACTIVE_TEXT = "text-white";
@@ -52,6 +53,13 @@ const sidebarConfig = [
     allowed: [],
   },
   {
+    type: "main",
+    title: "Tin nhắn khách hàng",
+    icon: FiMessageSquare,
+    path: "/support-messages",
+    allowed: ["customer_service", "customer_support"],
+  },
+  {
     type: "group",
     title: "QUẢN LÝ",
     children: [
@@ -70,7 +78,7 @@ const sidebarConfig = [
   },
 ];
 
-const SidebarItem = ({ item, isMain }) => {
+const SidebarItem = ({ item, isMain, badgeCount = 0 }) => {
   const location = useLocation();
   const isActive = location.pathname === item.path;
   const Icon = item.icon;
@@ -90,6 +98,11 @@ const SidebarItem = ({ item, isMain }) => {
         ${isActive ? "text-white" : "text-gray-500 group-hover:text-white"}`}
       />
       <span>{item.name || item.title}</span>
+      {badgeCount > 0 ? (
+        <span className="ml-auto min-w-[22px] rounded-full bg-amber-400 px-2 py-0.5 text-center text-[11px] font-semibold text-stone-950">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      ) : null}
     </Link>
   );
 };
@@ -97,9 +110,11 @@ const SidebarItem = ({ item, isMain }) => {
 export default function Sidebar() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const [supportInboxCount, setSupportInboxCount] = useState(0);
 
   const userPosition = localStorage.getItem("position") || "employee";
   const userRole = user?.role || localStorage.getItem("role");
+  const canSeeSupportInbox = userRole === "manager" || userRole === "admin" || ["customer_service", "customer_support"].includes(userPosition);
 
   const handleLogout = () => {
     if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
@@ -119,6 +134,31 @@ export default function Sidebar() {
     return item.allowed.includes(userPosition);
   };
 
+  useEffect(() => {
+    if (!canSeeSupportInbox) {
+      setSupportInboxCount(0);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadSupportCount = async () => {
+      try {
+        const data = await chatApi.getPendingSupportCount();
+        if (!cancelled) setSupportInboxCount(data?.count ?? 0);
+      } catch {
+        if (!cancelled) setSupportInboxCount(0);
+      }
+    };
+
+    loadSupportCount();
+    const timer = window.setInterval(loadSupportCount, 45000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [canSeeSupportInbox, userRole, userPosition]);
+
   return (
     <div className="sidebar w-[270px] h-screen bg-[#111827] border-r border-gray-800 fixed left-0 top-0 flex flex-col z-50">
 
@@ -132,7 +172,12 @@ export default function Sidebar() {
           {sidebarConfig
             .filter(item => item.type === "main" && checkPermission(item))
             .map((item, i) => (
-              <SidebarItem key={i} item={item} isMain={true} />
+              <SidebarItem
+                key={i}
+                item={item}
+                isMain={true}
+                badgeCount={item.path === "/support-messages" ? supportInboxCount : 0}
+              />
             ))}
         </div>
 

@@ -31,6 +31,30 @@ export class ChatService {
         }
     }
 
+    normalizeAccessContext(access = {}) {
+        return {
+            role: String(access.role || access.system_role || access.userRole || "").toLowerCase(),
+            position: String(access.position || access.employeePosition || "").toLowerCase(),
+        };
+    }
+
+    isSupportInboxUser(access = {}) {
+        const { role, position } = this.normalizeAccessContext(access);
+        return ["manager", "admin"].includes(role) || ["customer_service", "customer_support"].includes(position);
+    }
+
+    canAccessConversation(conversation, userId, access = {}) {
+        if (!conversation) return false;
+
+        const isParticipant = (conversation.participants || []).some(
+            (participant) => participant.user_id.toString() === userId.toString()
+        );
+
+        if (isParticipant) return true;
+
+        return conversation.type === "support" && this.isSupportInboxUser(access);
+    }
+
     async getSupportAgents() {
         try {
             const managerReply = await this.eventBus.safeRequest(USER_EVENTS.GET_MANAGERS, {});
@@ -166,12 +190,17 @@ export class ChatService {
         }
     }
 
-    async getMyConversations(userId) {
+    async getMyConversations(userId, access = {}) {
         try {
             const userObjectId = new mongoose.Types.ObjectId(userId);
+            const isSupportInboxUser = this.isSupportInboxUser(access);
+
+            const matchStage = isSupportInboxUser
+                ? { type: "support" }
+                : { "participants.user_id": userObjectId };
 
             return await this.Conversation.aggregate([
-                { $match: { "participants.user_id": userObjectId } },
+                { $match: matchStage },
                 { $sort: { "last_message.sent_at": -1, created_at: -1 } },
                 {
                     $lookup: {
@@ -207,14 +236,13 @@ export class ChatService {
         }
     }
 
-    async getConversationById(conversationId, userId) {
+    async getConversationById(conversationId, userId, access = {}) {
         try {
-            const conversation = await this.Conversation.findOne({
-                _id: conversationId,
-                "participants.user_id": userId,
-            }).lean();
+            const conversation = await this.Conversation.findById(conversationId).lean();
 
-            if (!conversation) throw new Error("Conversation not found or access denied.");
+            if (!this.canAccessConversation(conversation, userId, access)) {
+                throw new Error("Conversation not found or access denied.");
+            }
             return conversation;
         } catch (err) {
             console.log(`Error in getConversationById: ${err.message}`);
@@ -224,9 +252,9 @@ export class ChatService {
 
     // messages
 
-    async getMessages(conversationId, userId, page = 1, limit = 30) {
+    async getMessages(conversationId, userId, page = 1, limit = 30, access = {}) {
         try {
-            await this.assertParticipant(conversationId, userId);
+            await this.assertParticipant(conversationId, userId, access);
 
             const skip = (page - 1) * limit;
             const messages = await this.Message.find({ conversation_id: conversationId })
@@ -244,7 +272,7 @@ export class ChatService {
 
     async sendMessage(conversationId, senderSnapshot, content, type = "text") {
         try {
-            const conversation = await this.assertParticipant(conversationId, senderSnapshot.user_id);
+            const conversation = await this.assertParticipant(conversationId, senderSnapshot.user_id, senderSnapshot);
 
             const message = await this.Message.create({
                 conversation_id: conversationId,
@@ -273,9 +301,9 @@ export class ChatService {
         }
     }
 
-    async markAsRead(conversationId, userId) {
+    async markAsRead(conversationId, userId, access = {}) {
         try {
-            await this.assertParticipant(conversationId, userId);
+            await this.assertParticipant(conversationId, userId, access);
 
             const now = new Date();
             await this.Message.updateMany(
@@ -295,13 +323,12 @@ export class ChatService {
         }
     }
 
-    async assertParticipant(conversationId, userId) {
+    async assertParticipant(conversationId, userId, access = {}) {
         try {
-            const conversation = await this.Conversation.findOne({
-                _id: conversationId,
-                "participants.user_id": userId,
-            });
-            if (!conversation) throw new Error("Conversation not found or access denied.");
+            const conversation = await this.Conversation.findById(conversationId);
+            if (!this.canAccessConversation(conversation, userId, access)) {
+                throw new Error("Conversation not found or access denied.");
+            }
             return conversation;
         } catch (err) {
             console.log(`Error in assertParticipant: ${err.message}`);
@@ -309,9 +336,9 @@ export class ChatService {
         }
     }
 
-    async deleteMessage(messageId, conversationId, userId) {
+    async deleteMessage(messageId, conversationId, userId, access = {}) {
         try {
-            const conversation = await this.assertParticipant(conversationId, userId);
+            const conversation = await this.assertParticipant(conversationId, userId, access);
 
             const message = await this.Message.findOne({ _id: messageId, conversation_id: conversationId });
             if (!message) 
@@ -353,9 +380,9 @@ export class ChatService {
         }
     }
 
-    async editMessage(messageId, conversationId, userId, newContent) {
+    async editMessage(messageId, conversationId, userId, newContent, access = {}) {
         try {
-            const conversation = await this.assertParticipant(conversationId, userId);
+            const conversation = await this.assertParticipant(conversationId, userId, access);
 
             if (!newContent?.trim()) throw new Error("Message content cannot be empty.");
 
@@ -408,7 +435,7 @@ export class ChatService {
         }
     }
 
-    async endConversation(conversationId, userId, userRole) {
+    async endConversation(conversationId, userId, access = {}) {
         try {
             const conversation = await this.Conversation.findById(conversationId);
             if (!conversation) throw new Error("Conversation not found.");
@@ -416,7 +443,10 @@ export class ChatService {
             const isParticipant = conversation.participants.some(
                 (participant) => participant.user_id.toString() === userId.toString()
             );
-            const isStaff = ["manager", "admin", "receptionist", "customer_service"].includes(String(userRole || "").toLowerCase());
+            const { role, position } = this.normalizeAccessContext(access);
+            const isStaff = ["manager", "admin", "receptionist", "customer_service"].includes(role)
+                || ["customer_service", "customer_support"].includes(position)
+                || (conversation.type === "support" && this.isSupportInboxUser(access));
 
             if (!isParticipant && !isStaff) {
                 throw new Error("Conversation not found or access denied.");
@@ -437,12 +467,14 @@ export class ChatService {
         }
     }
 
-    async getConversationIds(userId) {
+    async getConversationIds(userId, access = {}) {
         try {
-            const conversations = await this.Conversation.find(
-                { "participants.user_id": userId, status: { $ne: "ended" } },
-                { _id: 1 }
-            ).lean();
+            const isSupportInboxUser = this.isSupportInboxUser(access);
+            const query = isSupportInboxUser
+                ? { type: "support", status: { $ne: "ended" } }
+                : { "participants.user_id": userId, status: { $ne: "ended" } };
+
+            const conversations = await this.Conversation.find(query, { _id: 1 }).lean();
             return conversations.map(c => c._id.toString());
         } catch (err) {
             console.log(`Error in getConversationIds: ${err.message}`);
