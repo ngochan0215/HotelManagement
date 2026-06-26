@@ -37,8 +37,11 @@ export class ChatController {
             } else if (type === "bot") {
                 const result = await this.chatService.getOrCreateBotConversation(myId, myRole);
                 conversation = result.conversation;
+            } else if (type === "support") {
+                const result = await this.chatService.getOrCreateSupportConversation(myId, myRole);
+                conversation = result.conversation;
             } else {
-                return res.status(400).json({ success: false, message: "type must be 'direct', 'group', or 'bot'." });
+                return res.status(400).json({ success: false, message: "type must be 'direct', 'group', 'bot', or 'support'." });
             }
 
             return res.status(201).json({ success: true, conversation });
@@ -64,6 +67,35 @@ export class ChatController {
             return res.status(200).json({ success: true, conversation });
         } catch (err) {
             const status = err.message.includes("creator") || err.message.includes("access denied") ? 403 : 500;
+            return res.status(status).json({ success: false, message: err.message });
+        }
+    };
+
+    endConversation = async (req, res) => {
+        try {
+            const conversation = await this.chatService.endConversation(
+                req.params.id,
+                req.user.userId,
+                req.user.role
+            );
+
+            let io = null;
+            try {
+                io = getSocketInstance();
+            } catch {
+                io = null;
+            }
+
+            io?.to(`conv:${req.params.id}`).emit("chat:conversation_ended", {
+                conversation_id: req.params.id,
+                status: conversation.status,
+                ended_at: conversation.ended_at,
+                ended_by: conversation.ended_by,
+            });
+
+            return res.status(200).json({ success: true, conversation });
+        } catch (err) {
+            const status = err.message.includes("access denied") ? 403 : 500;
             return res.status(status).json({ success: false, message: err.message });
         }
     };

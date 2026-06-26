@@ -1,7 +1,8 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { io } from "socket.io-client";
-import { Bot, Loader2, LogIn, MessageCircle, MoreHorizontal, Send, Users, X } from "lucide-react";
+import { Bot, CheckCircle2, Loader2, LogIn, MessageCircle, MoreHorizontal, Send, Users, X } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import { isCustomerRole } from "../../auth/utils/roleRedirect.js";
 import { chatApi } from "../../chat/api/chatApi.js";
@@ -46,6 +47,8 @@ function createChannelState() {
     typing: false,
     typingLabel: "",
     initialized: false,
+    ending: false,
+    conversationEnded: false,
   };
 }
 
@@ -106,7 +109,7 @@ export default function CustomerSupportWidget() {
   const channelsRef = useRef(channels);
   const activeChannelRef = useRef(activeChannel);
   const openRef = useRef(open);
-  const bottomRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const actionMenuRef = useRef(null);
   const fallbackTimersRef = useRef({ support: null, bot: null });
 
@@ -174,10 +177,13 @@ export default function CustomerSupportWidget() {
   };
 
   const resetChannelState = (channelKey, extra = {}) => {
-    setChannelState(channelKey, { ...createChannelState(), ...extra });
+    const nextChannel = { ...createChannelState(), ...extra };
+    channelsRef.current = { ...channelsRef.current, [channelKey]: nextChannel };
+    setChannelState(channelKey, nextChannel);
   };
 
-  const ensureChannel = async (channelKey) => {
+  const ensureChannel = async (channelKey, options = {}) => {
+    const { forceNewConversation = false } = options;
     if (!canChat) return null;
     const meta = CHANNELS.find((item) => item.key === channelKey);
     if (!meta) return null;
@@ -188,7 +194,12 @@ export default function CustomerSupportWidget() {
     }
 
     try {
-      let conversation = current.conversation;
+      const baseChannelState = forceNewConversation ? createChannelState() : current;
+      let conversation = baseChannelState.conversation;
+      if (forceNewConversation || current.conversationEnded) {
+        conversation = null;
+      }
+
       if (!conversation?._id) {
         const data =
           channelKey === "support"
@@ -203,16 +214,18 @@ export default function CustomerSupportWidget() {
       const shouldReloadMessages = !current.initialized || current.messages.length === 0;
       const messages = shouldReloadMessages
         ? (await chatApi.getMessages(conversation._id))?.messages ?? []
-        : current.messages;
+        : baseChannelState.messages;
 
       setChannelState(channelKey, {
-        ...current,
+        ...baseChannelState,
         conversation,
         messages,
         loading: false,
         error: "",
         initialized: true,
-        unreadCount: openRef.current && activeChannelRef.current === channelKey ? 0 : current.unreadCount,
+        conversationEnded: false,
+        ending: false,
+        unreadCount: openRef.current && activeChannelRef.current === channelKey ? 0 : baseChannelState.unreadCount,
       });
 
       joinConversation(conversation._id);
@@ -336,6 +349,22 @@ export default function CustomerSupportWidget() {
       }));
     });
 
+    socket.on("chat:conversation_ended", ({ conversation_id }) => {
+      const channelKey = getChannelKeyByConversationId(conversation_id);
+      if (!channelKey) return;
+
+      clearFallbackTimer(channelKey);
+      setShowActionMenu(false);
+      setShowEndConfirm(false);
+      setDraft("");
+      setChannelState(channelKey, (channel) => ({
+        ...createChannelState(),
+        conversationEnded: true,
+        loading: false,
+        initialized: true,
+      }));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -382,8 +411,15 @@ export default function CustomerSupportWidget() {
   }, [activeChannel, canChat, open]);
 
   useEffect(() => {
-    if (!open) return;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!open) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [channels, activeChannel, open]);
 
   useEffect(() => {
@@ -418,6 +454,8 @@ export default function CustomerSupportWidget() {
   }, [showActionMenu]);
 
   const openChannel = async (channelKey) => {
+    setShowActionMenu(false);
+    setShowEndConfirm(false);
     setActiveChannel(channelKey);
     setOpen(true);
     const current = channelsRef.current[channelKey];
@@ -463,8 +501,69 @@ export default function CustomerSupportWidget() {
     }
   };
 
+  const handleEndChat = async () => {
+    const current = channelsRef.current[activeChannel];
+    const conversationId = current?.conversation?._id;
+    if (!conversationId || current?.ending) {
+      setShowEndConfirm(false);
+      setShowActionMenu(false);
+      return;
+    }
+
+    setChannelState(activeChannel, (channel) => ({
+      ...channel,
+      ending: true,
+      error: "",
+    }));
+
+    try {
+      await chatApi.endConversation(conversationId);
+      socketRef.current?.emit("chat:leave_conversation", { conversation_id: conversationId });
+      clearFallbackTimer(activeChannel);
+      setDraft("");
+      setShowEndConfirm(false);
+      setShowActionMenu(false);
+      setChannelState(activeChannel, {
+        ...createChannelState(),
+        conversationEnded: true,
+        loading: false,
+        initialized: true,
+      });
+    } catch (err) {
+      setChannelState(activeChannel, (channel) => ({
+        ...channel,
+        ending: false,
+        error: normalizeChatError(err, "Chưa thể kết thúc cuộc trò chuyện. Vui lòng thử lại."),
+      }));
+    }
+  };
+
+  const handleStartNewChat = async () => {
+    clearFallbackTimer(activeChannel);
+    setDraft("");
+    setShowEndConfirm(false);
+    setShowActionMenu(false);
+    resetChannelState(activeChannel, { initialized: false });
+
+    if (!canChat) {
+      return;
+    }
+
+    // Conversation mới sẽ được tạo khi khách gửi tin đầu tiên.
+    const conversation = channelsRef.current[activeChannel]?.conversation;
+    if (conversation?._id) {
+      socketRef.current?.emit("chat:leave_conversation", { conversation_id: conversation._id });
+    }
+  };
+
   const activeChannelState = channels[activeChannel];
   const activeChannelMeta = CHANNELS.find((item) => item.key === activeChannel) ?? CHANNELS[0];
+  const showEndPrompt =
+    open &&
+    !activeChannelState.loading &&
+    !activeChannelState.conversationEnded &&
+    Boolean(activeChannelState.conversation?._id) &&
+    activeChannelState.messages.length > 0;
   const activeStatusText =
     activeChannel === "bot" && activeChannelState.typing
       ? "Bot đang trả lời..."
@@ -557,25 +656,38 @@ export default function CustomerSupportWidget() {
 
   const renderThankYouState = () => (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-      <div className="max-w-[320px] rounded-[28px] border border-amber-100 bg-white px-5 py-6 shadow-sm">
-        <p className="text-lg font-semibold text-stone-900">Cảm ơn anh/chị đã liên hệ SE Hotel 💛</p>
+      <div className="max-w-[320px] rounded-[28px] border border-[#dbe8e2] bg-white px-5 py-6 shadow-sm">
+        <p className="text-lg font-semibold text-stone-900">Cuộc trò chuyện đã kết thúc</p>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Cuộc trò chuyện đã kết thúc. Khi cần hỗ trợ thêm, anh/chị có thể bắt đầu đoạn chat mới bất cứ lúc nào.
+          SE Hotel cảm ơn anh/chị đã liên hệ. Khi cần thêm thông tin về phòng, đặt phòng hoặc dịch vụ, anh/chị có thể bắt đầu đoạn chat mới bất cứ lúc nào.
         </p>
       </div>
-      <button
-        type="button"
-        onClick={startNewChat}
-        disabled={!canChat || activeChannelState.ending}
-        className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#8fbfb3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#7ba89c] disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {activeChannelState.ending ? "Đang khởi tạo..." : "Bắt đầu chat mới"}
-      </button>
+      <div className="mt-5 flex w-full max-w-[320px] flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleStartNewChat}
+          disabled={!canChat || activeChannelState.ending}
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8fbfb3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#7ba89c] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <CheckCircle2 size={16} />
+          {activeChannelState.ending ? "Đang khởi tạo..." : "Bắt đầu chat mới"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="inline-flex items-center justify-center rounded-full border border-[#dbe8e2] bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+        >
+          Đóng cửa sổ
+        </button>
+      </div>
     </div>
   );
 
   const renderEmptyState = () => {
     const current = activeChannelState;
+    if (current.conversationEnded) {
+      return renderThankYouState();
+    }
     if (current.loading && !current.conversation?._id) {
       return (
         <div className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -657,7 +769,7 @@ export default function CustomerSupportWidget() {
 
   if (!canShowWidget) return null;
 
-  return (
+  const widget = (
     <>
       <style>{`
         @keyframes supportWidgetPop {
@@ -670,7 +782,7 @@ export default function CustomerSupportWidget() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-[#d9e6df] bg-[#f6f2ea] px-4 py-3 text-sm font-semibold text-stone-800 shadow-[0_16px_40px_rgba(142,128,108,0.18)] transition hover:-translate-y-0.5 hover:bg-white sm:bottom-6 sm:right-6"
+          className="fixed bottom-4 right-4 z-[9999] inline-flex items-center gap-2 rounded-full border border-[#d9e6df] bg-[#f6f2ea] px-4 py-3 text-sm font-semibold text-stone-800 shadow-[0_16px_40px_rgba(142,128,108,0.18)] transition hover:-translate-y-0.5 hover:bg-white sm:bottom-6 sm:right-6"
           aria-label="Mở trung tâm hỗ trợ"
         >
           <MessageCircle size={18} className="text-emerald-600" />
@@ -683,7 +795,7 @@ export default function CustomerSupportWidget() {
         </button>
       ) : (
         <div
-          className="fixed bottom-3 right-3 z-40 flex h-[72vh] w-[calc(100vw-1rem)] max-w-[430px] flex-col overflow-hidden rounded-[28px] border border-[#e8dfd2] bg-[#fbf8f2] shadow-[0_30px_80px_rgba(130,116,94,0.18)] sm:bottom-6 sm:right-6 sm:h-[580px] sm:w-[410px] relative"
+          className="fixed bottom-3 right-3 z-[9999] flex h-[72vh] w-[calc(100vw-1rem)] max-w-[430px] flex-col overflow-hidden rounded-[28px] border border-[#e8dfd2] bg-[#fbf8f2] shadow-[0_30px_80px_rgba(130,116,94,0.18)] sm:bottom-6 sm:right-6 sm:h-[580px] sm:w-[410px]"
           style={{ animation: "supportWidgetPop 180ms ease-out" }}
         >
           <div className="flex items-start justify-between gap-3 border-b border-[#e7dfd2] bg-gradient-to-r from-[#f6f1e6] via-[#f3f7f0] to-[#eef5fb] px-4 py-4">
@@ -704,7 +816,7 @@ export default function CustomerSupportWidget() {
                   <MoreHorizontal size={18} />
                 </button>
 
-                {showActionMenu ? (
+                {showActionMenu && activeChannelState.conversation?._id && !activeChannelState.conversationEnded ? (
                   <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-stone-200 bg-white p-1 shadow-[0_18px_45px_rgba(28,25,23,0.14)]">
                     <button
                       type="button"
@@ -723,7 +835,10 @@ export default function CustomerSupportWidget() {
 
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setShowActionMenu(false);
+                  setOpen(false);
+                }}
                 className="rounded-full p-2 text-stone-500 transition hover:bg-white/70 hover:text-stone-900"
                 aria-label="Đóng trung tâm hỗ trợ"
               >
@@ -750,7 +865,7 @@ export default function CustomerSupportWidget() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-[#fcfbf7] px-3 py-4">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[#fcfbf7] px-3 py-4">
             {renderEmptyState()}
             {activeChannelState.typing ? (
               <div className="mt-4 flex items-center gap-2 px-4">
@@ -758,77 +873,74 @@ export default function CustomerSupportWidget() {
                 <span className="text-xs font-medium text-stone-500">{activeChannelState.typingLabel}</span>
               </div>
             ) : null}
-            <div ref={bottomRef} />
           </div>
 
+          {activeChannelState.conversationEnded ? null : (
           <div className="border-t border-[#e7dfd2] bg-white/80 px-3 py-3">
-            {activeChannelState.conversationEnded ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-stone-700">
-                  Cảm ơn anh/chị đã trò chuyện cùng SE Hotel. Anh/chị có thể bắt đầu cuộc trò chuyện mới bất cứ lúc nào.
+            {showEndPrompt ? (
+              <button
+                type="button"
+                onClick={() => setShowEndConfirm(true)}
+                className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#dbe8e2] bg-[#f4fbf8] px-4 py-2.5 text-left text-sm font-semibold text-stone-800 transition hover:border-[#bfd7ce] hover:bg-[#eef8f3]"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  Tôi đã được hỗ trợ xong
+                </span>
+              </button>
+            ) : null}
+
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-stone-500">
+                {activeChannel === "bot"
+                  ? "Bot trả lời ngay các câu hỏi phổ biến."
+                  : "Khách sạn sẽ phản hồi sớm nhất có thể."}
+                </p>
+                {activeChannelState.notice ? (
+                  <p className="text-[11px] font-medium text-amber-700">{activeChannelState.notice}</p>
+                ) : null}
+              </div>
+
+              {activeChannelState.error ? (
+                <div className="mb-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                  {activeChannelState.error}
                 </div>
+              ) : null}
+
+              <div className="flex items-end gap-2">
+                <textarea
+                  rows={1}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  disabled={!canChat || activeChannelState.sending}
+                  placeholder="Nhập tin nhắn..."
+                  className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dfd6c9] bg-white px-4 py-3 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-[#9cc8bf] focus:ring-4 focus:ring-[#dff0ea] disabled:bg-stone-50 disabled:text-stone-400"
+                />
                 <button
                   type="button"
-                  onClick={startNewChat}
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#8fbfb3] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#7ca99c]"
+                  onClick={handleSend}
+                  disabled={!canChat || !draft.trim() || activeChannelState.sending}
+                  className="inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-[#8fbfb3] text-white shadow-sm transition hover:bg-[#7ca99c] disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Gửi tin nhắn"
                 >
-                  Bắt đầu chat mới
+                  {activeChannelState.sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-medium text-stone-500">
-                    {activeChannel === "bot"
-                      ? "Bot trả lời ngay các câu hỏi phổ biến."
-                      : "Khách sạn sẽ phản hồi sớm nhất có thể."}
-                  </p>
-                  {activeChannelState.notice ? (
-                    <p className="text-[11px] font-medium text-amber-700">{activeChannelState.notice}</p>
-                  ) : null}
-                </div>
-
-                {activeChannelState.error ? (
-                  <div className="mb-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
-                    {activeChannelState.error}
-                  </div>
-                ) : null}
-
-                <div className="flex items-end gap-2">
-                  <textarea
-                    rows={1}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    disabled={!canChat || activeChannelState.sending}
-                    placeholder="Nhập tin nhắn..."
-                    className="min-h-[52px] flex-1 resize-none rounded-2xl border border-[#dfd6c9] bg-white px-4 py-3 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-[#9cc8bf] focus:ring-4 focus:ring-[#dff0ea] disabled:bg-stone-50 disabled:text-stone-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSend}
-                    disabled={!canChat || !draft.trim() || activeChannelState.sending}
-                    className="inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-[#8fbfb3] text-white shadow-sm transition hover:bg-[#7ca99c] disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Gửi tin nhắn"
-                  >
-                    {activeChannelState.sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+            </div>
+          )}
 
           {showEndConfirm ? (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-stone-950/20 px-4 backdrop-blur-[1px]">
               <div className="w-full max-w-sm rounded-[28px] border border-stone-200 bg-white p-5 shadow-[0_24px_60px_rgba(28,25,23,0.18)]">
-                <p className="text-base font-semibold text-stone-950">Kết thúc cuộc trò chuyện?</p>
+                <p className="text-base font-semibold text-stone-950">Bạn muốn kết thúc cuộc trò chuyện?</p>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  Sau khi kết thúc, nội dung chat hiện tại sẽ được ẩn khỏi cửa sổ hỗ trợ của bạn. Bạn vẫn có thể bắt đầu cuộc trò chuyện mới khi cần.
+                  Nếu vấn đề đã được hỗ trợ xong, anh/chị có thể kết thúc cuộc trò chuyện tại đây. Khi cần hỗ trợ thêm, anh/chị vẫn có thể bắt đầu đoạn chat mới bất cứ lúc nào.
                 </p>
                 {activeChannelState.error ? (
                   <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
@@ -846,11 +958,11 @@ export default function CustomerSupportWidget() {
                   </button>
                   <button
                     type="button"
-                    onClick={endActiveChat}
+                    onClick={handleEndChat}
                     disabled={activeChannelState.ending}
-                    className="rounded-full bg-amber-400 px-4 py-2.5 text-sm font-semibold text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="rounded-full bg-[#8fbfb3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#7ba89c] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {activeChannelState.ending ? "Đang kết thúc..." : "Kết thúc chat"}
+                    {activeChannelState.ending ? "Đang kết thúc..." : "Kết thúc cuộc trò chuyện"}
                   </button>
                 </div>
               </div>
@@ -860,4 +972,6 @@ export default function CustomerSupportWidget() {
       )}
     </>
   );
+
+  return typeof document !== "undefined" ? createPortal(widget, document.body) : widget;
 }

@@ -31,6 +31,23 @@ export class ChatService {
         }
     }
 
+    async getSupportAgents() {
+        try {
+            const managerReply = await this.eventBus.safeRequest(USER_EVENTS.GET_MANAGERS, {});
+            const managers = (managerReply?.success ? managerReply.managers ?? [] : [])
+                .filter(user => user?.isBanned !== true)
+                .sort((a, b) => String(b._id).localeCompare(String(a._id)));
+            if (managers.length > 0) return managers;
+
+            const adminReply = await this.eventBus.safeRequest(USER_EVENTS.GET_ADMINS, {});
+            return (adminReply?.success ? adminReply.admins ?? [] : [])
+                .filter(user => user?.isBanned !== true)
+                .sort((a, b) => String(b._id).localeCompare(String(a._id)));
+        } catch (err) {
+            throw new Error(`Failed to get support agents: ${err.message}`);
+        }
+    }
+
     // main methods
 
     async getOrCreateDirectConversation(myUserId, myRole, targetUserId) {
@@ -38,7 +55,7 @@ export class ChatService {
             console.log(`Attempting to get or create direct conversation between ${myUserId} and ${targetUserId}`);
             const pairKey = [myUserId.toString(), targetUserId.toString()].sort().join("_");
 
-            const existing = await this.Conversation.findOne({ pair_key: pairKey });
+            const existing = await this.Conversation.findOne({ pair_key: pairKey, status: { $ne: "ended" } });
             if (existing) return { conversation: existing, isNew: false };
 
             const targetUser = await this.getUserInfo(targetUserId);
@@ -64,7 +81,7 @@ export class ChatService {
     async getOrCreateBotConversation(userId, userRole) {
         try {
             const pairKey = `bot_${userId}`;
-            const existing = await this.Conversation.findOne({ pair_key: pairKey });
+            const existing = await this.Conversation.findOne({ pair_key: pairKey, status: { $ne: "ended" } });
             if (existing) return { conversation: existing, isNew: false };
 
             const conversation = await this.Conversation.create({
@@ -82,6 +99,36 @@ export class ChatService {
         } catch (err) {
             console.log(`Error in getOrCreateBotConversation: ${err.message}`);
             throw new Error(`Failed to create bot conversation: ${err.message}`);
+        }
+    }
+
+    async getOrCreateSupportConversation(userId, userRole) {
+        try {
+            const pairKey = `support_${userId}`;
+            const existing = await this.Conversation.findOne({ pair_key: pairKey, status: { $ne: "ended" } });
+            if (existing) return { conversation: existing, isNew: false };
+
+            const supportAgents = await this.getSupportAgents();
+            const supportAgent = supportAgents[0];
+            if (!supportAgent?._id) {
+                throw new Error("Chưa có nhân viên hỗ trợ khả dụng.");
+            }
+
+            const conversation = await this.Conversation.create({
+                type: "support",
+                pair_key: pairKey,
+                name: "Hỗ trợ khách hàng",
+                participants: [
+                    { user_id: userId, role: userRole },
+                    { user_id: supportAgent._id, role: supportAgent.system_role },
+                ],
+                created_by: userId,
+            });
+
+            return { conversation, isNew: true };
+        } catch (err) {
+            console.log(`Error in getOrCreateSupportConversation: ${err.message}`);
+            throw new Error(`Failed to create support conversation: ${err.message}`);
         }
     }
 
@@ -361,10 +408,39 @@ export class ChatService {
         }
     }
 
+    async endConversation(conversationId, userId, userRole) {
+        try {
+            const conversation = await this.Conversation.findById(conversationId);
+            if (!conversation) throw new Error("Conversation not found.");
+
+            const isParticipant = conversation.participants.some(
+                (participant) => participant.user_id.toString() === userId.toString()
+            );
+            const isStaff = ["manager", "admin", "receptionist", "customer_service"].includes(String(userRole || "").toLowerCase());
+
+            if (!isParticipant && !isStaff) {
+                throw new Error("Conversation not found or access denied.");
+            }
+
+            if (conversation.status === "ended") return conversation;
+
+            conversation.status = "ended";
+            conversation.ended_at = new Date();
+            conversation.ended_by = userId;
+            conversation.pair_key = undefined;
+
+            await conversation.save();
+            return conversation;
+        } catch (err) {
+            console.log(`Error in endConversation: ${err.message}`);
+            throw new Error(err.message);
+        }
+    }
+
     async getConversationIds(userId) {
         try {
             const conversations = await this.Conversation.find(
-                { "participants.user_id": userId },
+                { "participants.user_id": userId, status: { $ne: "ended" } },
                 { _id: 1 }
             ).lean();
             return conversations.map(c => c._id.toString());

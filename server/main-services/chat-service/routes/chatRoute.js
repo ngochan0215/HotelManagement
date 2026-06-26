@@ -9,6 +9,7 @@ router.use(verifyToken);
 router.get("/conversations", controller.getMyConversations);
 router.post("/conversations", controller.createConversation);
 router.patch("/conversations/:id", controller.renameGroup);
+router.patch("/conversations/:id/end", controller.endConversation);
 router.get("/conversations/:id", controller.getConversationById);
 router.get("/conversations/:id/messages", controller.getMessages);
 

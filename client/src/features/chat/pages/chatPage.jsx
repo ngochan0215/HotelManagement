@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
+import { Link } from "react-router-dom";
 import { Send, Plus, X, MessageSquare, Pencil, Trash2, Check, Users, MessageCircle, Search, Bot } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
 import { chatApi } from "../api/chatApi.js";
 import { employeeApi } from "../../api/employeeApi.js";
+import { CHAT_SOCKET_PATH, CHAT_SOCKET_URL } from "../../../config/socketConfig.js";
+import CustomerShell from "../../customer-portal/components/customerShell.jsx";
+import { isCustomerRole } from "../../auth/utils/roleRedirect.js";
 
-const CHAT_SOCKET_URL = "http://localhost:3014";
 const BOT_USER_ID = "000000000000000000000001";
+const SOCKET_STATUS_LABELS = {
+    connecting: "Đang kết nối...",
+    connected: "Đã kết nối",
+    disconnected: "Mất kết nối",
+};
 
 function formatTime(dateStr) {
     if (!dateStr) return "";
@@ -31,10 +39,11 @@ function PositionBadge({ position }) {
     return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{position}</span>;
 }
 
-export default function ChatPage() {
+function StaffChatWorkspace() {
     const { user } = useAuth();
     const myId   = user?._id ?? user?.id ?? user?.userId;
     const isManagerOrAdmin = user?.role === "manager" || user?.role === "admin";
+    const token = user?.token || localStorage.getItem("token");
 
     // ── core state ──────────────────────────────────────────────────
     const [conversations,  setConversations]  = useState([]);
@@ -42,6 +51,7 @@ export default function ChatPage() {
     const [messages,       setMessages]       = useState([]);
     const [input,          setInput]          = useState("");
     const [error,          setError]          = useState("");
+    const [socketStatus,   setSocketStatus]   = useState("connecting");
 
     // ── new-conversation menu ────────────────────────────────────────
     const [showNewMenu,    setShowNewMenu]    = useState(false);
@@ -102,11 +112,34 @@ export default function ChatPage() {
 
     // ── socket ───────────────────────────────────────────────────────
     useEffect(() => {
-        const socket = io(CHAT_SOCKET_URL, { auth: { token: localStorage.getItem("token") } });
+        if (!token) {
+            setSocketStatus("disconnected");
+            setError("Bạn cần đăng nhập để sử dụng chat.");
+            return undefined;
+        }
+
+        setSocketStatus("connecting");
+        const socket = io(CHAT_SOCKET_URL, {
+            path: CHAT_SOCKET_PATH,
+            auth: { token },
+            transports: ["polling"],
+        });
         socketRef.current = socket;
 
-        socket.on("connect",       () => console.log("[CHAT] connected"));
-        socket.on("connect_error", (e) => console.error("[CHAT] error:", e.message));
+        socket.on("connect",       () => {
+            setSocketStatus("connected");
+            console.log("[CHAT] connected");
+        });
+        socket.on("disconnect",    (reason) => {
+            setSocketStatus("disconnected");
+            if (reason !== "io client disconnect") {
+                console.warn("[CHAT] disconnected:", reason);
+            }
+        });
+        socket.on("connect_error", (e) => {
+            setSocketStatus("disconnected");
+            console.error("[CHAT] error:", e.message);
+        });
 
         socket.on("chat:new_message", ({ conversation_id, message }) => {
             const isActive = activeConvIdRef.current === conversation_id;
@@ -151,8 +184,11 @@ export default function ChatPage() {
 
         socket.on("chat:error", ({ message }) => setError(message));
 
-        return () => socket.disconnect();
-    }, []);
+        return () => {
+            socket.disconnect();
+            socketRef.current = null;
+        };
+    }, [token]);
 
     // ── load conversations ───────────────────────────────────────────
     useEffect(() => {
@@ -294,6 +330,7 @@ export default function ChatPage() {
 
     const getConvLabel = (conv) => {
         if (conv.type === "bot")   return "SE Hotel Assistant";
+        if (conv.type === "support") return "Hỗ trợ khách hàng";
         if (conv.type === "group") return conv.name ?? "Group";
         const other = conv.participants?.find(p => p.user_id?.toString() !== myId?.toString());
         return other ? `${other.role} · ${other.user_id?.toString().slice(-6)}` : "Direct";
@@ -464,6 +501,7 @@ export default function ChatPage() {
                                         <div className="flex items-center gap-1.5 min-w-0">
                                             {conv.type === "group" && <Users size={12} className="text-gray-400 flex-shrink-0" />}
                                             {conv.type === "bot"   && <Bot   size={12} className="text-emerald-500 flex-shrink-0" />}
+                                            {conv.type === "support" && <MessageCircle size={12} className="text-amber-500 flex-shrink-0" />}
                                             <span className={`text-sm truncate max-w-[110px] ${hasUnread ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
                                                 {getConvLabel(conv)}
                                             </span>
@@ -502,6 +540,7 @@ export default function ChatPage() {
                         <div className="px-5 py-3 border-b border-gray-200 bg-white flex items-center gap-2">
                             {activeConv?.type === "group" && <Users size={16} className="text-gray-400 flex-shrink-0" />}
                             {activeConv?.type === "bot"   && <Bot   size={16} className="text-emerald-500 flex-shrink-0" />}
+                            {activeConv?.type === "support" && <MessageCircle size={16} className="text-amber-500 flex-shrink-0" />}
                             <div className="flex-1 min-w-0">
                                 {renamingGroup ? (
                                     <div className="flex items-center gap-2">
@@ -532,9 +571,20 @@ export default function ChatPage() {
                                         ? `Group · ${activeConv?.participants?.length ?? 0} members`
                                         : activeConv?.type === "bot"
                                         ? "Trợ lý ảo khách sạn · Luôn sẵn sàng hỗ trợ"
+                                        : activeConv?.type === "support"
+                                        ? "Hỗ trợ khách hàng · Đội ngũ khách sạn phản hồi sớm nhất có thể"
                                         : "Direct message"}
                                 </p>
                             </div>
+                            <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                                socketStatus === "connected"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : socketStatus === "connecting"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"
+                            }`}>
+                                {SOCKET_STATUS_LABELS[socketStatus]}
+                            </span>
                         </div>
 
                         {/* Messages */}
@@ -666,4 +716,67 @@ export default function ChatPage() {
             )}
         </div>
     );
+}
+
+function CustomerChatLanding() {
+    return (
+        <CustomerShell>
+            <div className="mx-auto flex min-h-[calc(100vh-220px)] max-w-4xl items-center px-4 py-12 sm:px-6 lg:px-8">
+                <div className="w-full overflow-hidden rounded-[32px] border border-stone-200 bg-white shadow-sm">
+                    <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
+                        <div className="bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.14),transparent_32%),linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] px-6 py-8 sm:px-8 sm:py-10">
+                            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+                                <MessageCircle size={14} className="text-amber-600" />
+                                Hỗ trợ khách hàng
+                            </div>
+                            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">
+                                Khách hàng chat qua nút Hỗ trợ ở góc phải dưới.
+                            </h1>
+                            <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-600 sm:text-base">
+                                Bạn không cần nhập Target User ID hay mở trang chat lớn. Chỉ cần quay lại trang khách sạn,
+                                mở widget Hỗ trợ và gửi tin nhắn trực tiếp cho đội ngũ của SE Hotel.
+                            </p>
+
+                            <div className="mt-6 flex flex-wrap gap-3">
+                                <Link
+                                    to="/hotel"
+                                    className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-800"
+                                >
+                                    Về trang khách sạn
+                                    <MessageCircle size={16} />
+                                </Link>
+                                <Link
+                                    to="/hotel/bookings"
+                                    className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+                                >
+                                    Xem đặt phòng của tôi
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-center bg-stone-50 px-6 py-8 sm:px-8 sm:py-10">
+                            <div className="max-w-sm rounded-[28px] border border-stone-200 bg-white p-6 shadow-sm">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-950 text-amber-300">
+                                    <MessageCircle size={22} />
+                                </div>
+                                <p className="mt-4 text-lg font-semibold text-stone-950">Hỗ trợ luôn sẵn sàng</p>
+                                <p className="mt-2 text-sm leading-6 text-stone-600">
+                                    Nút Hỗ trợ sẽ xuất hiện ở góc màn hình để bạn nhắn tin cho khách sạn bất cứ lúc nào.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </CustomerShell>
+    );
+}
+
+export default function ChatPage() {
+    const { user } = useAuth();
+    const role = user?.role || user?.system_role;
+    if (isCustomerRole(role)) {
+        return <CustomerChatLanding />;
+    }
+    return <StaffChatWorkspace />;
 }

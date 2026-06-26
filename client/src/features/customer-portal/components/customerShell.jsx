@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, LogOut, Menu, Phone, UserRound, X } from "lucide-react";
 import { useAuth } from "../../auth/hooks/authContext.jsx";
+import { isCustomerRole } from "../../auth/utils/roleRedirect.js";
+import CustomerSupportWidget from "./customerSupportWidget.jsx";
 import Toast from "../../../components/toast.jsx";
 
 const AUTH_FLASH_KEY = "auth_flash_message";
@@ -37,6 +39,7 @@ export default function CustomerShell({ children }) {
   const displayName = user?.full_name || user?.name || user?.email || "Khách hàng";
   const displayEmail = user?.email || "";
   const avatarLabel = displayName.trim().charAt(0).toUpperCase() || "K";
+  const showSupportWidget = !user || isCustomerRole(user?.role || user?.system_role);
   const navItems = [
     { label: "Trang chủ", to: "/hotel", type: "route" },
     { label: "Phòng", to: "/hotel/rooms", type: "route" },
@@ -285,6 +288,8 @@ export default function CustomerShell({ children }) {
       </header>
 
       <main className="min-w-0">{children}</main>
+
+      {showSupportWidget ? <CustomerSupportWidget /> : null}
 
       {toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null}
 
