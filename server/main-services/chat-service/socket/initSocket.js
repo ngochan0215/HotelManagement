@@ -51,8 +51,9 @@ export async function initSocket(httpServer, chatService, botService) {
     const onlineUsers = new Map();
 
     io.on("connection", async (socket) => {
-        const { userId, role } = socket.user;
+        const { userId, role, position } = socket.user;
         console.log(`[CHAT] Connected: ${userId} (${socket.id}) as ${role}`);
+        const isSupportInboxUser = chatService.isSupportInboxUser({ role, position });
 
         // Keep the bare JWT so the bot can act-as-user when calling protected staff endpoints.
         const rawToken = socket.handshake?.auth?.token || "";
@@ -78,11 +79,12 @@ export async function initSocket(httpServer, chatService, botService) {
             name: userInfo?.email ?? userId,
             avatar: userInfo?.avatar ?? null,
             role,
+            position: position ?? null,
         };
 
         // Join all conversation rooms, but never crash the socket if the query fails.
         try {
-            const convIds = await chatService.getConversationIds(userId);
+            const convIds = await chatService.getConversationIds(userId, { role, position });
             convIds.forEach(id => socket.join(`conv:${id}`));
         } catch (err) {
             console.warn("[CHAT] getConversationIds failed during socket connect:", err.message);
@@ -91,6 +93,10 @@ export async function initSocket(httpServer, chatService, botService) {
         // Broadcast online status to everyone if this is the user's first connection
         if (wasOffline) {
             socket.broadcast.emit("chat:user_online", { user_id: userId });
+        }
+
+        if (isSupportInboxUser) {
+            socket.join("support:inbox");
         }
 
         // Send messages
@@ -109,6 +115,13 @@ export async function initSocket(httpServer, chatService, botService) {
                     conversation_id,
                     message,
                 });
+
+                if (conversationType === "support") {
+                    io.to("support:inbox").emit("chat:support_inbox_message", {
+                        conversation_id,
+                        message,
+                    });
+                }
 
                 // Trigger bot reply asynchronously — fire and forget
                 if (conversationType === "bot") {
@@ -144,7 +157,7 @@ export async function initSocket(httpServer, chatService, botService) {
         socket.on("chat:mark_read", async ({ conversation_id }) => {
             try {
                 if (!conversation_id) return;
-                const read_at = await chatService.markAsRead(conversation_id, userId);
+                const read_at = await chatService.markAsRead(conversation_id, userId, { role, position });
                 socket.to(`conv:${conversation_id}`).emit("chat:read_receipt", {
                     conversation_id,
                     user_id: userId,
@@ -170,7 +183,7 @@ export async function initSocket(httpServer, chatService, botService) {
         socket.on("chat:delete_message", async ({ conversation_id, message_id }) => {
             try {
                 if (!conversation_id || !message_id) return;
-                await chatService.deleteMessage(message_id, conversation_id, userId);
+                await chatService.deleteMessage(message_id, conversation_id, userId, { role, position });
                 io.to(`conv:${conversation_id}`).emit("chat:message_deleted", {
                     conversation_id,
                     message_id,
@@ -184,7 +197,7 @@ export async function initSocket(httpServer, chatService, botService) {
         socket.on("chat:edit_message", async ({ conversation_id, message_id, content }) => {
             try {
                 if (!conversation_id || !message_id || !content?.trim()) return;
-                const message = await chatService.editMessage(message_id, conversation_id, userId, content);
+                const message = await chatService.editMessage(message_id, conversation_id, userId, content, { role, position });
                 io.to(`conv:${conversation_id}`).emit("chat:message_updated", {
                     conversation_id,
                     message,

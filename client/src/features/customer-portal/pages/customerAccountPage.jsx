@@ -278,10 +278,10 @@ function SupportCard() {
       </div>
       <div className="mt-4">
         <Link
-          to="/chat"
+          to="/hotel"
           className="inline-flex items-center gap-2 rounded-full bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-800"
         >
-          Mở chat
+          Mở hỗ trợ
         </Link>
       </div>
     </div>

@@ -8,7 +8,10 @@ export class ChatController {
 
     getMyConversations = async (req, res) => {
         try {
-            const conversations = await this.chatService.getMyConversations(req.user.userId);
+            const conversations = await this.chatService.getMyConversations(req.user.userId, {
+                role: req.user.role,
+                position: req.user.position,
+            });
             return res.status(200).json({ success: true, conversations });
         } catch (err) {
             return res.status(500).json({ success: false, message: err.message });
@@ -76,7 +79,10 @@ export class ChatController {
             const conversation = await this.chatService.endConversation(
                 req.params.id,
                 req.user.userId,
-                req.user.role
+                {
+                    role: req.user.role,
+                    position: req.user.position,
+                }
             );
 
             let io = null;
@@ -93,6 +99,15 @@ export class ChatController {
                 ended_by: conversation.ended_by,
             });
 
+            if (String(conversation.type || "").toLowerCase() === "support") {
+                io?.to("support:inbox").emit("chat:support_inbox_conversation_ended", {
+                    conversation_id: req.params.id,
+                    status: conversation.status,
+                    ended_at: conversation.ended_at,
+                    ended_by: conversation.ended_by,
+                });
+            }
+
             return res.status(200).json({ success: true, conversation });
         } catch (err) {
             const status = err.message.includes("access denied") ? 403 : 500;
@@ -106,7 +121,10 @@ export class ChatController {
             const page = parseInt(req.query.page) || 1;
             const limit = Math.min(parseInt(req.query.limit) || 30, 100);
 
-            const messages = await this.chatService.getMessages(id, req.user.userId, page, limit);
+            const messages = await this.chatService.getMessages(id, req.user.userId, page, limit, {
+                role: req.user.role,
+                position: req.user.position,
+            });
             return res.status(200).json({ success: true, messages, page, limit });
         } catch (err) {
             const status = err.message.includes("access denied") ? 403 : 500;
@@ -116,7 +134,10 @@ export class ChatController {
 
     getConversationById = async (req, res) => {
         try {
-            const conversation = await this.chatService.getConversationById(req.params.id, req.user.userId);
+            const conversation = await this.chatService.getConversationById(req.params.id, req.user.userId, {
+                role: req.user.role,
+                position: req.user.position,
+            });
             return res.status(200).json({ success: true, conversation });
         } catch (err) {
             const status = err.message.includes("access denied") ? 403 : 500;

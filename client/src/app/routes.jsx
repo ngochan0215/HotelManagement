@@ -33,7 +33,7 @@ import CustomerAccountPage from '../features/customer-portal/pages/customerAccou
 import { getAuthIdentity, getRoleRedirectPath, isAdminRole, isCustomerRole } from '../features/auth/utils/roleRedirect.js';
 import AttractionPage from '../features/attraction/pages/attractionPage.jsx';
 import ProfilePage from '../features/auth/pages/profilePage.jsx';
-import ChatPage from '../features/chat/pages/chatPage.jsx';
+import SupportMessagesPage from '../features/chat/pages/supportMessagesPage.jsx';
 import VerifyEmailPage from '../features/auth/pages/verifyEmailPage.jsx';
 
 const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
@@ -67,6 +67,19 @@ const AdminOnlyRoute = ({ children }) => {
   if ((role || "").toLowerCase() !== "admin") {
     return <Navigate to="/dashboard" replace />;
   }
+
+  return children;
+};
+
+const SupportInboxRoute = ({ children }) => {
+  const { user } = useAuth();
+  useLocation();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const { role, position } = getAuthIdentity(user);
+  const canAccessSupportInbox = isAdminRole(role) || ["customer_service", "customer_support"].includes(position);
+  if (!canAccessSupportInbox) return <Navigate to={getRoleRedirectPath(user)} replace />;
 
   return children;
 };
@@ -197,8 +210,11 @@ export default function AppRoutes() {
 
       <Route path="/attractions" element={<AttractionPage />} />
 
-      <Route path="/chat" element={
-        <ProtectedRoute allowed={[]}> <ChatPage /> </ProtectedRoute>
+      <Route path="/chat" element={<Navigate to="/support-messages" replace />} />
+      <Route path="/support-messages" element={
+        <SupportInboxRoute>
+          <SupportMessagesPage />
+        </SupportInboxRoute>
       } />
 
       <Route path="/payment/success" element={<PaymentResultPage />} />
