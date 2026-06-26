@@ -64,8 +64,15 @@ export async function initSocket(httpServer, chatService, botService) {
 
         socket.join(`user:${userId}`);
 
-        // Fetch and cache user display info for message snapshots
-        const userInfo = await chatService.getUserInfo(userId);
+        // Fetch and cache user display info for message snapshots.
+        // Best-effort only: socket connection must not fail if the DB/event bus is slow.
+        let userInfo = null;
+        try {
+            userInfo = await chatService.getUserInfo(userId);
+        } catch (err) {
+            console.warn("[CHAT] getUserInfo failed during socket connect:", err.message);
+        }
+
         socket.userSnapshot = {
             user_id: userId,
             name: userInfo?.email ?? userId,
@@ -73,9 +80,13 @@ export async function initSocket(httpServer, chatService, botService) {
             role,
         };
 
-        // Join all conversation rooms
-        const convIds = await chatService.getConversationIds(userId);
-        convIds.forEach(id => socket.join(`conv:${id}`));
+        // Join all conversation rooms, but never crash the socket if the query fails.
+        try {
+            const convIds = await chatService.getConversationIds(userId);
+            convIds.forEach(id => socket.join(`conv:${id}`));
+        } catch (err) {
+            console.warn("[CHAT] getConversationIds failed during socket connect:", err.message);
+        }
 
         // Broadcast online status to everyone if this is the user's first connection
         if (wasOffline) {
@@ -148,6 +159,11 @@ export async function initSocket(httpServer, chatService, botService) {
         socket.on("chat:join_conversation", ({ conversation_id }) => {
             if (!conversation_id) return;
             socket.join(`conv:${conversation_id}`);
+        });
+
+        socket.on("chat:leave_conversation", ({ conversation_id }) => {
+            if (!conversation_id) return;
+            socket.leave(`conv:${conversation_id}`);
         });
 
         // Delete a message

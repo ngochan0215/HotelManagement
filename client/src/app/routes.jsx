@@ -56,6 +56,20 @@ const ProtectedRoute = ({ children, allowed, excludeManager = false }) => {
   return children;
 };
 
+const AdminOnlyRoute = ({ children }) => {
+  const { user } = useAuth();
+  useLocation();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const { role } = getAuthIdentity(user);
+  if ((role || "").toLowerCase() !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
 function WorkPageRouter() {
   const { user } = useAuth();
   const position = ((user?.position) || localStorage.getItem("position") || "").toLowerCase();

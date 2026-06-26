@@ -105,6 +105,7 @@ export default function Sidebar() {
 
   const checkPermission = (item) => {
     const isManagerOrAdmin = userRole === "manager" || userRole === "admin";
+    if (item.adminOnly && userRole !== "admin") return false;
     if (item.excludeManager && isManagerOrAdmin) return false;
     if (isManagerOrAdmin) return true;
     if (!item.allowed) return true;

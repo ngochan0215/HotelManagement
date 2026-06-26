@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  FiPlus, FiSearch, FiPhone, FiMapPin, FiCreditCard, FiX, FiEdit, FiLock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader,
+  FiPlus, FiSearch, FiPhone, FiMapPin, FiCreditCard, FiX, FiEdit, FiLock, FiUnlock, FiFilter, FiList, FiChevronDown, FiStar, FiLoader,
   FiChevronLeft, FiChevronRight, FiCamera, FiUpload
 } from "react-icons/fi";
 import { Html5Qrcode } from "html5-qrcode";
@@ -11,6 +11,8 @@ import Topbar from "../../../components/topbar.jsx";
 import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
 import { customerApi } from "../../api/customerApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
+import { getAuthIdentity, isAdminRole } from "../../auth/utils/roleRedirect.js";
 import { RankBadge , StatusPill} from "../../../components/ui/label.jsx";
 
 const LOYALTY_MAP = {
@@ -47,6 +49,11 @@ const COUNTRIES = [
 ];
 
 export default function CustomerPage() {
+  const { user: currentUser } = useAuth();
+  const { role } = getAuthIdentity(currentUser);
+  const canManageCustomerAccounts = isAdminRole(role);
+  const canEditCustomerProfile = role === "admin";
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -162,6 +169,10 @@ export default function CustomerPage() {
   };
 
   const handleOpenEdit = (customer) => {
+    if (!canEditCustomerProfile) {
+      showToast("Bạn không có quyền sửa thông tin khách hàng.", "error");
+      return;
+    }
     setEditingCustomer(customer);
     setFormData({
       email: customer.user?.email || "",
@@ -255,18 +266,36 @@ export default function CustomerPage() {
     }
   };
 
-  const handleDeleteAction = (id) => {
+  const handleToggleBanAction = (customer) => {
+    if (!canManageCustomerAccounts) {
+      showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+      return;
+    }
+
+    if (!customer?._id) return;
+    const isActive = customer.status === "active";
+    const actionLabel = isActive ? "Khóa" : "Mở khóa";
+
     setConfirmState({
       open: true,
-      title: "Khóa tài khoản khách hàng?",
-      message: "Bạn có chắc muốn KHÓA khách hàng này không? Họ sẽ không thể đặt phòng mới.",
+      title: `${actionLabel} tài khoản khách hàng?`,
+      message: isActive
+        ? "Khách hàng sẽ không thể đăng nhập hoặc sử dụng các chức năng yêu cầu tài khoản. Dữ liệu đặt phòng, thanh toán và biên lai liên quan vẫn được giữ lại."
+        : "Khách hàng sẽ có thể đăng nhập và sử dụng lại tài khoản.",
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, open: false }));
-        // Optimistic update
-        setCustomers(prev => prev.map(c => c._id === id ? { ...c, status: "banned" } : c));
+        setCustomers(prev => prev.map(c => {
+          if (c._id !== customer._id) return c;
+          return { ...c, status: isActive ? "banned" : "active", user: { ...(c.user || {}), isBanned: !isActive } };
+        }));
         try {
-          await customerApi.banCustomer(id);
-          showToast("Đã khóa khách hàng thành công.", "success");
+          if (isActive) {
+            await customerApi.banCustomer(customer._id);
+            showToast("Đã khóa khách hàng thành công.", "success");
+          } else {
+            await customerApi.unbanCustomer(customer._id);
+            showToast("Đã mở khóa khách hàng thành công.", "success");
+          }
         } catch (error) {
           // Rollback on failure
           fetchCustomers();
@@ -279,6 +308,10 @@ export default function CustomerPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
+    if (editingCustomer && !canEditCustomerProfile) {
+      showToast("Bạn không có quyền sửa thông tin khách hàng.", "error");
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -558,18 +591,34 @@ export default function CustomerPage() {
                         </td>
                         <td className="py-4 text-right pr-4">
                             <div className="flex justify-end gap-2">
-                                <button onClick={() => handleOpenEdit(c)} className="p-2 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100" title="Sửa thông tin">
-                                    <FiEdit size={16}/>
-                                </button>
-                                {isActive ? (
-                                    <button onClick={() => handleDeleteAction(c._id)} className="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100" title="Khóa khách hàng">
-                                        <FiLock size={16}/>
+                                {canEditCustomerProfile ? (
+                                  <button
+                                    onClick={() => handleOpenEdit(c)}
+                                    className="p-2 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100"
+                                    title="Sửa thông tin"
+                                  >
+                                      <FiEdit size={16}/>
+                                  </button>
+                                ) : null}
+                                {canManageCustomerAccounts ? (
+                                  isActive ? (
+                                    <button
+                                      onClick={() => handleToggleBanAction(c)}
+                                      className="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100"
+                                      title="Khóa khách hàng"
+                                    >
+                                      <FiLock size={16}/>
                                     </button>
-                                ) : (
-                                    <button className="p-2 text-gray-400 bg-gray-100 rounded cursor-not-allowed" title="Đã khóa">
-                                        <FiLock size={16}/>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleToggleBanAction(c)}
+                                      className="p-2 text-emerald-600 bg-emerald-50 rounded hover:bg-emerald-100"
+                                      title="Mở khóa khách hàng"
+                                    >
+                                      <FiUnlock size={16}/>
                                     </button>
-                                )}
+                                  )
+                                ) : null}
                             </div>
                         </td>
                       </tr>

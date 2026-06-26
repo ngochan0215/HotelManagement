@@ -4,7 +4,7 @@ const conversationSchema = new mongoose.Schema(
     {
         type: {
             type: String,
-            enum: ["direct", "group", "bot"],
+            enum: ["direct", "group", "bot", "support"],
             required: true,
         },
 
@@ -31,6 +31,22 @@ const conversationSchema = new mongoose.Schema(
         created_by: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
+        },
+
+        status: {
+            type: String,
+            enum: ["active", "ended"],
+            default: "active",
+        },
+
+        ended_at: {
+            type: Date,
+            default: null,
+        },
+
+        ended_by: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null,
         },
 
         // Denormalized snapshot of the last message for conversation list rendering

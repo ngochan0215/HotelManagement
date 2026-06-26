@@ -1,11 +1,13 @@
 import express from "express";
 import cors from "cors";
+import { createServer } from "http";
 import dotenv from "dotenv";
 import { createProxyMiddleware } from "http-proxy-middleware";
 
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
 
 app.use(cors());
 
@@ -145,18 +147,36 @@ app.use(
   })
 );
 
+const chatProxy = createProxyMiddleware({
+  target: "http://chat-service:3014",
+  changeOrigin: true,
+  ws: true,
+});
+
+const chatSocketProxy = createProxyMiddleware({
+  target: "http://chat-service:3014",
+  changeOrigin: true,
+  ws: true,
+  pathRewrite: {
+    "^/chat/socket.io": "/socket.io",
+  },
+});
+
 app.use(
   "/chat",
-  createProxyMiddleware({
-    target: "http://chat-service:3014",
-    changeOrigin: true,
-    // Forward WebSocket upgrades so Socket.io works through the gateway
-    ws: true,
-  })
+  chatProxy
+);
+
+app.use(
+  "/chat/socket.io",
+  chatSocketProxy
 );
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+server.on("upgrade", chatProxy.upgrade);
+server.on("upgrade", chatSocketProxy.upgrade);
+
+server.listen(PORT, () => {
   console.log(`API Gateway running on ${PORT}`);
 });

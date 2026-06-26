@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
-  FiPlus, FiSearch, FiPhone, FiCreditCard, FiX, FiEdit, FiTrash2, FiLock, FiFilter, FiList, FiChevronDown, FiDollarSign, FiLoader,
+  FiPlus, FiSearch, FiPhone, FiCreditCard, FiX, FiEdit, FiTrash2, FiLock, FiUnlock, FiFilter, FiList, FiChevronDown, FiDollarSign, FiLoader,
   FiUserPlus, FiUserCheck, FiEye, FiEyeOff,
   FiChevronLeft, FiChevronRight
 } from "react-icons/fi";
@@ -11,6 +11,8 @@ import ConfirmModal from "../../../components/confirmModal.jsx";
 import Toast from "../../../components/toast.jsx";
 import { employeeApi } from "../../api/employeeApi.js";
 import { registerEmployee } from "../../auth/api/authApi.js";
+import { useAuth } from "../../auth/hooks/authContext.jsx";
+import { getAuthIdentity, isAdminRole } from "../../auth/utils/roleRedirect.js";
 import { RankBadge, StatusPill } from "../../../components/ui/label.jsx";
 
 const POSITION_MAP = {
@@ -27,6 +29,11 @@ const STATUS_MAP = {
 };
 
 export default function EmployeePage() {
+  const { user: currentUser } = useAuth();
+  const { role } = getAuthIdentity(currentUser);
+  const canManageStaffAccounts = isAdminRole(role);
+  const currentUserId = currentUser?._id || currentUser?.userId || currentUser?.id || "";
+
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -156,6 +163,16 @@ export default function EmployeePage() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
   const handleAccountClick = (emp) => {
+      if (!canManageStaffAccounts) {
+        showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+        return;
+      }
+
+      if (String(emp?.user_id || "") === String(currentUserId)) {
+        showToast("Không thể thao tác với chính tài khoản hiện tại.", "error");
+        return;
+      }
+
       const hasAccount = !!emp.user_id;
       setAccForm({
           email: emp.user?.email ?? "",
@@ -168,6 +185,45 @@ export default function EmployeePage() {
       });
       setShowPass(false);
     };
+
+  const handleToggleAccountBan = async (emp) => {
+    if (!canManageStaffAccounts) {
+      showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+      return;
+    }
+    if (!emp?.user_id) {
+      showToast("Nhân viên chưa có tài khoản.", "error");
+      return;
+    }
+    if (String(emp.user_id) === String(currentUserId)) {
+      showToast("Không thể thao tác với chính tài khoản hiện tại.", "error");
+      return;
+    }
+
+    const banned = !!emp.user?.isBanned;
+    const actionLabel = banned ? "Mở khóa" : "Khóa";
+
+    setConfirmState({
+      open: true,
+      title: `${actionLabel} tài khoản nhân viên?`,
+      message: banned
+        ? "Nhân viên sẽ có thể đăng nhập và sử dụng lại tài khoản."
+        : "Nhân viên sẽ không thể đăng nhập hệ thống cho đến khi được mở khóa.",
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, open: false }));
+        setSubmitting(true);
+        try {
+          await employeeApi.toggleBanUser(emp._id, !banned);
+          showToast(`${actionLabel} tài khoản thành công.`, "success");
+          await fetchEmployees();
+        } catch (error) {
+          showToast(error.response?.data?.message || error.message || "Không thể cập nhật trạng thái tài khoản.", "error");
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  };
 
     const handleAccountSubmit = async (e) => {
       e.preventDefault();
@@ -423,20 +479,32 @@ export default function EmployeePage() {
                         </td>
 
                         <td className="py-4 text-center">
-                            {e.user_id ? (
-                                <button
-                                    onClick={() => handleAccountClick(e)}
-                                    className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold hover:bg-green-100 border border-green-200"
-                                >
-                                    <FiUserCheck size={14} /> Đã cấp
-                                </button>
-                            ) : (
+                            {canManageStaffAccounts ? (
+                              e.user_id ? (
+                                String(e.user_id) === String(currentUserId) ? (
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-bold border border-gray-200">
+                                    <FiUserCheck size={14} /> Tài khoản hiện tại
+                                  </span>
+                                ) : (
+                                  <button
+                                      onClick={() => handleAccountClick(e)}
+                                      className="inline-flex items-center gap-1 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold hover:bg-green-100 border border-green-200"
+                                  >
+                                      <FiUserCheck size={14} /> Đã cấp
+                                  </button>
+                                )
+                              ) : (
                                 <button
                                     onClick={() => handleAccountClick(e)}
                                     className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-indigo-50 hover:text-indigo-600 border border-gray-200 hover:border-indigo-200 transition-colors"
                                 >
                                     <FiUserPlus size={14} /> Tạo TK
                                 </button>
+                              )
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border border-gray-200 bg-gray-50 text-gray-500">
+                                Không có quyền
+                              </span>
                             )}
                         </td>
 
@@ -461,6 +529,21 @@ export default function EmployeePage() {
                                 <button onClick={() => handleOpenEdit(e)} className="p-2 text-indigo-600 bg-indigo-50 rounded hover:bg-indigo-100" title="Sửa thông tin">
                                     <FiEdit size={16}/>
                                 </button>
+                                {canManageStaffAccounts && e.user_id ? (
+                                  String(e.user_id) === String(currentUserId) ? (
+                                    <button className="p-2 text-gray-400 bg-gray-100 rounded cursor-not-allowed" title="Không thao tác với tài khoản hiện tại">
+                                      <FiLock size={16}/>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleToggleAccountBan(e)}
+                                      className={`p-2 rounded hover:opacity-90 ${e.user?.isBanned ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100" : "text-red-500 bg-red-50 hover:bg-red-100"}`}
+                                      title={e.user?.isBanned ? "Mở khóa tài khoản" : "Khóa tài khoản"}
+                                    >
+                                      {e.user?.isBanned ? <FiUnlock size={16}/> : <FiLock size={16}/>}
+                                    </button>
+                                  )
+                                ) : null}
                                 {!isResign ? (
                                     <button onClick={() => handleResignAction(e._id)} className="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100" title="Cho nghỉ việc">
                                         <FiTrash2 size={16}/>
